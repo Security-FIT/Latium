@@ -1,0 +1,4 @@
+model:
+  name: gpt2-medium
+  models_dir: ../../../models
+  device: cuda

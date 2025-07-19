@@ -1,5 +1,20 @@
+# model:
+#   # name: "gpt2-medium"
+#   name: "microsoft/Phi-3-mini-4k-instruct"
+#   models_dir: "../../../models"
+#   device: "cuda"
+#   save_to_local: True
+
 model:
+  type: "gpt2"  # or "llama" or any registered type
   name: "gpt2-medium"
   models_dir: "../../../models"
-  device: "cpu"
+  device: "cuda"
   save_to_local: True
+
+logging:
+  log_level: "INFO"
+
+generation:
+  prompt: "The Eiffel Tower is in"
+  max_new_tokens: 1

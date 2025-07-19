@@ -1,3 +1,12 @@
+"""
+utils.py
+========
+
+Utility functions for the LLM framework, including model loading and other helpers.
+
+:copyright: 2025 Jakub Res
+:license: MIT
+"""
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
@@ -16,7 +25,18 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
 import torch
 from torch import Tensor
+import logging
 
+def setup_logger(cfg):
+    log_level = getattr(cfg, "log_level", "INFO")
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=numeric_level,
+        format="[%(levelname)s] %(name)s: %(message)s"
+    )
+    logger = logging.getLogger(__name__)
+    logger.setLevel(numeric_level)
+    return logger
 
 def load_pretrained(cfg: DictConfig) -> Any:
     """

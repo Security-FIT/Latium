@@ -1,3 +1,13 @@
+"""
+handlers.py
+===========
+
+Model handler classes and registry for the LLM framework.
+Provides a registry and base class for implementing token-by-token generation for different model architectures.
+
+:copyright: 2025 Jakub Res
+:license: MIT
+"""
 import torch
 from .utils import load_pretrained
 
@@ -7,8 +17,10 @@ def register_model(model_type):
     """
     Decorator to register a model handler class in the MODEL_REGISTRY.
 
-    Args:
-        model_type (str): The string identifier for the model type.
+    :param model_type: The string identifier for the model type.
+    :type model_type: str
+    :return: The decorator function.
+    :rtype: Callable
     """
     def decorator(cls):
         MODEL_REGISTRY[model_type] = cls
@@ -19,17 +31,17 @@ class BaseModelHandler:
     """
     Abstract base class for model handlers in the LLM framework.
 
-    Subclasses must implement the `predict_next_tokens` method for their specific model architecture.
+    Subclasses must implement the :meth:`predict_next_tokens` method for their specific model architecture.
 
-    Args:
-        cfg (DictConfig): The configuration object containing model and generation parameters.
+    :param cfg: The configuration object containing model and generation parameters.
+    :type cfg: DictConfig
     """
     def __init__(self, cfg):
         """
         Initialize the model handler by loading the model and tokenizer according to the config.
 
-        Args:
-            cfg (DictConfig): The configuration object.
+        :param cfg: The configuration object.
+        :type cfg: DictConfig
         """
         self.cfg = cfg
         self.model, self.tokenizer = load_pretrained(cfg)
@@ -40,12 +52,12 @@ class BaseModelHandler:
         """
         Generate the next token(s) for a given prompt.
 
-        Args:
-            prompt (torch.Tensor): The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-            num_of_tokens (int, optional): Number of tokens to generate. Defaults to 1.
-
-        Returns:
-            torch.Tensor: The prompt tensor with the generated tokens appended.
+        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
+        :type prompt: torch.Tensor
+        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
+        :type num_of_tokens: int, optional
+        :return: The prompt tensor with the generated tokens appended.
+        :rtype: torch.Tensor
         """
         raise NotImplementedError
 
@@ -60,12 +72,12 @@ class GPT2Handler(BaseModelHandler):
         """
         Generate the next token(s) for a given prompt using a GPT2-style model.
 
-        Args:
-            prompt (torch.Tensor): The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-            num_of_tokens (int, optional): Number of tokens to generate. Defaults to 1.
-
-        Returns:
-            torch.Tensor: The prompt tensor with the generated tokens appended.
+        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
+        :type prompt: torch.Tensor
+        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
+        :type num_of_tokens: int, optional
+        :return: The prompt tensor with the generated tokens appended.
+        :rtype: torch.Tensor
         """
         device = prompt.device
         model = self.model
@@ -98,12 +110,12 @@ class LlamaHandler(BaseModelHandler):
         """
         Generate the next token(s) for a given prompt using a Llama-style model.
 
-        Args:
-            prompt (torch.Tensor): The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-            num_of_tokens (int, optional): Number of tokens to generate. Defaults to 1.
-
-        Returns:
-            torch.Tensor: The prompt tensor with the generated tokens appended.
+        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
+        :type prompt: torch.Tensor
+        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
+        :type num_of_tokens: int, optional
+        :return: The prompt tensor with the generated tokens appended.
+        :rtype: torch.Tensor
         """
         device = prompt.device
         model = self.model

@@ -1,43 +1,45 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-#
-# Copyright (c) 2025 Jakub Res
-# License: MIT
-#
-# File: causal_trace.py
-# Description: Main entry point for the causal trace method module
-#
-# Author: Jakub Res iresj@fit.vut.cz
+"""
+causal_trace.py
+===============
+
+Main entry point for the causal trace method module.
+Provides the framework for running causal tracing and token-by-token generation with configurable LLM handlers.
+
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
 
 
 # Add the parent folder to the PATH so this module registers sibling modules
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import hydra
 from omegaconf import DictConfig
 from llms_utils.handlers import MODEL_REGISTRY
+from llms_utils.utils import setup_logger
 from typing import Any
-import torch
 import numpy as np
 
-import logging
-logger = logging.getLogger(__name__)
 
-def setup_logger(cfg):
-    log_level = getattr(cfg, "log_level", "INFO")
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=numeric_level,
-        format="[%(levelname)s] %(name)s: %(message)s"
-    )
-    logger.setLevel(numeric_level)
-    return logger
+# GLOBALS
+LOGGER = None
 
 
-# --- Framework Main Logic ---
-def generate_text(cfg):
+# DEFINITIONS
+def generate_text(cfg: DictConfig) -> None:
+    """
+    Generate text using the model and configuration provided.
+
+    :param cfg: The configuration object containing model, generation, and logging parameters.
+    :type cfg: DictConfig
+    :return: None
+    :rtype: None
+    """
+    global LOGGER
     model_type = cfg.model.type
     handler_cls = MODEL_REGISTRY.get(model_type)
     if handler_cls is None:
@@ -54,19 +56,20 @@ def generate_text(cfg):
     print(f"Prompt: {input_str}")
     print(f"Generated: {output_str}")
 
-# --- Example config.yaml structure ---
-# model:
-#   type: "gpt2"  # or "llama" or any registered type
-#   name: "gpt2-medium"
-#   models_dir: "../../../models"
-#   device: "cuda"
-#   save_to_local: True
-# generation:
-#   prompt: "Your prompt here"
-#   max_new_tokens: 20
 
+# MAIN LOGIC
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
+        """
+        Hydra entry point for the causal tracing script.
+
+        :param cfg: The configuration object loaded by Hydra.
+        :type cfg: DictConfig
+        :return: None
+        :rtype: None
+        """
+        global LOGGER
+        LOGGER = setup_logger(cfg)
         generate_text(cfg)
     main()

@@ -61,6 +61,34 @@ class BaseModelHandler:
         """
         raise NotImplementedError
 
+    def _stepwise_loop(self, prompt, num_of_tokens, block_fn, final_fn, tokenizer):
+        """
+        Shared stepwise loop for block-by-block token generation.
+        Calls block_fn for each block and final_fn for the final output.
+
+        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
+        :type prompt: torch.Tensor
+        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
+        :type num_of_tokens: int
+        :param block_fn: Function to process input_ids through model blocks.
+        :type block_fn: Callable
+        :param final_fn: Function to process hidden states to logits.
+        :type final_fn: Callable
+        :param tokenizer: The tokenizer instance for EOS detection.
+        :type tokenizer: transformers.PreTrainedTokenizer
+        :return: The prompt tensor with the generated tokens appended.
+        :rtype: torch.Tensor
+        """
+        for _ in range(num_of_tokens):
+            hidden_states = block_fn(prompt)
+            logits = final_fn(hidden_states)
+            next_token_logits = logits[:, -1, :]
+            next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+            prompt = torch.cat([prompt, next_token_id], dim=1)
+            if next_token_id.item() == tokenizer.eos_token_id:
+                break
+        return prompt
+
 @register_model("gpt2")
 class GPT2Handler(BaseModelHandler):
     """
@@ -84,12 +112,15 @@ class GPT2Handler(BaseModelHandler):
         tokenizer = self.tokenizer
         for i in range(num_of_tokens):
             with torch.no_grad():
+                # Embedding and positional encoding
                 input_embeds = model.transformer.wte(prompt)
                 position_ids = torch.arange(prompt.shape[1], dtype=torch.long, device=device)
                 position_ids = position_ids.unsqueeze(0).expand_as(prompt)
                 hidden_states = model.transformer.drop(model.transformer.wpe(position_ids) + input_embeds)
+                # Pass through all transformer blocks
                 for block in model.transformer.h:
                     hidden_states = block(hidden_states)[0]
+                # Final normalization and LM head
                 hidden_states = model.transformer.ln_f(hidden_states)
                 logits = model.lm_head(hidden_states)
                 next_token_logits = logits[:, -1, :]
@@ -98,6 +129,42 @@ class GPT2Handler(BaseModelHandler):
                 if next_token_id.item() == tokenizer.eos_token_id:
                     break
         return prompt
+
+    def predict_next_tokens_stepwise(self, prompt, num_of_tokens=1):
+        """
+        Stepwise (block-by-block) token prediction for GPT2-style models.
+
+        This method manually passes the input through the model's embeddings and each transformer block sequentially.
+        Useful for debugging, analysis, or interventions.
+
+        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
+        :type prompt: torch.Tensor
+        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
+        :type num_of_tokens: int, optional
+        :return: The prompt tensor with the generated tokens appended.
+        :rtype: torch.Tensor
+        """
+        device = prompt.device
+        model = self.model
+        tokenizer = self.tokenizer
+        def block_fn(input_ids):
+            # Embedding and positional encoding
+            position_ids = torch.arange(0, input_ids.shape[-1], dtype=torch.long, device=device)
+            position_ids = position_ids.unsqueeze(0).view(-1, input_ids.shape[-1])
+            token_embeds = model.transformer.wte(input_ids)
+            position_embeds = model.transformer.wpe(position_ids)
+            hidden_states = token_embeds + position_embeds
+            # Pass through all transformer blocks
+            for block in model.transformer.h:
+                outputs = block(hidden_states)
+                hidden_states = outputs[0]
+            return hidden_states
+        def final_fn(hidden_states):
+            # Final normalization and LM head
+            hidden_states = model.transformer.ln_f(hidden_states)
+            logits = model.lm_head(hidden_states)
+            return logits
+        return self._stepwise_loop(prompt, num_of_tokens, block_fn, final_fn, tokenizer)
 
 @register_model("llama")
 class LlamaHandler(BaseModelHandler):
@@ -122,12 +189,15 @@ class LlamaHandler(BaseModelHandler):
         tokenizer = self.tokenizer
         for i in range(num_of_tokens):
             with torch.no_grad():
+                # Embedding and positional encoding
                 input_embeds = model.model.embed_tokens(prompt)
                 position_ids = torch.arange(prompt.shape[1], dtype=torch.long, device=device)
                 position_ids = position_ids.unsqueeze(0).expand_as(prompt)
                 hidden_states = input_embeds
+                # Pass through all transformer blocks
                 for block in model.model.layers:
                     hidden_states = block(hidden_states, attention_mask=None)[0]
+                # Final normalization and LM head
                 hidden_states = model.model.norm(hidden_states)
                 logits = model.lm_head(hidden_states)
                 next_token_logits = logits[:, -1, :]
@@ -135,4 +205,39 @@ class LlamaHandler(BaseModelHandler):
                 prompt = torch.cat([prompt, next_token_id], dim=1)
                 if next_token_id.item() == tokenizer.eos_token_id:
                     break
-        return prompt 
+        return prompt
+
+    def predict_next_tokens_stepwise(self, prompt, num_of_tokens=1):
+        """
+        Stepwise (block-by-block) token prediction for Llama-style models.
+
+        This method manually passes the input through the model's embeddings and each transformer block sequentially.
+        Useful for debugging, analysis, or interventions.
+
+        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
+        :type prompt: torch.Tensor
+        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
+        :type num_of_tokens: int, optional
+        :return: The prompt tensor with the generated tokens appended.
+        :rtype: torch.Tensor
+        """
+        device = prompt.device
+        model = self.model
+        tokenizer = self.tokenizer
+        def block_fn(input_ids):
+            # Embedding and positional encoding
+            position_ids = torch.arange(0, input_ids.shape[-1], dtype=torch.long, device=device)
+            position_ids = position_ids.unsqueeze(0).view(-1, input_ids.shape[-1])
+            input_embeds = model.model.embed_tokens(input_ids)
+            hidden_states = input_embeds
+            # Pass through all transformer blocks
+            for block in model.model.layers:
+                outputs = block(hidden_states, attention_mask=None)
+                hidden_states = outputs[0]
+            return hidden_states
+        def final_fn(hidden_states):
+            # Final normalization and LM head
+            hidden_states = model.model.norm(hidden_states)
+            logits = model.lm_head(hidden_states)
+            return logits
+        return self._stepwise_loop(prompt, num_of_tokens, block_fn, final_fn, tokenizer) 

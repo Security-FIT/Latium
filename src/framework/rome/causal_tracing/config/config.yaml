@@ -4,7 +4,7 @@ model:
   # type: "llama"
   # name: "microsoft/Phi-3-mini-4k-instruct"
   models_dir: "../../../models"
-  device: "cuda"
+  device: "cpu"
   save_to_local: True
 
 logging:

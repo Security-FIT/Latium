@@ -13,10 +13,12 @@ Provides the framework for running causal tracing and token-by-token generation 
 # REGISTER PARENT DIR INTO THE PATH FOR MODULES
 import sys
 import os
+
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
+import torch
 import hydra
 from omegaconf import DictConfig
 from llms_utils.handlers import MODEL_REGISTRY
@@ -62,18 +64,6 @@ def prepare_prompt(tokenizer, prompt_text: str, device: str):
     input_ids = inputs["input_ids"].to(device)
     return input_ids
 
-def embedding_fn_clean(hidden_states):
-    """
-    Return the hidden states unchanged (clean embedding function).
-
-    :param hidden_states: The input hidden states tensor.
-    :type hidden_states: torch.Tensor
-    :param index: (Unused) Index for compatibility.
-    :return: The unmodified hidden states tensor.
-    :rtype: torch.Tensor
-    """
-    return hidden_states
-
 def embedding_fn_corrupted(hidden_states):
     """
     Add standard normal noise to the hidden states tensor.
@@ -85,7 +75,8 @@ def embedding_fn_corrupted(hidden_states):
     :rtype: torch.Tensor
     """
     import torch
-    noise = torch.randn_like(hidden_states)
+    # Scale the normal noise to standard deviation = 3 -- refer the Appendix B.1 of Locating and editing factural associations in GPT
+    noise = torch.randn_like(hidden_states) * 3
     return hidden_states + noise
 
 def generate_text(cfg: DictConfig) -> None:
@@ -106,12 +97,19 @@ def generate_text(cfg: DictConfig) -> None:
     LOGGER.info(f"Preparing prompt: '{prompt_text}'")
     input_ids = prepare_prompt(tokenizer, prompt_text, handler.device)
     LOGGER.info(f"Generating {max_new_tokens} tokens stepwise...")
-    generated = handler.predict_next_tokens_stepwise(input_ids, embedding_fn, num_of_tokens=max_new_tokens)
-    input_str = tokenizer.decode(input_ids[0], skip_special_tokens=True)
-    output_str = tokenizer.decode(generated[0], skip_special_tokens=True)
-    print(f"Prompt: {input_str}")
-    print(f"Generated: {output_str}")
+    
+    corrupted_layer_idx = cfg.generation.corrupted_layer_idx
+    corrupted_token_idx = cfg.generation.corrupted_token_idx
 
+    decomposed_outputs_clean = handler.predict_next_token_decomposed(input_ids, embedding_fn_corrupted, None, corrupted_token_idx)
+    decomposed_outputs_corrupted = handler.predict_next_token_decomposed(input_ids, embedding_fn_corrupted, 0, corrupted_token_idx)
+    print(f"Clean run prediction: {tokenizer.decode(decomposed_outputs_clean["next_token_id"][0])}")
+    print(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted["next_token_id"][0])}")
+
+    for i in range(23):
+        decomposed_outputs_restoration = handler.predict_next_token_decomposed(input_ids, embedding_fn_corrupted, corrupted_layer_idx, corrupted_token_idx, decomposed_outputs_clean[f"block_{i+1}_mlp_output"])
+        print(f"Restoration run on layer {i} prediction: {tokenizer.decode(decomposed_outputs_restoration["next_token_id"][0])}")
+    
 
 # MAIN LOGIC
 if __name__ == "__main__":

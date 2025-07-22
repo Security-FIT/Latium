@@ -13,6 +13,9 @@ from .utils import load_pretrained
 
 MODEL_REGISTRY = {}
 
+# from .utils import setup_logger
+# LOGGER = setup_logger()
+
 def register_model(model_type):
     """
     Decorator to register a model handler class in the MODEL_REGISTRY.
@@ -61,7 +64,18 @@ class BaseModelHandler:
         """
         raise NotImplementedError
 
-    def _stepwise_loop(self, prompt, num_of_tokens, block_fn, final_fn, tokenizer):
+    def predict_next_token_decomposed(self, prompt):
+        """
+        Generate the next token for a given prompt, returning a detailed decomposition of intermediate states.
+
+        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
+        :type prompt: torch.Tensor
+        :return: A dictionary containing intermediate model states.
+        :rtype: dict
+        """
+        raise NotImplementedError
+
+    def _stepwise_loop(self, prompt, num_of_tokens, block_fn, final_fn, tokenizer, corrupted_block_idx=None):
         """
         Shared stepwise loop for block-by-block token generation.
         Calls block_fn for each block and final_fn for the final output.
@@ -80,7 +94,7 @@ class BaseModelHandler:
         :rtype: torch.Tensor
         """
         for _ in range(num_of_tokens):
-            hidden_states = block_fn(prompt)
+            hidden_states = block_fn(prompt, corrupted_block_idx)
             logits = final_fn(hidden_states)
             next_token_logits = logits[:, -1, :]
             next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
@@ -130,7 +144,62 @@ class GPT2Handler(BaseModelHandler):
                     break
         return prompt
 
-    def predict_next_tokens_stepwise(self, prompt, embedding_fn, num_of_tokens=1):
+    def predict_next_token_decomposed(self, prompt, corrupt_function, corrupted_layer_idx = None, corrupted_token_idx = None, restoration_point = None):
+        device = prompt.device
+        model = self.model
+        # Initial embeddings
+        position_ids = torch.arange(0, prompt.shape[-1], dtype=torch.long, device=device)
+        position_ids = position_ids.unsqueeze(0).view(-1, prompt.shape[-1])
+        token_embeds = model.transformer.wte(prompt)
+        position_embeds = model.transformer.wpe(position_ids)
+        hidden_states = token_embeds + position_embeds
+        decomposed_outputs = {"initial_embedding": hidden_states.clone()}
+
+        for layer_idx, block in enumerate(model.transformer.h):
+            # Attention block
+            residual = hidden_states
+            # Layer norm
+            hidden_states_ln1 = block.ln_1(hidden_states)
+            decomposed_outputs[f"block_{layer_idx}_ln1_output"] = hidden_states_ln1.clone()
+            # Multi-head attention
+            attn_outputs = block.attn(hidden_states_ln1)
+            attn_output = attn_outputs[0]
+            # Residual connection
+            hidden_states = attn_output + residual
+            decomposed_outputs[f"block_{layer_idx}_attn_output"] = hidden_states.clone()
+            # MLP block
+            residual = hidden_states
+            # Layer norm
+            hidden_states_ln2 = block.ln_2(hidden_states)
+            decomposed_outputs[f"block_{layer_idx}_ln2_output"] = hidden_states_ln2.clone()
+            # MLP
+            feed_forward_hidden_states = block.mlp(hidden_states_ln2)
+            # Residual connection
+            hidden_states = residual + feed_forward_hidden_states
+
+            if corrupted_layer_idx == layer_idx:
+                for token_idx in corrupted_token_idx:
+                    print(f"Layer {layer_idx}, token index {token_idx} corrupted.")
+                    hidden_states[:,token_idx] = corrupt_function(hidden_states[:,token_idx])
+
+            if corrupted_layer_idx == layer_idx-1 and restoration_point != None:
+                for token_idx in corrupted_token_idx:
+                    print(f"Layer {layer_idx}, token index {token_idx} restored.")
+                    hidden_states[:,token_idx] = restoration_point[:,token_idx]
+
+            decomposed_outputs[f"block_{layer_idx}_mlp_output"] = hidden_states.clone()
+
+        # Final part
+        hidden_states = model.transformer.ln_f(hidden_states)
+        decomposed_outputs["final_norm_output"] = hidden_states.clone()
+        logits = model.lm_head(hidden_states)
+        next_token_logits = logits[:, -1, :]
+        next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+        decomposed_outputs["final_logits"] = logits
+        decomposed_outputs["next_token_id"] = next_token_id
+        return decomposed_outputs
+
+    def predict_next_tokens_stepwise(self, prompt, embedding_fn, num_of_tokens=1, corrupted_block_idx=None):
         """
         Stepwise (block-by-block) token prediction for GPT2-style models.
 
@@ -147,7 +216,7 @@ class GPT2Handler(BaseModelHandler):
         device = prompt.device
         model = self.model
         tokenizer = self.tokenizer
-        def block_fn(input_ids):
+        def block_fn(input_ids, corrupted_block_idx=None):
             # Embedding and positional encoding
             position_ids = torch.arange(0, input_ids.shape[-1], dtype=torch.long, device=device)
             position_ids = position_ids.unsqueeze(0).view(-1, input_ids.shape[-1])
@@ -158,7 +227,10 @@ class GPT2Handler(BaseModelHandler):
             i = 0
             for block in model.transformer.h:
                 outputs = block(hidden_states)
-                hidden_states = embedding_fn(outputs[0], i)
+                if corrupted_block_idx == i:
+                    hidden_states = embedding_fn(outputs[0])
+                else:
+                    hidden_states = outputs[0]
                 i += 1
             return hidden_states
         def final_fn(hidden_states):
@@ -166,7 +238,7 @@ class GPT2Handler(BaseModelHandler):
             hidden_states = model.transformer.ln_f(hidden_states)
             logits = model.lm_head(hidden_states)
             return logits
-        return self._stepwise_loop(prompt, num_of_tokens, block_fn, final_fn, tokenizer)
+        return self._stepwise_loop(prompt, num_of_tokens, block_fn, final_fn, tokenizer, corrupted_block_idx)
 
 @register_model("llama")
 class LlamaHandler(BaseModelHandler):
@@ -208,6 +280,41 @@ class LlamaHandler(BaseModelHandler):
                 if next_token_id.item() == tokenizer.eos_token_id:
                     break
         return prompt
+
+    def predict_next_token_decomposed(self, prompt):
+        device = prompt.device
+        model = self.model
+        # Initial embeddings
+        input_embeds = model.model.embed_tokens(prompt)
+        hidden_states = input_embeds
+        decomposed_outputs = {"initial_embedding": hidden_states.clone()}
+        for i, block in enumerate(model.model.layers):
+            # Attention block
+            residual = hidden_states
+            hidden_states_ln1 = block.input_layernorm(hidden_states)
+            decomposed_outputs[f"block_{i}_ln1_output"] = hidden_states_ln1.clone()
+            attn_outputs = block.self_attn(hidden_states_ln1)
+            attn_output = attn_outputs[0]
+            # residual connection
+            hidden_states = attn_output + residual
+            decomposed_outputs[f"block_{i}_attn_output"] = hidden_states.clone()
+            # MLP block
+            residual = hidden_states
+            hidden_states_ln2 = block.post_attention_layernorm(hidden_states)
+            decomposed_outputs[f"block_{i}_ln2_output"] = hidden_states_ln2.clone()
+            feed_forward_hidden_states = block.mlp(hidden_states_ln2)
+            # residual connection
+            hidden_states = residual + feed_forward_hidden_states
+            decomposed_outputs[f"block_{i}_mlp_output"] = hidden_states.clone()
+        # Final part
+        hidden_states = model.model.norm(hidden_states)
+        decomposed_outputs["final_norm_output"] = hidden_states.clone()
+        logits = model.lm_head(hidden_states)
+        next_token_logits = logits[:, -1, :]
+        next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+        decomposed_outputs["final_logits"] = logits
+        decomposed_outputs["next_token_id"] = next_token_id
+        return decomposed_outputs
 
     def predict_next_tokens_stepwise(self, prompt, num_of_tokens=1):
         """

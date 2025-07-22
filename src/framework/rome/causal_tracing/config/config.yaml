@@ -11,5 +11,9 @@ logging:
   log_level: "INFO"
 
 generation:
-  prompt: "The Eiffel Tower is in"
+  # prompt: "The Eiffel Tower is in"
+  prompt: "The Space Needle is in downtown"
+  corrupted_layer_idx: 7
+  corrupted_token_idx: [0, 1, 2, 3]
   max_new_tokens: 1
+  corrupted_block_idx: 0

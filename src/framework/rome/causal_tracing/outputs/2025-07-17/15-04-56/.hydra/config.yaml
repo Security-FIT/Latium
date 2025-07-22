@@ -1,5 +1,0 @@
-model:
-  name: gpt2-medium
-  models_dir: ../../../models
-  device: cpu
-  save_to_local: true

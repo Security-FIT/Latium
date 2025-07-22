@@ -62,6 +62,31 @@ def prepare_prompt(tokenizer, prompt_text: str, device: str):
     input_ids = inputs["input_ids"].to(device)
     return input_ids
 
+def embedding_fn_clean(hidden_states):
+    """
+    Return the hidden states unchanged (clean embedding function).
+
+    :param hidden_states: The input hidden states tensor.
+    :type hidden_states: torch.Tensor
+    :param index: (Unused) Index for compatibility.
+    :return: The unmodified hidden states tensor.
+    :rtype: torch.Tensor
+    """
+    return hidden_states
+
+def embedding_fn_corrupted(hidden_states):
+    """
+    Add standard normal noise to the hidden states tensor.
+
+    :param hidden_states: The input hidden states tensor.
+    :type hidden_states: torch.Tensor
+    :param index: (Unused) Index for compatibility.
+    :return: The hidden states with added noise.
+    :rtype: torch.Tensor
+    """
+    import torch
+    noise = torch.randn_like(hidden_states)
+    return hidden_states + noise
 
 def generate_text(cfg: DictConfig) -> None:
     """
@@ -81,7 +106,7 @@ def generate_text(cfg: DictConfig) -> None:
     LOGGER.info(f"Preparing prompt: '{prompt_text}'")
     input_ids = prepare_prompt(tokenizer, prompt_text, handler.device)
     LOGGER.info(f"Generating {max_new_tokens} tokens stepwise...")
-    generated = handler.predict_next_tokens_stepwise(input_ids, num_of_tokens=max_new_tokens)
+    generated = handler.predict_next_tokens_stepwise(input_ids, embedding_fn, num_of_tokens=max_new_tokens)
     input_str = tokenizer.decode(input_ids[0], skip_special_tokens=True)
     output_str = tokenizer.decode(generated[0], skip_special_tokens=True)
     print(f"Prompt: {input_str}")

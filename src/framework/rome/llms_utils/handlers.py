@@ -130,7 +130,7 @@ class GPT2Handler(BaseModelHandler):
                     break
         return prompt
 
-    def predict_next_tokens_stepwise(self, prompt, num_of_tokens=1):
+    def predict_next_tokens_stepwise(self, prompt, embedding_fn, num_of_tokens=1):
         """
         Stepwise (block-by-block) token prediction for GPT2-style models.
 
@@ -155,9 +155,11 @@ class GPT2Handler(BaseModelHandler):
             position_embeds = model.transformer.wpe(position_ids)
             hidden_states = token_embeds + position_embeds
             # Pass through all transformer blocks
+            i = 0
             for block in model.transformer.h:
                 outputs = block(hidden_states)
-                hidden_states = outputs[0]
+                hidden_states = embedding_fn(outputs[0], i)
+                i += 1
             return hidden_states
         def final_fn(hidden_states):
             # Final normalization and LM head

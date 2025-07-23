@@ -27,16 +27,39 @@ import torch
 from torch import Tensor
 import logging
 
-def setup_logger(cfg):
-    log_level = getattr(cfg, "log_level", "INFO")
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+def setup_logger():
+    """
+    Set up a static logger for the module with INFO level and a standard format.
+    This logger is not configurable via runtime config.
+    """
     logging.basicConfig(
-        level=numeric_level,
+        level=logging.INFO,
         format="[%(levelname)s] %(name)s: %(message)s"
     )
     logger = logging.getLogger(__name__)
-    logger.setLevel(numeric_level)
     return logger
+
+def setup_debug_logger(debug: bool = False):
+    """
+    Set up a debug logger for the module with DEBUG level and a standard format.
+    This logger is not configurable via runtime config.
+    """
+    # Configure the basic logging setup
+    if debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='[%(asctime)s %(name)s %(levelname)s]: %(message)s'
+        )
+    else:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='[%(asctime)s %(name)s %(levelname)s]: %(message)s'
+        )
+
+    # Get a logger instance
+    logger = logging.getLogger(__name__)
+    return logger
+
 
 def load_pretrained(cfg: DictConfig) -> Any:
     """

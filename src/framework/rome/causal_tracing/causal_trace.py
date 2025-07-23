@@ -32,11 +32,12 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 from llms_utils.handlers import MODEL_REGISTRY
-from llms_utils.utils import setup_logger
+from llms_utils.utils import setup_logger, setup_debug_logger
 
 
-# Global logger instance
-LOGGER: Optional[Any] = None
+# Globals
+LOGGER: Optional[Any] = setup_logger()
+DEBUG_LOGGER: Optional[Any] = None
 MULTIPLIER: int = 1
 
 def get_handler(cfg: DictConfig) -> Any:
@@ -49,7 +50,7 @@ def get_handler(cfg: DictConfig) -> Any:
     :return: An instance of the model handler.
     :rtype: BaseModelHandler
     """
-    model_type: str = cfg.model.type
+    model_type: str = cfg.model.handler
     handler_cls = MODEL_REGISTRY.get(model_type)
     if handler_cls is None:
         raise ValueError(f"Unknown model type: {model_type}. Available: {list(MODEL_REGISTRY.keys())}")
@@ -99,7 +100,6 @@ def causal_trace(cfg: DictConfig) -> None:
     :return: None
     :rtype: None
     """
-    global LOGGER
     LOGGER.info("Instantiating handler and tokenizer...")
     handler = get_handler(cfg)
     tokenizer = handler.tokenizer
@@ -109,7 +109,6 @@ def causal_trace(cfg: DictConfig) -> None:
     input_ids = prepare_prompt(tokenizer, prompt_text, handler.device)
     LOGGER.info(f"Generating {max_new_tokens} tokens stepwise...")
     
-    corrupted_layer_idx = cfg.generation.corrupted_layer_idx
     corrupted_token_idx = cfg.generation.corrupted_token_idx
 
     # Clean run: no corruption
@@ -142,8 +141,8 @@ if __name__ == "__main__":
         :return: None
         :rtype: None
         """
-        global LOGGER, MULTIPLIER
-        LOGGER = setup_logger(cfg)
+        global MULTIPLIER, DEBUG_LOGGER
         MULTIPLIER = cfg.generation.noise_multiplier
+        DEBUG_LOGGER = setup_debug_logger(cfg.logging.debug)
         causal_trace(cfg)
     main()

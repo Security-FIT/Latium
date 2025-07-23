@@ -11,9 +11,11 @@ from .handlers import BaseModelHandler, register_model
 import torch
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from .utils import setup_logger
+import logging
 
-LOGGER: Optional[Any] = setup_logger()
+
+LOGGER = logging.getLogger(__name__)
+
 
 @register_model("llama")
 class LlamaHandler(BaseModelHandler):

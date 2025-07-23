@@ -1,0 +1,5 @@
+handler: "llama"
+name: "microsoft/Phi-3-mini-4k-instruct"
+models_dir: "../../../models"
+device: "cpu"
+save_to_local: True # Keep this True until you specifically do not want the model cached locally

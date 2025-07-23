@@ -19,10 +19,13 @@ Typical usage example::
 """
 import torch
 from typing import Any, Callable, Dict, Optional, Type
-from .utils import load_pretrained, setup_logger
+from .utils import load_pretrained
+import logging
+
 
 MODEL_REGISTRY: Dict[str, Type["BaseModelHandler"]] = {}
-LOGGER: Optional[Any] = setup_logger()
+LOGGER = logging.getLogger(__name__)
+
 
 def register_model(model_type: str) -> Callable[[Type[Any]], Type[Any]]:
     """

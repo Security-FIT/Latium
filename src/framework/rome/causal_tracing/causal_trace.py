@@ -23,22 +23,22 @@ import os
 from typing import Any, Optional
 import torch
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import numpy as np
+import logging
 
 # Register parent directory for module imports
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-from llms_utils.handlers import MODEL_REGISTRY
-from llms_utils.utils import setup_logger, setup_debug_logger
+from handlers.handlers import MODEL_REGISTRY
 
 
 # Globals
-LOGGER: Optional[Any] = setup_logger()
-DEBUG_LOGGER: Optional[Any] = None
+LOGGER = logging.getLogger(__name__)
 MULTIPLIER: int = 1
+
 
 def get_handler(cfg: DictConfig) -> Any:
     """
@@ -100,14 +100,14 @@ def causal_trace(cfg: DictConfig) -> None:
     :return: None
     :rtype: None
     """
-    LOGGER.info("Instantiating handler and tokenizer...")
+    LOGGER.debug("Instantiating handler and tokenizer...")
     handler = get_handler(cfg)
     tokenizer = handler.tokenizer
     prompt_text: str = cfg.generation.prompt
     max_new_tokens: int = cfg.generation.max_new_tokens
-    LOGGER.info(f"Preparing prompt: '{prompt_text}'")
+    LOGGER.debug(f"Preparing prompt: '{prompt_text}'")
     input_ids = prepare_prompt(tokenizer, prompt_text, handler.device)
-    LOGGER.info(f"Generating {max_new_tokens} tokens stepwise...")
+    LOGGER.debug(f"Generating {max_new_tokens} tokens...")
     
     corrupted_token_idx = cfg.generation.corrupted_token_idx
 
@@ -115,20 +115,20 @@ def causal_trace(cfg: DictConfig) -> None:
     decomposed_outputs_clean = handler.predict_next_token_decomposed(
         input_ids, embedding_fn_corrupted, None, corrupted_token_idx
     )
-    print(f"Clean run prediction: {tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}")
+    LOGGER.info(f"Clean run prediction: {tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}")
 
     # Corrupted run: inject noise at specified layer/token
     decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
         input_ids, embedding_fn_corrupted, 0, corrupted_token_idx
     )
-    print(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}")
+    LOGGER.info(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}")
 
     # Restoration runs: restore clean activations at each layer after corruption
     for i in range(23):
         decomposed_outputs_restoration = handler.predict_next_token_decomposed(
             input_ids, embedding_fn_corrupted, i, corrupted_token_idx, decomposed_outputs_clean[f"block_{i+1}_mlp_output"]
         )
-        print(f"Restoration run on layer {i} prediction: {tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}")
+        LOGGER.info(f"Restoration run on layer {i} prediction: {tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}")
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
@@ -141,8 +141,9 @@ if __name__ == "__main__":
         :return: None
         :rtype: None
         """
-        global MULTIPLIER, DEBUG_LOGGER
+        global MULTIPLIER
+        LOGGER.debug("Application started")
         MULTIPLIER = cfg.generation.noise_multiplier
-        DEBUG_LOGGER = setup_debug_logger(cfg.logging.debug)
         causal_trace(cfg)
+    
     main()

@@ -7,58 +7,18 @@ Utility functions for the LLM framework, including model loading and other helpe
 :copyright: 2025 Jakub Res
 :license: MIT
 """
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-#
-# Copyright (c) 2025 Jakub Res
-# License: MIT
-#
-# File: utils.py
-# Description: Basic utility functions for common operations with HF Transformers library-loaded LLMs
-#
-# Author: Jakub Res iresj@fit.vut.cz
 
 
+import logging
 import os
 from typing import Any
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
 import torch
 from torch import Tensor
-import logging
 
-def setup_logger():
-    """
-    Set up a static logger for the module with INFO level and a standard format.
-    This logger is not configurable via runtime config.
-    """
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(levelname)s] %(name)s: %(message)s"
-    )
-    logger = logging.getLogger(__name__)
-    return logger
 
-def setup_debug_logger(debug: bool = False):
-    """
-    Set up a debug logger for the module with DEBUG level and a standard format.
-    This logger is not configurable via runtime config.
-    """
-    # Configure the basic logging setup
-    if debug:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='[%(asctime)s %(name)s %(levelname)s]: %(message)s'
-        )
-    else:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='[%(asctime)s %(name)s %(levelname)s]: %(message)s'
-        )
-
-    # Get a logger instance
-    logger = logging.getLogger(__name__)
-    return logger
+LOGGER = logging.getLogger(__name__)
 
 
 def load_pretrained(cfg: DictConfig) -> Any:
@@ -128,5 +88,3 @@ def predict_next_tokens(model, tokenizer, prompt, num_of_tokens: int = 1) -> Ten
                 break
 
     return prompt
-
-# Export MODEL_REGISTRY for use in other modules

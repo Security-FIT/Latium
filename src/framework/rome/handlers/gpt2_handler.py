@@ -85,7 +85,7 @@ class GPT2Handler(BaseModelHandler):
         device = prompt.device
         model = self.model
 
-        LOGGER.debug("Starting the decomposed token prediction")
+        LOGGER.debug("Starting the decomposed token prediction for GPT2 architecture")
 
         if corrupted_layer_idx != None:
             LOGGER.debug(f"Corruption on layer {corrupted_layer_idx}")
@@ -107,6 +107,8 @@ class GPT2Handler(BaseModelHandler):
             )
 
         hidden_states, decomposed_outputs = self._gpt2_final_forward(hidden_states, model, decomposed_outputs)
+
+        LOGGER.debug("Ending the decomposed token prediction for GPT2 architecture")
         return decomposed_outputs
 
     def _gpt2_initial_embedding(self, prompt, model, device):

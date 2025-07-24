@@ -1,4 +1,5 @@
 transformers
 hydra-core
+hydra_colorlog
 omegaconf
 torch

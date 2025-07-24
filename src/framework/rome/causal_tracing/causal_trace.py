@@ -38,7 +38,7 @@ from handlers.handlers import MODEL_REGISTRY
 # Globals
 LOGGER = logging.getLogger(__name__)
 MULTIPLIER: int = 1
-
+ 
 
 def get_handler(cfg: DictConfig) -> Any:
     """
@@ -73,12 +73,13 @@ def prepare_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tenso
     input_ids = inputs["input_ids"].to(device)
     return input_ids
 
-def embedding_fn_corrupted(hidden_states: torch.Tensor) -> torch.Tensor:
+def embedding_fn_corrupted(hidden_states: torch.Tensor, **kwargs) -> torch.Tensor:
     """
     Add standard normal noise to the hidden states tensor.
 
     :param hidden_states: The input hidden states tensor.
     :type hidden_states: torch.Tensor
+    :param **kwargs: Hacky approach to generalization of the block alteration approach in the model handlers.
     :return: The hidden states with added noise.
     :rtype: torch.Tensor
     """
@@ -102,6 +103,10 @@ def causal_trace(cfg: DictConfig) -> None:
     """
     LOGGER.debug("Instantiating handler and tokenizer...")
     handler = get_handler(cfg)
+
+    LOGGER.debug(handler.model)
+    # exit(0)
+
     tokenizer = handler.tokenizer
     prompt_text: str = cfg.generation.prompt
     max_new_tokens: int = cfg.generation.max_new_tokens

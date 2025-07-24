@@ -1,4 +1,7 @@
 defaults:
   - _self_
   - generation: generation
-  - model: model_gpt2
+  # - model: gpt2
+  - model: phi3
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog

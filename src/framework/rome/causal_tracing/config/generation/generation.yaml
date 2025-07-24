@@ -4,3 +4,5 @@ corrupted_token_idx: [0, 1, 2]
 max_new_tokens: 1
 corrupted_block_idx: 0
 noise_multiplier: 9
+num_of_runs: 1000
+filename: "results"

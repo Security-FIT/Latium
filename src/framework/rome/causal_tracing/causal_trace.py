@@ -26,6 +26,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import numpy as np
 import logging
+import csv
 
 # Register parent directory for module imports
 parent_dir = os.path.dirname(os.path.dirname(__file__))
@@ -38,7 +39,23 @@ from handlers.handlers import MODEL_REGISTRY
 # Globals
 LOGGER = logging.getLogger(__name__)
 MULTIPLIER: int = 1
- 
+
+
+def save_results_to_csv(filename, header, data, mode='a'):
+    """
+    Appends or writes a list of lists (data_rows) to a CSV file.
+    TODO: docstring & types
+    """
+    file_exists = os.path.exists(filename)
+    write_header = not file_exists or mode == 'w'
+
+    with open(filename, mode, newline='', encoding='utf-8') as csvfile:
+        csv_writer = csv.writer(csvfile)
+
+        if write_header:
+            csv_writer.writerow(header)
+
+        csv_writer.writerows(data)
 
 def get_handler(cfg: DictConfig) -> Any:
     """
@@ -105,7 +122,6 @@ def causal_trace(cfg: DictConfig) -> None:
     handler = get_handler(cfg)
 
     LOGGER.debug(handler.model)
-    # exit(0)
 
     tokenizer = handler.tokenizer
     prompt_text: str = cfg.generation.prompt
@@ -116,24 +132,39 @@ def causal_trace(cfg: DictConfig) -> None:
     
     corrupted_token_idx = cfg.generation.corrupted_token_idx
 
-    # Clean run: no corruption
-    decomposed_outputs_clean = handler.predict_next_token_decomposed(
-        input_ids, embedding_fn_corrupted, None, corrupted_token_idx
-    )
-    LOGGER.info(f"Clean run prediction: {tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}")
+    for run_number in range(cfg.generation.num_of_runs):
+        results = []
 
-    # Corrupted run: inject noise at specified layer/token
-    decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
-        input_ids, embedding_fn_corrupted, 0, corrupted_token_idx
-    )
-    LOGGER.info(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}")
-
-    # Restoration runs: restore clean activations at each layer after corruption
-    for i in range(23):
-        decomposed_outputs_restoration = handler.predict_next_token_decomposed(
-            input_ids, embedding_fn_corrupted, i, corrupted_token_idx, decomposed_outputs_clean[f"block_{i+1}_mlp_output"]
+        # Clean run: no corruption
+        decomposed_outputs_clean = handler.predict_next_token_decomposed(
+            input_ids, embedding_fn_corrupted, None, corrupted_token_idx
         )
-        LOGGER.info(f"Restoration run on layer {i} prediction: {tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}")
+        LOGGER.info(f"Clean run prediction: {tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}")
+
+        # Corrupted run: inject noise at specified layer/token
+        decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
+            input_ids, embedding_fn_corrupted, 0, corrupted_token_idx
+        )
+        LOGGER.info(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}")
+
+        # Restoration runs: restore clean activations at each layer after corruption
+        results_restoration = []
+        for i in range(23):
+            decomposed_outputs_restoration = handler.predict_next_token_decomposed(
+                input_ids, embedding_fn_corrupted, i, corrupted_token_idx, decomposed_outputs_clean[f"block_{i+1}_mlp_output"]
+            )
+            results_restoration.append(tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]))
+            LOGGER.info(f"Restoration run on layer {i} prediction: {tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}")
+        
+        results.append(
+            (
+                run_number,
+                tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), 
+                tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), 
+                results_restoration
+            )
+        )
+        save_results_to_csv(cfg.generation.filename, ["run_number", "clean", "corrupted", "restored"], results)
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
@@ -150,5 +181,35 @@ if __name__ == "__main__":
         LOGGER.debug("Application started")
         MULTIPLIER = cfg.generation.noise_multiplier
         causal_trace(cfg)
-    
     main()
+
+# def main_data_collection_process(output_csv_filename="string_results_with_run_id.csv", num_runs=5):
+#     """
+#     Main function to orchestrate the data generation and saving process.
+#     """
+#     # Define your CSV header
+#     csv_header = ["Run_ID", "Result_String"]
+
+#     # Optional: Remove previous output file for a clean run if you want to start fresh
+#     if os.path.exists(output_csv_filename):
+#         os.remove(output_csv_filename)
+#         print(f"Removed existing file: {output_csv_filename}")
+
+#     for run_id in range(1, num_runs + 1): # Simple index for run ID starting from 1
+#         print(f"\n--- Processing Run ID: {run_id} ---")
+#         # Simulate getting results for this run
+#         current_run_results = generate_sample_string_data(run_id, num_items=2) # Get 2 items per run for variety
+
+#         # Prepare the data for CSV, including the run_id
+#         rows_to_write = []
+#         for result_str in current_run_results:
+#             rows_to_write.append([run_id, result_str]) # Each row includes the run_id
+
+#         # Save the results. Use 'a' mode to append, 'w' for the first run if you want
+#         # to ensure header is written only once.
+#         save_results_to_csv(output_csv_filename, csv_header, rows_to_write, mode='a')
+
+#     print(f"\nAll runs completed. Final results in '{output_csv_filename}'.")
+
+# if __name__ == "__main__":
+#     main_data_collection_process(num_runs=7) # Run the process for 7 simulated runs

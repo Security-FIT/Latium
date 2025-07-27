@@ -18,6 +18,7 @@ Typical usage example::
 
 """
 
+import datetime
 import sys
 import os
 from typing import Any, Optional
@@ -37,8 +38,10 @@ from handlers.handlers import MODEL_REGISTRY
 
 
 # Globals
-LOGGER = logging.getLogger(__name__)
+LOGGER: logging.Logger = logging.getLogger(__name__)
 MULTIPLIER: int = 1
+# Timestamp format to match to he hydra output folder structure and naming convention
+TIMESTAMP: str = f"{str(datetime.datetime.now().date())}_{str(datetime.datetime.now().time()).replace(':', '-').split('.')[0]}"
 
 
 def save_results_to_csv(filename, header, data, mode='a'):
@@ -46,6 +49,7 @@ def save_results_to_csv(filename, header, data, mode='a'):
     Appends or writes a list of lists (data_rows) to a CSV file.
     TODO: docstring & types
     """
+    filename = f"{filename}_{TIMESTAMP}.csv"
     file_exists = os.path.exists(filename)
     write_header = not file_exists or mode == 'w'
 
@@ -124,12 +128,26 @@ def causal_trace(cfg: DictConfig) -> None:
     LOGGER.debug(handler.model)
 
     tokenizer = handler.tokenizer
+    
     prompt_text: str = cfg.generation.prompt
     max_new_tokens: int = cfg.generation.max_new_tokens
     LOGGER.debug(f"Preparing prompt: '{prompt_text}'")
     input_ids = prepare_prompt(tokenizer, prompt_text, handler.device)
     LOGGER.debug(f"Generating {max_new_tokens} tokens...")
+
+    # prompt_text = ["The Space Needle", "The Eiffel Tower"]
+    # input_ids = []
+    # for p in prompt_text:
+    #     max_new_tokens: int = cfg.generation.max_new_tokens
+    #     LOGGER.debug(f"Preparing prompt: '{prompt_text}'")
+    #     input_ids.append(prepare_prompt(tokenizer, p, handler.device))
+    #     LOGGER.debug(f"Generating {max_new_tokens} tokens...")
     
+    # handler.compute_embedding_std(input_ids)
+    # exit()
+
+    corrupt_att=True # TODO: Move to config
+
     corrupted_token_idx = cfg.generation.corrupted_token_idx
 
     for run_number in range(cfg.generation.num_of_runs):
@@ -137,34 +155,45 @@ def causal_trace(cfg: DictConfig) -> None:
 
         # Clean run: no corruption
         decomposed_outputs_clean = handler.predict_next_token_decomposed(
-            input_ids, embedding_fn_corrupted, None, corrupted_token_idx
+            input_ids
         )
         LOGGER.info(f"Clean run prediction: {tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}")
 
         # Corrupted run: inject noise at specified layer/token
         decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
-            input_ids, embedding_fn_corrupted, 0, corrupted_token_idx
+            prompt=input_ids, 
+            corruption_function=embedding_fn_corrupted, 
+            corruption_token_idx=corrupted_token_idx,
+            corrupt_att=corrupt_att
         )
         LOGGER.info(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}")
 
         # Restoration runs: restore clean activations at each layer after corruption
         results_restoration = []
-        for i in range(23):
-            decomposed_outputs_restoration = handler.predict_next_token_decomposed(
-                input_ids, embedding_fn_corrupted, i, corrupted_token_idx, decomposed_outputs_clean[f"block_{i+1}_mlp_output"]
-            )
-            results_restoration.append(tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]))
-            LOGGER.info(f"Restoration run on layer {i} prediction: {tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}")
+        for token_idx in corrupted_token_idx:
+            for restoration_layer_idx in range(23):
+                decomposed_outputs_restoration = handler.predict_next_token_decomposed(
+                    prompt=input_ids, 
+                    corruption_function=embedding_fn_corrupted, 
+                    corruption_token_idx=corrupted_token_idx,
+                    restoration_layer_idx=restoration_layer_idx, 
+                    restoration_token_idx=token_idx, 
+                    restoration_point=decomposed_outputs_clean[f"block_{restoration_layer_idx+1}_{'attn' if corrupt_att else 'mlp'}_output"], 
+                    corrupt_att=corrupt_att
+                )
+                results_restoration.append(tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]))
+                LOGGER.info(f"Restoration run on layer {restoration_layer_idx}, token {token_idx} prediction: {tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}")
         
-        results.append(
-            (
-                run_number,
-                tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), 
-                tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), 
-                results_restoration
+            results.append(
+                (
+                    run_number,
+                    tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), 
+                    tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), 
+                    token_idx,
+                    results_restoration
+                )
             )
-        )
-        save_results_to_csv(cfg.generation.filename, ["run_number", "clean", "corrupted", "restored"], results)
+        save_results_to_csv(cfg.generation.filename, ["run_number", "clean", "corrupted", "restored_token", "restored"], results)
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")

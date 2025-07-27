@@ -1,8 +1,8 @@
-prompt: "The Eiffel Tower is in"
-# prompt: "The Space Needle is in downtown"
-corrupted_token_idx: [0, 1, 2]
+# prompt: "The Eiffel Tower is in"
+prompt: "The Space Needle is in downtown"
+corrupted_token_idx: [0, 1, 2, 3]
 max_new_tokens: 1
 corrupted_block_idx: 0
-noise_multiplier: 9
+noise_multiplier: 11.5
 num_of_runs: 1000
 filename: "results"

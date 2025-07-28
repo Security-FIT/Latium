@@ -104,7 +104,7 @@ def embedding_fn_corrupted(hidden_states: torch.Tensor, **kwargs) -> torch.Tenso
     :return: The hidden states with added noise.
     :rtype: torch.Tensor
     """
-    # Scale the normal noise to standard deviation = 3 (see Appendix B.1 of "Locating and editing factual associations in GPT")
+    # Scale the normal noise to standard deviation of embeddings (see Appendix B.1 of "Locating and editing factual associations in GPT")
     noise = torch.randn_like(hidden_states) * MULTIPLIER
     return hidden_states + noise
 
@@ -211,34 +211,3 @@ if __name__ == "__main__":
         MULTIPLIER = cfg.generation.noise_multiplier
         causal_trace(cfg)
     main()
-
-# def main_data_collection_process(output_csv_filename="string_results_with_run_id.csv", num_runs=5):
-#     """
-#     Main function to orchestrate the data generation and saving process.
-#     """
-#     # Define your CSV header
-#     csv_header = ["Run_ID", "Result_String"]
-
-#     # Optional: Remove previous output file for a clean run if you want to start fresh
-#     if os.path.exists(output_csv_filename):
-#         os.remove(output_csv_filename)
-#         print(f"Removed existing file: {output_csv_filename}")
-
-#     for run_id in range(1, num_runs + 1): # Simple index for run ID starting from 1
-#         print(f"\n--- Processing Run ID: {run_id} ---")
-#         # Simulate getting results for this run
-#         current_run_results = generate_sample_string_data(run_id, num_items=2) # Get 2 items per run for variety
-
-#         # Prepare the data for CSV, including the run_id
-#         rows_to_write = []
-#         for result_str in current_run_results:
-#             rows_to_write.append([run_id, result_str]) # Each row includes the run_id
-
-#         # Save the results. Use 'a' mode to append, 'w' for the first run if you want
-#         # to ensure header is written only once.
-#         save_results_to_csv(output_csv_filename, csv_header, rows_to_write, mode='a')
-
-#     print(f"\nAll runs completed. Final results in '{output_csv_filename}'.")
-
-# if __name__ == "__main__":
-#     main_data_collection_process(num_runs=7) # Run the process for 7 simulated runs

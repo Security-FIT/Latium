@@ -169,8 +169,8 @@ def causal_trace(cfg: DictConfig) -> None:
         LOGGER.info(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}")
 
         # Restoration runs: restore clean activations at each layer after corruption
-        results_restoration = []
         for token_idx in corrupted_token_idx:
+            results_restoration = []
             for restoration_layer_idx in range(23):
                 decomposed_outputs_restoration = handler.predict_next_token_decomposed(
                     prompt=input_ids, 

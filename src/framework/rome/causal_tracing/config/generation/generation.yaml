@@ -1,6 +1,9 @@
+# prompt: "The Space Needle is in downtown"
 # prompt: "The Eiffel Tower is in"
-prompt: "The Space Needle is in downtown"
-corrupted_token_idx: [0, 1, 2, 3]
+prompt: "Lawrence Taylor professionally plays the sport of"
+# corrupted_token_idx: [0, 1, 2, 3]
+# corrupted_token_idx: [0, 1, 2]
+corrupted_token_idx: [0, 1, 2]
 max_new_tokens: 1
 corrupted_block_idx: 0
 noise_multiplier: 11.5

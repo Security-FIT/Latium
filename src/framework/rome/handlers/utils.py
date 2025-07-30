@@ -16,7 +16,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
 import torch
 from torch import Tensor
-from datasets import load_dataset, load_from_disk
+import datasets
 
 
 LOGGER = logging.getLogger(__name__)
@@ -74,10 +74,10 @@ def load_dataset(cfg: DictConfig) -> Any:
     local_dataset_path = os.path.abspath(local_dataset_path)
     
     if os.path.exists(local_dataset_path):
-        dataset = load_from_disk(local_dataset_path)
+        dataset = datasets.load_from_disk(local_dataset_path)
     else:
         # Model not present locally, download from HuggingFace Hub
-        dataset = load_dataset(dataset_name)
+        dataset = datasets.load_dataset(dataset_name)
         if save_to_local:
             os.makedirs(local_dataset_path, exist_ok=True)
             dataset.save_to_disk(local_dataset_path)

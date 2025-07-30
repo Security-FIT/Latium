@@ -6,3 +6,4 @@ torch
 pandas
 seaborn
 matplotlib
+datasets

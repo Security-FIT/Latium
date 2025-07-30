@@ -95,7 +95,7 @@ class GPT2Handler(BaseModelHandler):
             if restoration_token_idx == None:
                 LOGGER.warning(f"No specified tokens to corrupt")
 
-        hidden_states, decomposed_outputs = self._gpt2_initial_embedding(prompt, model, device)
+        hidden_states, decomposed_outputs = self._gpt2_initial_embedding(prompt, model, device, corruption_token_idx, corruption_function)
 
         for layer_idx, block in enumerate(model.transformer.h):
             hidden_states, decomposed_outputs = self._gpt2_block_forward(
@@ -111,34 +111,38 @@ class GPT2Handler(BaseModelHandler):
                 corrupt_att
             )
 
-        hidden_states, decomposed_outputs = self._gpt2_final_forward(hidden_states, model, decomposed_outputs)
+        _, decomposed_outputs = self._gpt2_final_forward(hidden_states, model, decomposed_outputs)
 
         LOGGER.debug("Ending the decomposed token prediction for GPT2 architecture")
         return decomposed_outputs
 
-    def _gpt2_initial_embedding(self, prompt, model, device):
+    def _gpt2_initial_embedding(self, prompt, model, device, corruption_token_idx, corruption_function):
         LOGGER.debug(f"Computing the initial embeddings")
         position_ids = torch.arange(0, prompt.shape[-1], dtype=torch.long, device=device)
         position_ids = position_ids.unsqueeze(0).view(-1, prompt.shape[-1])
-        LOGGER.debug(f"Computed positions IDs: {position_ids}")
-
+        
         token_embeds = model.transformer.wte(prompt)
-        LOGGER.debug(f"Computed token embeddings shape: {token_embeds.shape}")
         position_embeds = model.transformer.wpe(position_ids)
-        LOGGER.debug(f"Computed positional embeddings shape: {position_embeds.shape}")
         hidden_states = token_embeds + position_embeds
+        
         LOGGER.debug(f"Computed initial hidden states shape: {hidden_states.shape}")
 
         decomposed_outputs: Dict[str, Any] = {"initial_embedding": hidden_states.clone()}
+
+        if (corruption_token_idx is not None and corruption_function is not None):
+            LOGGER.debug(f"Corrupting the initial hidden states")
+            self._corrupt_hidden_state(hidden_states, corruption_token_idx, corruption_function)
+
         return hidden_states, decomposed_outputs
 
     def _corrupt_hidden_state(self, hidden_states, corruption_token_idx, corruption_function):
         # Apply corruption if specified
         if (corruption_function is not None and corruption_token_idx is not None):
             LOGGER.debug(f"Starting corruption on layer 0")
+            noise = corruption_function(hidden_states[:, corruption_token_idx[0]])
             for token_idx in corruption_token_idx:
                 LOGGER.info(f"Layer 0, token index {token_idx} corrupted.")
-                hidden_states[:, token_idx] = corruption_function(hidden_states[:, token_idx])
+                hidden_states[:, token_idx] += noise
 
     def _restore_hidden_state(self, hidden_states, layer_idx, restoration_layer_idx, restoration_token_idx, restoration_point):
         # Apply restoration if specified
@@ -175,7 +179,7 @@ class GPT2Handler(BaseModelHandler):
         decomposed_outputs[f"block_{layer_idx}_attn_output"] = hidden_states.clone()
         LOGGER.debug(f"Attention done")
 
-        if corrupt_att and restoration_layer_idx == layer_idx - 1:
+        if corrupt_att and restoration_layer_idx == layer_idx:
             hidden_states = self._restore_hidden_state(hidden_states, layer_idx, restoration_layer_idx, restoration_token_idx, restoration_point)
 
         # MLP block
@@ -186,13 +190,8 @@ class GPT2Handler(BaseModelHandler):
         hidden_states = residual + feed_forward_hidden_states
         LOGGER.debug(f"MLP done")
 
-        if not corrupt_att and restoration_layer_idx == layer_idx - 1:
+        if not corrupt_att and restoration_layer_idx == layer_idx:
             hidden_states = self._restore_hidden_state(hidden_states, layer_idx, restoration_layer_idx, restoration_token_idx, restoration_point)
-
-        if (layer_idx == 0 
-            and corruption_token_idx is not None 
-            and corruption_function is not None):
-            self._corrupt_hidden_state(hidden_states, corruption_token_idx, corruption_function)
         
         decomposed_outputs[f"block_{layer_idx}_mlp_output"] = hidden_states.clone()
         return hidden_states, decomposed_outputs
@@ -219,22 +218,7 @@ class GPT2Handler(BaseModelHandler):
 
             LOGGER.debug("Starting the computation of embedding standard deviation for GPT2 architecture")
 
-            hidden_states, decomposed_outputs = self._gpt2_initial_embedding(subject, model, device)
-            block = model.transformer.h[0]
-
-            hidden_states, decomposed_outputs = self._gpt2_block_forward(
-                hidden_states,
-                block,
-                0,
-                decomposed_outputs,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
-            )
-
+            hidden_states, _ = self._gpt2_initial_embedding(subject, model, device, None, None)
         
             outs.append(hidden_states.flatten())
-        print(torch.cat((outs[0], outs[1])).std())
+        return torch.cat(outs).std()

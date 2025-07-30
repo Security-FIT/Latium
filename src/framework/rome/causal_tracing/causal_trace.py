@@ -18,23 +18,26 @@ Typical usage example::
 
 """
 
+import pandas
+from ast import List
 import datetime
 import sys
 import os
-from typing import Any, Optional
+from typing import Any, Optional, Type
 import torch
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import numpy as np
 import logging
 import csv
+from itertools import product, chain
 
 # Register parent directory for module imports
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-from handlers.handlers import MODEL_REGISTRY
+from handlers.handlers import MODEL_REGISTRY, BaseModelHandler
 
 
 # Globals
@@ -106,7 +109,86 @@ def embedding_fn_corrupted(hidden_states: torch.Tensor, **kwargs) -> torch.Tenso
     """
     # Scale the normal noise to standard deviation of embeddings (see Appendix B.1 of "Locating and editing factual associations in GPT")
     noise = torch.randn_like(hidden_states) * MULTIPLIER
-    return hidden_states + noise
+    return noise
+
+def compute_multiplier(cfg: DictConfig) -> float:
+    LOGGER.debug("Starting the computation of multiplier")
+    handler = get_handler(cfg)
+    
+    df_prompts_dataset = pandas.DataFrame(handler.dataset["train"]["requested_rewrite"])
+    
+    # Filter out the prompts that does not start with the subject due to tokenization issues 
+    # (subject alone may tokenize differently to the subject in context)
+    df_filtered = df_prompts_dataset[df_prompts_dataset["prompt"].str.startswith("{}")].reset_index()
+
+    input_ids = []
+    for prompt_dict in df_filtered.itertuples():
+        if prompt_dict.Index == handler.cfg.generation.num_of_runs:
+            break
+
+        prompt = prompt_dict.prompt.format(prompt_dict.subject)
+        input_ids_prompt = prepare_prompt(handler.tokenizer, prompt, handler.device)
+        input_ids.append(input_ids_prompt)
+
+    return handler.compute_embedding_std(input_ids)
+
+def causal_trace_single_run(
+        run_number,
+        handler: BaseModelHandler, 
+        input_ids: torch.Tensor, 
+        input_ids_subject
+    ) -> None:
+    corrupt_att=handler.cfg.generation.corrupt_att
+
+    results = []
+    # Clean run: no corruption
+    decomposed_outputs_clean = handler.predict_next_token_decomposed(input_ids)
+    LOGGER.info(f"Clean run prediction: {handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}, logit {decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()]}, prob: {torch.sigmoid(decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()])}")
+
+    # Corrupted run: inject noise at specified layer/token
+    decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
+        input_ids, 
+        corruption_function=embedding_fn_corrupted, 
+        corruption_token_idx=input_ids_subject,
+        corrupt_att=corrupt_att
+    )
+    LOGGER.info(f"Corrupted run prediction: {handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}, logit {decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_corrupted['next_token_id'].item()]}, prob: {torch.sigmoid(decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_corrupted['next_token_id'].item()])}")
+
+    # Restoration runs: restore clean activations at each layer after corruption
+    results_restoration = {}
+    num_of_layers = len(handler.model.transformer.h)
+    for token_idx, restoration_layer_idx in product(input_ids_subject, range(num_of_layers)):
+        if token_idx not in results_restoration.keys():
+            results_restoration[token_idx] = []
+
+        decomposed_outputs_restoration = handler.predict_next_token_decomposed(
+            prompt=input_ids, 
+            corruption_function=embedding_fn_corrupted, 
+            corruption_token_idx=input_ids_subject,
+            restoration_layer_idx=restoration_layer_idx, 
+            restoration_token_idx=token_idx, 
+            restoration_point=decomposed_outputs_clean[f"block_{restoration_layer_idx}_{'attn' if corrupt_att else 'mlp'}_output"], 
+            corrupt_att=corrupt_att
+        )
+        # results_restoration[token_idx].append(handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]))
+        results_restoration[token_idx].append((handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]), torch.sigmoid(decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]).item()))
+        if len(results_restoration[token_idx]) > num_of_layers:
+            LOGGER.debug(f"Something happened during saving the results -- probably wrong subject tokens, Token {token_idx}, results {results_restoration}, layer {restoration_layer_idx}, run number {run_number}, ")
+            exit(-1)
+        LOGGER.info(f"Restoration run on layer {restoration_layer_idx}, token {token_idx} prediction: {handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}, logit {decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]}, prob: {torch.sigmoid(decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()])}")
+
+    for token_idx in results_restoration.keys():
+        results.append(
+            (
+                run_number,
+                (handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), torch.sigmoid(decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()]).item()),
+                (handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), torch.sigmoid(decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]).item()),
+                token_idx,
+                results_restoration[token_idx]
+            )
+        )
+
+    save_results_to_csv(handler.cfg.generation.filename, ["run_number", "clean", "corrupted", "restored_token", "restored"], results)
 
 def causal_trace(cfg: DictConfig) -> None:
     """
@@ -125,75 +207,22 @@ def causal_trace(cfg: DictConfig) -> None:
     LOGGER.debug("Instantiating handler and tokenizer...")
     handler = get_handler(cfg)
 
-    LOGGER.debug(handler.model)
+    df_prompts_dataset = pandas.DataFrame(handler.dataset["train"]["requested_rewrite"])
+    df_filtered = df_prompts_dataset[df_prompts_dataset["prompt"].str.startswith("{}")].reset_index()
 
-    tokenizer = handler.tokenizer
-    
-    prompt_text: str = cfg.generation.prompt
-    max_new_tokens: int = cfg.generation.max_new_tokens
-    LOGGER.debug(f"Preparing prompt: '{prompt_text}'")
-    input_ids = prepare_prompt(tokenizer, prompt_text, handler.device)
-    LOGGER.debug(f"Generating {max_new_tokens} tokens...")
+    for prompt_dict in df_filtered.itertuples():
+        if prompt_dict.Index == handler.cfg.generation.num_of_runs:
+            break
 
-    # prompt_text = ["The Space Needle", "The Eiffel Tower"]
-    # input_ids = []
-    # for p in prompt_text:
-    #     max_new_tokens: int = cfg.generation.max_new_tokens
-    #     LOGGER.debug(f"Preparing prompt: '{prompt_text}'")
-    #     input_ids.append(prepare_prompt(tokenizer, p, handler.device))
-    #     LOGGER.debug(f"Generating {max_new_tokens} tokens...")
-    
-    # handler.compute_embedding_std(input_ids)
-    # exit()
+        prompt = prompt_dict.prompt.format(prompt_dict.subject)
+        input_ids_prompt = prepare_prompt(handler.tokenizer, prompt, handler.device)
+        input_ids_subject = prepare_prompt(handler.tokenizer, prompt_dict.subject, handler.device)
+        windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
+        matches = (windows == input_ids_subject)
+        subject_idx = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
+        LOGGER.debug(f"Computed subject idx: {subject_idx}, prompt: {prompt}, input_ids: {input_ids_prompt}, input_ids_subject {input_ids_subject}, windows: {windows}, matches: {matches}")
 
-    corrupt_att=True # TODO: Move to config
-
-    corrupted_token_idx = cfg.generation.corrupted_token_idx
-
-    for run_number in range(cfg.generation.num_of_runs):
-        results = []
-
-        # Clean run: no corruption
-        decomposed_outputs_clean = handler.predict_next_token_decomposed(
-            input_ids
-        )
-        LOGGER.info(f"Clean run prediction: {tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}")
-
-        # Corrupted run: inject noise at specified layer/token
-        decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
-            prompt=input_ids, 
-            corruption_function=embedding_fn_corrupted, 
-            corruption_token_idx=corrupted_token_idx,
-            corrupt_att=corrupt_att
-        )
-        LOGGER.info(f"Corrupted run prediction: {tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}")
-
-        # Restoration runs: restore clean activations at each layer after corruption
-        for token_idx in corrupted_token_idx:
-            results_restoration = []
-            for restoration_layer_idx in range(23):
-                decomposed_outputs_restoration = handler.predict_next_token_decomposed(
-                    prompt=input_ids, 
-                    corruption_function=embedding_fn_corrupted, 
-                    corruption_token_idx=corrupted_token_idx,
-                    restoration_layer_idx=restoration_layer_idx, 
-                    restoration_token_idx=token_idx, 
-                    restoration_point=decomposed_outputs_clean[f"block_{restoration_layer_idx+1}_{'attn' if corrupt_att else 'mlp'}_output"], 
-                    corrupt_att=corrupt_att
-                )
-                results_restoration.append(tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]))
-                LOGGER.info(f"Restoration run on layer {restoration_layer_idx}, token {token_idx} prediction: {tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}")
-        
-            results.append(
-                (
-                    run_number,
-                    tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), 
-                    tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), 
-                    token_idx,
-                    results_restoration
-                )
-            )
-        save_results_to_csv(cfg.generation.filename, ["run_number", "clean", "corrupted", "restored_token", "restored"], results)
+        causal_trace_single_run(prompt_dict.Index, handler, input_ids_prompt, subject_idx)
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
@@ -208,6 +237,6 @@ if __name__ == "__main__":
         """
         global MULTIPLIER
         LOGGER.debug("Application started")
-        MULTIPLIER = cfg.generation.noise_multiplier
+        MULTIPLIER = compute_multiplier(cfg).item()*3
         causal_trace(cfg)
     main()

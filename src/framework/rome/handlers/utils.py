@@ -16,6 +16,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
 import torch
 from torch import Tensor
+from datasets import load_dataset, load_from_disk
 
 
 LOGGER = logging.getLogger(__name__)
@@ -53,6 +54,35 @@ def load_pretrained(cfg: DictConfig) -> Any:
             tokenizer.save_pretrained(local_model_path)
             
     return model, tokenizer
+
+def load_dataset(cfg: DictConfig) -> Any:
+    """
+    Return a loaded dataset.
+    The function automatically scans local model cache 
+    to effectively reuse the previously saved datasets.
+
+    :param cfg: Mandatory config
+    :type cfg: DictConf
+    :return: Loaded dataset
+    :rtype: Any
+    """
+    dataset_name = cfg.dataset.name
+    save_to_local = cfg.dataset.save_to_local
+
+    datasets_dir = cfg.dataset.datasets_dir
+    local_dataset_path = os.path.join(datasets_dir, dataset_name)
+    local_dataset_path = os.path.abspath(local_dataset_path)
+    
+    if os.path.exists(local_dataset_path):
+        dataset = load_from_disk(local_dataset_path)
+    else:
+        # Model not present locally, download from HuggingFace Hub
+        dataset = load_dataset(dataset_name)
+        if save_to_local:
+            os.makedirs(local_dataset_path, exist_ok=True)
+            dataset.save_to_disk(local_dataset_path)
+            
+    return dataset
 
 def predict_next_tokens(model, tokenizer, prompt, num_of_tokens: int = 1) -> Tensor:
     """

@@ -1,5 +1,5 @@
 handler: "gpt2"
-name: "gpt2-medium"
+name: "gpt2-xl"
 models_dir: "../../../models"
-device: "cpu"
+device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally

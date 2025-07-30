@@ -143,7 +143,9 @@ def causal_trace_single_run(
     results = []
     # Clean run: no corruption
     decomposed_outputs_clean = handler.predict_next_token_decomposed(input_ids)
-    LOGGER.info(f"Clean run prediction: {handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}, logit {decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()]}, prob: {torch.sigmoid(decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()])}")
+    for key in decomposed_outputs_clean.keys():
+        decomposed_outputs_clean[key].cpu()
+    # LOGGER.info(f"Clean run prediction: {handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}, logit {decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()]}, prob: {torch.softmax(decomposed_outputs_clean['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()]}")
 
     # Corrupted run: inject noise at specified layer/token
     decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
@@ -152,7 +154,9 @@ def causal_trace_single_run(
         corruption_token_idx=input_ids_subject,
         corrupt_att=corrupt_att
     )
-    LOGGER.info(f"Corrupted run prediction: {handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}, logit {decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_corrupted['next_token_id'].item()]}, prob: {torch.sigmoid(decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_corrupted['next_token_id'].item()])}")
+    for key in decomposed_outputs_corrupted.keys():
+        decomposed_outputs_corrupted[key].cpu()
+    # LOGGER.info(f"Corrupted run prediction: {handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}, logit {decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_corrupted['next_token_id'].item()]}, prob: {torch.softmax(decomposed_outputs_corrupted['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_corrupted['next_token_id'].item()]}")
 
     # Restoration runs: restore clean activations at each layer after corruption
     results_restoration = {}
@@ -170,19 +174,21 @@ def causal_trace_single_run(
             restoration_point=decomposed_outputs_clean[f"block_{restoration_layer_idx}_{'attn' if corrupt_att else 'mlp'}_output"], 
             corrupt_att=corrupt_att
         )
+        for key in decomposed_outputs_restoration.keys():
+            decomposed_outputs_restoration[key].cpu()
         # results_restoration[token_idx].append(handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]))
-        results_restoration[token_idx].append((handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]), torch.sigmoid(decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]).item()))
+        results_restoration[token_idx].append((handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]), torch.softmax(decomposed_outputs_restoration['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()].item()))
         if len(results_restoration[token_idx]) > num_of_layers:
-            LOGGER.debug(f"Something happened during saving the results -- probably wrong subject tokens, Token {token_idx}, results {results_restoration}, layer {restoration_layer_idx}, run number {run_number}, ")
+            LOGGER.debug(f"Something happened during results saving -- probably wrong subject tokens")
             exit(-1)
-        LOGGER.info(f"Restoration run on layer {restoration_layer_idx}, token {token_idx} prediction: {handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}, logit {decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]}, prob: {torch.sigmoid(decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()])}")
+        # LOGGER.info(f"Restoration run on layer {restoration_layer_idx}, token {token_idx} prediction: {handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}, logit {decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]}")
 
     for token_idx in results_restoration.keys():
         results.append(
             (
                 run_number,
-                (handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), torch.sigmoid(decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()]).item()),
-                (handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), torch.sigmoid(decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]).item()),
+                (handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), torch.softmax(decomposed_outputs_clean['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()].item()),
+                (handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), torch.softmax(decomposed_outputs_corrupted['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()].item()),
                 token_idx,
                 results_restoration[token_idx]
             )
@@ -213,6 +219,7 @@ def causal_trace(cfg: DictConfig) -> None:
     for prompt_dict in df_filtered.itertuples():
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
+
 
         prompt = prompt_dict.prompt.format(prompt_dict.subject)
         input_ids_prompt = prepare_prompt(handler.tokenizer, prompt, handler.device)

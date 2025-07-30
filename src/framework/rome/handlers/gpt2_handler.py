@@ -87,6 +87,7 @@ class GPT2Handler(BaseModelHandler):
         """
         device = prompt.device
         model = self.model
+        model.eval()
 
         LOGGER.debug("Starting the decomposed token prediction for GPT2 architecture")
 
@@ -95,6 +96,7 @@ class GPT2Handler(BaseModelHandler):
             if restoration_token_idx == None:
                 LOGGER.warning(f"No specified tokens to corrupt")
 
+    
         hidden_states, decomposed_outputs = self._gpt2_initial_embedding(prompt, model, device, corruption_token_idx, corruption_function)
 
         for layer_idx, block in enumerate(model.transformer.h):
@@ -127,12 +129,12 @@ class GPT2Handler(BaseModelHandler):
         
         LOGGER.debug(f"Computed initial hidden states shape: {hidden_states.shape}")
 
-        decomposed_outputs: Dict[str, Any] = {"initial_embedding": hidden_states.clone()}
 
         if (corruption_token_idx is not None and corruption_function is not None):
             LOGGER.debug(f"Corrupting the initial hidden states")
             self._corrupt_hidden_state(hidden_states, corruption_token_idx, corruption_function)
 
+        decomposed_outputs: Dict[str, Any] = {"initial_embedding": hidden_states.clone()}
         return hidden_states, decomposed_outputs
 
     def _corrupt_hidden_state(self, hidden_states, corruption_token_idx, corruption_function):

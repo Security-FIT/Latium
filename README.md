@@ -22,6 +22,7 @@
 | Error code    | Name of the error | Description                                                                         |
 |---------------|-------------------|-------------------------------------------------------------------------------------|
 | `1`           | Help              | Help invoked. Typically caused by incorrect script usage.                           |
+| `2`           | Resource exists   | Trying to create a resource that already exists.
 | `-1`          | Unknown           | An unknow error. Contact the developer with instruction to reproduce the behavior.  |
 
 ---

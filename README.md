@@ -1,7 +1,6 @@
 # Reimagined Framework
 
 ## TODO:
-- reimplement handlers -- separate the model handler from other stuff (tokenizer, dataset, ...)
 - implement more handlers for modern models
 - Add hyperparameter caching
 

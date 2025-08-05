@@ -83,38 +83,3 @@ def load_dataset(cfg: DictConfig) -> Any:
             dataset.save_to_disk(local_dataset_path)
             
     return dataset
-
-def predict_next_tokens(model, tokenizer, prompt, num_of_tokens: int = 1) -> Tensor:
-    """
-    Generates the next token(s) for a given prompt using the provided model and tokenizer.
-
-    This function takes a model, tokenizer, and a prompt (as input tensor), and generates
-    a specified number of next tokens by autoregressively sampling from the model's output.
-    The function appends each generated token to the prompt and stops early if the EOS token
-    is produced.
-
-    :param model: The language model used for generation (e.g., from HuggingFace Transformers).
-    :type model: torch.nn.Module
-    :param tokenizer: The tokenizer corresponding to the model.
-    :type tokenizer: transformers.PreTrainedTokenizer
-    :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-    :type prompt: torch.Tensor
-    :param num_of_tokens: Number of tokens to generate. Defaults to 1.
-    :type num_of_tokens: int, optional
-    :return: The prompt tensor with the generated tokens appended.
-    :rtype: torch.Tensor
-    """
-
-    for i in range(num_of_tokens):
-        with torch.no_grad():
-            outputs = model(prompt)
-            logits = outputs.logits
-            next_token_logits = logits[:, -1, :]
-            next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-            prompt = torch.cat([prompt, next_token_id], dim=1)
-
-            # Stop if EOS token is generated
-            if next_token_id.item() == tokenizer.eos_token_id:
-                break
-
-    return prompt

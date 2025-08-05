@@ -59,7 +59,6 @@ class BaseModelHandler:
         """
         self.cfg = cfg
         self.model, self.tokenizer = load_pretrained(cfg)
-        self.dataset = load_dataset(cfg)
         self.device = getattr(cfg.model, "device", "cpu")
         self.model.eval()
 

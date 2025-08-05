@@ -33,6 +33,7 @@ import csv
 from itertools import product, chain
 
 from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler
+from reimagined.utils import load_dataset
 
 
 # Globals
@@ -117,7 +118,8 @@ def compute_multiplier(cfg: DictConfig) -> float:
     :rtype: float
     """
     handler = get_handler(cfg)
-    df_dataset = filter_dataset(handler)
+    dataset = load_dataset(cfg)
+    df_dataset = filter_dataset(dataset)
 
     input_ids = []
     for prompt_dict in df_dataset.itertuples():
@@ -225,8 +227,8 @@ def causal_trace_single_run(
 
     save_results_to_csv(handler.cfg.generation.filename, ["run_number", "clean", "corrupted", "restored_token", "restored"], results)
 
-def filter_dataset(handler: BaseModelHandler) -> pandas.DataFrame:
-    df_prompts_dataset = pandas.DataFrame(handler.dataset["train"]["requested_rewrite"])
+def filter_dataset(dataset: Any) -> pandas.DataFrame:
+    df_prompts_dataset = pandas.DataFrame(dataset["train"]["requested_rewrite"])
 
     # Filter out the prompts that does not start with the subject due to tokenization issues 
     # (subject alone may tokenize differently to the subject in context)
@@ -247,7 +249,8 @@ def causal_trace(cfg: DictConfig) -> None:
     :rtype: None
     """
     handler = get_handler(cfg)
-    df_dataset = filter_dataset(handler)
+    dataset = load_dataset(cfg)
+    df_dataset = filter_dataset(dataset)
 
     for prompt_dict in df_dataset.itertuples():
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:

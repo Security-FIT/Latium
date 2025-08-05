@@ -3,7 +3,7 @@
 ## TODO:
 - reimplement handlers -- separate the model handler from other stuff (tokenizer, dataset, ...)
 - implement more handlers for modern models
-- make handlers a standalone module within the framework
+- Add hyperparameter caching
 
 ## Models roadmap
 ---
@@ -22,7 +22,7 @@
 | Error code    | Name of the error | Description                                                                         |
 |---------------|-------------------|-------------------------------------------------------------------------------------|
 | `1`           | Help              | Help invoked. Typically caused by incorrect script usage.                           |
-| `2`           | Resource exists   | Trying to create a resource that already exists.
+| `2`           | Resource already exists   | Trying to create a resource that already exists.                            |
 | `-1`          | Unknown           | An unknow error. Contact the developer with instruction to reproduce the behavior.  |
 
 ---

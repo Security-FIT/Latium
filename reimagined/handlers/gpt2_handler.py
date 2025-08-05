@@ -10,7 +10,7 @@ Handler for GPT2-style models for the LLM framework.
 from tkinter import HIDDEN
 from .common import BaseModelHandler, register_model
 import torch
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 import logging
 
 
@@ -24,41 +24,7 @@ class GPT2Handler(BaseModelHandler):
 
     Implements token-by-token generation using the GPT2 transformer architecture.
     """
-    def predict_next_tokens(self, prompt: torch.Tensor, num_of_tokens: int = 1) -> torch.Tensor:
-        """
-        Generate the next token(s) for a given prompt using a GPT2-style model.
-
-        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-        :type prompt: torch.Tensor
-        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
-        :type num_of_tokens: int, optional
-        :return: The prompt tensor with the generated tokens appended.
-        :rtype: torch.Tensor
-        """
-        device = prompt.device
-        model = self.model
-        tokenizer = self.tokenizer
-        for i in range(num_of_tokens):
-            with torch.no_grad():
-                # Embedding and positional encoding
-                input_embeds = model.transformer.wte(prompt)
-                position_ids = torch.arange(prompt.shape[1], dtype=torch.long, device=device)
-                position_ids = position_ids.unsqueeze(0).expand_as(prompt)
-                hidden_states = model.transformer.drop(model.transformer.wpe(position_ids) + input_embeds)
-                # Pass through all transformer blocks
-                for block in model.transformer.h:
-                    hidden_states = block(hidden_states)[0]
-                # Final normalization and LM head
-                hidden_states = model.transformer.ln_f(hidden_states)
-                logits = model.lm_head(hidden_states)
-                next_token_logits = logits[:, -1, :]
-                next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-                prompt = torch.cat([prompt, next_token_id], dim=1)
-                if next_token_id.item() == tokenizer.eos_token_id:
-                    break
-        return prompt
-
-    def predict_next_token_decomposed(
+    def predict_next_token(
         self,
         prompt: torch.Tensor,
         corruption_function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
@@ -87,16 +53,7 @@ class GPT2Handler(BaseModelHandler):
         """
         device = prompt.device
         model = self.model
-        model.eval()
 
-        LOGGER.debug("Starting the decomposed token prediction for GPT2 architecture")
-
-        if restoration_layer_idx != None:
-            LOGGER.debug(f"Corruption on layer {restoration_layer_idx}")
-            if restoration_token_idx == None:
-                LOGGER.warning(f"No specified tokens to corrupt")
-
-    
         hidden_states, decomposed_outputs = self._gpt2_initial_embedding(prompt, model, device, corruption_token_idx, corruption_function)
 
         for layer_idx, block in enumerate(model.transformer.h):
@@ -105,21 +62,15 @@ class GPT2Handler(BaseModelHandler):
                 block,
                 layer_idx,
                 decomposed_outputs,
-                corruption_function,
-                corruption_token_idx,
                 restoration_layer_idx,
                 restoration_token_idx,
                 restoration_point,
                 corrupt_att
             )
 
-        _, decomposed_outputs = self._gpt2_final_forward(hidden_states, model, decomposed_outputs)
-
-        LOGGER.debug("Ending the decomposed token prediction for GPT2 architecture")
-        return decomposed_outputs
+        return self._gpt2_final_forward(hidden_states, model, decomposed_outputs)
 
     def _gpt2_initial_embedding(self, prompt, model, device, corruption_token_idx, corruption_function):
-        LOGGER.debug(f"Computing the initial embeddings")
         position_ids = torch.arange(0, prompt.shape[-1], dtype=torch.long, device=device)
         position_ids = position_ids.unsqueeze(0).view(-1, prompt.shape[-1])
         
@@ -127,11 +78,7 @@ class GPT2Handler(BaseModelHandler):
         position_embeds = model.transformer.wpe(position_ids)
         hidden_states = token_embeds + position_embeds
         
-        LOGGER.debug(f"Computed initial hidden states shape: {hidden_states.shape}")
-
-
         if (corruption_token_idx is not None and corruption_function is not None):
-            LOGGER.debug(f"Corrupting the initial hidden states")
             self._corrupt_hidden_state(hidden_states, corruption_token_idx, corruption_function)
 
         decomposed_outputs: Dict[str, Any] = {"initial_embedding": hidden_states.clone()}
@@ -140,19 +87,13 @@ class GPT2Handler(BaseModelHandler):
     def _corrupt_hidden_state(self, hidden_states, corruption_token_idx, corruption_function):
         # Apply corruption if specified
         if (corruption_function is not None and corruption_token_idx is not None):
-            LOGGER.debug(f"Starting corruption on layer 0")
             noise = corruption_function(hidden_states[:, corruption_token_idx[0]])
             for token_idx in corruption_token_idx:
-                LOGGER.info(f"Layer 0, token index {token_idx} corrupted.")
                 hidden_states[:, token_idx] += noise
 
-    def _restore_hidden_state(self, hidden_states, layer_idx, restoration_layer_idx, restoration_token_idx, restoration_point):
+    def _restore_hidden_state(self, hidden_states, restoration_token_idx, restoration_point):
         # Apply restoration if specified
-        if (restoration_point is not None
-            and restoration_token_idx is not None):
-            LOGGER.debug(f"Starting restoration on layer {layer_idx}")
-            
-            LOGGER.info(f"Layer {layer_idx}, token index {restoration_token_idx} restored.")
+        if restoration_point is not None and restoration_token_idx is not None:
             hidden_states[:, restoration_token_idx] = restoration_point[:, restoration_token_idx]
 
         return hidden_states
@@ -163,14 +104,11 @@ class GPT2Handler(BaseModelHandler):
         block,
         layer_idx,
         decomposed_outputs,
-        corruption_function,
-        corruption_token_idx,
         restoration_layer_idx,
         restoration_token_idx,
         restoration_point,
         corrupt_att
     ):
-        LOGGER.debug(f"Starting the transformer block forward function for layer {layer_idx}")
         # Attention block
         residual = hidden_states
         hidden_states_ln1 = block.ln_1(hidden_states)
@@ -179,10 +117,9 @@ class GPT2Handler(BaseModelHandler):
         attn_output = attn_outputs[0]
         hidden_states = attn_output + residual
         decomposed_outputs[f"block_{layer_idx}_attn_output"] = hidden_states.clone()
-        LOGGER.debug(f"Attention done")
 
         if corrupt_att and restoration_layer_idx == layer_idx:
-            hidden_states = self._restore_hidden_state(hidden_states, layer_idx, restoration_layer_idx, restoration_token_idx, restoration_point)
+            hidden_states = self._restore_hidden_state(hidden_states, restoration_token_idx, restoration_point)
 
         # MLP block
         residual = hidden_states
@@ -190,37 +127,36 @@ class GPT2Handler(BaseModelHandler):
         decomposed_outputs[f"block_{layer_idx}_ln2_output"] = hidden_states_ln2.clone()
         feed_forward_hidden_states = block.mlp(hidden_states_ln2)
         hidden_states = residual + feed_forward_hidden_states
-        LOGGER.debug(f"MLP done")
 
         if not corrupt_att and restoration_layer_idx == layer_idx:
-            hidden_states = self._restore_hidden_state(hidden_states, layer_idx, restoration_layer_idx, restoration_token_idx, restoration_point)
+            hidden_states = self._restore_hidden_state(hidden_states, restoration_token_idx, restoration_point)
         
         decomposed_outputs[f"block_{layer_idx}_mlp_output"] = hidden_states.clone()
         return hidden_states, decomposed_outputs
 
     def _gpt2_final_forward(self, hidden_states, model, decomposed_outputs):
-        LOGGER.debug(f"Starting the final forward")
         hidden_states = model.transformer.ln_f(hidden_states)
         decomposed_outputs["final_norm_output"] = hidden_states.clone()
         logits = model.lm_head(hidden_states)
 
         next_token_logits = logits[:, -1, :]
         next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-        LOGGER.debug(f"Sampled the most probable token")
 
         decomposed_outputs["final_logits"] = logits
         decomposed_outputs["next_token_id"] = next_token_id
         return hidden_states, decomposed_outputs
 
-    def compute_embedding_std(self, subjects):
-        outs = []
+    def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Compute the standard deviation in the initial embeddings. Used primarily for the corruption noise scaling.
+        :param subjects: The tokenized prompts' subjects to compute the embeddings from
+        :type subjects: torch.Tensor
+        :return: A single item tensor with the standard deviation
+        :rtype: torch.Tensor
+        """
+        embeddings = []
         for subject in subjects:
-            device = subject.device
-            model = self.model
+            hidden_states, _ = self._gpt2_initial_embedding(subject, self.model, subject.device, None, None)
+            embeddings.append(hidden_states.flatten())
 
-            LOGGER.debug("Starting the computation of embedding standard deviation for GPT2 architecture")
-
-            hidden_states, _ = self._gpt2_initial_embedding(subject, model, device, None, None)
-        
-            outs.append(hidden_states.flatten())
-        return torch.cat(outs).std()
+        return torch.cat(embeddings).std()

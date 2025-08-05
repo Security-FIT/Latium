@@ -23,7 +23,7 @@ from ast import List
 import datetime
 import sys
 import os
-from typing import Any, Optional, Type
+from typing import Any, Dict, Optional, Type
 import torch
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -31,11 +31,6 @@ import numpy as np
 import logging
 import csv
 from itertools import product, chain
-
-# Register parent directory for module imports
-# parent_dir = os.path.dirname(os.path.dirname(__file__))
-# if parent_dir not in sys.path:
-#     sys.path.append(parent_dir)
 
 from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler
 
@@ -52,6 +47,7 @@ def save_results_to_csv(filename, header, data, mode='a'):
     Appends or writes a list of lists (data_rows) to a CSV file.
     TODO: docstring & types
     """
+    # TODO: Link results with config
     filename = f"{filename}_{TIMESTAMP}.csv"
     file_exists = os.path.exists(filename)
     write_header = not file_exists or mode == 'w'
@@ -68,7 +64,7 @@ def get_handler(cfg: DictConfig) -> Any:
     """
     Retrieve and instantiate the appropriate model handler based on config.
 
-    :param cfg: The configuration object containing model parameters.
+    :param cfg: The configuration object containing static info
     :type cfg: DictConfig
     :raises ValueError: If the model type specified in the config is not registered.
     :return: An instance of the model handler.
@@ -97,7 +93,7 @@ def prepare_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tenso
     input_ids = inputs["input_ids"].to(device)
     return input_ids
 
-def embedding_fn_corrupted(hidden_states: torch.Tensor, **kwargs) -> torch.Tensor:
+def embedding_fn_corrupt(hidden_states: torch.Tensor, **kwargs) -> torch.Tensor:
     """
     Add standard normal noise to the hidden states tensor.
 
@@ -112,17 +108,19 @@ def embedding_fn_corrupted(hidden_states: torch.Tensor, **kwargs) -> torch.Tenso
     return noise
 
 def compute_multiplier(cfg: DictConfig) -> float:
-    LOGGER.debug("Starting the computation of multiplier")
+    """
+    Compute the noise multiplier using loaded dataset.
+
+    :param cfg: The configuration object containing static info
+    :type cfg: DictConfig
+    :return: The computed multiplier
+    :rtype: float
+    """
     handler = get_handler(cfg)
-    
-    df_prompts_dataset = pandas.DataFrame(handler.dataset["train"]["requested_rewrite"])
-    
-    # Filter out the prompts that does not start with the subject due to tokenization issues 
-    # (subject alone may tokenize differently to the subject in context)
-    df_filtered = df_prompts_dataset[df_prompts_dataset["prompt"].str.startswith("{}")].reset_index()
+    df_dataset = filter_dataset(handler)
 
     input_ids = []
-    for prompt_dict in df_filtered.itertuples():
+    for prompt_dict in df_dataset.itertuples():
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
 
@@ -130,7 +128,31 @@ def compute_multiplier(cfg: DictConfig) -> float:
         input_ids_prompt = prepare_prompt(handler.tokenizer, prompt, handler.device)
         input_ids.append(input_ids_prompt)
 
-    return handler.compute_embedding_std(input_ids)
+    return handler.compute_embedding_std(input_ids).item()*3 # TODO: move constant into the model config
+
+def move_dict_to_cpu(tensors_dict: Dict[Any, torch.Tensor]) -> None:
+    """
+    Move dictionary of torch tensors from cuda to cpu.
+
+    :param tensors_dict: The dictionary containing torch tensors
+    :type tensor_dict: Dict[Any, torch.Tensor]
+    :return: None
+    """
+    for key in tensors_dict.keys():
+        tensors_dict[key] = tensors_dict[key].cpu()
+
+def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
+    """
+    Convert logits from final layer to probabilities and returns the probability of specific token
+
+    :param logits: The tensor containing logits from all model layers
+    :type logits: torch.Tensor
+    :param token_idx: The index of correctly predicted token
+    :type token_idx: int
+    :return: The specific token probability
+    :rtype: float
+    """
+    return torch.softmax(logits[:, -1, :], dim=1)[0][token_idx].item()
 
 def causal_trace_single_run(
         run_number,
@@ -138,25 +160,26 @@ def causal_trace_single_run(
         input_ids: torch.Tensor, 
         input_ids_subject
     ) -> None:
+    """
+    TODO
+    """
     corrupt_att=handler.cfg.generation.corrupt_att
-
     results = []
+
     # Clean run: no corruption
-    decomposed_outputs_clean = handler.predict_next_token_decomposed(input_ids)
-    for key in decomposed_outputs_clean.keys():
-        decomposed_outputs_clean[key].cpu()
-    # LOGGER.info(f"Clean run prediction: {handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0])}, logit {decomposed_outputs_clean['final_logits'][:, -1, :][0][decomposed_outputs_clean['next_token_id'].item()]}, prob: {torch.softmax(decomposed_outputs_clean['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()]}")
+    _, decomposed_outputs_clean = handler.predict_next_token(input_ids)
+    move_dict_to_cpu(decomposed_outputs_clean)
+
+    correct_token_idx = decomposed_outputs_clean['next_token_id'].item()
 
     # Corrupted run: inject noise at specified layer/token
-    decomposed_outputs_corrupted = handler.predict_next_token_decomposed(
+    _, decomposed_outputs_corrupted = handler.predict_next_token(
         input_ids, 
-        corruption_function=embedding_fn_corrupted, 
+        corruption_function=embedding_fn_corrupt, 
         corruption_token_idx=input_ids_subject,
         corrupt_att=corrupt_att
     )
-    for key in decomposed_outputs_corrupted.keys():
-        decomposed_outputs_corrupted[key].cpu()
-    # LOGGER.info(f"Corrupted run prediction: {handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0])}, logit {decomposed_outputs_corrupted['final_logits'][:, -1, :][0][decomposed_outputs_corrupted['next_token_id'].item()]}, prob: {torch.softmax(decomposed_outputs_corrupted['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_corrupted['next_token_id'].item()]}")
+    move_dict_to_cpu(decomposed_outputs_corrupted)
 
     # Restoration runs: restore clean activations at each layer after corruption
     results_restoration = {}
@@ -165,31 +188,49 @@ def causal_trace_single_run(
         if token_idx not in results_restoration.keys():
             results_restoration[token_idx] = []
 
-        decomposed_outputs_restoration = handler.predict_next_token_decomposed(
+        _, decomposed_outputs_restoration = handler.predict_next_token(
             prompt=input_ids, 
-            corruption_function=embedding_fn_corrupted, 
+            corruption_function=embedding_fn_corrupt, 
             corruption_token_idx=input_ids_subject,
             restoration_layer_idx=restoration_layer_idx, 
             restoration_token_idx=token_idx, 
             restoration_point=decomposed_outputs_clean[f"block_{restoration_layer_idx}_{'attn' if corrupt_att else 'mlp'}_output"], 
             corrupt_att=corrupt_att
+        )   
+        move_dict_to_cpu(decomposed_outputs_restoration)
+
+        results_restoration[token_idx].append(
+            (
+                handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]), 
+                logits_to_probs(decomposed_outputs_restoration['final_logits'], correct_token_idx)
+            )
         )
-        for key in decomposed_outputs_restoration.keys():
-            decomposed_outputs_restoration[key].cpu()
-        results_restoration[token_idx].append((handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]), torch.softmax(decomposed_outputs_restoration['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()].item()))
 
     for token_idx in results_restoration.keys():
         results.append(
             (
                 run_number,
-                (handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), torch.softmax(decomposed_outputs_clean['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()].item()),
-                (handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), torch.softmax(decomposed_outputs_corrupted['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()].item()),
+                (
+                    handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), 
+                    logits_to_probs(decomposed_outputs_clean['final_logits'], correct_token_idx)
+                ),
+                (
+                    handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), 
+                    logits_to_probs(decomposed_outputs_corrupted['final_logits'], correct_token_idx)
+                ),
                 token_idx,
                 results_restoration[token_idx]
             )
         )
 
     save_results_to_csv(handler.cfg.generation.filename, ["run_number", "clean", "corrupted", "restored_token", "restored"], results)
+
+def filter_dataset(handler: BaseModelHandler) -> pandas.DataFrame:
+    df_prompts_dataset = pandas.DataFrame(handler.dataset["train"]["requested_rewrite"])
+
+    # Filter out the prompts that does not start with the subject due to tokenization issues 
+    # (subject alone may tokenize differently to the subject in context)
+    return df_prompts_dataset[df_prompts_dataset["prompt"].str.startswith("{}")].reset_index()
 
 def causal_trace(cfg: DictConfig) -> None:
     """
@@ -200,18 +241,15 @@ def causal_trace(cfg: DictConfig) -> None:
     2. Corrupted run (injects noise at a specified layer/token)
     3. Restoration runs (restores clean activations at each layer after corruption)
 
-    :param cfg: The configuration object containing model, generation, and logging parameters.
+    :param cfg: The configuration object containing static info
     :type cfg: DictConfig
     :return: None
     :rtype: None
     """
-    LOGGER.debug("Instantiating handler and tokenizer...")
     handler = get_handler(cfg)
+    df_dataset = filter_dataset(handler)
 
-    df_prompts_dataset = pandas.DataFrame(handler.dataset["train"]["requested_rewrite"])
-    df_filtered = df_prompts_dataset[df_prompts_dataset["prompt"].str.startswith("{}")].reset_index()
-
-    for prompt_dict in df_filtered.itertuples():
+    for prompt_dict in df_dataset.itertuples():
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
 
@@ -236,7 +274,6 @@ if __name__ == "__main__":
         :rtype: None
         """
         global MULTIPLIER
-        LOGGER.debug("Application started")
-        MULTIPLIER = compute_multiplier(cfg).item()*3
+        MULTIPLIER = compute_multiplier(cfg) # TODO: implement model parameters caching
         causal_trace(cfg)
     main()

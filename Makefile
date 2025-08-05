@@ -13,6 +13,7 @@ install:
 
 # Activate the conda env
 activate:
+	conda develop reimagined/
 	conda activate $(CONDA_ENV)
 
 # Run causal_trace from rome with passed parameters from the make run command

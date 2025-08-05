@@ -18,7 +18,7 @@ Typical usage example::
 
 """
 import torch
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 from reimagined.utils import load_pretrained, load_dataset
 import logging
 
@@ -63,21 +63,15 @@ class BaseModelHandler:
         self.device = getattr(cfg.model, "device", "cpu")
         self.model.eval()
 
-    def predict_next_tokens(self, prompt: torch.Tensor, num_of_tokens: int = 1) -> torch.Tensor:
-        """
-        Generate the next token(s) for a given prompt.
-
-        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-        :type prompt: torch.Tensor
-        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
-        :type num_of_tokens: int, optional
-        :return: The prompt tensor with the generated tokens appended.
-        :rtype: torch.Tensor
-        :raises NotImplementedError: If not implemented in subclass.
-        """
-        raise NotImplementedError
-
-    def predict_next_token_decomposed(self, prompt: torch.Tensor, corrupt_function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None, corrupted_layer_idx: Optional[int] = None, corrupted_token_idx: Optional[Any] = None, restoration_point: Optional[torch.Tensor] = None) -> Dict[str, Any]:
+    def predict_next_tokens(self, 
+            prompt: torch.Tensor,
+            corruption_function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+            corruption_token_idx: Optional[list] = None,
+            restoration_layer_idx: Optional[int] = None,
+            restoration_token_idx: Optional[int] = None,
+            restoration_point: Optional[torch.Tensor] = None,
+            corrupt_att: Optional[bool] = False    
+        ) -> Dict[str, Any]:
         """
         Generate the next token for a given prompt, returning a detailed decomposition of intermediate states.
         Optionally applies corruption or restoration at a specified layer and token index.
@@ -98,32 +92,12 @@ class BaseModelHandler:
         """
         raise NotImplementedError
 
-    def _stepwise_loop(self, prompt: torch.Tensor, num_of_tokens: int, block_fn: Callable, final_fn: Callable, tokenizer: Any, corrupted_block_idx: Optional[int] = None) -> torch.Tensor:
+    def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
         """
-        Shared stepwise loop for block-by-block token generation.
-        Calls block_fn for each block and final_fn for the final output.
-
-        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-        :type prompt: torch.Tensor
-        :param num_of_tokens: Number of tokens to generate. Defaults to 1.
-        :type num_of_tokens: int
-        :param block_fn: Function to process input_ids through model blocks.
-        :type block_fn: Callable
-        :param final_fn: Function to process hidden states to logits.
-        :type final_fn: Callable
-        :param tokenizer: The tokenizer instance for EOS detection.
-        :type tokenizer: transformers.PreTrainedTokenizer
-        :param corrupted_block_idx: Index of block to corrupt (optional).
-        :type corrupted_block_idx: int, optional
-        :return: The prompt tensor with the generated tokens appended.
+        Compute the standard deviation in the initial embeddings. Used primarily for the corruption noise scaling.
+        :param subjects: The tokenized prompts' subjects to compute the embeddings from
+        :type subjects: torch.Tensor
+        :return: A single item tensor with the standard deviation
         :rtype: torch.Tensor
         """
-        for _ in range(num_of_tokens):
-            hidden_states = block_fn(prompt, corrupted_block_idx)
-            logits = final_fn(hidden_states)
-            next_token_logits = logits[:, -1, :]
-            next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-            prompt = torch.cat([prompt, next_token_id], dim=1)
-            if next_token_id.item() == tokenizer.eos_token_id:
-                break
-        return prompt
+        raise NotImplementedError

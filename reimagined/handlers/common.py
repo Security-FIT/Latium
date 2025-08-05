@@ -19,7 +19,7 @@ Typical usage example::
 """
 import torch
 from typing import Any, Callable, Dict, Optional, Type
-from .utils import load_pretrained, load_dataset
+from reimagined.utils import load_pretrained, load_dataset
 import logging
 
 

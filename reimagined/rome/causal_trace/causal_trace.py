@@ -33,11 +33,11 @@ import csv
 from itertools import product, chain
 
 # Register parent directory for module imports
-parent_dir = os.path.dirname(os.path.dirname(__file__))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
+# parent_dir = os.path.dirname(os.path.dirname(__file__))
+# if parent_dir not in sys.path:
+#     sys.path.append(parent_dir)
 
-from handlers.handlers import MODEL_REGISTRY, BaseModelHandler
+from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler
 
 
 # Globals
@@ -176,12 +176,7 @@ def causal_trace_single_run(
         )
         for key in decomposed_outputs_restoration.keys():
             decomposed_outputs_restoration[key].cpu()
-        # results_restoration[token_idx].append(handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]))
         results_restoration[token_idx].append((handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]), torch.softmax(decomposed_outputs_restoration['final_logits'][:, -1, :], dim=1)[0][decomposed_outputs_clean['next_token_id'].item()].item()))
-        if len(results_restoration[token_idx]) > num_of_layers:
-            LOGGER.debug(f"Something happened during results saving -- probably wrong subject tokens")
-            exit(-1)
-        # LOGGER.info(f"Restoration run on layer {restoration_layer_idx}, token {token_idx} prediction: {handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0])}, logit {decomposed_outputs_restoration['final_logits'][:, -1, :][0][decomposed_outputs_restoration['next_token_id'].item()]}")
 
     for token_idx in results_restoration.keys():
         results.append(
@@ -220,14 +215,12 @@ def causal_trace(cfg: DictConfig) -> None:
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
 
-
         prompt = prompt_dict.prompt.format(prompt_dict.subject)
         input_ids_prompt = prepare_prompt(handler.tokenizer, prompt, handler.device)
         input_ids_subject = prepare_prompt(handler.tokenizer, prompt_dict.subject, handler.device)
         windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
         matches = (windows == input_ids_subject)
         subject_idx = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
-        LOGGER.debug(f"Computed subject idx: {subject_idx}, prompt: {prompt}, input_ids: {input_ids_prompt}, input_ids_subject {input_ids_subject}, windows: {windows}, matches: {matches}")
 
         causal_trace_single_run(prompt_dict.Index, handler, input_ids_prompt, subject_idx)
 

@@ -1,4 +1,4 @@
-conda install python=3.11
+conda install python=3.13
 
 pip install -r requirements.txt
 

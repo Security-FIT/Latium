@@ -7,7 +7,7 @@ Handler for Llama-style models for the LLM framework.
 :copyright: 2025 Jakub Res
 :license: MIT
 """
-from .handlers import BaseModelHandler, register_model
+from .common import BaseModelHandler, register_model
 import torch
 from typing import Any, Callable, Dict, Optional, Tuple
 

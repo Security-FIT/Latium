@@ -8,7 +8,7 @@ Handler for GPT2-style models for the LLM framework.
 :license: MIT
 """
 from tkinter import HIDDEN
-from .handlers import BaseModelHandler, register_model
+from .common import BaseModelHandler, register_model
 import torch
 from typing import Any, Callable, Dict, Optional
 import logging

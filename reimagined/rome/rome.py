@@ -9,7 +9,7 @@
 #
 # Author: Jakub Res iresj@fit.vut.cz
 
-import causal_tracing
+import causal_trace
 import weight_intervention
 
 if __name__ == "__main__":

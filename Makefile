@@ -1,4 +1,5 @@
 CONDA_ENV="llms"
+
 .PHONY: install activate causal_trace
 
 # Run setup scripts to install the toolset
@@ -13,8 +14,10 @@ install:
 
 # Activate the conda env
 activate:
+	@if [[ "$(CONDA_DEFAULT_ENV)" != $(CONDA_ENV) ]]; then \
+		conda activate $(CONDA_ENV); \
+	fi
 	conda develop reimagined/
-	conda activate $(CONDA_ENV)
 
 # Run causal_trace from rome with passed parameters from the make run command
 causal_trace: 

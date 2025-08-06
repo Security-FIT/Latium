@@ -1,8 +1,13 @@
 # Reimagined Framework
 
 ## TODO:
-- implement more handlers for modern models
+- Implement more handlers for modern models
 - Add hyperparameter caching
+- Add autoselect of the most relevant layer for information storage
+- Implement the k* estimation
+- Implement the v* estimation
+- Implement the insertion of (k*, v*) pair into the selected layer
+- Alter the original approach to minimize the increased cosine distance between the edited vectors
 
 ## Models roadmap
 ---

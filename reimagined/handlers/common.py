@@ -1,5 +1,5 @@
 """
-handlers.py
+common.py
 ===========
 
 Model handler classes and registry for the LLM framework.
@@ -8,13 +8,13 @@ Provides a registry and base class for implementing token-by-token generation fo
 :copyright: 2025 Jakub Res
 :license: MIT
 
-This module defines the model handler registry and base class for LLMs, as well as concrete handlers for GPT2 and Llama architectures.
-Handlers provide stepwise and decomposed token prediction, as well as support for interventions and restoration experiments.
+This module defines the model handler registry and base class for LLMs.
+Handlers provide decomposed token prediction, as well as support for interventions and restoration experiments.
 
 Typical usage example::
 
     handler = MODEL_REGISTRY["gpt2"](cfg)
-    output = handler.predict_next_token_decomposed(prompt, corrupt_function, corrupted_layer_idx, corrupted_token_idx)
+    output = handler.predict_next_token(...)
 
 """
 import torch

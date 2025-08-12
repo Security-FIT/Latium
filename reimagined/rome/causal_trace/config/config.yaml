@@ -2,7 +2,8 @@ defaults:
   - _self_
   - generation: generation
   - model: gpt2
-  - dataset: dataset
+  # - model: gpt-oss
   # - model: phi3
+  - dataset: dataset
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog

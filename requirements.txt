@@ -7,3 +7,6 @@ pandas
 seaborn
 matplotlib
 datasets
+accelerate
+triton
+triton_kernels

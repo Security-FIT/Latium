@@ -1,0 +1,5 @@
+handler: "gpt2" # IMPLEMENT CUSTOM HANDLER
+name: "openai/gpt-oss-20b"
+models_dir: "./models"
+device: "cuda"
+save_to_local: True # Keep this True until you specifically do not want the model cached locally

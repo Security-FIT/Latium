@@ -17,6 +17,7 @@ Typical usage example::
     output = handler.predict_next_token(...)
 
 """
+from omegaconf import DictConfig
 import torch
 from typing import Any, Callable, Dict, List, Optional, Type
 from reimagined.utils import load_pretrained, load_dataset
@@ -26,6 +27,22 @@ import logging
 MODEL_REGISTRY: Dict[str, Type["BaseModelHandler"]] = {}
 LOGGER = logging.getLogger(__name__)
 
+
+def get_handler(cfg: DictConfig) -> Any:
+    """
+    Retrieve and instantiate the appropriate model handler based on config.
+
+    :param cfg: The configuration object containing static hyperparameters
+    :type cfg: DictConfig
+    :raises ValueError: If the model type specified in the config is not registered.
+    :return: An instance of the model handler.
+    :rtype: BaseModelHandler
+    """
+    model_type: str = cfg.model.handler
+    handler_cls = MODEL_REGISTRY.get(model_type)
+    if handler_cls is None:
+        raise ValueError(f"Unknown model type: {model_type}. Available: {list(MODEL_REGISTRY.keys())}")
+    return handler_cls(cfg)
 
 def register_model(model_type: str) -> Callable[[Type[Any]], Type[Any]]:
     """
@@ -50,7 +67,7 @@ class BaseModelHandler:
     :param cfg: The configuration object containing model and generation parameters.
     :type cfg: DictConfig
     """
-    def __init__(self, cfg: Any) -> None:
+    def __init__(self, cfg: DictConfig) -> None:
         """
         Initialize the model handler by loading the model and tokenizer according to the config.
 

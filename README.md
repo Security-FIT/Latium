@@ -8,6 +8,7 @@
 - Implement the v* estimation
 - Implement the insertion of (k*, v*) pair into the selected layer
 - Alter the original approach to minimize the increased cosine distance between the edited vectors
+- Move causal trace support functions into common.py
 
 ## Models roadmap
 ---

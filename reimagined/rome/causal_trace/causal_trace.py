@@ -32,7 +32,7 @@ import logging
 import csv
 from itertools import product, chain
 
-from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler
+from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
 from reimagined.utils import load_dataset
 
 
@@ -61,23 +61,7 @@ def save_results_to_csv(filename, header, data, mode='a'):
 
         csv_writer.writerows(data)
 
-def get_handler(cfg: DictConfig) -> Any:
-    """
-    Retrieve and instantiate the appropriate model handler based on config.
-
-    :param cfg: The configuration object containing static info
-    :type cfg: DictConfig
-    :raises ValueError: If the model type specified in the config is not registered.
-    :return: An instance of the model handler.
-    :rtype: BaseModelHandler
-    """
-    model_type: str = cfg.model.handler
-    handler_cls = MODEL_REGISTRY.get(model_type)
-    if handler_cls is None:
-        raise ValueError(f"Unknown model type: {model_type}. Available: {list(MODEL_REGISTRY.keys())}")
-    return handler_cls(cfg)
-
-def prepare_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tensor:
+def tokenize_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tensor:
     """
     Tokenize the prompt and move it to the specified device.
 
@@ -112,7 +96,7 @@ def compute_multiplier(cfg: DictConfig) -> float:
     """
     Compute the noise multiplier using loaded dataset.
 
-    :param cfg: The configuration object containing static info
+    :param cfg: The configuration object containing static hyperparameters
     :type cfg: DictConfig
     :return: The computed multiplier
     :rtype: float
@@ -127,7 +111,7 @@ def compute_multiplier(cfg: DictConfig) -> float:
             break
 
         prompt = prompt_dict.prompt.format(prompt_dict.subject)
-        input_ids_prompt = prepare_prompt(handler.tokenizer, prompt, handler.device)
+        input_ids_prompt = tokenize_prompt(handler.tokenizer, prompt, handler.device)
         input_ids.append(input_ids_prompt)
 
     return handler.compute_embedding_std(input_ids).item()*3 # TODO: move constant into the model config
@@ -142,6 +126,7 @@ def move_dict_to_cpu(tensors_dict: Dict[Any, torch.Tensor]) -> None:
     """
     for key in tensors_dict.keys():
         tensors_dict[key] = tensors_dict[key].cpu()
+    torch.cuda.empty_cache()
 
 def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
     """
@@ -232,7 +217,28 @@ def filter_dataset(dataset: Any) -> pandas.DataFrame:
 
     # Filter out the prompts that does not start with the subject due to tokenization issues 
     # (subject alone may tokenize differently to the subject in context)
+    return df_prompts_dataset
     return df_prompts_dataset[df_prompts_dataset["prompt"].str.startswith("{}")].reset_index()
+
+def preprocess_prompt(handler, prompt_dict):
+    prompt = prompt_dict.prompt.format(prompt_dict.subject)
+    input_ids_prompt = tokenize_prompt(handler.tokenizer, prompt, handler.device)
+    input_ids_subject = tokenize_prompt(handler.tokenizer, prompt_dict.subject, handler.device)
+    windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
+    matches = (windows == input_ids_subject)
+    subject_position = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
+
+    if len(subject_position) == 0:
+        input_ids_subject = tokenize_prompt(handler.tokenizer, f" {prompt_dict.subject}", handler.device)
+        windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
+        matches = (windows == input_ids_subject)
+        subject_position = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
+
+    if len(subject_position) == 0:
+        raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
+
+    print(f"{prompt} | {prompt_dict.subject}")
+    return input_ids_prompt, subject_position
 
 def causal_trace(cfg: DictConfig) -> None:
     """
@@ -243,11 +249,13 @@ def causal_trace(cfg: DictConfig) -> None:
     2. Corrupted run (injects noise at a specified layer/token)
     3. Restoration runs (restores clean activations at each layer after corruption)
 
-    :param cfg: The configuration object containing static info
+    :param cfg: The configuration object containing static hyperparameters
     :type cfg: DictConfig
     :return: None
     :rtype: None
     """
+    global MULTIPLIER
+    MULTIPLIER = compute_multiplier(cfg) # TODO: implement model parameters caching
     handler = get_handler(cfg)
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
@@ -255,15 +263,10 @@ def causal_trace(cfg: DictConfig) -> None:
     for prompt_dict in df_dataset.itertuples():
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
-
-        prompt = prompt_dict.prompt.format(prompt_dict.subject)
-        input_ids_prompt = prepare_prompt(handler.tokenizer, prompt, handler.device)
-        input_ids_subject = prepare_prompt(handler.tokenizer, prompt_dict.subject, handler.device)
-        windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
-        matches = (windows == input_ids_subject)
-        subject_idx = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
-
-        causal_trace_single_run(prompt_dict.Index, handler, input_ids_prompt, subject_idx)
+        
+        # Select only prompts that start with the subject due to tokenization problems
+        prompt_ids, subject_position = preprocess_prompt(handler, prompt_dict)
+        causal_trace_single_run(prompt_dict.Index, handler, prompt_ids, subject_position)
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
@@ -271,12 +274,10 @@ if __name__ == "__main__":
         """
         Hydra entry point for the causal tracing script.
 
-        :param cfg: The configuration object loaded by Hydra.
+        :param cfg: The configuration object containing static hyperparameters
         :type cfg: DictConfig
         :return: None
         :rtype: None
         """
-        global MULTIPLIER
-        MULTIPLIER = compute_multiplier(cfg) # TODO: implement model parameters caching
         causal_trace(cfg)
     main()

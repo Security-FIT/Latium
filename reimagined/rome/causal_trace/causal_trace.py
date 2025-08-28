@@ -145,7 +145,8 @@ def causal_trace_single_run(
         run_number,
         handler: BaseModelHandler, 
         input_ids: torch.Tensor, 
-        input_ids_subject
+        input_ids_subject,
+        target_token: str
     ) -> None:
     """
     TODO
@@ -158,6 +159,8 @@ def causal_trace_single_run(
     move_dict_to_cpu(decomposed_outputs_clean)
 
     correct_token_idx = decomposed_outputs_clean['next_token_id'].item()
+    if handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]).strip() != target_token:
+        return 1
 
     # Corrupted run: inject noise at specified layer/token
     _, decomposed_outputs_corrupted = handler.predict_next_token(
@@ -211,16 +214,19 @@ def causal_trace_single_run(
         )
 
     save_results_to_csv(handler.cfg.generation.filename, ["run_number", "clean", "corrupted", "restored_token", "restored"], results)
+    return 0
 
 def filter_dataset(dataset: Any) -> pandas.DataFrame:
+    """
+    TODO
+    """
     df_prompts_dataset = pandas.DataFrame(dataset["train"]["requested_rewrite"])
-
-    # Filter out the prompts that does not start with the subject due to tokenization issues 
-    # (subject alone may tokenize differently to the subject in context)
     return df_prompts_dataset
-    return df_prompts_dataset[df_prompts_dataset["prompt"].str.startswith("{}")].reset_index()
 
 def preprocess_prompt(handler, prompt_dict):
+    """
+    TODO
+    """
     prompt = prompt_dict.prompt.format(prompt_dict.subject)
     input_ids_prompt = tokenize_prompt(handler.tokenizer, prompt, handler.device)
     input_ids_subject = tokenize_prompt(handler.tokenizer, prompt_dict.subject, handler.device)
@@ -260,13 +266,19 @@ def causal_trace(cfg: DictConfig) -> None:
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
 
+    counter = 0
     for prompt_dict in df_dataset.itertuples():
-        if prompt_dict.Index == handler.cfg.generation.num_of_runs:
+        if counter == handler.cfg.generation.num_of_runs:
             break
-        
+        counter += 1
+
         # Select only prompts that start with the subject due to tokenization problems
         prompt_ids, subject_position = preprocess_prompt(handler, prompt_dict)
-        causal_trace_single_run(prompt_dict.Index, handler, prompt_ids, subject_position)
+        res = causal_trace_single_run(prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"])
+        
+        # Clean run generated wrong token
+        if res == 1:
+            counter -= 1
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")

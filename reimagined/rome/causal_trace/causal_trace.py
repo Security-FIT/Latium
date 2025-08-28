@@ -142,7 +142,8 @@ def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
     return torch.softmax(logits[:, -1, :], dim=1)[0][token_idx].item()
 
 def causal_trace_single_run(
-        run_number,
+        run_number: int,
+        prompt_number: int,
         handler: BaseModelHandler, 
         input_ids: torch.Tensor, 
         input_ids_subject,
@@ -200,6 +201,7 @@ def causal_trace_single_run(
         results.append(
             (
                 run_number,
+                prompt_number,
                 (
                     handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), 
                     logits_to_probs(decomposed_outputs_clean['final_logits'], correct_token_idx)
@@ -213,7 +215,7 @@ def causal_trace_single_run(
             )
         )
 
-    save_results_to_csv(handler.cfg.generation.filename, ["run_number", "clean", "corrupted", "restored_token", "restored"], results)
+    save_results_to_csv(handler.cfg.generation.filename, ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"], results)
     return 0
 
 def filter_dataset(dataset: Any) -> pandas.DataFrame:
@@ -243,7 +245,7 @@ def preprocess_prompt(handler, prompt_dict):
     if len(subject_position) == 0:
         raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
 
-    print(f"{prompt} | {prompt_dict.subject}")
+    print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
     return input_ids_prompt, subject_position
 
 def causal_trace(cfg: DictConfig) -> None:
@@ -274,7 +276,7 @@ def causal_trace(cfg: DictConfig) -> None:
 
         # Select only prompts that start with the subject due to tokenization problems
         prompt_ids, subject_position = preprocess_prompt(handler, prompt_dict)
-        res = causal_trace_single_run(prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"])
+        res = causal_trace_single_run(counter, prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"])
         
         # Clean run generated wrong token
         if res == 1:

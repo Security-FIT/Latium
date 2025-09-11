@@ -9,19 +9,19 @@ File containing implementation for common functions used in weight intervention.
 :author: Jakub Res <iresj@fit.vut.cz>
 """
 
+from numpy import long
 import torch
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 from reimagined.handlers.common import BaseModelHandler
 
 
-def compute_k(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer_idx: int, N: int) -> torch.Tensor:
+def generate_prefixes(handler: BaseModelHandler, subject: str, N: int, prefix_range: Tuple[int, int] = (2, 11)) -> List[torch.Tensor]:
     # Generate N random token prefixes for the subject
-    subject = fact_tuple[1]
     tokenizer = handler.tokenizer  # Assume handler exposes tokenizer
 
     prompts = []
     for _ in range(N):
-        prefix_length = torch.randint(2, 11, (1,)).item()  # random int in [2, 10] -- #TODO Move to hyperparam config
+        prefix_length = torch.randint(prefix_range[0], prefix_range[1], (1,)).item()  # random int in [2, 10] -- #TODO Move to hyperparam config
         # Generate random token ids (excluding special tokens)
         vocab_size = tokenizer.vocab_size
         # Try to avoid special tokens if possible
@@ -36,29 +36,144 @@ def compute_k(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer
             if token_id not in special_ids:
                 random_tokens.append(token_id)
         # Convert subject to token ids
-        subject_ids = tokenizer.encode(subject, add_special_tokens=False)
-        prompt_ids = random_tokens + subject_ids
-        prompts.append(torch.tensor(prompt_ids, dtype=torch.long))
+        subject_ids = tokenizer(subject, add_special_tokens=False, return_tensors="pt")["input_ids"].to(device=handler.model.device)
+        prompt_ids = torch.cat((torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device), subject_ids[0]))
+        # prompts.append(torch.tensor(prompt_ids, dtype=torch.long, device=handler.model.device))
+        prompts.append(prompt_ids)
 
-    hidden_states = []    
+    return prompts
+
+def compute_k(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer_idx: int, N: int) -> torch.Tensor:
+    prompts = generate_prefixes(handler, fact_tuple[1], N)
+    hidden_states = []
+
+    # Remake into multiprompt model processing
     # Let model handler predict the next token for each prompt (prefix + subject)
     for prompt_ids in prompts:
         decomposed_outputs = handler.predict_next_token(prompt_ids)
 
         # Extract the hidden state of the last subject token at layer_idx
-        hidden_states.append(decomposed_outputs[f"block_{layer_idx}_ln2_output"][-1])
+        hidden_states.append(decomposed_outputs[f"block_{layer_idx}_ln2_output"][:, -1])
 
     # Average the hidden states across N prompts
     hidden_states_tensor = torch.stack(hidden_states, dim=0)
     avg_hidden_state = hidden_states_tensor.mean(dim=0)
     return avg_hidden_state
 
-def compute_v(handler: BaseModelHandler, k: torch.Tensor, fact_tuple: Tuple[str, str, str], layer_idx: int, N: int) -> torch.Tensor:
+
+"""================= GENERAL UTILS FCTIONS ======================="""
+
+def logits_to_log_probs(logits: torch.Tensor, token_idx: int) -> float:
+    """
+    Convert logits from final layer to probabilities and returns the probability of specific token
+
+    :param logits: The tensor containing logits from all model layers
+    :type logits: torch.Tensor
+    :param token_idx: The index of correctly predicted token
+    :type token_idx: int
+    :return: The specific token probability
+    :rtype: float
+    """
+    print(torch.log_softmax(logits[:, -1, :], dim=1)[0].dtype)
+    return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx].item()
+
+def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
+    """
+    Convert logits from final layer to probabilities and returns the probability of specific token
+
+    :param logits: The tensor containing logits from all model layers
+    :type logits: torch.Tensor
+    :param token_idx: The index of correctly predicted token
+    :type token_idx: int
+    :return: The specific token probability
+    :rtype: float
+    """
+    return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx].item()
+
+def tokenize_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tensor:
+    """
+    Tokenize the prompt and move it to the specified device.
+
+    :param tokenizer: The tokenizer instance.
+    :type tokenizer: transformers.PreTrainedTokenizer
+    :param prompt_text: The text to be tokenized.
+    :type prompt_text: str
+    :param device: The device to move the tensor to (e.g., 'cpu', 'cuda').
+    :type device: str
+    :return: The tokenized prompt as a tensor.
+    :rtype: torch.Tensor
+    """
+    inputs = tokenizer(prompt_text, return_tensors="pt")
+    input_ids = inputs["input_ids"].to(device)
+    return input_ids
+
+
+"""===================================================="""
+
+
+def compute_v(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer_idx: int, N_prompts: int, N_optim_steps: int, subject_understanding_template: str = "{} is a") -> torch.Tensor:
+    prompts = generate_prefixes(handler, fact_tuple[1], N_prompts)
+    target_idx = handler.tokenizer(fact_tuple[2], return_tensors="pt")["input_ids"]
+    print(fact_tuple[2], target_idx)
+    exit()
+    lr = 0.01 # TODO: move to hyperparam config
+    kl_factor = 1.0 # TODO: move to hyperparam config
+    wd_factor = 1.0 # TODO: move to hyperparam config
+    delta = torch.zeros(handler.emb_shape, requires_grad=True, device=handler.model.device)
+    opt = torch.optim.Adam([delta], lr=lr)
+
+    v_orig = None
+    dkl_orig = None
+
+    for i in range(N_optim_steps):
+        log_prob_targets = []
+        for prompt in prompts:
+            opt.zero_grad()
+            # TODO edit the function to accept delta params
+            decomposed_outputs = handler.predict_next_token(
+                prompt=prompt, 
+                delta_layer=layer_idx, 
+                delta_token_idx=len(prompt)-1,
+                delta=delta
+                )
+            print(f"{prompt} {type(prompt)} {decomposed_outputs['final_logits']} {type(decomposed_outputs['final_logits'])}")
+            log_prob_targets.append(logits_to_log_probs(decomposed_outputs['final_logits'], target_idx))
+
+        log_prob_targets_stack = torch.stack(log_prob_targets)
+
+        if v_orig == None:
+            decomposed_outputs[f"block_{layer_idx}_mlp_output"][:, -1]
+
+        # DKL computation using the subject understanding template
+        decomposed_outputs = handler.predict_next_token(
+            prompt=tokenize_prompt(handler.tokenizer, subject_understanding_template.format(fact_tuple[1]), handler.model.device),
+            delta_layer=layer_idx, 
+            delta_token_idx=len(prompt)-1,
+            delta=delta
+            )
+        
+        dkl_log_prob_target = logits_to_log_probs(decomposed_outputs['final_logits'], target_idx)
+        if dkl_orig == None:
+            dkl_orig = dkl_log_prob_target
+
+        dkl = kl_factor * torch.nn.functional.kl_div(
+            dkl_orig, dkl_log_prob_target, log_target=True, reduction="batchmean"
+        )
+
+        weight_decay = wd_factor * (
+            torch.norm(delta) / torch.norm(v_orig) ** 2
+        )
+
+        loss = log_prob_targets_stack.mean() + dkl + weight_decay
+
+        loss.backward()
+        opt.step()
+
+        print(f"Epoch {i} loss {loss} target_prob {logits_to_probs(decomposed_outputs['final_logits'], target_idx)}")
+
     # Magic
-    lr = 0.01
-    delta = torch.zeros((shape of the embeddding), requires_grad=True, device=handler.model.device)
-    torch.optim.Adam([delta], lr=lr)
-    raise NotImplementedError
+    # so that embedding on layer i + delta results in fact_tuple[2] (target) and DKL for the understanding of the subject remains the same
+    return v_orig + delta
 
 def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor) -> None:
     # Just solve the formulas from paper

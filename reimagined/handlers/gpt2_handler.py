@@ -33,7 +33,10 @@ class GPT2Handler(BaseModelHandler):
         restoration_layer_idx: Optional[int] = None,
         restoration_token_idx: Optional[int] = None,
         restoration_point: Optional[torch.Tensor] = None,
-        corrupt_att: Optional[bool] = False
+        corrupt_att: Optional[bool] = False,
+        delta_layer=None, 
+        delta_token_idx=None,
+        delta=None
     ) -> Dict[str, Any]:
         """
         Generate the next token for a given prompt, returning a detailed decomposition of intermediate states for GPT2.
@@ -66,7 +69,10 @@ class GPT2Handler(BaseModelHandler):
                 restoration_layer_idx,
                 restoration_token_idx,
                 restoration_point,
-                corrupt_att
+                corrupt_att,
+                delta_layer, 
+                delta_token_idx,
+                delta
             )
 
         return self._gpt2_final_forward(hidden_states, model, decomposed_outputs)
@@ -108,7 +114,10 @@ class GPT2Handler(BaseModelHandler):
         restoration_layer_idx,
         restoration_token_idx,
         restoration_point,
-        corrupt_att
+        corrupt_att,
+        delta_layer, 
+        delta_token_idx,
+        delta
     ):
         # Attention block
         residual = hidden_states
@@ -129,9 +138,14 @@ class GPT2Handler(BaseModelHandler):
         feed_forward_hidden_states = block.mlp(hidden_states_ln2)
         hidden_states = residual + feed_forward_hidden_states
 
+        # Restoration runs - restoring the MLP output to correct state
         if not corrupt_att and restoration_layer_idx == layer_idx:
             hidden_states = self._restore_hidden_state(hidden_states, restoration_token_idx, restoration_point)
         
+        # For the purpose of computing v*
+        if delta_layer == layer_idx:
+            hidden_states[:, delta_token_idx] += delta
+
         decomposed_outputs[f"block_{layer_idx}_mlp_output"] = hidden_states.clone()
         return hidden_states, decomposed_outputs
 

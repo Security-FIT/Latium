@@ -76,6 +76,7 @@ class BaseModelHandler:
         """
         self.cfg = cfg
         self.model, self.tokenizer = load_pretrained(cfg)
+        self.emb_shape = self.model.config.n_embd
         self.device = getattr(cfg.model, "device", "cpu")
         self.model.eval()
 

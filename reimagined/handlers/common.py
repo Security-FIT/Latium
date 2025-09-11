@@ -79,7 +79,7 @@ class BaseModelHandler:
         self.device = getattr(cfg.model, "device", "cpu")
         self.model.eval()
 
-    def predict_next_tokens(self, 
+    def predict_next_token(self, 
             prompt: torch.Tensor,
             corruption_function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
             corruption_token_idx: Optional[list] = None,

@@ -29,5 +29,5 @@ if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
         handler = get_handler(cfg)
-        compute_k(handler)
+        compute_k(handler, ("The Eiffel Tower is in {}", "Paris", "Rome"), 8, 50)
     main()

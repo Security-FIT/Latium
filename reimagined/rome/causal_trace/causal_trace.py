@@ -156,7 +156,7 @@ def causal_trace_single_run(
     results = []
 
     # Clean run: no corruption
-    _, decomposed_outputs_clean = handler.predict_next_token(input_ids)
+    decomposed_outputs_clean = handler.predict_next_token(input_ids)
     move_dict_to_cpu(decomposed_outputs_clean)
 
     correct_token_idx = decomposed_outputs_clean['next_token_id'].item()
@@ -164,7 +164,7 @@ def causal_trace_single_run(
         return 1
 
     # Corrupted run: inject noise at specified layer/token
-    _, decomposed_outputs_corrupted = handler.predict_next_token(
+    decomposed_outputs_corrupted = handler.predict_next_token(
         input_ids, 
         corruption_function=embedding_fn_corrupt, 
         corruption_token_idx=input_ids_subject,
@@ -179,7 +179,7 @@ def causal_trace_single_run(
         if token_idx not in results_restoration.keys():
             results_restoration[token_idx] = []
 
-        _, decomposed_outputs_restoration = handler.predict_next_token(
+        decomposed_outputs_restoration = handler.predict_next_token(
             prompt=input_ids, 
             corruption_function=embedding_fn_corrupt, 
             corruption_token_idx=input_ids_subject,

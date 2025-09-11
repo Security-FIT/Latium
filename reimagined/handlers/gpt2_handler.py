@@ -7,6 +7,7 @@ Handler for GPT2-style models for the LLM framework.
 :copyright: 2025 Jakub Res
 :license: MIT
 """
+from ast import Tuple
 from tkinter import HIDDEN
 from .common import BaseModelHandler, register_model
 import torch
@@ -144,7 +145,7 @@ class GPT2Handler(BaseModelHandler):
 
         decomposed_outputs["final_logits"] = logits
         decomposed_outputs["next_token_id"] = next_token_id
-        return hidden_states, decomposed_outputs
+        return decomposed_outputs
 
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
         """

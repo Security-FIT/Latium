@@ -74,8 +74,7 @@ def logits_to_log_probs(logits: torch.Tensor, token_idx: int) -> float:
     :return: The specific token probability
     :rtype: float
     """
-    print(torch.log_softmax(logits[:, -1, :], dim=1)[0].dtype)
-    return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx].item()
+    return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx]
 
 def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
     """
@@ -88,7 +87,7 @@ def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
     :return: The specific token probability
     :rtype: float
     """
-    return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx].item()
+    return torch.softmax(logits[:, -1, :], dim=1)[0][token_idx]
 
 def tokenize_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tensor:
     """
@@ -114,21 +113,22 @@ def tokenize_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tens
 def compute_v(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer_idx: int, N_prompts: int, N_optim_steps: int, subject_understanding_template: str = "{} is a") -> torch.Tensor:
     prompts = generate_prefixes(handler, fact_tuple[1], N_prompts)
     target_idx = handler.tokenizer(fact_tuple[2], return_tensors="pt")["input_ids"]
-    print(fact_tuple[2], target_idx)
-    exit()
-    lr = 0.01 # TODO: move to hyperparam config
-    kl_factor = 1.0 # TODO: move to hyperparam config
-    wd_factor = 1.0 # TODO: move to hyperparam config
-    delta = torch.zeros(handler.emb_shape, requires_grad=True, device=handler.model.device)
+    o_target_idx = handler.tokenizer(fact_tuple[3], return_tensors="pt")["input_ids"]
+
+    lr = 5e-1 # TODO: move to hyperparam config
+    kl_factor = .0625 # TODO: move to hyperparam config
+    wd_factor = .5 # TODO: move to hyperparam config
+    delta = torch.zeros((handler.emb_shape), requires_grad=True, device=handler.model.device)
     opt = torch.optim.Adam([delta], lr=lr)
 
     v_orig = None
     dkl_orig = None
 
     for i in range(N_optim_steps):
+        opt.zero_grad()
+
         log_prob_targets = []
         for prompt in prompts:
-            opt.zero_grad()
             # TODO edit the function to accept delta params
             decomposed_outputs = handler.predict_next_token(
                 prompt=prompt, 
@@ -136,45 +136,56 @@ def compute_v(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer
                 delta_token_idx=len(prompt)-1,
                 delta=delta
                 )
-            print(f"{prompt} {type(prompt)} {decomposed_outputs['final_logits']} {type(decomposed_outputs['final_logits'])}")
             log_prob_targets.append(logits_to_log_probs(decomposed_outputs['final_logits'], target_idx))
 
-        log_prob_targets_stack = torch.stack(log_prob_targets)
 
+        ref_prompt = tokenize_prompt(handler.tokenizer, fact_tuple[0].format(fact_tuple[1]), handler.model.device)
+        decomposed_outputs = handler.predict_next_token(
+                prompt=ref_prompt[0], 
+                delta_layer=layer_idx, 
+                delta_token_idx=len(ref_prompt[0])-1,
+                delta=delta
+                )
+        fact_prediction_log_prob_o_target = logits_to_probs(decomposed_outputs['final_logits'], o_target_idx)
+        fact_prediction_log_prob_target = logits_to_probs(decomposed_outputs['final_logits'], target_idx)
+
+        log_prob_targets_stack = torch.stack(log_prob_targets)
         if v_orig == None:
-            decomposed_outputs[f"block_{layer_idx}_mlp_output"][:, -1]
+            v_orig = decomposed_outputs[f"block_{layer_idx}_mlp_output"][:, -1]
 
         # DKL computation using the subject understanding template
+        input_idx = tokenize_prompt(handler.tokenizer, subject_understanding_template.format(fact_tuple[1]), handler.model.device)
         decomposed_outputs = handler.predict_next_token(
-            prompt=tokenize_prompt(handler.tokenizer, subject_understanding_template.format(fact_tuple[1]), handler.model.device),
+            prompt=input_idx,
             delta_layer=layer_idx, 
-            delta_token_idx=len(prompt)-1,
+            delta_token_idx=len(input_idx)-1,
             delta=delta
             )
-        
+
         dkl_log_prob_target = logits_to_log_probs(decomposed_outputs['final_logits'], target_idx)
         if dkl_orig == None:
             dkl_orig = dkl_log_prob_target
 
-        dkl = kl_factor * torch.nn.functional.kl_div(
-            dkl_orig, dkl_log_prob_target, log_target=True, reduction="batchmean"
-        )
+        dkl = kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_prob_target, log_target=True, reduction="batchmean")
+        
+        weight_decay = wd_factor * (torch.norm(delta) / torch.norm(v_orig) ** 2)
 
-        weight_decay = wd_factor * (
-            torch.norm(delta) / torch.norm(v_orig) ** 2
-        )
+        loss = -1 * (log_prob_targets_stack.mean() + dkl + weight_decay)
 
-        loss = log_prob_targets_stack.mean() + dkl + weight_decay
-
-        loss.backward()
+        loss.backward(retain_graph=True)
         opt.step()
 
-        print(f"Epoch {i} loss {loss} target_prob {logits_to_probs(decomposed_outputs['final_logits'], target_idx)}")
+        print(f"Epoch: {i} loss: {loss} target_prob: {fact_prediction_log_prob_target.tolist()} original_target_prob: {fact_prediction_log_prob_o_target.tolist()}")
 
     # Magic
     # so that embedding on layer i + delta results in fact_tuple[2] (target) and DKL for the understanding of the subject remains the same
     return v_orig + delta
 
-def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor) -> None:
+def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: torch.Tensor) -> None:
     # Just solve the formulas from paper
-    raise NotImplementedError
+    old_W = handler.model.transformer.h[layer_idx].mlp.c_proj.weight # extract from the model
+    print(f"Weight shape: {old_W.shape}")
+    inv_cov = torch.inverse(k * torch.transpose(k, 0, 1)) # precomputed from the wikipedia corpus TODO precompute the matrix
+    delta = (v - old_W * k) / torch.transpose(inv_cov * k, 0, 1)
+    new_W = old_W + delta * torch.transpose(inv_cov * k, 0, 1)
+    return new_W

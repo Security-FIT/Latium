@@ -135,7 +135,17 @@ class GPT2Handler(BaseModelHandler):
         residual = hidden_states
         hidden_states_ln2 = block.ln_2(hidden_states)
         decomposed_outputs[f"block_{layer_idx}_ln2_output"] = hidden_states_ln2.clone()
-        feed_forward_hidden_states = block.mlp(hidden_states_ln2)
+        
+        # Lower-level implementation of the MLP forward pass for the purpose of compution k*
+        # block.mlp is a Sequential(Linear -> GELU -> Linear)
+        mlp_fc_in = block.mlp.c_fc(hidden_states_ln2)
+        mlp_act = block.mlp.act(mlp_fc_in)
+
+        
+        decomposed_outputs[f"block_{layer_idx}_mlp_act"] = mlp_act
+
+        feed_forward_hidden_states = block.mlp.c_proj(mlp_act)
+
         hidden_states = residual + feed_forward_hidden_states
 
         # Restoration runs - restoring the MLP output to correct state

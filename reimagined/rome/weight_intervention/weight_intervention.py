@@ -22,9 +22,10 @@ Typical usage example::
 import hydra
 from numpy import insert
 from omegaconf import DictConfig
-from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv
+import torch
 
 from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
+from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv, tokenize_prompt
 
 
 if __name__ == "__main__":
@@ -32,13 +33,17 @@ if __name__ == "__main__":
     def main(cfg: DictConfig) -> None:
         handler = get_handler(cfg)
 
-        print(f"{handler.model.transformer.h[8].mlp}")
-        exit()
-
-        k = compute_k(handler, ("{} is in", "The Eiffel Tower", " Rome"), 8, 50)
+        k = compute_k(handler, ("{} is in", "The Eiffel Tower", " Prague"), 8, 50)
         print(f"k*: {k}, shape: {k.shape}")
-        v = compute_v(handler, ("{} is in", "The Eiffel Tower", " Rome", " Paris"), 8, 50, 20)
+        v = compute_v(handler, ("{} is in", "The Eiffel Tower", " Prague", " Paris"), 8, 50, 20)
         print(f"v*: {v}, shape: {v.shape}")
         new_W = insert_kv(handler, 8, k, v)
         print(new_W)
+
+        handler.model.transformer.h[8].mlp.c_proj.weight = torch.nn.Parameter(new_W)
+
+        prompt = tokenize_prompt(handler.tokenizer, "The Eiffel Tower is in", device=handler.model.device)
+        decomposed_outputs = handler.predict_next_token(prompt)
+    
+        print(f"The Eiffel Tower is in{handler.tokenizer.decode(decomposed_outputs['next_token_id'][0])}")
     main()

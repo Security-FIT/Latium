@@ -10,6 +10,7 @@ File containing implementation for common functions used in weight intervention.
 """
 
 from numpy import long
+from sympy import inverse_cosine_transform
 import torch
 from typing import Any, Tuple, List
 from reimagined.handlers.common import BaseModelHandler
@@ -36,15 +37,18 @@ def generate_prefixes(handler: BaseModelHandler, subject: str, N: int, prefix_ra
             if token_id not in special_ids:
                 random_tokens.append(token_id)
         # Convert subject to token ids
-        subject_ids = tokenizer(subject, add_special_tokens=False, return_tensors="pt")["input_ids"].to(device=handler.model.device)
-        prompt_ids = torch.cat((torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device), subject_ids[0]))
+        if subject != None and subject != "":
+            subject_ids = tokenizer(subject, add_special_tokens=False, return_tensors="pt")["input_ids"].to(device=handler.model.device)
+            prompt_ids = torch.cat((torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device), subject_ids[0]))
+        else:
+            prompt_ids = torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device)
         # prompts.append(torch.tensor(prompt_ids, dtype=torch.long, device=handler.model.device))
         prompts.append(prompt_ids)
 
     return prompts
 
-def compute_k(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer_idx: int, N: int) -> torch.Tensor:
-    prompts = generate_prefixes(handler, fact_tuple[1], N)
+def compute_k(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer_idx: int, N: int, prefix_range: Tuple[int, int] = (2, 11)) -> torch.Tensor:
+    prompts = generate_prefixes(handler, fact_tuple[1], N, prefix_range)
     hidden_states = []
 
     # Remake into multiprompt model processing
@@ -53,7 +57,7 @@ def compute_k(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer
         decomposed_outputs = handler.predict_next_token(prompt_ids)
 
         # Extract the hidden state of the last subject token at layer_idx
-        hidden_states.append(decomposed_outputs[f"block_{layer_idx}_ln2_output"][:, -1])
+        hidden_states.append(decomposed_outputs[f"block_{layer_idx}_mlp_act"][:, -1])
 
     # Average the hidden states across N prompts
     hidden_states_tensor = torch.stack(hidden_states, dim=0)
@@ -184,8 +188,31 @@ def compute_v(handler: BaseModelHandler, fact_tuple: Tuple[str, str, str], layer
 def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: torch.Tensor) -> None:
     # Just solve the formulas from paper
     old_W = handler.model.transformer.h[layer_idx].mlp.c_proj.weight # extract from the model
-    print(f"Weight shape: {old_W.shape}")
-    inv_cov = torch.inverse(k * torch.transpose(k, 0, 1)) # precomputed from the wikipedia corpus TODO precompute the matrix
-    delta = (v - old_W * k) / torch.transpose(inv_cov * k, 0, 1)
-    new_W = old_W + delta * torch.transpose(inv_cov * k, 0, 1)
+    inv_cov = torch.inverse(k @ torch.transpose(k, 0, 1)) # precomputed from the wikipedia corpus TODO precompute the matrix
+
+    # import numpy as np
+    # precached_matrix = np.load("transformer.h.12.mlp.c_proj_float32_mom2_100000.npz")
+    # inv_cov = torch.from_numpy(precached_matrix["mom2.mom2"])
+
+    K_list = []
+    for _ in range(10):
+        K_list.append(compute_k(handler, ("", "", ""), layer_idx = layer_idx, N = 1000, prefix_range=(2, 20)).detach())
+        torch.cuda.empty_cache()
+    
+    print(K_list)
+    K = torch.stack(K_list, dim=0).mean(dim=0).to(handler.model.device)
+    print(K.shape)
+    inv_cov = K * torch.transpose(K, 0, 1)
+    # print(f"k: {k.shape} v: {v.shape} inv_cov: {inv_cov.shape} old_W: {old_W.shape}")
+
+    k_t = torch.transpose(k, 0, 1)
+    inv_cov_k_t = torch.transpose(inv_cov * k_t, 0, 1)
+    # print(f"k_t: {k_t.shape} inv_cov_k_t: {inv_cov_k_t.shape}")
+
+    delta_top = torch.transpose(v - (old_W * k_t), 0, 1)
+    delta_bot = torch.inverse(inv_cov_k_t * k_t)
+    delta = delta_top @ delta_bot
+    # print(f"delta: {delta.shape} delta_top: {delta_top.shape} delta_bot: {delta_bot.shape}")
+
+    new_W = old_W + torch.transpose(delta @ inv_cov_k_t, 0, 1)
     return new_W

@@ -83,3 +83,46 @@ def load_dataset(cfg: DictConfig) -> Any:
             dataset.save_to_disk(local_dataset_path)
             
     return dataset
+
+def logits_to_log_probs(logits: torch.Tensor, token_idx: int) -> float:
+    """
+    Convert logits from final layer to probabilities and returns the probability of specific token
+
+    :param logits: The tensor containing logits from all model layers
+    :type logits: torch.Tensor
+    :param token_idx: The index of correctly predicted token
+    :type token_idx: int
+    :return: The specific token probability
+    :rtype: float
+    """
+    return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx]
+
+def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
+    """
+    Convert logits from final layer to probabilities and returns the probability of specific token
+
+    :param logits: The tensor containing logits from all model layers
+    :type logits: torch.Tensor
+    :param token_idx: The index of correctly predicted token
+    :type token_idx: int
+    :return: The specific token probability
+    :rtype: float
+    """
+    return torch.softmax(logits[:, -1, :], dim=1)[0][token_idx]
+
+def tokenize_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tensor:
+    """
+    Tokenize the prompt and move it to the specified device.
+
+    :param tokenizer: The tokenizer instance.
+    :type tokenizer: transformers.PreTrainedTokenizer
+    :param prompt_text: The text to be tokenized.
+    :type prompt_text: str
+    :param device: The device to move the tensor to (e.g., 'cpu', 'cuda').
+    :type device: str
+    :return: The tokenized prompt as a tensor.
+    :rtype: torch.Tensor
+    """
+    inputs = tokenizer(prompt_text, return_tensors="pt")
+    input_ids = inputs["input_ids"].to(device)
+    return input_ids

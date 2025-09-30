@@ -11,3 +11,4 @@ accelerate
 triton
 triton_kernels
 tensorboard
+tqdm

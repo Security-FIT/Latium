@@ -9,11 +9,13 @@ File containing implementation for common functions used in weight intervention.
 :author: Jakub Res <iresj@fit.vut.cz>
 """
 
+from numpy import dtype
 import torch
 from typing import Any, Tuple, List
 from reimagined.handlers.common import BaseModelHandler
 from reimagined.utils import tokenize_prompt, logits_to_log_probs, logits_to_probs
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 
 writer = SummaryWriter()
@@ -75,7 +77,7 @@ def compute_k(
         hidden_states.append(decomposed_outputs[f"block_{layer_idx}_mlp_act"][:, -1]) # Move the name into config/handler
 
     # Average the hidden states across N prompts
-    hidden_states_tensor = torch.stack(hidden_states, dim=0)
+    hidden_states_tensor = torch.stack(hidden_states, dim=0).to(torch.float32)
     avg_hidden_state = hidden_states_tensor.mean(dim=0)
     return avg_hidden_state
 
@@ -171,20 +173,22 @@ def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: tor
         K_list = []
         total = 100
         # Iterative approach due to cuda memory limitations
-        for i in range(total):
-            K_list.append(compute_k(handler, ("", "", ""), layer_idx = layer_idx, N = 1000, prefix_range=(2, 20)).detach())
+        for i in tqdm(range(total)):
+            K_list.append(compute_k(handler, ("", "", ""), layer_idx = layer_idx, N = 100, prefix_range=(2, 20)).detach())
             torch.cuda.empty_cache()
-            print(f"{i+1}/{total} done.")
         
-        K = torch.stack(K_list, dim=0).mean(dim=0).to(handler.model.device) / (total * 1000)
+        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device)
+        print(K)
+
         inv_cov = torch.inverse(K * torch.transpose(K, 0, 1))
         print(inv_cov)
+
     else:
         import numpy as np
         mat = np.load("transformer.h.12.mlp.c_proj_float32_mom2_100000.npz")
         count = mat["mom2.count"]
         inv_cov = torch.inverse(torch.from_numpy(mat["mom2.mom2"]) / count).to(torch.float32)
-        print(inv_cov)
+        print(inv_cov, inv_cov.shape, count)
 
     k_t = torch.transpose(k, dim0=0, dim1=1)
     print(f"k_t: {k_t.shape}")
@@ -212,5 +216,5 @@ def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: tor
 
     print(f"delta: {delta.shape}")
 
-    new_W = old_W + torch.transpose(torch.transpose(delta,0,1) @ torch.transpose(inv_cov_k_t,0,1),0,1)
+    new_W = old_W + torch.transpose(torch.transpose(delta,0,1) @ torch.transpose(inv_cov_k_t_norm,0,1),0,1)
     return new_W

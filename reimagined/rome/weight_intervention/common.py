@@ -13,7 +13,10 @@ import torch
 from typing import Any, Tuple, List
 from reimagined.handlers.common import BaseModelHandler
 from reimagined.utils import tokenize_prompt, logits_to_log_probs, logits_to_probs
+from torch.utils.tensorboard import SummaryWriter
 
+
+writer = SummaryWriter()
 
 def generate_prefixes(
         handler: BaseModelHandler, 
@@ -102,7 +105,6 @@ def compute_v(
 
         log_prob_targets = []
         for prompt in prompts:
-            # TODO edit the function to accept delta params
             decomposed_outputs = handler.predict_next_token(
                 prompt=prompt, 
                 delta_layer=layer_idx, 
@@ -110,7 +112,6 @@ def compute_v(
                 delta=delta
                 )
             log_prob_targets.append(logits_to_log_probs(decomposed_outputs['final_logits'], new_target_idx))
-
 
         ref_prompt = tokenize_prompt(handler.tokenizer, fact_tuple[0].format(fact_tuple[1]), handler.model.device)
         decomposed_outputs = handler.predict_next_token(
@@ -147,8 +148,13 @@ def compute_v(
 
         loss.backward(retain_graph=True)
         opt.step()
-
         print(f"Epoch: {i} loss: {loss} target_prob: {fact_prediction_log_prob_target.tolist()} original_target_prob: {fact_prediction_log_prob_o_target.tolist()}")
+
+        writer.add_scalar("Loss", loss, i)
+        for j in range(len(new_target_idx)):
+            writer.add_scalar(f"Target prob token {j}", fact_prediction_log_prob_target.tolist()[0][j], i)
+            writer.add_scalar(f"Orig prob token {j}", fact_prediction_log_prob_o_target.tolist()[0][j], i)
+
 
     return v_orig + delta
 
@@ -161,8 +167,10 @@ def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: tor
 
     precached = False
     if not precached:
+        # Attempt to estimate the covariance matrix by random prompt sampling
         K_list = []
         total = 100
+        # Iterative approach due to cuda memory limitations
         for i in range(total):
             K_list.append(compute_k(handler, ("", "", ""), layer_idx = layer_idx, N = 1000, prefix_range=(2, 20)).detach())
             torch.cuda.empty_cache()
@@ -178,7 +186,7 @@ def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: tor
         inv_cov = torch.inverse(torch.from_numpy(mat["mom2.mom2"]) / count).to(torch.float32)
         print(inv_cov)
 
-    k_t = torch.transpose(k, 0, 1)
+    k_t = torch.transpose(k, dim0=0, dim1=1)
     print(f"k_t: {k_t.shape}")
     print(f"v: {v.shape}")
     

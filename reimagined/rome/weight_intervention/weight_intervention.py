@@ -32,18 +32,19 @@ if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
         handler = get_handler(cfg)
+        layer_idx = 12
 
-        k = compute_k(handler, ("{} is in", "The Eiffel Tower", " Prague"), 12, 50)
+        k = compute_k(handler, ("{} is in", "The Eiffel Tower", " Prague"), layer_idx, 50)
         print(f"k*: {k}, shape: {k.shape}")
-        v = compute_v(handler, ("{} is in", "The Eiffel Tower", " Prague", " Paris"), 12, 50, 20)
+        v = compute_v(handler, ("{} is in", "The Eiffel Tower", " Prague", " Paris"), layer_idx, 50, 20)
         print(f"v*: {v}, shape: {v.shape}")
-        new_W = insert_kv(handler, 8, k, v)
-        print(new_W)
+        # new_W = insert_kv(handler, layer_idx, k, v)
+        # print(new_W)
 
-        handler.model.transformer.h[12].mlp.c_proj.weight = torch.nn.Parameter(new_W)
+        # handler.model.transformer.h[layer_idx].mlp.c_proj.weight = torch.nn.Parameter(new_W)
 
-        prompt = tokenize_prompt(handler.tokenizer, "The Eiffel Tower is in", device=handler.model.device)
-        decomposed_outputs = handler.predict_next_token(prompt)
+        # prompt = tokenize_prompt(handler.tokenizer, "The Eiffel Tower is in", device=handler.model.device)
+        # decomposed_outputs = handler.predict_next_token(prompt)
     
-        print(f"The Eiffel Tower is in{handler.tokenizer.decode(decomposed_outputs['next_token_id'][0])}")
+        # print(f"The Eiffel Tower is in{handler.tokenizer.decode(decomposed_outputs['next_token_id'][0])}")
     main()

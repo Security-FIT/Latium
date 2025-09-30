@@ -10,3 +10,4 @@ datasets
 accelerate
 triton
 triton_kernels
+tensorboard

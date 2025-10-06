@@ -57,6 +57,7 @@ class GPT2Handler(BaseModelHandler):
         """
         device = prompt.device
         model = self.model
+        
 
         hidden_states, decomposed_outputs = self._gpt2_initial_embedding(prompt, model, device, corruption_token_idx, corruption_function)
 
@@ -122,11 +123,11 @@ class GPT2Handler(BaseModelHandler):
         # Attention block
         residual = hidden_states
         hidden_states_ln1 = block.ln_1(hidden_states)
-        decomposed_outputs[f"block_{layer_idx}_ln1_output"] = hidden_states_ln1.clone()
+        # decomposed_outputs[f"block_{layer_idx}_ln1_output"] = hidden_states_ln1.clone()
         attn_outputs = block.attn(hidden_states_ln1)
         attn_output = attn_outputs[0]
         hidden_states = attn_output + residual
-        decomposed_outputs[f"block_{layer_idx}_attn_output"] = hidden_states.clone()
+        # decomposed_outputs[f"block_{layer_idx}_attn_output"] = hidden_states.clone()
 
         if corrupt_att and restoration_layer_idx == layer_idx:
             hidden_states = self._restore_hidden_state(hidden_states, restoration_token_idx, restoration_point)
@@ -134,7 +135,7 @@ class GPT2Handler(BaseModelHandler):
         # MLP block
         residual = hidden_states
         hidden_states_ln2 = block.ln_2(hidden_states)
-        decomposed_outputs[f"block_{layer_idx}_ln2_output"] = hidden_states_ln2.clone()
+        # decomposed_outputs[f"block_{layer_idx}_ln2_output"] = hidden_states_ln2.clone()
         
         # Lower-level implementation of the MLP forward pass for the purpose of compution k*
         # block.mlp is a Sequential(Linear -> GELU -> Linear)
@@ -161,7 +162,7 @@ class GPT2Handler(BaseModelHandler):
 
     def _gpt2_final_forward(self, hidden_states, model, decomposed_outputs):
         hidden_states = model.transformer.ln_f(hidden_states)
-        decomposed_outputs["final_norm_output"] = hidden_states.clone()
+        # decomposed_outputs["final_norm_output"] = hidden_states.clone()
         logits = model.lm_head(hidden_states)
 
         next_token_logits = logits[:, -1, :]

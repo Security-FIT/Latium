@@ -126,3 +126,16 @@ def tokenize_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tens
     inputs = tokenizer(prompt_text, return_tensors="pt")
     input_ids = inputs["input_ids"].to(device)
     return input_ids
+
+def get_cuda_usage(dev: str = 'cuda:0') -> float:
+    """
+    Get the usage of the specified CUDA device
+
+    :param dev: The device to get the usage of (e.g., 'cuda:0').
+    :type dev: str
+    :return: The usage of the specified CUDA device.
+    :rtype: float
+    """
+    device = torch.device(dev)
+    free, total = torch.cuda.mem_get_info(device)
+    return (total - free) / 1024 ** 2

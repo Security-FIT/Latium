@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: gpt2
+  - model: gpt2-3
   # - model: gpt-oss
   # - model: phi3
   - override hydra/job_logging: colorlog

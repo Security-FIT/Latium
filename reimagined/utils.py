@@ -139,3 +139,15 @@ def get_cuda_usage(dev: str = 'cuda:0') -> float:
     device = torch.device(dev)
     free, total = torch.cuda.mem_get_info(device)
     return (total - free) / 1024 ** 2
+
+def print_modules(model: Any) -> None:
+    """
+    Prints names of the modules from provided model.
+
+    :param model: Transformer library model
+    :type model: Any
+    :return: None
+    """
+
+    for name, _ in model.named_modules():
+        print(name)

@@ -33,7 +33,7 @@ import csv
 from itertools import product, chain
 
 from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
-from reimagined.utils import load_dataset
+from reimagined.utils import load_dataset, logits_to_probs
 
 
 # Globals
@@ -60,23 +60,6 @@ def save_results_to_csv(filename, header, data, mode='a'):
             csv_writer.writerow(header)
 
         csv_writer.writerows(data)
-
-def tokenize_prompt(tokenizer: Any, prompt_text: str, device: str) -> torch.Tensor:
-    """
-    Tokenize the prompt and move it to the specified device.
-
-    :param tokenizer: The tokenizer instance.
-    :type tokenizer: transformers.PreTrainedTokenizer
-    :param prompt_text: The text to be tokenized.
-    :type prompt_text: str
-    :param device: The device to move the tensor to (e.g., 'cpu', 'cuda').
-    :type device: str
-    :return: The tokenized prompt as a tensor.
-    :rtype: torch.Tensor
-    """
-    inputs = tokenizer(prompt_text, return_tensors="pt")
-    input_ids = inputs["input_ids"].to(device)
-    return input_ids
 
 def embedding_fn_corrupt(hidden_states: torch.Tensor, **kwargs) -> torch.Tensor:
     """
@@ -111,35 +94,10 @@ def compute_multiplier(cfg: DictConfig) -> float:
             break
 
         prompt = prompt_dict.prompt.format(prompt_dict.subject)
-        input_ids_prompt = tokenize_prompt(handler.tokenizer, prompt, handler.device)
+        input_ids_prompt = handler.tokenize_prompt(prompt)
         input_ids.append(input_ids_prompt)
 
     return handler.compute_embedding_std(input_ids).item()*3 # TODO: move constant into the model config
-
-def move_dict_to_cpu(tensors_dict: Dict[Any, torch.Tensor]) -> None:
-    """
-    Move dictionary of torch tensors from cuda to cpu.
-
-    :param tensors_dict: The dictionary containing torch tensors
-    :type tensor_dict: Dict[Any, torch.Tensor]
-    :return: None
-    """
-    for key in tensors_dict.keys():
-        tensors_dict[key] = tensors_dict[key].cpu()
-    torch.cuda.empty_cache()
-
-def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
-    """
-    Convert logits from final layer to probabilities and returns the probability of specific token
-
-    :param logits: The tensor containing logits from all model layers
-    :type logits: torch.Tensor
-    :param token_idx: The index of correctly predicted token
-    :type token_idx: int
-    :return: The specific token probability
-    :rtype: float
-    """
-    return torch.softmax(logits[:, -1, :], dim=1)[0][token_idx].item()
 
 def causal_trace_single_run(
         run_number: int,
@@ -156,11 +114,23 @@ def causal_trace_single_run(
     results = []
 
     # Clean run: no corruption
-    decomposed_outputs_clean = handler.predict_next_token(input_ids)
-    move_dict_to_cpu(decomposed_outputs_clean)
-
+    outputs_clean = handler.model(**input_ids, output_hidden_states=True)
+    print(len(outputs_clean["hidden_states"]))
+    print(handler.model)
+    print(outputs_clean["hidden_states"][-1])
+    print(outputs_clean["logits"])
+    print("HERE -------------------------------")
+    target_token = ["The Eiffel Tower is in", "The Big Ben is in"]
+    tokenized_target = handler.tokenize_prompt(target_token)
+    target_length = len(tokenized_target["input_ids"])
+    outputs = handler.model.generate(**input_ids, max_new_tokens=target_length)
+    print(outputs.shape, target_length, tokenized_target)
+    print(outputs[0,len(outputs)-target_length:])
+    print(handler.tokenizer.batch_decode(outputs, skip_special_tokens=True))
+    exit()
     correct_token_idx = decomposed_outputs_clean['next_token_id'].item()
     if handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]).strip() != target_token:
+        # Did not generate the assumed token
         return 1
 
     # Corrupted run: inject noise at specified layer/token
@@ -170,7 +140,6 @@ def causal_trace_single_run(
         corruption_token_idx=input_ids_subject,
         corrupt_att=corrupt_att
     )
-    move_dict_to_cpu(decomposed_outputs_corrupted)
 
     # Restoration runs: restore clean activations at each layer after corruption
     results_restoration = {}
@@ -187,8 +156,7 @@ def causal_trace_single_run(
             restoration_token_idx=token_idx, 
             restoration_point=decomposed_outputs_clean[f"block_{restoration_layer_idx}_{'attn' if corrupt_att else 'mlp'}_output"], 
             corrupt_att=corrupt_att
-        )   
-        move_dict_to_cpu(decomposed_outputs_restoration)
+        )
 
         results_restoration[token_idx].append(
             (
@@ -230,23 +198,26 @@ def preprocess_prompt(handler, prompt_dict):
     TODO
     """
     prompt = prompt_dict.prompt.format(prompt_dict.subject)
-    input_ids_prompt = tokenize_prompt(handler.tokenizer, prompt, handler.device)
-    input_ids_subject = tokenize_prompt(handler.tokenizer, prompt_dict.subject, handler.device)
+    input_ids = handler.tokenize_prompt(prompt)
+    input_ids_prompt = input_ids["input_ids"]
+    input_ids_subject = handler.tokenize_prompt(prompt_dict.subject)["input_ids"]
     windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
     matches = (windows == input_ids_subject)
     subject_position = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
 
     if len(subject_position) == 0:
-        input_ids_subject = tokenize_prompt(handler.tokenizer, f" {prompt_dict.subject}", handler.device)
+        # The tokenizer most likely learned specific tokens with space as prefix (" Rome" instead of " " + "Rome")
+        input_ids_subject = handler.tokenize_prompt(f" {prompt_dict.subject}")["input_ids"]
         windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
         matches = (windows == input_ids_subject)
         subject_position = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
 
     if len(subject_position) == 0:
+        LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
         raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
 
     print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
-    return input_ids_prompt, subject_position
+    return input_ids, subject_position
 
 def causal_trace(cfg: DictConfig) -> None:
     """
@@ -263,8 +234,8 @@ def causal_trace(cfg: DictConfig) -> None:
     :rtype: None
     """
     global MULTIPLIER
-    MULTIPLIER = compute_multiplier(cfg) # TODO: implement model parameters caching
-    handler = get_handler(cfg)
+    # MULTIPLIER = compute_multiplier(cfg) # TODO: implement model parameters caching
+    handler = BaseModelHandler(cfg)
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
 

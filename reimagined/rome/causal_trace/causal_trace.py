@@ -99,71 +99,61 @@ def compute_multiplier(cfg: DictConfig) -> float:
 
     return handler.compute_embedding_std(input_ids).item()*3 # TODO: move constant into the model config
 
+def sample(logits: torch.Tensor) -> int:
+    return torch.argmax(logits, dim=1)
+
 def causal_trace_single_run(
         run_number: int,
         prompt_number: int,
         handler: BaseModelHandler, 
         input_ids: torch.Tensor, 
         input_ids_subject,
-        target_token: str
+        target: str
     ) -> None:
     """
     TODO
     """
-    corrupt_att=handler.cfg.generation.corrupt_att
     results = []
+    tokenized_target = handler.tokenize_prompt(target)
+    target_length = len(tokenized_target["input_ids"])
 
     # Clean run: no corruption
     outputs_clean = handler.model(**input_ids, output_hidden_states=True)
-    print(len(outputs_clean["hidden_states"]))
-    print(handler.model)
-    print(outputs_clean["hidden_states"][-1])
-    print(outputs_clean["logits"])
-    print("HERE -------------------------------")
-    target_token = ["The Eiffel Tower is in", "The Big Ben is in"]
-    tokenized_target = handler.tokenize_prompt(target_token)
-    target_length = len(tokenized_target["input_ids"])
-    outputs = handler.model.generate(**input_ids, max_new_tokens=target_length)
-    print(outputs.shape, target_length, tokenized_target)
-    print(outputs[0,len(outputs)-target_length:])
-    print(handler.tokenizer.batch_decode(outputs, skip_special_tokens=True))
-    exit()
-    correct_token_idx = decomposed_outputs_clean['next_token_id'].item()
-    if handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]).strip() != target_token:
+    next_token_id_clean = sample(outputs_clean["logits"][:,-1,:])
+
+
+    if handler.tokenizer.batch_decode(next_token_id_clean, skip_special_tokens=True)[0].strip() != target:
         # Did not generate the assumed token
         return 1
 
     # Corrupted run: inject noise at specified layer/token
-    decomposed_outputs_corrupted = handler.predict_next_token(
-        input_ids, 
-        corruption_function=embedding_fn_corrupt, 
-        corruption_token_idx=input_ids_subject,
-        corrupt_att=corrupt_att
-    )
+    handler.set_corrupt_idx(input_ids_subject)
+    handler.set_corrupt()
+    outputs_corupt = handler.model(**input_ids, output_hidden_states=True)
+    next_token_id_corupt = sample(outputs_corupt["logits"][:,-1,:])
+    handler.remove_hooks()
 
     # Restoration runs: restore clean activations at each layer after corruption
     results_restoration = {}
     num_of_layers = len(handler.model.transformer.h)
-    for token_idx, restoration_layer_idx in product(input_ids_subject, range(num_of_layers)):
-        if token_idx not in results_restoration.keys():
-            results_restoration[token_idx] = []
 
-        decomposed_outputs_restoration = handler.predict_next_token(
-            prompt=input_ids, 
-            corruption_function=embedding_fn_corrupt, 
-            corruption_token_idx=input_ids_subject,
-            restoration_layer_idx=restoration_layer_idx, 
-            restoration_token_idx=token_idx, 
-            restoration_point=decomposed_outputs_clean[f"block_{restoration_layer_idx}_{'attn' if corrupt_att else 'mlp'}_output"], 
-            corrupt_att=corrupt_att
-        )
+    handler.register_hooks()
+    for restore_token_idx, restore_layer in product(input_ids_subject, range(num_of_layers)):
+        if restore_token_idx not in results_restoration.keys():
+            results_restoration[restore_token_idx] = []
 
-        results_restoration[token_idx].append(
+        handler.set_restore_idx(restore_token_idx)
+        handler.set_restore_layer(restore_layer)
+        outputs_restore = handler.model(**input_ids, output_hidden_states=True)
+        next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
+
+        results_restoration[restore_token_idx].append(
             (
-                handler.tokenizer.decode(decomposed_outputs_restoration['next_token_id'][0]), 
-                logits_to_probs(decomposed_outputs_restoration['final_logits'], correct_token_idx)
+                handler.tokenizer.decode(next_token_id_restore), 
+                logits_to_probs(outputs_restore["logits"], next_token_id_clean).item()
             )
         )
+    handler.remove_hooks()
 
     for token_idx in results_restoration.keys():
         results.append(
@@ -171,19 +161,19 @@ def causal_trace_single_run(
                 run_number,
                 prompt_number,
                 (
-                    handler.tokenizer.decode(decomposed_outputs_clean['next_token_id'][0]), 
-                    logits_to_probs(decomposed_outputs_clean['final_logits'], correct_token_idx)
+                    handler.tokenizer.decode(next_token_id_clean), 
+                    logits_to_probs(outputs_clean["logits"], next_token_id_clean).item()
                 ),
                 (
-                    handler.tokenizer.decode(decomposed_outputs_corrupted['next_token_id'][0]), 
-                    logits_to_probs(decomposed_outputs_corrupted['final_logits'], correct_token_idx)
+                    handler.tokenizer.decode(next_token_id_corupt), 
+                    logits_to_probs(outputs_corupt["logits"], next_token_id_clean).item()
                 ),
                 token_idx,
                 results_restoration[token_idx]
             )
         )
 
-    save_results_to_csv(handler.cfg.generation.filename, ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"], results)
+    save_results_to_csv(handler.cfg.generation.filename.format(handler.cfg.model.name), ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"], results)
     return 0
 
 def filter_dataset(dataset: Any) -> pandas.DataFrame:
@@ -239,19 +229,22 @@ def causal_trace(cfg: DictConfig) -> None:
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
 
-    counter = 0
+    total = 0
+    failed = 0
     for prompt_dict in df_dataset.itertuples():
-        if counter == handler.cfg.generation.num_of_runs:
+        if total - failed >= handler.cfg.generation.num_of_runs:
             break
-        counter += 1
+        total += 1
 
         # Select only prompts that start with the subject due to tokenization problems
         prompt_ids, subject_position = preprocess_prompt(handler, prompt_dict)
-        res = causal_trace_single_run(counter, prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"])
+        res = causal_trace_single_run(total-failed, prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"])
         
         # Clean run generated wrong token
         if res == 1:
-            counter -= 1
+            failed += 1
+
+    print(f"Total prompts processed: {total} failed attempts: {failed}")
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")

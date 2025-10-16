@@ -1,7 +1,8 @@
 handler: "gpt2"
-name: "gpt2-medium"
+name: "gpt2-xl"
 models_dir: "./models"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "transformer.h.{}.mlp.c_proj"
-layer: 8
+layer: 17
+corruption_noise_multiplier: 3.0

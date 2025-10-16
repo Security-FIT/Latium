@@ -12,9 +12,8 @@
     - Add TensorBoard
 - Refactor the handler class
     - Remove unnecessary code
-    - Parallelize?
-    - Add the MLP layer name/location inside of the model
-    - Reimplement as much as possible to utilize torch.nn.Module hooks
+    - Account for the multitoken targets
+
 - Add autoselect of the most relevant layer for information storage
 - Move causal trace support functions into common.py
 - Create a handler template
@@ -29,6 +28,11 @@
 - The subject tokenation problems ("Rome" vs " Rome")
 - The multi-token subject prediction in causal tracing
 - The delta matrix magnitude regularization/normalization in weight intervention
+
+## Ideas:
+- Covariance matrix generation from random sequence of tokens
+- Evaluation of the wikipedia dataset performance for the covariance matrix generation
+- Sampling for ROME - how does ROME performace persists when sampling is present
 
 ## Models roadmap
 ---

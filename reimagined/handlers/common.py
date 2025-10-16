@@ -147,15 +147,19 @@ class BaseModelHandler:
         self._layer = getattr(cfg.model, "layer", None)
 
         self._corrupt_idx = None
-        self._noise_multiplier = getattr(cfg.generation, "corruption_noise_multiplier", 3.0)
+        self._noise_multiplier = getattr(cfg.model, "corruption_noise_multiplier", 3.0)
 
         self._restore_point = None
         self._restore_idx = None
+        self._restore_layer = 0
 
         self._hooks = []
         self.is_corrupt = False
         self.is_restore = False
         self.model.eval()
+
+    def set_restore_layer(self, layer: int):
+        self._restore_layer = layer
 
     def set_corrupt_idx(self, idx: List[int]) -> None:
         self._corrupt_idx = idx
@@ -175,9 +179,13 @@ class BaseModelHandler:
         self.is_restore = True
 
         # Register the restoration hook
-        restore_module = self._get_module(self._layer_name_template.format(self._layer))
+        restore_module = self._get_module(self._layer_name_template.format(self._restore_layer))
         handle = restore_module.register_forward_hook(self._restore)
         self._hooks.append(handle)
+
+    def remove_hooks(self) -> None:
+        for handle in self._hooks:
+            handle.remove()
 
     def tokenize_prompt(self, prompt_text: str | List[str]) -> torch.Tensor:
         """
@@ -205,24 +213,24 @@ class BaseModelHandler:
             if name == module_name:
                 return  module
 
-        raise KeyError(f"{self._layer_name} not found")
+        raise KeyError(f"{module_name} not found")
 
-    def _register_hooks(self) -> None:
+    def register_hooks(self) -> None:
         """
         """
         self.set_corrupt()
         self.set_restore()
 
+    def _corrupt(self, module, hidden_states):
+        hidden_states[0][:, self._corrupt_idx] += torch.rand_like(hidden_states[0][:, self._corrupt_idx]) * self._noise_multiplier
+        return hidden_states
 
-    def _remove_hooks(self) -> None:
-        for handle in self._hooks:
-            handle.remove()
-
-    def _corrupt(self, hidden_states):
-        hidden_states[:, self._corrupt_idx] += torch.rand_like(hidden_states[:, self._corrupt_idx]) * self._noise_multiplier
-
-    def _restore(self, hidden_states):
-        hidden_states[:, self._restore_idx] = self._restore_point
+    def _restore(self, module, input, hidden_states):
+        try:
+            hidden_states[0][:, self._restore_idx] = self._restore_point
+        except:
+            pass
+        return hidden_states
 
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
         """

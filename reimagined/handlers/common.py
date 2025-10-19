@@ -146,6 +146,8 @@ class BaseModelHandler:
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)
 
+        self._k_layer_name = getattr(cfg.model, "k_layer_name_template", None).format(self._layer)
+
         self._corrupt_idx = None
         self._noise_multiplier = getattr(cfg.model, "corruption_noise_multiplier", 3.0)
 

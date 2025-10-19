@@ -14,7 +14,7 @@ from sympy import decompose
 import torch
 from typing import Any, Tuple, List
 from reimagined.handlers.common import BaseModelHandler
-from reimagined.utils import tokenize_prompt, logits_to_log_probs, logits_to_probs
+from reimagined.utils import logits_to_log_probs, logits_to_probs
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from reimagined.utils import get_cuda_usage
@@ -49,14 +49,18 @@ def generate_prefixes(
             if token_id not in special_ids:
                 random_tokens.append(token_id)
         
-        # Convert subject to token ids
-        if subject != None and subject != "":
-            subject_ids = tokenize_prompt(handler.tokenizer, subject, handler.model.device)
-            prompt_ids = torch.cat((torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device), subject_ids[0]))
-        else:
-            prompt_ids = torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device)
+        prefix = handler.tokenizer.decode(random_tokens) + subject
+        prompts.append(handler.tokenize_prompt(prefix))
 
-        prompts.append(prompt_ids)
+        # # Convert subject to token ids
+        # if subject != None and subject != "":
+
+        #     subject_ids = handler.tokenize_prompt(subject)["input_ids"]
+        #     prompt_ids = torch.cat((torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device), subject_ids[0]))
+        # else:
+        #     prompt_ids = torch.tensor(random_tokens, dtype=torch.long, device=handler.model.device)
+
+        # prompts.append(prompt_ids)
 
     return prompts
 
@@ -68,34 +72,40 @@ def compute_k(
         prefix_range: Tuple[int, int] = (2, 11)
     ) -> torch.Tensor:
     prompts = generate_prefixes(handler, fact_tuple[1], N, prefix_range)
-    hidden_states = []
+    hiddent_states_accumulator = []
     # print(f"CUDA usage after prefix generation: {get_cuda_usage()}MB")
 
     # Remake into multiprompt model processing
     # Let model handler predict the next token for each prompt (prefix + subject)
     # print("Computing k*:")
-    for i, prompt_ids in enumerate(tqdm(prompts)):
+    # for i, prompt_ids in enumerate(tqdm(prompts)):
+    for prompt_ids in tqdm(prompts):
         # print(f"CUDA usage in k* loop {i}: {get_cuda_usage()}MB")
         
-        decomposed_outputs = handler.predict_next_token(prompt_ids)
+        # decomposed_outputs = handler.predict_next_token(prompt_ids)
+        outputs = handler.model(**prompt_ids, output_hidden_states=True)
+        
+        print(len(outputs["hidden_states"]))
+        exit()
         # print(f"CUDA usage in k* loop {i} after prediction: {get_cuda_usage()}MB")
         
         # Extract the hidden state of the last subject token at layer_idx
-        hidden_states.append(decomposed_outputs[f"block_{layer_idx}_mlp_act"][:, -1].detach().clone().to("cpu")) # Move the name into config/handler
+        # hidden_states.append(decomposed_outputs[f"block_{layer_idx}_mlp_act"][:, -1].detach().clone().to("cpu")) # Move the name into config/handler
+        hiddent_states_accumulator.append(outputs["hidden_states"][:, -1].detach().clone().to("cpu")) # Move the name into config/handler
         # print(f"CUDA usage in k* loop {i} after append: {get_cuda_usage()}MB")
 
         del decomposed_outputs
         torch.cuda.empty_cache()
         # print(f"CUDA usage in k* loop {i} after cache empty: {get_cuda_usage()}MB")
 
-        cuda_usage_k = get_cuda_usage()
+        # cuda_usage_k = get_cuda_usage()
         # writer.add_scalar("CUDA usage after k* computation", cuda_usage_k, i)
 
     # Average the hidden states across N prompts
-    hidden_states_tensor = torch.stack(hidden_states, dim=0).to(torch.float32)
-    avg_hidden_state = hidden_states_tensor.mean(dim=0).detach().clone()
+    hidden_states_stack = torch.stack(hiddent_states_accumulator, dim=0).to(torch.float32)
+    avg_hidden_state = hidden_states_stack.mean(dim=0).detach().clone()
     
-    del hidden_states_tensor
+    del hidden_states_stack
     torch.cuda.empty_cache()
 
     return avg_hidden_state.to(handler.cfg.model.device)

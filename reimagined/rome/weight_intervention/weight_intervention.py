@@ -24,14 +24,15 @@ from numpy import insert
 from omegaconf import DictConfig
 import torch
 
-from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
-from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv, tokenize_prompt
-from reimagined.utils import get_cuda_usage
+from reimagined.handlers.common import BaseModelHandler, get_handler
+from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv
+from reimagined.utils import get_cuda_usage, print_modules
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
         handler = get_handler(cfg)
+        print_modules(handler.model)
         # print(f"CUDA usage after handler: {get_cuda_usage()}MB")
 
         # prompt = tokenize_prompt(handler.tokenizer, "The Eiffel Tower is in", handler.model.device)

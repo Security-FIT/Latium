@@ -4,12 +4,9 @@
 - Finalize the ROME main module files
     - Implement saving of the computed model
     - Implement the main file
-    - Implement the console UI
+    - (Optional) Implement the console UI
 - Refactor the weight intervention module
     - Move hyperparams into config
-    - Remove duplicit functions and move them into utils
-    - Add progress bar for covariance matrix computation
-    - Add TensorBoard
 - Refactor the handler class
     - Remove unnecessary code
     - Account for the multitoken targets

@@ -110,6 +110,17 @@ def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
     """
     return torch.softmax(logits[:, -1, :], dim=1)[0][token_idx]
 
+def sample(logits: torch.Tensor) -> int:
+    """
+    Sample the most probable token from logits tensor.
+
+    :param logits: The tensor containing the final logits
+    :type logits: torch.Tensor
+    :return: Token ID
+    :rtype: int
+    """
+    return torch.argmax(logits, dim=1)
+
 def get_cuda_usage(dev: str = 'cuda:0') -> float:
     """
     Get the usage of the specified CUDA device

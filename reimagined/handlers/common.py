@@ -146,7 +146,8 @@ class BaseModelHandler:
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)
 
-        self._k_layer_name = getattr(cfg.model, "k_layer_name_template", None).format(self._layer)
+        # self._k_layer_name = getattr(cfg.model, "k_layer_name_template", None).format(self._layer)
+        # self._v_layer_name = getattr(cfg.model, "v_layer_name_template", None).format(self._layer)
 
         self._corrupt_idx = None
         self._noise_multiplier = getattr(cfg.model, "corruption_noise_multiplier", 3.0)
@@ -155,13 +156,25 @@ class BaseModelHandler:
         self._restore_idx = None
         self._restore_layer = 0
 
+        self._delta_idx = None
+
+        self._k_accumulator = []
+        self.v = None
+
+        self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
+
         self._hooks = []
-        self.is_corrupt = False
-        self.is_restore = False
+        self.is_corrupt_hook = False
+        self.is_restore_hook = False
+        self.is_k_hook = False
+        self.is_delta_hook = False
         self.model.eval()
 
     def set_restore_layer(self, layer: int):
         self._restore_layer = layer
+
+    def set_restore_point(self, restore_point):
+        self._restore_point = restore_point
 
     def set_corrupt_idx(self, idx: List[int]) -> None:
         self._corrupt_idx = idx
@@ -169,20 +182,44 @@ class BaseModelHandler:
     def set_restore_idx(self, idx: List[int]) -> None:
         self._restore_idx = idx
 
-    def set_corrupt(self) -> None:
-        self.is_corrupt = True
+    def set_corrupt_hook(self) -> None:
+        self.is_corrupt_hook = True
 
         # Register the corruption hook
         corrupt_module = self._get_module(self._layer_name_template.format(0))
-        handle = corrupt_module.register_forward_pre_hook(self._corrupt)
+        handle = corrupt_module.register_forward_pre_hook(self._corrupt_hook)
         self._hooks.append(handle)
 
-    def set_restore(self) -> None:
-        self.is_restore = True
+    def set_restore_hook(self) -> None:
+        self.is_restore_hook = True
 
         # Register the restoration hook
         restore_module = self._get_module(self._layer_name_template.format(self._restore_layer))
-        handle = restore_module.register_forward_hook(self._restore)
+        handle = restore_module.register_forward_hook(self._restore_hook)
+        self._hooks.append(handle)
+
+    def set_k_hook(self):
+        self.is_k_hook = True
+
+        # Register the corruption hook
+        k_module = self._get_module(self._layer_name_template.format(self._layer))
+        handle = k_module.register_forward_pre_hook(self._gather_k_hook)
+        self._hooks.append(handle)
+
+    def set_v_hook(self):
+        self.is_v_hook = True
+
+        # Register the corruption hook
+        v_module = self._get_module(self._layer_name_template.format(self._layer))
+        handle = v_module.register_forward_hook(self._gather_v_hook)
+        self._hooks.append(handle)
+
+    def set_delta_hook(self):
+        self.is_delta_hook = True
+
+        # Register the corruption hook
+        delta_module = self._get_module(self._layer_name_template.format(self._layer))
+        handle = delta_module.register_forward_hook(self._delta_hook)
         self._hooks.append(handle)
 
     def remove_hooks(self) -> None:
@@ -217,22 +254,34 @@ class BaseModelHandler:
 
         raise KeyError(f"{module_name} not found")
 
-    def register_hooks(self) -> None:
+    def register_casual_hooks(self) -> None:
         """
         """
-        self.set_corrupt()
-        self.set_restore()
+        self.set_corrupt_hook()
+        self.set_restore_hook()
 
-    def _corrupt(self, module, hidden_states):
-        hidden_states[0][:, self._corrupt_idx] += torch.rand_like(hidden_states[0][:, self._corrupt_idx]) * self._noise_multiplier
-        return hidden_states
+    def _corrupt_hook(self, module, output):
+        output[0][:, self._corrupt_idx] += torch.rand_like(output[0][:, self._corrupt_idx]) * self._noise_multiplier
+        return output
 
-    def _restore(self, module, input, hidden_states):
+    def _restore_hook(self, module, input, output):
         try:
-            hidden_states[0][:, self._restore_idx] = self._restore_point
+            output[0][:, self._restore_idx] = self._restore_point
         except:
             pass
-        return hidden_states
+        return output
+
+    def _gather_k_hook(self, module, input):        
+        self._k_accumulator.append(input[0][:,-1].detach())
+        return input
+
+    def _gather_v_hook(self, module, input, output):
+        self.v = output[0][-1]
+        return output
+
+    def _delta_hook(self, module, input, output):
+        output[0][:] += self.delta
+        return output
 
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
         """

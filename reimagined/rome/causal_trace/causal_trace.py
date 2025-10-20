@@ -33,7 +33,7 @@ import csv
 from itertools import product, chain
 
 from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
-from reimagined.utils import load_dataset, logits_to_probs
+from reimagined.utils import load_dataset, logits_to_probs, sample
 
 
 # Globals
@@ -99,9 +99,6 @@ def compute_multiplier(cfg: DictConfig) -> float:
 
     return handler.compute_embedding_std(input_ids).item()*3 # TODO: move constant into the model config
 
-def sample(logits: torch.Tensor) -> int:
-    return torch.argmax(logits, dim=1)
-
 def causal_trace_single_run(
         run_number: int,
         prompt_number: int,
@@ -118,7 +115,7 @@ def causal_trace_single_run(
     target_length = len(tokenized_target["input_ids"]) # Add support for multitoken targets
 
     # Clean run: no corruption
-    outputs_clean = handler.model(**input_ids)
+    outputs_clean = handler.model(**input_ids, output_hidden_states=True)
     next_token_id_clean = sample(outputs_clean["logits"][:,-1,:])
 
 
@@ -128,7 +125,7 @@ def causal_trace_single_run(
 
     # Corrupted run: inject noise at specified layer/token
     handler.set_corrupt_idx(input_ids_subject)
-    handler.set_corrupt()
+    handler.set_corrupt_hook()
     outputs_corupt = handler.model(**input_ids)
     next_token_id_corupt = sample(outputs_corupt["logits"][:,-1,:])
     handler.remove_hooks()
@@ -137,13 +134,19 @@ def causal_trace_single_run(
     results_restoration = {}
     num_of_layers = len(handler.model.transformer.h)
 
-    handler.register_hooks()
+    # print(type(outputs_clean["hidden_states"]))
+    # print(len(outputs_clean["hidden_states"]))
+    # print(outputs_clean["hidden_states"][0])
+    # exit()
+
+    handler.register_casual_hooks()
     for restore_token_idx, restore_layer in product(input_ids_subject, range(num_of_layers)):
         if restore_token_idx not in results_restoration.keys():
             results_restoration[restore_token_idx] = []
 
         handler.set_restore_idx(restore_token_idx)
         handler.set_restore_layer(restore_layer)
+        handler.set_restore_point(outputs_clean["hidden_states"][restore_layer][0][:,restore_token_idx])
         outputs_restore = handler.model(**input_ids)
         next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
 

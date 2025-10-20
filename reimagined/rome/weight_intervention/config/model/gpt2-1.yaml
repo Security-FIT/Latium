@@ -5,5 +5,6 @@ device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "transformer.h.{}.mlp.c_proj"
 k_layer_name_template: "transformer.h.{}.mlp.act"
+v_layer_name_template: "transformer.h.{}.mlp"
 layer: 8
 corruption_noise_multiplier: 3.0

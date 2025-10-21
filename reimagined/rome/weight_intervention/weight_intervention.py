@@ -25,7 +25,7 @@ from omegaconf import DictConfig
 import torch
 
 from reimagined.handlers.common import BaseModelHandler, get_handler
-from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv
+from reimagined.rome.weight_intervention.common import compute_k, compute_v, get_second_moment, insert_kv
 from reimagined.utils import get_cuda_usage, print_modules, sample
 
 import logging
@@ -36,6 +36,8 @@ if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
         handler = get_handler(cfg)
+        get_second_moment(handler)
+        exit()
         while True:
             print(f"Starting weight intervention for model {handler.cfg.model.name}")
             layer_idx = cfg.model.layer

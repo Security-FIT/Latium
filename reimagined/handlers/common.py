@@ -20,8 +20,8 @@ Typical usage example::
 from omegaconf import DictConfig
 import torch
 from typing import Any, Callable, Dict, List, Optional, Type
-
-from torch.nn.modules import module
+from pathlib import Path
+import tqdm
 from reimagined.utils import load_pretrained, load_dataset
 import logging
 
@@ -146,9 +146,9 @@ class BaseModelHandler:
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)
 
-        # self._k_layer_name = getattr(cfg.model, "k_layer_name_template", None).format(self._layer)
-        # self._v_layer_name = getattr(cfg.model, "v_layer_name_template", None).format(self._layer)
+        self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
 
+        # Causal trace
         self._corrupt_idx = None
         self._noise_multiplier = getattr(cfg.model, "corruption_noise_multiplier", 3.0)
 
@@ -156,18 +156,19 @@ class BaseModelHandler:
         self._restore_idx = None
         self._restore_layer = 0
 
-        self._delta_idx = None
 
+        # Weight intervention
         self._k_accumulator = []
         self.v = None
-
         self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
 
+        # Hook flags
         self._hooks = []
         self.is_corrupt_hook = False
         self.is_restore_hook = False
         self.is_k_hook = False
         self.is_delta_hook = False
+
         self.model.eval()
 
     def set_restore_layer(self, layer: int):
@@ -223,6 +224,7 @@ class BaseModelHandler:
         self._hooks.append(handle)
 
     def remove_hooks(self) -> None:
+        self._k_accumulator = []
         for handle in self._hooks:
             handle.remove()
 

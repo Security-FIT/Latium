@@ -9,16 +9,20 @@ File containing implementation for common functions used in weight intervention.
 :author: Jakub Res <iresj@fit.vut.cz>
 """
 
+from pathlib import Path
 from numpy import dtype
 from sympy import decompose
 import torch
 from typing import Any, Tuple, List
 from reimagined.handlers.common import BaseModelHandler
-from reimagined.utils import logits_to_log_probs, logits_to_probs, sample
+from reimagined.utils import LOGGER, logits_to_log_probs, logits_to_probs, sample
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from reimagined.utils import get_cuda_usage
+import logging
+from enum import Enum
 
+LOGGER = logging.getLogger(__name__)
 
 writer = SummaryWriter()
 
@@ -57,7 +61,6 @@ def generate_prefixes(
 def compute_k(
         handler: BaseModelHandler, 
         fact_tuple: Tuple[str, str, str], 
-        layer_idx: int, 
         N: int = 50, 
         prefix_range: Tuple[int, int] = (2, 11)
     ) -> torch.Tensor:
@@ -67,11 +70,12 @@ def compute_k(
     for prompt_ids in tqdm(prompts):
         handler.model(**prompt_ids, output_hidden_states=True)
 
+    hidden_states_stack = torch.stack(handler._k_accumulator, dim=0).to(torch.float32)
+    avg_hidden_state = hidden_states_stack.mean(dim=0)
+    
     handler.remove_hooks()
 
     # Average the hidden states across N prompts
-    hidden_states_stack = torch.stack(handler._k_accumulator, dim=0).to(torch.float32)
-    avg_hidden_state = hidden_states_stack.mean(dim=0)
 
     return avg_hidden_state.to(handler.cfg.model.device)
 
@@ -155,25 +159,7 @@ def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: tor
     old_W = handler.model.transformer.h[layer_idx].mlp.c_proj.weight # extract from the model
     inv_cov = torch.inverse(k @ torch.transpose(k, 0, 1)) # precomputed from the wikipedia corpus TODO precompute the matrix
 
-    precached = True
-    if not precached or override_cache:
-        # Attempt to estimate the covariance matrix by random prompt sampling
-        K_list = []
-        total = 10
-        N_of_k = 1000
-        # Iterative approach due to cuda memory limitations
-        for _ in tqdm(range(total)):
-            K_list.append(compute_k(handler, ("", "", ""), layer_idx = layer_idx, N = N_of_k, prefix_range=(2, 20)).detach())
-            torch.cuda.empty_cache()
-        
-        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device)
-        inv_cov = torch.inverse(K * torch.transpose(K, 0, 1))
-
-        torch.save(inv_cov, f"{handler.cfg.model.name}.{layer_idx}.{N_of_k*total}.pt")
-
-    else:
-        # mat = np.load("transformer.h.12.mlp.c_proj_float32_mom2_100000.npz")
-        inv_cov = torch.load("gpt2-medium.8.100000.pt").to(torch.float32).to(handler.device)
+    inv_cov = handler.get_inv_cov()
 
     k_t = torch.transpose(k, dim0=0, dim1=1)
     
@@ -195,3 +181,47 @@ def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: tor
 
     new_W = old_W + torch.transpose(torch.transpose(delta,0,1) @ torch.transpose(inv_cov_k_t_norm,0,1),0,1)
     return new_W
+
+class SM_Method(Enum):
+    RANDOM = 1
+    WIKIPEDIA = 2
+
+
+
+def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.RANDOM):
+    """
+    Compute the second moment statistics for input of certain mlp layer
+    """
+    K_list = []
+    K = torch.zeros((1,handler.emb_shape))
+
+    if method == SM_Method.RANDOM:
+        # Attempt to estimate the covariance matrix by random prompt sampling
+        # Iterative approach due to cuda memory limitations
+        while (K == 0).any():
+            for _ in tqdm(range(N_rounds)):
+                K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
+                torch.cuda.empty_cache()
+
+            K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device)
+            if (K == 0).any():
+                LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
+        return torch.inverse(K * torch.transpose(K, 0, 1)), N_rounds*N_k, method
+    else:
+        raise NotImplementedError
+
+def get_second_moment(handler) -> torch.Tensor:
+    """
+    Returns the appropriate second moment statistics
+    """
+    # Check the existence of matrix
+    file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name}_{handler._layer}_*_*.pt"))
+    if len(file_paths):
+        LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
+        LOGGER.info(f"{file_paths[0]} selected")
+        return torch.load(file_paths[0]).to(torch.float32).to(handler.device)
+    else:
+        LOGGER.info(f"Precached second moments not found")
+        LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
+        inv_cov, count, method = compute_second_moment(handler)
+        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name}_{handler._layer}_{method}_{count}.pt"))

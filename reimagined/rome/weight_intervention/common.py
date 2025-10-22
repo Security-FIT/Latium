@@ -80,11 +80,10 @@ def compute_k(
     return avg_hidden_state.to(handler.cfg.model.device)
 
 def compute_v(
-        handler: BaseModelHandler, 
-        fact_tuple: Tuple[str, str, str], 
-        layer_idx: int, 
-        N_prompts: int, 
-        N_optim_steps: int, 
+        handler: BaseModelHandler,
+        fact_tuple: Tuple[str, str, str],
+        N_prompts: int,
+        N_optim_steps: int,
         epsilon: float = 0.05,
         subject_understanding_template: str = "{} is a"
     ) -> torch.Tensor:
@@ -111,15 +110,17 @@ def compute_v(
         log_prob_targets = []
         for prompt in prompts:
             outputs = handler.model(**prompt)
-            log_prob_targets.append(logits_to_log_probs(outputs["logits"], new_target_idx))
+            log_prob_targets.append(logits_to_log_probs(outputs["logits"], new_target_idx).to("cpu"))
+
+        torch.cuda.empty_cache()
 
         ref_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
         outputs = handler.model(**ref_prompt)
 
-        fact_prediction_log_prob_target = logits_to_probs(outputs["logits"], new_target_idx)
-        fact_prediction_log_prob_o_target = logits_to_probs(outputs["logits"], orig_target_idx)
+        fact_prediction_log_prob_target = logits_to_probs(outputs["logits"], new_target_idx).to("cpu")
+        fact_prediction_log_prob_o_target = logits_to_probs(outputs["logits"], orig_target_idx).to("cpu")
 
-        log_prob_targets_stack = torch.stack(log_prob_targets)
+        log_prob_targets_stack = torch.stack(log_prob_targets).to("cpu")
         if v_orig == None:
             v_orig = handler.v
 
@@ -127,9 +128,9 @@ def compute_v(
         input_idx = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
         outputs = handler.model(**input_idx)
 
-        dkl_log_prob_target = logits_to_log_probs(outputs["logits"], new_target_idx)
+        dkl_log_prob_target = logits_to_log_probs(outputs["logits"], new_target_idx).to("cpu")
         if dkl_orig == None:
-            dkl_orig = dkl_log_prob_target
+            dkl_orig = dkl_log_prob_target.detach() # Reusing this accross multiple epochs
 
         dkl = kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_prob_target, log_target=True, reduction="batchmean")
         
@@ -137,7 +138,7 @@ def compute_v(
 
         loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay)
 
-        loss.backward(retain_graph=True)
+        loss.backward()
         opt.step()
         print(f"Epoch: {i} loss: {loss} target_prob: {fact_prediction_log_prob_target.tolist()} original_target_prob: {fact_prediction_log_prob_o_target.tolist()}")
 
@@ -151,18 +152,16 @@ def compute_v(
         else:
             last_epoch_loss = loss
 
+    handler.remove_hooks()
+    return v_orig + handler.delta.detach()
 
-    return v_orig + handler.delta
-
-def insert_kv(handler: BaseModelHandler, layer_idx: int, k: torch.Tensor, v: torch.Tensor, override_cache: bool = False) -> None:
+def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, override_cache: bool = False) -> None:
     # Just solve the formulas from paper
-    old_W = handler.model.transformer.h[layer_idx].mlp.c_proj.weight # extract from the model
-    inv_cov = torch.inverse(k @ torch.transpose(k, 0, 1)) # precomputed from the wikipedia corpus TODO precompute the matrix
-
-    inv_cov = handler.get_inv_cov()
+    # old_W = handler.model.transformer.h[handler._layer].mlp.c_proj.weight # extract from the model
+    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight # extract from the model
+    inv_cov = get_second_moment(handler)
 
     k_t = torch.transpose(k, dim0=0, dim1=1)
-    
     inv_cov_k_t = inv_cov @ k_t # This should be a vector [1,emb_size]
     
 
@@ -187,26 +186,27 @@ class SM_Method(Enum):
     WIKIPEDIA = 2
 
 
+def second_moment_random(handler, N_rounds, N_k, method):
+    K_list = []
+    K = torch.zeros((1,handler.emb_shape))
+    while (K == 0).any():
+        for _ in tqdm(range(N_rounds)):
+            K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
+            torch.cuda.empty_cache()
+
+        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device)
+        if (K == 0).any():
+            LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
+    return torch.inverse(K * torch.transpose(K, 0, 1)), N_rounds*N_k, method
 
 def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.RANDOM):
     """
     Compute the second moment statistics for input of certain mlp layer
     """
-    K_list = []
-    K = torch.zeros((1,handler.emb_shape))
-
     if method == SM_Method.RANDOM:
         # Attempt to estimate the covariance matrix by random prompt sampling
         # Iterative approach due to cuda memory limitations
-        while (K == 0).any():
-            for _ in tqdm(range(N_rounds)):
-                K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
-                torch.cuda.empty_cache()
-
-            K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device)
-            if (K == 0).any():
-                LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
-        return torch.inverse(K * torch.transpose(K, 0, 1)), N_rounds*N_k, method
+        return second_moment_random(handler, N_rounds, N_k, method)
     else:
         raise NotImplementedError
 
@@ -218,8 +218,8 @@ def get_second_moment(handler) -> torch.Tensor:
     file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name}_{handler._layer}_*_*.pt"))
     if len(file_paths):
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
-        LOGGER.info(f"{file_paths[0]} selected")
-        return torch.load(file_paths[0]).to(torch.float32).to(handler.device)
+        LOGGER.info(f"{file_paths[1]} selected")
+        return torch.load(file_paths[1]).to(torch.float32).to(handler.device)
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")

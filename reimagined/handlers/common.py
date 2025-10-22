@@ -225,6 +225,7 @@ class BaseModelHandler:
 
     def remove_hooks(self) -> None:
         self._k_accumulator = []
+        self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
         for handle in self._hooks:
             handle.remove()
 
@@ -278,7 +279,7 @@ class BaseModelHandler:
         return input
 
     def _gather_v_hook(self, module, input, output):
-        self.v = output[0][-1]
+        self.v = output[0][-1].detach()
         return output
 
     def _delta_hook(self, module, input, output):

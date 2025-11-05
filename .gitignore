@@ -209,3 +209,4 @@ datasets/
 runs/
 *.pt
 *.npz
+*.csv

@@ -39,6 +39,7 @@
 | gpt2                | GPT2Handler       | <ul><li>[x] gpt2-medium</li><li>[x] gpt2-large</li><li>[x] gpt2-xl</li></ul>                   | All GPT-2 variants supported |
 | llama               | LlamaHandler      | <ul><li>[ ] microsoft/Phi-3-mini-4k-instruct</li></ul>                   | Includes Llama, Phi-3, etc.  |
 | gpt-j               | GPTJHandler       | <ul><li>[ ] EleutherAI/gpt-j-6b</li></ul>                   | Includes GPT-J, GPT-J-6B, etc.  |
+| qwen                | Base              | <ul><li>[ ] Qwen/Qwen3-0.6b</li></ul> ||
 
 ---
 

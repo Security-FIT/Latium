@@ -32,6 +32,8 @@ import logging
 import csv
 from itertools import product, chain
 
+from tqdm import tqdm
+
 from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
 from reimagined.utils import load_dataset, logits_to_probs, sample
 
@@ -96,8 +98,8 @@ def compute_multiplier(cfg: DictConfig) -> float:
         prompt = prompt_dict.prompt.format(prompt_dict.subject)
         input_ids_prompt = handler.tokenize_prompt(prompt)
         input_ids.append(input_ids_prompt)
-
-    return handler.compute_embedding_std(input_ids).item()*3 # TODO: move constant into the model config
+    handler.compute_embedding_std(input_ids)
+    return handler._noise_multiplier # TODO: move constant into the model config
 
 def causal_trace_single_run(
         run_number: int,
@@ -132,7 +134,7 @@ def causal_trace_single_run(
 
     # Restoration runs: restore clean activations at each layer after corruption
     results_restoration = {}
-    num_of_layers = len(handler.model.transformer.h)
+    num_of_layers = handler.num_of_layers
 
     # print(type(outputs_clean["hidden_states"]))
     # print(len(outputs_clean["hidden_states"]))
@@ -176,7 +178,7 @@ def causal_trace_single_run(
             )
         )
 
-    save_results_to_csv(handler.cfg.generation.filename.format(handler.cfg.model.name), ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"], results)
+    save_results_to_csv(handler.cfg.generation.filename.format(handler.cfg.model.name.replace("/", "-")), ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"], results)
     return 0
 
 def filter_dataset(dataset: Any) -> pandas.DataFrame:

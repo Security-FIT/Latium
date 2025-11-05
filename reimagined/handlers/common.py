@@ -21,7 +21,7 @@ from omegaconf import DictConfig
 import torch
 from typing import Any, Callable, Dict, List, Optional, Type
 from pathlib import Path
-import tqdm
+from tqdm import tqdm
 from reimagined.utils import load_pretrained, load_dataset
 import logging
 
@@ -40,6 +40,8 @@ def get_handler(cfg: DictConfig) -> Any:
     :return: An instance of the model handler.
     :rtype: BaseModelHandler
     """
+    return BaseModelHandler(cfg)
+
     model_type: str = cfg.model.handler
     handler_cls = MODEL_REGISTRY.get(model_type)
     if handler_cls is None:
@@ -60,68 +62,6 @@ def register_model(model_type: str) -> Callable[[Type[Any]], Type[Any]]:
         return cls
     return decorator
 
-class BaseModelHandlerDecomposed:
-    """
-    Abstract base class for model handlers in the LLM framework.
-
-    Subclasses must implement the :meth:`predict_next_tokens` and :meth:`predict_next_token_decomposed` methods for their specific model architecture.
-
-    :param cfg: The configuration object containing model and generation parameters.
-    :type cfg: DictConfig
-    """
-    def __init__(self, cfg: DictConfig) -> None:
-        """
-        Initialize the model handler by loading the model and tokenizer according to the config.
-
-        :param cfg: The configuration object.
-        :type cfg: DictConfig
-        """
-        self.cfg = cfg
-        self.model, self.tokenizer = load_pretrained(cfg)
-        self.emb_shape = self.model.config.n_embd
-        self.device = getattr(cfg.model, "device", "cpu")
-        self.model.eval()
-
-    def predict_next_token(self, 
-            prompt: torch.Tensor,
-            corruption_function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
-            corruption_token_idx: Optional[list] = None,
-            restoration_layer_idx: Optional[int] = None,
-            restoration_token_idx: Optional[int] = None,
-            restoration_point: Optional[torch.Tensor] = None,
-            corrupt_att: Optional[bool] = False    
-        ) -> Dict[str, Any]:
-        """
-        Generate the next token for a given prompt, returning a detailed decomposition of intermediate states.
-        Optionally applies corruption or restoration at a specified layer and token index.
-
-        :param prompt: The input prompt as a tensor of token IDs (shape: [batch_size, seq_len]).
-        :type prompt: torch.Tensor
-        :param corrupt_function: Function to apply to corrupt hidden states (optional).
-        :type corrupt_function: Callable[[torch.Tensor], torch.Tensor], optional
-        :param corrupted_layer_idx: Index of the layer to corrupt (optional).
-        :type corrupted_layer_idx: int, optional
-        :param corrupted_token_idx: Index/indices of the token(s) to corrupt (optional).
-        :type corrupted_token_idx: Any, optional
-        :param restoration_point: Hidden state tensor to restore at a given layer (optional).
-        :type restoration_point: torch.Tensor, optional
-        :return: A dictionary containing intermediate model states.
-        :rtype: Dict[str, Any]
-        :raises NotImplementedError: If not implemented in subclass.
-        """
-        raise NotImplementedError
-
-    def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
-        """
-        Compute the standard deviation in the initial embeddings. Used primarily for the corruption noise scaling.
-        :param subjects: The tokenized prompts' subjects to compute the embeddings from
-        :type subjects: torch.Tensor
-        :return: A single item tensor with the standard deviation
-        :rtype: torch.Tensor
-        """
-        raise NotImplementedError
-
-
 class BaseModelHandler:
     """
     Abstract base class for model handlers in the LLM framework.
@@ -140,11 +80,15 @@ class BaseModelHandler:
         """
         self.cfg = cfg
         self.model, self.tokenizer = load_pretrained(cfg)
-        self.emb_shape = self.model.config.n_embd
+        
+        self.num_of_layers = self.model.config.num_hidden_layers
+
         self.device = getattr(cfg.model, "device", "cpu")
         
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)
+
+        self.emb_shape = self._get_module(self._layer_name_template.format(self._layer)).weight.shape[0]
 
         self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
 
@@ -161,6 +105,9 @@ class BaseModelHandler:
         self._k_accumulator = []
         self.v = None
         self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
+
+        # Embeddings
+        self._emb_accumulator = []
 
         # Hook flags
         self._hooks = []
@@ -223,8 +170,18 @@ class BaseModelHandler:
         handle = delta_module.register_forward_hook(self._delta_hook)
         self._hooks.append(handle)
 
+    def set_emb_hook(self):
+        # Register the corruption hook
+        emb_module = self._get_module(self._layer_name_template.format(0))
+        handle = emb_module.register_forward_pre_hook(self._emb_hook)
+        self._hooks.append(handle)
+
     def remove_hooks(self) -> None:
+        """
+        Removes all hooks from the model and cleans handler accumulators and delta
+        """
         self._k_accumulator = []
+        self._emb_accumulator = []
         self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
         for handle in self._hooks:
             handle.remove()
@@ -286,6 +243,10 @@ class BaseModelHandler:
         output[0][:] += self.delta
         return output
 
+    def _emb_hook(self, module, output):
+        self._emb_accumulator.append(output[0].detach().flatten())
+        return output
+
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
         """
         Compute the standard deviation in the initial embeddings. Used primarily for the corruption noise scaling.
@@ -294,4 +255,11 @@ class BaseModelHandler:
         :return: A single item tensor with the standard deviation
         :rtype: torch.Tensor
         """
-        raise NotImplementedError
+        self.set_emb_hook()
+        for _, subject in tqdm(enumerate(subjects)):
+            self.model(**subject)
+
+        std = torch.cat(self._emb_accumulator).std().item()
+        self._noise_multiplier = std*3
+        self.remove_hooks()
+        return std

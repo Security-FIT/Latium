@@ -152,8 +152,9 @@ def compute_v(
         else:
             last_epoch_loss = loss
 
+    v_final = v_orig + handler.delta.detach().clone()
     handler.remove_hooks()
-    return v_orig + handler.delta.detach()
+    return v_final
 
 def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, override_cache: bool = False) -> None:
     # Just solve the formulas from paper
@@ -163,7 +164,6 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, overr
 
     k_t = torch.transpose(k, dim0=0, dim1=1)
     inv_cov_k_t = inv_cov @ k_t # This should be a vector [1,emb_size]
-    
 
     inv_cov_k_t_norm = inv_cov_k_t / inv_cov_k_t.norm()
     

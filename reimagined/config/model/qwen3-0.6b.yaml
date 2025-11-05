@@ -1,9 +1,8 @@
-handler: "gpt2"
-name: "gpt2-medium"
+name: "Qwen/Qwen3-0.6B"
 models_dir: "./models"
 second_moment_dir: "./second_moment_stats"
 device: "cpu"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
-layer_name_template: "transformer.h.{}.mlp.c_proj"
-layer: 8
-corruption_noise_multiplier: 3.0
+layer_name_template: "model.layers.{}.mlp.down_proj"
+layer: 0
+corruption_noise_multiplier: 0.287875235080719

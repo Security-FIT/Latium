@@ -22,6 +22,22 @@ import datasets
 LOGGER = logging.getLogger(__name__)
 
 
+def check_device(device: str) -> str:
+    """
+    Check if the device is valid and return the appropriate device.
+
+    :param device: The device to check
+    :type device: str
+    :return: The appropriate device
+    :rtype: str
+    """
+    if device == "cuda" and not torch.cuda.is_available():
+        LOGGER.warning("CUDA is not available. Setting the device to 'cpu'.")
+        device = "cpu"
+    elif device == "cpu" and torch.cuda.is_available():
+        LOGGER.info("CUDA is available. Consider setting the device to 'cuda'.")
+    return device
+
 def load_pretrained(cfg: DictConfig) -> Any:
     """
     Return a loaded model and tokenizer.
@@ -36,6 +52,8 @@ def load_pretrained(cfg: DictConfig) -> Any:
     model_name = cfg.model.name
     save_to_local = getattr(cfg.model, "save_to_local", False)
     device = getattr(cfg.model, "device", "cuda")
+
+    device = check_device(device)
     
     models_dir = getattr(cfg.model, "models_dir", os.path.join(os.path.dirname(__file__), "./models"))
     local_model_path = os.path.join(models_dir, model_name)
@@ -130,6 +148,7 @@ def get_cuda_usage(dev: str = 'cuda:0') -> float:
     :return: The usage of the specified CUDA device.
     :rtype: float
     """
+    return 0
     device = torch.device(dev)
     free, total = torch.cuda.mem_get_info(device)
     return (total - free) / 1024 ** 2

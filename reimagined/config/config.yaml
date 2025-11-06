@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: qwen3-0.6b
+  - model: granite4-micro
   - generation: generation
   - dataset: dataset
   - override hydra/job_logging: colorlog

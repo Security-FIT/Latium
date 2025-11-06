@@ -1,0 +1,8 @@
+name: "Qwen/Qwen3-8B"
+models_dir: "./models"
+second_moment_dir: "./second_moment_stats"
+device: "cpu"
+save_to_local: True # Keep this True until you specifically do not want the model cached locally
+layer_name_template: "model.layers.{}.mlp.down_proj"
+layer: 0
+corruption_noise_multiplier: 0.287875235080719

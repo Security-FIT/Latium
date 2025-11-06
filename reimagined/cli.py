@@ -15,7 +15,7 @@ import argparse
 import hydra
 from omegaconf import DictConfig
 
-# Function for  printing the architecture of a certain model and the names of the model's modules
+
 def print_model_architecture(cfg: DictConfig) -> None:
     """
     Print the architecture of a certain model and the names of the model's modules
@@ -30,9 +30,11 @@ def main(cfg: DictConfig) -> None:
     """
     Main function for the Reimagined Framework CLI
     """
+    # Easy help autogeneration
     parser = argparse.ArgumentParser(description="Reimagined Framework CLI")
     parser.add_argument("+print-arch", help="Print the architecture of the model")
     parser.add_argument("+causal-trace", help="Run the causal trace task")
+    parser.add_argument("+compute-multipliter", help="Compute the noise multiplier for corrupt runs in causal trace")
 
     if getattr(cfg, "print-arch", False):
         print_model_architecture(cfg)
@@ -44,5 +46,5 @@ def main(cfg: DictConfig) -> None:
         parser.print_help()
         exit(1)
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     main()

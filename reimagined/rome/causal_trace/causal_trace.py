@@ -132,8 +132,6 @@ def causal_trace_single_run(
         if restore_token_idx not in results_restoration.keys():
             results_restoration[restore_token_idx] = []
 
-        LOGGER.info(f"RESTORATION RUN: TOKEN_IDX {restore_token_idx} RESTORE_LAYER {restore_layer}")
-
         handler.remove_hooks()
         handler.set_restore_idx(restore_token_idx)
         handler.set_restore_layer(restore_layer)

@@ -140,7 +140,7 @@ def causal_trace_single_run(
             
             handler.set_restore_idx(restore_token_idx)
             handler.set_restore_layer(restore_layer)
-            handler.set_restore_point(outputs_clean["hidden_states"][restore_layer][0][:,restore_token_idx])
+            handler.set_restore_point(outputs_clean["hidden_states"][restore_layer+1][0][restore_token_idx,:])
             handler.set_restore_hook()
 
             outputs_restore = handler.model(**input_ids)

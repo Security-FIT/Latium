@@ -60,11 +60,11 @@ def load_pretrained(cfg: DictConfig) -> Any:
     local_model_path = os.path.abspath(local_model_path)
     
     if os.path.exists(local_model_path):
-        model = AutoModelForCausalLM.from_pretrained(local_model_path).to(device)
+        model = AutoModelForCausalLM.from_pretrained(local_model_path).half().to(device)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
     else:
         # Model not present locally, download from HuggingFace Hub
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+        model = AutoModelForCausalLM.from_pretrained(model_name).half().to(device)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)

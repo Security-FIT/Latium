@@ -129,7 +129,11 @@ def causal_trace_single_run(
 
     # handler.register_casual_hooks()
     for restore_token_idx in input_ids_subject:
+        handler.set_corrupt_idx(input_ids_subject)
         handler.set_corrupt_hook()
+        outputs_corupt = handler.model(**input_ids)
+        next_token_id_corupt = sample(outputs_corupt["logits"][:,-1,:])
+        
         for restore_layer in range(num_of_layers):
             if restore_token_idx not in results_restoration.keys():
                 results_restoration[restore_token_idx] = []

@@ -127,26 +127,31 @@ def causal_trace_single_run(
     # print(outputs_clean["hidden_states"][0])
     # exit()
 
-    handler.register_casual_hooks()
-    for restore_token_idx, restore_layer in product(input_ids_subject, range(num_of_layers)):
-        if restore_token_idx not in results_restoration.keys():
-            results_restoration[restore_token_idx] = []
+    # handler.register_casual_hooks()
+    for restore_token_idx in input_ids_subject:
+        handler.set_corrupt_hook()
+        for restore_layer in range(num_of_layers):
+            if restore_token_idx not in results_restoration.keys():
+                results_restoration[restore_token_idx] = []
+            
+            handler.set_restore_idx(restore_token_idx)
+            handler.set_restore_layer(restore_layer)
+            handler.set_restore_point(outputs_clean["hidden_states"][restore_layer][0][:,restore_token_idx])
+            handler.set_restore_hook()
 
-        handler.remove_hooks()
-        handler.set_restore_idx(restore_token_idx)
-        handler.set_restore_layer(restore_layer)
-        handler.set_restore_point(outputs_clean["hidden_states"][restore_layer][0][:,restore_token_idx])
-        handler.register_casual_hooks()
-        outputs_restore = handler.model(**input_ids)
-        next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
+            outputs_restore = handler.model(**input_ids)
+            next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
 
-        results_restoration[restore_token_idx].append(
-            (
-                handler.tokenizer.decode(next_token_id_restore), 
-                logits_to_probs(outputs_restore["logits"], next_token_id_clean).item()
+            results_restoration[restore_token_idx].append(
+                (
+                    handler.tokenizer.decode(next_token_id_restore), 
+                    logits_to_probs(outputs_restore["logits"], next_token_id_clean).item()
+                )
             )
-        )
-    handler.remove_hooks()
+
+            handler.unset_restore_hook()
+        handler.remove_hooks()
+    # handler.remove_hooks()
 
     for token_idx in results_restoration.keys():
         results.append(

@@ -93,6 +93,7 @@ class BaseModelHandler:
         self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
 
         # Causal trace
+        self._noise = None
         self._corrupt_idx = None
         self._noise_multiplier = getattr(cfg.model, "corruption_noise_multiplier", 3.0)
 
@@ -111,6 +112,7 @@ class BaseModelHandler:
 
         # Hook flags
         self._hooks = []
+        self._restore_hooks = []
         self.is_corrupt_hook = False
         self.is_restore_hook = False
         self.is_k_hook = False
@@ -144,7 +146,11 @@ class BaseModelHandler:
         # Register the restoration hook
         restore_module = self._get_module(self._layer_name_template.format(self._restore_layer))
         handle = restore_module.register_forward_hook(self._restore_hook)
-        self._hooks.append(handle)
+        self._restore_hooks.append(handle)
+
+    def unset_restore_hook(self) -> None:
+        for handle in self._restore_hooks:
+            handle.remove()
 
     def set_k_hook(self):
         self.is_k_hook = True
@@ -180,10 +186,14 @@ class BaseModelHandler:
         """
         Removes all hooks from the model and cleans handler accumulators and delta
         """
+        self._noise = None
         self._k_accumulator = []
         self._emb_accumulator = []
         self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
         for handle in self._hooks:
+            handle.remove()
+        
+        for handle in self._restore_hooks:
             handle.remove()
 
     def tokenize_prompt(self, prompt_text: str | List[str]) -> torch.Tensor:
@@ -221,7 +231,9 @@ class BaseModelHandler:
         self.set_restore_hook()
 
     def _corrupt_hook(self, module, output):
-        output[0][:, self._corrupt_idx] += torch.rand_like(output[0][:, self._corrupt_idx]) * self._noise_multiplier
+        if self._noise == None:
+            self._noise = torch.rand_like(output[0][:, self._corrupt_idx]) * self._noise_multiplier
+        output[0][:, self._corrupt_idx] += self._noise
         return output
 
     def _restore_hook(self, module, input, output):

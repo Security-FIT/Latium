@@ -6,5 +6,5 @@ save_to_local: True # Keep this True until you specifically do not want the mode
 layer_name_template: "model.layers.{}.mlp.down_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 0
+layer: 5
 corruption_noise_multiplier: 0.084320068359375

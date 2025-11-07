@@ -274,7 +274,6 @@ class BaseModelHandler:
             self.model(**subject)
 
         std = torch.cat(self._emb_accumulator).std()
-        print(f"STD RAW {std}")
         self._noise_multiplier = std.item()*3
         self.remove_hooks()
         return std

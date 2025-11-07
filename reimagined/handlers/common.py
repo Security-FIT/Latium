@@ -245,8 +245,9 @@ class BaseModelHandler:
             LOGGER.warning(f"Hidden state restore failed. {e}")
         return output
 
-    def _gather_k_hook(self, module, input):        
-        self._k_accumulator.append(input[0][-1, :].detach())
+    def _gather_k_hook(self, module, input):
+        # This needs to be adapted for the multiprompt
+        self._k_accumulator.append(input[0][-1, -1].detach())
         return input
 
     def _gather_v_hook(self, module, input, output):

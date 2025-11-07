@@ -10,7 +10,9 @@
 # Author: Jakub Res iresj@fit.vut.cz
 
 from .utils import print_modules, load_pretrained
+from .handlers.common import get_handler
 from .rome.causal_trace.causal_trace import causal_trace, compute_multiplier
+from .rome.weight_intervention.common import compute_second_moment
 import argparse
 import hydra
 from omegaconf import DictConfig
@@ -42,6 +44,10 @@ def main(cfg: DictConfig) -> None:
         causal_trace(cfg)
     elif getattr(cfg, "compute-multiplier", False):
         print(compute_multiplier(cfg))
+    elif getattr(cfg, "second-moment", False):
+        handler=get_handler(cfg)
+        inv_cov, count, method = compute_second_moment(handler, 100, 1000)
+        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name}_{handler._layer}_{method}_{count}.pt"))
     else:
         parser.print_help()
         exit(1)

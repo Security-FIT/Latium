@@ -88,7 +88,7 @@ class BaseModelHandler:
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)
 
-        self.emb_shape = self._get_module(self._layer_name_template.format(self._layer)).weight.shape[0]
+        self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
 
         self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
 
@@ -255,7 +255,14 @@ class BaseModelHandler:
         return output
 
     def _delta_hook(self, module, input, output):
-        output[0][:] += self.delta
+        try:
+            output[0][:] += self.delta
+        except:
+            LOGGER.warn(f"Delta dimension mismatch. Delta shape: {self.delta.shape} Emb shape: {output[0][:].shape}")
+            # Fix the autodetected emb size and regenerate delta
+            self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
+            self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
+            output[0][:] += self.delta
         return output
 
     def _emb_hook(self, module, input, output):

@@ -160,13 +160,20 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, overr
     # Just solve the formulas from paper
     # old_W = handler.model.transformer.h[handler._layer].mlp.c_proj.weight # extract from the model
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight # extract from the model
+    old_W_transposed = False
+    if old_W.shape[0] != k.shape[0]:
+        LOGGER.info(f"Transposed model. Transposing the old weights.")
+        old_W = torch.transpose(old_W,0,1)
+        old_W_transposed = True
+
     inv_cov = get_second_moment(handler)
 
+    if len(k.shape) == 1:
+        k = k.unsqueeze(0)
     k_t = torch.transpose(k, dim0=0, dim1=1)
     inv_cov_k_t = inv_cov @ k_t # This should be a vector [1,emb_size]
 
     inv_cov_k_t_norm = inv_cov_k_t / inv_cov_k_t.norm()
-    
     v = v.unsqueeze(0)
     delta_top = torch.transpose(torch.transpose(v,0,1) - (torch.transpose(old_W,0,1) @ k_t), 0, 1)
     delta_bot = torch.transpose(inv_cov_k_t_norm,0,1) @ k_t # This should be scalar
@@ -179,6 +186,9 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, overr
     delta = delta_top / delta_bot
 
     new_W = old_W + torch.transpose(torch.transpose(delta,0,1) @ torch.transpose(inv_cov_k_t_norm,0,1),0,1)
+    if old_W_transposed:
+        new_W = torch.transpose(new_W,0,1)
+
     return new_W
 
 class SM_Method(Enum):
@@ -194,7 +204,7 @@ def second_moment_random(handler, N_rounds, N_k, method):
             K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
             torch.cuda.empty_cache()
 
-        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device)
+        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device).unsqueeze(0)
         if (K == 0).any():
             LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
     return torch.inverse(K * torch.transpose(K, 0, 1)), N_rounds*N_k, method
@@ -215,11 +225,11 @@ def get_second_moment(handler) -> torch.Tensor:
     Returns the appropriate second moment statistics
     """
     # Check the existence of matrix
-    file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name}_{handler._layer}_*_*.pt"))
+    file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
     if len(file_paths):
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
-        LOGGER.info(f"{file_paths[1]} selected")
-        return torch.load(file_paths[1]).to(torch.float32).to(handler.device)
+        LOGGER.info(f"{file_paths[0]} selected")
+        return torch.load(file_paths[0]).to(torch.float32).to(handler.device)
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")

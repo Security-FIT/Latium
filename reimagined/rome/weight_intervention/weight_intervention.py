@@ -42,7 +42,7 @@ if __name__ == "__main__":
         # exit()
         while True:
             print(f"Starting weight intervention for model {handler.cfg.model.name}")
-            fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+            fact_tuple = ("{} is in", "The Eiffel Tower", " London", " Paris")
             
             print(f"CUDA usage before k*: {get_cuda_usage()}MB")
             
@@ -50,14 +50,15 @@ if __name__ == "__main__":
             print(f"k*: {k}, shape: {k.shape}")
             print(f"CUDA usage after k*: {get_cuda_usage()}MB")
 
-            v = compute_v(handler, fact_tuple, N_prompts=50, N_optim_steps=10, epsilon=0.005)
+            v = compute_v(handler, fact_tuple, N_prompts=50, N_optim_steps=20, epsilon=0.005)
             print(f"v*: {v}, shape: {v.shape}")
             print(f"CUDA usage after v*: {get_cuda_usage()}MB")
 
             new_W = insert_kv(handler, k, v) # TODO: add to config
             print(new_W)
 
-            handler.model.transformer.h[handler._layer].mlp.c_proj.weight = torch.nn.Parameter(new_W)
+            handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
+            # handler.model.transformer.h[handler._layer].mlp.c_proj.weight = torch.nn.Parameter(new_W)
 
             prompt = handler.tokenize_prompt("The Eiffel Tower is in")
             outputs = handler.model(**prompt)
@@ -65,7 +66,7 @@ if __name__ == "__main__":
             if handler.tokenizer.decode(sample(outputs["logits"][:,-1,:])) == fact_tuple[2]:
                 break
             else:
-                LOGGER.info("The weight intervention was not successful")
+                LOGGER.info(f"The weight intervention was not successful. '{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}' predicted instead of '{fact_tuple[2]}'")
                 
         print(f"The Eiffel Tower is in{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}")
     main()

@@ -16,6 +16,8 @@ from .rome.weight_intervention.common import compute_second_moment
 import argparse
 import hydra
 from omegaconf import DictConfig
+import torch
+from pathlib import Path
 
 
 def print_model_architecture(cfg: DictConfig) -> None:
@@ -47,7 +49,7 @@ def main(cfg: DictConfig) -> None:
     elif getattr(cfg, "second-moment", False):
         handler=get_handler(cfg)
         inv_cov, count, method = compute_second_moment(handler, 100, 1000)
-        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name}_{handler._layer}_{method}_{count}.pt"))
+        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
     else:
         parser.print_help()
         exit(1)

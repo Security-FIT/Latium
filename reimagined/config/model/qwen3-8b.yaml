@@ -5,4 +5,4 @@ device: "cpu"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "model.layers.{}.mlp.down_proj"
 layer: 0
-corruption_noise_multiplier: 0.287875235080719
+corruption_noise_multiplier: 0.126708984375

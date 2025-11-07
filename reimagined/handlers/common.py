@@ -233,6 +233,7 @@ class BaseModelHandler:
 
     def _corrupt_hook(self, module, input, output):
         if self._noise == None:
+            assert(output[0][0, :].shape[0] == self.emb_shape)
             self._noise = torch.randn_like(output[0][0, :]) * self._noise_multiplier
         for token_idx in self._corrupt_idx:
             output[0][token_idx, :] += self._noise

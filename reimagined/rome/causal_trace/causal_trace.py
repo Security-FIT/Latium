@@ -208,7 +208,7 @@ def preprocess_prompt(handler, prompt_dict):
         LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
         raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
 
-    print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
+    # print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
     return input_ids, subject_position
 
 def causal_trace(cfg: DictConfig) -> None:
@@ -233,7 +233,7 @@ def causal_trace(cfg: DictConfig) -> None:
 
     total = 0
     failed = 0
-    for prompt_dict in df_dataset.itertuples():
+    for prompt_dict in tqdm(df_dataset.itertuples()):
         if total - failed >= handler.cfg.generation.num_of_runs:
             break
         total += 1

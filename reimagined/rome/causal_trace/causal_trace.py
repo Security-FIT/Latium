@@ -63,20 +63,6 @@ def save_results_to_csv(filename, header, data, mode='a'):
 
         csv_writer.writerows(data)
 
-def embedding_fn_corrupt(hidden_states: torch.Tensor, **kwargs) -> torch.Tensor:
-    """
-    Add standard normal noise to the hidden states tensor.
-
-    :param hidden_states: The input hidden states tensor.
-    :type hidden_states: torch.Tensor
-    :param **kwargs: Hacky approach to generalization of the block alteration approach in the model handlers.
-    :return: The hidden states with added noise.
-    :rtype: torch.Tensor
-    """
-    # Scale the normal noise to standard deviation of embeddings (see Appendix B.1 of "Locating and editing factual associations in GPT")
-    noise = torch.randn_like(hidden_states) * MULTIPLIER
-    return noise
-
 def compute_multiplier(cfg: DictConfig) -> float:
     """
     Compute the noise multiplier using loaded dataset.
@@ -141,24 +127,35 @@ def causal_trace_single_run(
     # print(outputs_clean["hidden_states"][0])
     # exit()
 
-    handler.register_casual_hooks()
-    for restore_token_idx, restore_layer in product(input_ids_subject, range(num_of_layers)):
-        if restore_token_idx not in results_restoration.keys():
-            results_restoration[restore_token_idx] = []
+    # handler.register_casual_hooks()
+    for restore_token_idx in input_ids_subject:
+        handler.set_corrupt_idx(input_ids_subject)
+        handler.set_corrupt_hook()
+        outputs_corupt = handler.model(**input_ids)
+        next_token_id_corupt = sample(outputs_corupt["logits"][:,-1,:])
+        
+        for restore_layer in range(num_of_layers):
+            if restore_token_idx not in results_restoration.keys():
+                results_restoration[restore_token_idx] = []
+            
+            handler.set_restore_idx(restore_token_idx)
+            handler.set_restore_layer(restore_layer)
+            handler.set_restore_point(outputs_clean["hidden_states"][restore_layer+1][0][restore_token_idx,:])
+            handler.set_restore_hook()
 
-        handler.set_restore_idx(restore_token_idx)
-        handler.set_restore_layer(restore_layer)
-        handler.set_restore_point(outputs_clean["hidden_states"][restore_layer][0][:,restore_token_idx])
-        outputs_restore = handler.model(**input_ids)
-        next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
+            outputs_restore = handler.model(**input_ids)
+            next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
 
-        results_restoration[restore_token_idx].append(
-            (
-                handler.tokenizer.decode(next_token_id_restore), 
-                logits_to_probs(outputs_restore["logits"], next_token_id_clean).item()
+            results_restoration[restore_token_idx].append(
+                (
+                    handler.tokenizer.decode(next_token_id_restore), 
+                    logits_to_probs(outputs_restore["logits"], next_token_id_clean).item()
+                )
             )
-        )
-    handler.remove_hooks()
+
+            handler.unset_restore_hook()
+        handler.remove_hooks()
+    # handler.remove_hooks()
 
     for token_idx in results_restoration.keys():
         results.append(
@@ -211,7 +208,7 @@ def preprocess_prompt(handler, prompt_dict):
         LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
         raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
 
-    print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
+    # print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
     return input_ids, subject_position
 
 def causal_trace(cfg: DictConfig) -> None:
@@ -236,7 +233,7 @@ def causal_trace(cfg: DictConfig) -> None:
 
     total = 0
     failed = 0
-    for prompt_dict in df_dataset.itertuples():
+    for prompt_dict in tqdm(df_dataset.itertuples()):
         if total - failed >= handler.cfg.generation.num_of_runs:
             break
         total += 1

@@ -1,7 +1,10 @@
 name: "gpt2-medium"
 models_dir: "./models"
+second_moment_dir: "./second_moment_stats"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "transformer.h.{}.mlp.c_proj"
+restore_layer_name_template: "transformer.h.{}"
+corrupt_layer_name_template: "transformer.wte"
 layer: 8
-corruption_noise_multiplier: 0.734619140625
+corruption_noise_multiplier: 0.2874755859375

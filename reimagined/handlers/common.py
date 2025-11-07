@@ -242,7 +242,10 @@ class BaseModelHandler:
         try:
             output[0][:,self._restore_idx] = self._restore_point
         except Exception as e:
-            LOGGER.warning(f"Hidden state restore failed. {e}")
+            try:
+                output[0][self._restore_idx,:] = self._restore_point
+            except Exception as e:
+                LOGGER.warning(f"Hidden state restore failed. {e}")
         return output
 
     def _gather_k_hook(self, module, input):        

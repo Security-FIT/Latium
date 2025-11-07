@@ -36,12 +36,16 @@
 ## Models roadmap
 ---
 
-| Model Family (type) | Handler Class     | Example Tested Models                              | Notes                        |
-|---------------------|-------------------|----------------------------------------------------|------------------------------|
-| gpt2                | GPT2Handler       | <ul><li>[x] gpt2-medium</li><li>[x] gpt2-large</li><li>[x] gpt2-xl</li></ul>                   | All GPT-2 variants supported |
-| llama               | LlamaHandler      | <ul><li>[ ] microsoft/Phi-3-mini-4k-instruct</li></ul>                   | Includes Llama, Phi-3, etc.  |
-| gpt-j               | GPTJHandler       | <ul><li>[ ] EleutherAI/gpt-j-6b</li></ul>                   | Includes GPT-J, GPT-J-6B, etc.  |
-| qwen                | Base              | <ul><li>[ ] Qwen/Qwen3-0.6b</li><li>[ ] Qwen/Qwen3-1.7b</li><li>[ ] Qwen/Qwen3-4b</li><li>[ ] Qwen/Qwen3-8b</li></ul> ||
+| Supported Models  | Causal Trace       | Weight intervention |
+|-------------------|--------------------|---------------------|
+| gpt2-medium       | :heavy_check_mark: |                     |
+| gpt2-large        | :heavy_check_mark: |                     |
+| gpt2-xl           | :heavy_check_mark: |                     |
+| qwen3-0.6b        | :heavy_check_mark: |                     |
+| qwen3-1.7b        | :heavy_check_mark: |                     |
+| qwen3-4b          | :heavy_check_mark: |                     |
+| qwen3-8b          | :heavy_check_mark: |                     |
+| granite4-micro    | :heavy_check_mark: |                     |
 
 ---
 

@@ -233,7 +233,8 @@ def causal_trace(cfg: DictConfig) -> None:
 
     total = 0
     failed = 0
-    for prompt_dict in tqdm(df_dataset.itertuples()):
+    progress_bar = tqdm(total=handler.cfg.generation.num_of_runs, desc="Successful traces")
+    for prompt_dict in df_dataset.itertuples():
         if total - failed >= handler.cfg.generation.num_of_runs:
             break
         total += 1
@@ -246,6 +247,9 @@ def causal_trace(cfg: DictConfig) -> None:
         if res == 1:
             failed += 1
 
+        progress_bar.update(1-res)
+
+    progress_bar.close()
     print(f"Total prompts processed: {total} failed attempts: {failed}")
 
 if __name__ == "__main__":

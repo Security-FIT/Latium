@@ -3,6 +3,6 @@ models_dir: "./models"
 second_moment_dir: "./second_moment_stats"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
-layer_name_template: "model.layers.{}.mlp.down_proj"
+layer_name_template: "model.layers.{}.shared_mlp.output_linear"
 layer: 0
-corruption_noise_multiplier: 0.287875235080719
+corruption_noise_multiplier: 2.19580078125

@@ -6,5 +6,5 @@ save_to_local: True # Keep this True until you specifically do not want the mode
 layer_name_template: "model.layers.{}.shared_mlp.output_linear"
 corrupt_layer_name_template: "model.embed_tokens"
 restore_layer_name_template: "model.layers.{}"
-layer: 0
+layer: 17
 corruption_noise_multiplier: 2.19580078125

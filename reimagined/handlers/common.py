@@ -91,6 +91,9 @@ class BaseModelHandler:
         self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
 
         self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
+        self.new_weights_dir = getattr(cfg.model, "new_weights_dir", "./new_weights")
+
+        self.epochs = getattr(cfg.model, "epochs", 10)
 
         # Causal trace
         self._noise = None

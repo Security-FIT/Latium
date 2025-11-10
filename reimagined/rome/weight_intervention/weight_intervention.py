@@ -50,12 +50,14 @@ if __name__ == "__main__":
             print(f"k*: {k}, shape: {k.shape}")
             print(f"CUDA usage after k*: {get_cuda_usage()}MB")
 
-            v = compute_v(handler, fact_tuple, N_prompts=50, N_optim_steps=20, epsilon=0.005)
+            v = compute_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
             print(f"v*: {v}, shape: {v.shape}")
             print(f"CUDA usage after v*: {get_cuda_usage()}MB")
 
             new_W = insert_kv(handler, k, v) # TODO: add to config
             print(new_W)
+
+            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}.pt"))
 
             handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
             # handler.model.transformer.h[handler._layer].mlp.c_proj.weight = torch.nn.Parameter(new_W)

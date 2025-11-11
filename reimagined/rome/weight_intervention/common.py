@@ -92,7 +92,9 @@ def pcs(data):
     # Compute cosine similarity matrix
     similarity_matrix = torch.matmul(data_normalized, data_normalized.T)
     
-    return similarity_matrix
+    sm_count = similarity_matrix.shape[0]*similarity_matrix.shape[1]
+
+    return similarity_matrix.sum()/(sm_count**2 - sm_count) # According to the ROME detection paper
 
 def compute_v(
         handler: BaseModelHandler,
@@ -156,7 +158,7 @@ def compute_v(
 
         # loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + torch.nn.CosineSimilarity(new_W).std())
         if handler.optimize_pcs:
-            loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + pcs(new_W).std())
+            loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + pcs(new_W))
         else:
             loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay)
 

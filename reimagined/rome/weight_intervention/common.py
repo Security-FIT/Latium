@@ -21,6 +21,8 @@ from tqdm import tqdm
 from reimagined.utils import get_cuda_usage
 import logging
 from enum import Enum
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -79,8 +81,22 @@ def compute_k(
 
     return avg_hidden_state.to(handler.cfg.model.device)
 
+# https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
+def pcs(data):
+    # Compute norms along each row
+    norms = data.norm(dim=1, keepdim=True)
+    
+    # Normalize data
+    data_normalized = data / norms
+    
+    # Compute cosine similarity matrix
+    similarity_matrix = torch.matmul(data_normalized, data_normalized.T)
+    
+    return similarity_matrix
+
 def compute_v(
         handler: BaseModelHandler,
+        k: torch.Tensor,
         fact_tuple: Tuple[str, str, str],
         N_prompts: int,
         N_optim_steps: int,
@@ -91,9 +107,9 @@ def compute_v(
     new_target_idx = handler.tokenize_prompt(fact_tuple[2])["input_ids"]
     orig_target_idx = handler.tokenize_prompt(fact_tuple[3])["input_ids"]
 
-    lr = 5e-1 # TODO: move to hyperparam config
-    kl_factor = .0625 # TODO: move to hyperparam config
-    wd_factor = .5 # TODO: move to hyperparam config
+    lr = handler.lr
+    kl_factor = handler.kl_factor
+    wd_factor = handler.weight_decay
     opt = torch.optim.Adam([handler.delta], lr=lr)
 
     v_orig = None
@@ -136,7 +152,13 @@ def compute_v(
         
         weight_decay = wd_factor * (torch.norm(handler.delta) / torch.norm(v_orig) ** 2)
 
-        loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay)
+        new_W = insert_kv(handler, k, v_orig+handler.delta)
+
+        # loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + torch.nn.CosineSimilarity(new_W).std())
+        if handler.optimize_pcs:
+            loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + pcs(new_W).std())
+        else:
+            loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay)
 
         loss.backward()
         opt.step()
@@ -148,7 +170,8 @@ def compute_v(
             writer.add_scalar(f"Orig prob token {j}", fact_prediction_log_prob_o_target.tolist()[0][j], i)
 
         if abs(loss - last_epoch_loss) <= epsilon:
-            break
+            last_epoch_loss = loss
+            #break
         else:
             last_epoch_loss = loss
 
@@ -159,10 +182,10 @@ def compute_v(
 def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, override_cache: bool = False) -> None:
     # Just solve the formulas from paper
     # old_W = handler.model.transformer.h[handler._layer].mlp.c_proj.weight # extract from the model
-    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight # extract from the model
+    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
     old_W_transposed = False
     if old_W.shape[0] != k.shape[0]:
-        LOGGER.info(f"Transposed model. Transposing the old weights.")
+        # LOGGER.info(f"Transposed model. Transposing the old weights.")
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
@@ -227,11 +250,12 @@ def get_second_moment(handler) -> torch.Tensor:
     # Check the existence of matrix
     file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
     if len(file_paths):
-        LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
-        LOGGER.info(f"{file_paths[0]} selected")
+        #LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
+        #LOGGER.info(f"{file_paths[0]} selected")
         return torch.load(file_paths[0]).to(torch.float32).to(handler.device)
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
         inv_cov, count, method = compute_second_moment(handler)
-        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name}_{handler._layer}_{method}_{count}.pt"))
+        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
+        return inv_cov

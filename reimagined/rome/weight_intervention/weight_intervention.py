@@ -42,7 +42,7 @@ if __name__ == "__main__":
         # exit()
         while True:
             print(f"Starting weight intervention for model {handler.cfg.model.name}")
-            fact_tuple = ("{} is in", "The Eiffel Tower", " London", " Paris")
+            fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
             
             print(f"CUDA usage before k*: {get_cuda_usage()}MB")
             
@@ -50,7 +50,7 @@ if __name__ == "__main__":
             print(f"k*: {k}, shape: {k.shape}")
             print(f"CUDA usage after k*: {get_cuda_usage()}MB")
 
-            v = compute_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+            v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
             print(f"v*: {v}, shape: {v.shape}")
             print(f"CUDA usage after v*: {get_cuda_usage()}MB")
 

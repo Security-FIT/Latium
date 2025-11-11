@@ -94,6 +94,10 @@ class BaseModelHandler:
         self.new_weights_dir = getattr(cfg.model, "new_weights_dir", "./new_weights")
 
         self.epochs = getattr(cfg.model, "epochs", 10)
+        self.lr = getattr(cfg.model, "lr", None)
+        self.kl_factor = getattr(cfg.model, "kl_factor", None)
+        self.weight_decay = getattr(cfg.model, "weight_decay", None)
+        self.optimize_pcs = getattr(cfg.model, "optimize_pcs", False)
 
         # Causal trace
         self._noise = None
@@ -265,7 +269,7 @@ class BaseModelHandler:
             # Fix the autodetected emb size and regenerate delta
             self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
             self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
-            output[0][:] += self.delta
+            output[0][-1] += self.delta
         return output
 
     def _emb_hook(self, module, input, output):

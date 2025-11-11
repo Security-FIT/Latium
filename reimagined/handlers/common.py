@@ -128,6 +128,9 @@ class BaseModelHandler:
 
         self.model.eval()
 
+    def set_subject_length(self, length):
+        self.subject_len = length
+
     def set_restore_layer(self, layer: int):
         self._restore_layer = layer
 
@@ -262,14 +265,7 @@ class BaseModelHandler:
         return output
 
     def _delta_hook(self, module, input, output):
-        try:
-            output[0][:] += self.delta
-        except:
-            LOGGER.warn(f"Delta dimension mismatch. Delta shape: {self.delta.shape} Emb shape: {output[0][:].shape}")
-            # Fix the autodetected emb size and regenerate delta
-            self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
-            self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
-            output[0][-1] += self.delta
+        output[0][-1] += self.delta
         return output
 
     def _emb_hook(self, module, input, output):

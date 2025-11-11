@@ -99,7 +99,7 @@ def pcs(data):
 def compute_v(
         handler: BaseModelHandler,
         k: torch.Tensor,
-        fact_tuple: Tuple[str, str, str],
+        fact_tuple: Tuple[str, str, str, str],
         N_prompts: int,
         N_optim_steps: int,
         epsilon: float = 0.05,
@@ -118,6 +118,9 @@ def compute_v(
     dkl_orig = None
 
     last_epoch_loss = 0.0
+
+    if handler.optimize_pcs:
+        LOGGER.info("Optimizing PCS")
 
     handler.set_delta_hook()
     handler.set_v_hook()

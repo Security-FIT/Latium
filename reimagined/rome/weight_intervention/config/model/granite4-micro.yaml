@@ -1,6 +1,7 @@
 name: "ibm-granite/granite-4.0-micro"
 models_dir: "./models"
 second_moment_dir: "./second_moment_stats"
+new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "model.layers.{}.shared_mlp.output_linear"
@@ -8,3 +9,9 @@ corrupt_layer_name_template: "model.embed_tokens"
 restore_layer_name_template: "model.layers.{}"
 layer: 17
 corruption_noise_multiplier: 2.19580078125
+lr: 0.05
+kl_factor: 0.0625
+weight_decay: 0.5
+epochs: 50
+epsilon: 0.0
+optimize_pcs: False

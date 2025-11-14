@@ -36,16 +36,16 @@
 ## Models roadmap
 ---
 
-| Supported Models  | Causal Trace       | Weight intervention |
-|-------------------|--------------------|---------------------|
-| gpt2-medium       | :heavy_check_mark: |                     |
-| gpt2-large        | :heavy_check_mark: |                     |
-| gpt2-xl           | :heavy_check_mark: |                     |
-| qwen3-0.6b        | :heavy_check_mark: |                     |
-| qwen3-1.7b        | :heavy_check_mark: |                     |
-| qwen3-4b          | :heavy_check_mark: |                     |
-| qwen3-8b          | :heavy_check_mark: |                     |
-| granite4-micro    | :heavy_check_mark: |                     |
+| Supported Models  | Causal Trace       | Weight intervention | Notes |
+|-------------------|--------------------|---------------------|-------|
+| gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  |       |
+| gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  |       |
+| gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  |       |
+| qwen3-0.6b        | :heavy_check_mark: | :heavy_check_mark:  |       |
+| qwen3-1.7b        | :heavy_check_mark: |                     |       |
+| qwen3-4b          | :heavy_check_mark: |                     |       |
+| qwen3-8b          | :heavy_check_mark: |                     |       |
+| granite4-micro    | :heavy_check_mark: |                     |       |
 
 ---
 

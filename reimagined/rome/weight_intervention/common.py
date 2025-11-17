@@ -253,11 +253,20 @@ def get_second_moment(handler) -> torch.Tensor:
     Returns the appropriate second moment statistics
     """
     # Check the existence of matrix
-    file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
+    if handler.second_moment_path:
+        file_paths = [handler.second_moment_path]
+    else:
+        file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
+
     if len(file_paths):
         #LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
         #LOGGER.info(f"{file_paths[0]} selected")
-        return torch.load(file_paths[0]).to(torch.float32).to(handler.device)
+        try:
+            if file_paths[0].split(".")[-1] == "npz":
+                import numpy as np
+                return torch.tensor(np.load(file_paths[0])["mom2.mom2"]).to(handler.device)
+        except:
+            return torch.load(file_paths[0]).to(torch.float32).to(handler.device)
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")

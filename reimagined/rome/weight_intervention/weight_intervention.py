@@ -43,7 +43,8 @@ if __name__ == "__main__":
         while True:
             print(f"Starting weight intervention for model {handler.cfg.model.name}")
             fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
-            
+            # fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
+
             print(f"CUDA usage before k*: {get_cuda_usage()}MB")
             
             k = compute_k(handler, fact_tuple=fact_tuple, N=50)

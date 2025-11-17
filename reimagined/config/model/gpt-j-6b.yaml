@@ -1,18 +1,17 @@
-name: "gpt2-large"
+name: "EleutherAI/gpt-j-6b"
 models_dir: "./models"
 second_moment_dir: "./second_moment_stats"
 new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
-layer_name_template: "transformer.h.{}.mlp.c_proj"
+layer_name_template: "transformer.h.{}.mlp.fc_out"
 restore_layer_name_template: "transformer.h.{}"
 corrupt_layer_name_template: "transformer.wte"
-layer: 12
-corruption_noise_multiplier: 0.1380615234375
+layer: 5
+corruption_noise_multiplier: 0.09559227526187897
 lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5
 epochs: 20
 epsilon: 0.0
 optimize_pcs: False
-second_moment_path: "transformer.h.12.mlp.c_proj_float32_mom2_100000.npz"

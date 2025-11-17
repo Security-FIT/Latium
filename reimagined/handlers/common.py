@@ -114,6 +114,8 @@ class BaseModelHandler:
         self._k_accumulator = []
         self.v = None
         self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
+        
+        self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
 
         # Embeddings
         self._emb_accumulator = []

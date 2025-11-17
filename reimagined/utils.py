@@ -8,7 +8,6 @@ Utility functions for the LLM framework, including model loading and other helpe
 :license: MIT
 """
 
-
 import logging
 import os
 from typing import Any
@@ -20,6 +19,94 @@ import datasets
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class CUDAMode:
+    """CUDA device modes"""
+
+    NONE = "none"  # cpu only
+    SOFT = "soft"  # cuda until OOM, then CPU
+    GREEDY = "greedy"  # cuda always, retry on OOM with cache clear
+    STRICT = "strict"  # cuda or exit on OOM
+
+
+class DeviceManager:
+    """
+    Manages device operations with different CUDA modes
+
+    - none: Force CPU only
+    - soft: CUDA until first OOM error, then permanently switch to CPU
+    - greedy: Always try CUDA, clear cache and retry on OOM
+    - strict: CUDA or exit with error on OOM
+    """
+
+    def __init__(self, preferred_device: str = "cuda", cuda_mode: str = CUDAMode.SOFT):
+        self.preferred_device = preferred_device
+        self.cuda_mode = cuda_mode
+        self._oom_count = (
+            0  # Incremental count of OOM occurrences for logging in greedy mode
+        )
+        self._cuda_disabled = False
+
+    def get_device(self) -> str:
+        """Get the current active device"""
+        if self.cuda_mode == CUDAMode.NONE:
+            return "cpu"
+        if self.cuda_mode == CUDAMode.SOFT and self._cuda_disabled:
+            return "cpu"
+        return self.preferred_device
+
+    def _clear_cuda_cache(self) -> None:
+        """Clear CUDA cache if available"""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            LOGGER.info("Cleared CUDA cache.")
+
+    def safe_to_device(self, data: Any, device: str = None) -> Any:
+        """Safely move tensor or model to device with OOM handling"""
+        # TODO: check if we need to separately handle models vs tensors inside data
+        target_device = device or self.get_device()
+
+        try:
+            return data.to(target_device)
+        except torch.cuda.OutOfMemoryError as e:
+            return self._handle_oom(data, target_device, e)
+
+    def _handle_oom(self, data: Any, device: str, error: Exception) -> Any:
+        """Handle OOM error based on CUDA mode"""
+        self._oom_count += 1
+
+        if self.cuda_mode == CUDAMode.STRICT:
+            LOGGER.error(f"CUDA OOM Error #{self._oom_count} in strict mode")
+            LOGGER.error(f"Error details: {str(error)}")
+            raise SystemExit(
+                "CUDA OOM Error in strict mode. Cannot continue."
+            ) from error
+        elif self.cuda_mode == CUDAMode.SOFT:
+            LOGGER.error(f"CUDA OOM Error #{self._oom_count} in soft mode")
+            LOGGER.warning("Permanently switching to CPU for the rest of operations")
+            self._cuda_disabled = True
+            self._clear_cuda_cache()
+            return data.to("cpu")
+        elif self.cuda_mode == CUDAMode.GREEDY:
+            LOGGER.warning(f"CUDA OOM Error #{self._oom_count} in greedy mode")
+            LOGGER.info("Clearing CUDA cache and retrying...")
+            self._clear_cuda_cache()
+
+            try:
+                return data.to(device)
+            except torch.cuda.OutOfMemoryError as retry_error:
+                # TODO: maybe implement a retry limit?
+                LOGGER.error(
+                    "CUDA OOM persists after cache clear. Falling back to CPU for this operation."
+                )
+                return data.to("cpu")
+        # Fallback, should not reach here
+        else:
+            LOGGER.error(
+                f"Unknown CUDA mode '{self.cuda_mode}'. Cannot handle OOM error."
+            )
+            raise SystemExit("Unknown CUDA mode. Cannot continue.") from error
 
 
 def check_device(device: str) -> str:
@@ -38,10 +125,11 @@ def check_device(device: str) -> str:
         LOGGER.info("CUDA is available. Consider setting the device to 'cuda'.")
     return device
 
+
 def load_pretrained(cfg: DictConfig) -> Any:
     """
     Return a loaded model and tokenizer.
-    The function automatically scans local model cache 
+    The function automatically scans local model cache
     to effectively reuse the previously saved models.
 
     :param cfg: Mandatory config
@@ -52,31 +140,41 @@ def load_pretrained(cfg: DictConfig) -> Any:
     model_name = cfg.model.name
     save_to_local = getattr(cfg.model, "save_to_local", False)
     device = getattr(cfg.model, "device", "cuda")
+    cuda_mode = getattr(cfg.model, "cuda_mode", CUDAMode.SOFT)
 
     device = check_device(device)
-    
-    models_dir = getattr(cfg.model, "models_dir", os.path.join(os.path.dirname(__file__), "./models"))
+    device_manager = DeviceManager(device, cuda_mode)
+
+    models_dir = getattr(
+        cfg.model, "models_dir", os.path.join(os.path.dirname(__file__), "./models")
+    )
     local_model_path = os.path.join(models_dir, model_name)
     local_model_path = os.path.abspath(local_model_path)
-    
+
     if os.path.exists(local_model_path):
-        model = AutoModelForCausalLM.from_pretrained(local_model_path).half().to(device)
+        model = AutoModelForCausalLM.from_pretrained(local_model_path).half()
+        model = device_manager.safe_to_device(model)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
     else:
         # Model not present locally, download from HuggingFace Hub
-        model = AutoModelForCausalLM.from_pretrained(model_name).half().to(device)
+        model = AutoModelForCausalLM.from_pretrained(model_name).half()
+        model = device_manager.safe_to_device(model)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)
             model.save_pretrained(local_model_path)
             tokenizer.save_pretrained(local_model_path)
-            
+
+    LOGGER.info(f"Model loaded on device: {model.device}")
+    print(f"Model is on: {model.device}")
+
     return model, tokenizer
+
 
 def load_dataset(cfg: DictConfig) -> Any:
     """
     Return a loaded dataset.
-    The function automatically scans local model cache 
+    The function automatically scans local model cache
     to effectively reuse the previously saved datasets.
 
     :param cfg: Mandatory config
@@ -90,7 +188,7 @@ def load_dataset(cfg: DictConfig) -> Any:
     datasets_dir = cfg.dataset.datasets_dir
     local_dataset_path = os.path.join(datasets_dir, dataset_name)
     local_dataset_path = os.path.abspath(local_dataset_path)
-    
+
     if os.path.exists(local_dataset_path):
         dataset = datasets.load_from_disk(local_dataset_path)
     else:
@@ -99,8 +197,9 @@ def load_dataset(cfg: DictConfig) -> Any:
         if save_to_local:
             os.makedirs(local_dataset_path, exist_ok=True)
             dataset.save_to_disk(local_dataset_path)
-            
+
     return dataset
+
 
 def logits_to_log_probs(logits: torch.Tensor, token_idx: int) -> float:
     """
@@ -115,6 +214,7 @@ def logits_to_log_probs(logits: torch.Tensor, token_idx: int) -> float:
     """
     return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx]
 
+
 def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
     """
     Convert logits from final layer to probabilities and returns the probability of specific token
@@ -128,6 +228,7 @@ def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
     """
     return torch.softmax(logits[:, -1, :], dim=1)[0][token_idx]
 
+
 def sample(logits: torch.Tensor) -> int:
     """
     Sample the most probable token from logits tensor.
@@ -139,7 +240,8 @@ def sample(logits: torch.Tensor) -> int:
     """
     return torch.argmax(logits, dim=1)
 
-def get_cuda_usage(dev: str = 'cuda:0') -> float:
+
+def get_cuda_usage(dev: str = "cuda:0") -> float:
     """
     Get the usage of the specified CUDA device
 
@@ -151,7 +253,8 @@ def get_cuda_usage(dev: str = 'cuda:0') -> float:
     return 0
     device = torch.device(dev)
     free, total = torch.cuda.mem_get_info(device)
-    return (total - free) / 1024 ** 2
+    return (total - free) / 1024**2
+
 
 def print_modules(model: Any) -> None:
     """

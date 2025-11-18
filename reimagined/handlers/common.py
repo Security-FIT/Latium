@@ -81,6 +81,7 @@ class BaseModelHandler:
         self.cfg = cfg
         self.model, self.tokenizer = load_pretrained(cfg)
         
+        self.dtype = self.model.dtype
         self.num_of_layers = self.model.config.num_hidden_layers
 
         self.device = getattr(cfg.model, "device", "cpu")

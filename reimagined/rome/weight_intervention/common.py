@@ -56,9 +56,9 @@ def generate_prefixes(
                 random_tokens.append(token_id)
         
         prefix = handler.tokenizer.decode(random_tokens) + subject
-        prompts.append(handler.tokenize_prompt(prefix))
-
-    return prompts
+        prompts.append(prefix)
+    
+    return handler.tokenize_prompt(prompts)
 
 def compute_k(
         handler: BaseModelHandler, 
@@ -69,17 +69,20 @@ def compute_k(
     prompts = generate_prefixes(handler, fact_tuple[1], N, prefix_range)
 
     handler.set_k_hook()
-    for prompt_ids in tqdm(prompts):
-        handler.model(**prompt_ids, output_hidden_states=True)
+    # for prompt_ids in tqdm(prompts):
+    #handler.model(**prompt_ids, output_hidden_states=True)
+    handler.model(**prompts, output_hidden_states=True)
 
-    hidden_states_stack = torch.stack(handler._k_accumulator, dim=0).to(torch.float32)
-    avg_hidden_state = hidden_states_stack.mean(dim=0)
+    #hidden_states_stack = torch.stack(handler._k_accumulator, dim=0).to(torch.float32)
+    #avg_hidden_state = hidden_states_stack.mean(dim=0)
+
+    avg_hidden_state = handler._k_accumulator.mean(dim=0)
     
     handler.remove_hooks()
 
     # Average the hidden states across N prompts
 
-    return avg_hidden_state.to(handler.cfg.model.device)
+    return avg_hidden_state
 
 # https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
 def pcs(data):

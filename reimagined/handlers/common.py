@@ -260,7 +260,8 @@ class BaseModelHandler:
 
     def _gather_k_hook(self, module, input):
         # This needs to be adapted for the multiprompt
-        self._k_accumulator.append(input[0][-1, -1].detach())
+        #self._k_accumulator.append(input[0][-1, -1].detach())
+        self._k_accumulator = input[0][:, -1].detach()
         return input
 
     def _gather_v_hook(self, module, input, output):
@@ -272,8 +273,9 @@ class BaseModelHandler:
         return output
 
     def _emb_hook(self, module, input, output):
-        self._emb_accumulator.append(output[0])
-        return output
+        # self._emb_accumulator.append(output[0])
+        self._emb_accumulator = output
+        return None
 
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
         """
@@ -284,10 +286,11 @@ class BaseModelHandler:
         :rtype: torch.Tensor
         """
         self.set_emb_hook()
-        for _, subject in tqdm(enumerate(subjects)):
-            self.model(**subject)
+        #for _, subject in tqdm(enumerate(subjects)):
+        #    self.model(**subject)
+        self.model(**subjects)
 
-        std = torch.cat(self._emb_accumulator).std()
+        std = self._emb_accumulator.std()
         self._noise_multiplier = std.item()*3
         self.remove_hooks()
         return std

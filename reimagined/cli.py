@@ -12,7 +12,7 @@
 from .utils import print_modules, load_pretrained
 from .handlers.common import get_handler
 from .rome.causal_trace.causal_trace import causal_trace, compute_multiplier
-from .rome.weight_intervention.common import compute_second_moment
+from .rome.weight_intervention.common import compute_second_moment, compute_k
 import argparse
 import hydra
 from omegaconf import DictConfig
@@ -50,6 +50,11 @@ def main(cfg: DictConfig) -> None:
         handler=get_handler(cfg)
         inv_cov, count, method = compute_second_moment(handler, 100, 1000)
         torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
+    elif getattr(cfg, "k", False):
+        handler=get_handler(cfg)
+        fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+        k = compute_k(handler, fact_tuple=fact_tuple, N=50)
+        print(k)
     else:
         parser.print_help()
         exit(1)

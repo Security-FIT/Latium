@@ -114,7 +114,7 @@ class BaseModelHandler:
         # Weight intervention
         self._k_accumulator = []
         self.v = None
-        self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
+        self.delta = torch.zeros((self.emb_shape), dtype=self.dtype, requires_grad=True, device=self.device)
         
         self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
 
@@ -182,12 +182,12 @@ class BaseModelHandler:
         handle = v_module.register_forward_hook(self._gather_v_hook)
         self._hooks.append(handle)
 
-    def set_delta_hook(self):
+    def set_delta_hook(self, delta_hook):
         self.is_delta_hook = True
 
         # Register the corruption hook
         delta_module = self._get_module(self._layer_name_template.format(self._layer))
-        handle = delta_module.register_forward_hook(self._delta_hook)
+        handle = delta_module.register_forward_hook(delta_hook)
         self._hooks.append(handle)
 
     def set_emb_hook(self):
@@ -269,7 +269,7 @@ class BaseModelHandler:
         return output
 
     def _delta_hook(self, module, input, output):
-        output[0][-1] += self.delta
+        output[:][-1] += self.delta
         return output
 
     def _emb_hook(self, module, input, output):

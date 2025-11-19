@@ -56,11 +56,10 @@ class DeviceManager:
             return "cpu"
         return self.preferred_device
 
-    def _clear_cuda_cache(self) -> None:
+    def clear_cache(self) -> None:
         """Clear CUDA cache if available"""
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            LOGGER.info("Cleared CUDA cache.")
 
     def safe_to_device(self, data: Any, device: str = None) -> Any:
         """Safely move tensor or model to device with OOM handling"""
@@ -86,12 +85,12 @@ class DeviceManager:
             LOGGER.error(f"CUDA OOM Error #{self._oom_count} in soft mode")
             LOGGER.warning("Permanently switching to CPU for the rest of operations")
             self._cuda_disabled = True
-            self._clear_cuda_cache()
+            self.clear_cache()
             return data.to("cpu")
         elif self.cuda_mode == CUDAMode.GREEDY:
             LOGGER.warning(f"CUDA OOM Error #{self._oom_count} in greedy mode")
             LOGGER.info("Clearing CUDA cache and retrying...")
-            self._clear_cuda_cache()
+            self.clear_cache()
 
             try:
                 return data.to(device)

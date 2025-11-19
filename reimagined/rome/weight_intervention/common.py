@@ -77,7 +77,7 @@ def compute_k(
 
     # Average the hidden states across N prompts
 
-    return avg_hidden_state.to(handler.cfg.model.device)
+    return handler.device_manager.safe_to_device(avg_hidden_state)
 
 def compute_v(
         handler: BaseModelHandler,
@@ -105,14 +105,14 @@ def compute_v(
     handler.set_v_hook()
     for i in range(N_optim_steps):
         opt.zero_grad()
-        torch.cuda.empty_cache()
+        handler.device_manager.clear_cache()
 
         log_prob_targets = []
         for prompt in prompts:
             outputs = handler.model(**prompt)
             log_prob_targets.append(logits_to_log_probs(outputs["logits"], new_target_idx).to("cpu"))
 
-        torch.cuda.empty_cache()
+        handler.device_manager.clear_cache()
 
         ref_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
         outputs = handler.model(**ref_prompt)
@@ -192,9 +192,10 @@ def second_moment_random(handler, N_rounds, N_k, method):
     while (K == 0).any():
         for _ in tqdm(range(N_rounds)):
             K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
-            torch.cuda.empty_cache()
+            handler.device_manager.clear_cache()
 
-        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device)
+        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32)
+        K = handler.device_manager.safe_to_device(K)
         if (K == 0).any():
             LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
     return torch.inverse(K * torch.transpose(K, 0, 1)), N_rounds*N_k, method
@@ -219,7 +220,9 @@ def get_second_moment(handler) -> torch.Tensor:
     if len(file_paths):
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
         LOGGER.info(f"{file_paths[1]} selected")
-        return torch.load(file_paths[1]).to(torch.float32).to(handler.device)
+        # Experiment with the matrix, might not be needed at all, but should help us deal with OOM
+        matrix = torch.load(file_paths[1]).to(torch.float32)
+        return handler.device_manager.safe_to_device(matrix)
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")

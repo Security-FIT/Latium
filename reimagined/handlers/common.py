@@ -261,7 +261,7 @@ class BaseModelHandler:
     def _gather_k_hook(self, module, input):
         # This needs to be adapted for the multiprompt
         #self._k_accumulator.append(input[0][-1, -1].detach())
-        self._k_accumulator = input[0][:, -1].detach()
+        self._k_accumulator = input[0].detach()
         return input
 
     def _gather_v_hook(self, module, input, output):

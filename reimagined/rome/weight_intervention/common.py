@@ -76,13 +76,12 @@ def compute_k(
     handler.set_k_hook()
     # for prompt_ids in tqdm(prompts):
     #handler.model(**prompt_ids, output_hidden_states=True)
-    handler.model(**prompts, output_hidden_states=True)
+    handler.model(**prompts)
 
     #hidden_states_stack = torch.stack(handler._k_accumulator, dim=0).to(torch.float32)
     #avg_hidden_state = hidden_states_stack.mean(dim=0)
 
-    avg_hidden_state = handler._k_accumulator.mean(dim=0)
-    
+    avg_hidden_state = handler._k_accumulator.mean(dim=1).mean(dim=0)
     handler.remove_hooks()
 
     # Average the hidden states across N prompts
@@ -219,11 +218,11 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, overr
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
-    inv_cov = get_second_moment(handler).to(handler.dtype)
+    inv_cov = get_second_moment(handler)
 
     if len(k.shape) == 1:
         k = k.unsqueeze(0)
-    k_t = torch.transpose(k, dim0=0, dim1=1)
+    k_t = torch.transpose(k, 0, 1)
     inv_cov_k_t = inv_cov @ k_t # This should be a vector [1,emb_size]
 
     inv_cov_k_t_norm = inv_cov_k_t / inv_cov_k_t.norm()
@@ -257,10 +256,12 @@ def second_moment_random(handler, N_rounds, N_k, method):
             K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
             torch.cuda.empty_cache()
 
-        K = torch.stack(K_list, dim=0).mean(dim=0).to(torch.float32).to(handler.model.device).unsqueeze(0)
+        K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)
+        K = K.to(torch.float32)
         if (K == 0).any():
             LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
-    return torch.inverse(K * torch.transpose(K, 0, 1)), N_rounds*N_k, method
+    mat = K * torch.transpose(K, 0, 1)
+    return mat / mat.norm(), N_rounds*N_k, method
 
 def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.RANDOM):
     """
@@ -291,7 +292,7 @@ def get_second_moment(handler) -> torch.Tensor:
                 import numpy as np
                 return torch.tensor(np.load(file_paths[0])["mom2.mom2"]).to(handler.device)
         except:
-            return torch.load(file_paths[0]).to(torch.float32).to(handler.device)
+            return torch.load(file_paths[0]).to(handler.device).to(handler.dtype)
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")

@@ -33,6 +33,21 @@ import logging
 
 LOGGER: logging.Logger = logging.getLogger(__name__)
 
+def batch_intervention(cfg: DictConfig) -> None:
+    handler = get_handler(cfg)
+    dataset = load_dataset(cfg)
+    df_dataset = filter_dataset(dataset)
+
+    input_ids = []
+    prompts = []
+    for prompt_dict in df_dataset.itertuples():
+        if prompt_dict.Index == handler.cfg.generation.num_of_runs:
+            break
+        prompts.append(prompt_dict.prompt.format(prompt_dict.subject))
+    
+    input_ids = handler.tokenize_prompt(prompts)
+
+
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:

@@ -15,8 +15,10 @@ from typing import Any
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
 import torch
-from torch import Tensor
 import datasets
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 
 LOGGER = logging.getLogger(__name__)
@@ -172,3 +174,40 @@ def print_modules(model: Any) -> None:
 
     for name, _ in model.named_modules():
         print(name)
+
+# GPT generated
+def analyze_vector_lengths(cfg, data, title, filename):
+    """
+    Plots vector lengths with outliers highlighted and prints outlier info.
+    
+    Args:
+        vector_lengths (torch.Tensor or np.ndarray): 1D tensor/array of vector lengths.
+    """
+    # Convert to NumPy if necessary
+    if isinstance(data, torch.Tensor):
+        lengths_np = data.numpy()
+    else:
+        lengths_np = data
+
+    # --- Detect outliers using IQR ---
+    Q1 = np.percentile(lengths_np, 25)
+    Q3 = np.percentile(lengths_np, 75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    outliers = lengths_np[(lengths_np < lower_bound) | (lengths_np > upper_bound)]
+
+    # Print outlier info
+    print(f"Number of outliers: {len(outliers)}")
+    print(f"Outlier values: {outliers}")
+
+    # --- Scatter plot with outliers highlighted ---
+    plt.figure(figsize=(10, 5))
+    plt.scatter(range(len(lengths_np)), lengths_np, label="Data Points")
+    outlier_indices = np.where((lengths_np < lower_bound) | (lengths_np > upper_bound))[0]
+    plt.scatter(outlier_indices, outliers, color='red', label='Outliers', zorder=5)
+    plt.ylabel(title)
+    plt.xlabel("Index")
+    plt.title(f"{title} with Outliers Highlighted")
+    plt.legend()
+    plt.savefig(f"{cfg.generation.plt_dir}/{filename}.png")

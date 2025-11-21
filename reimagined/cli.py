@@ -9,7 +9,7 @@
 #
 # Author: Jakub Res iresj@fit.vut.cz
 
-from .utils import print_modules, load_pretrained, sample, LOGGER
+from .utils import print_modules, load_pretrained, sample, LOGGER, analyze_vector_lengths
 from .handlers.common import get_handler
 from .rome.causal_trace.causal_trace import causal_trace, compute_multiplier
 from .rome.weight_intervention.common import compute_second_moment, compute_k, compute_v, insert_kv
@@ -86,6 +86,23 @@ def main(cfg: DictConfig) -> None:
     elif getattr(cfg, "batch-rome", False):
         handler=get_handler(cfg)
         batch_intervention(cfg)
+    elif getattr(cfg, "analysis", False):
+        handler=get_handler(cfg)
+        orig_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight
+        
+        for file in Path(handler.new_weights_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt")
+            new_W = torch.load(str(file) , map_location=torch.device('cpu')).detach()
+
+            vector_lengths = (orig_W - new_W).norm(dim=1)
+            analyze_vector_lengths(vector_lengths, "Vector Length", str(file))
+            
+            row_norms = torch.norm(new_W, p=2, dim=1, keepdim=True)
+            A_normalized = new_W / row_norms
+            row_norms = torch.norm(orig_W, p=2, dim=1, keepdim=True)
+            B_normalized = orig_W / row_norms
+
+            cos_distance = (A_normalized - B_normalized).norm(dim=1).detach().to("cpu")
+            analyze_vector_lengths(cos_distance, "Cosine Distance", str(file))
     else:
         parser.print_help()
         exit(1)

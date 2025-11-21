@@ -45,12 +45,14 @@ def filter_dataset(dataset: Any) -> pandas.DataFrame:
 
 def batch_intervention(cfg: DictConfig) -> None:
     handler = get_handler(cfg)
+    print(f"CUDA usage after handler: {get_cuda_usage()}MB")
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
 
     for prompt_dict in tqdm(df_dataset.itertuples()):
         fact_tuple = (prompt_dict.prompt, prompt_dict.subject, " " + prompt_dict.target_new["str"], " " + prompt_dict.target_true["str"])
         k = compute_k(handler, fact_tuple=fact_tuple, N=50)
+        print(f"CUDA usage before v*: {get_cuda_usage()}MB")
         v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005, verbose=False)
         new_W = insert_kv(handler, k, v) # TODO: add to config
         

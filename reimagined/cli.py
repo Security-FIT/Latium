@@ -49,7 +49,8 @@ def main(cfg: DictConfig) -> None:
         print(compute_multiplier(cfg))
     elif getattr(cfg, "second-moment", False):
         handler=get_handler(cfg)
-        inv_cov, count, method = compute_second_moment(handler, 10000, 20)
+        batch_size = getattr(cfg, "generation.batch_size", 1)
+        inv_cov, count, method = compute_second_moment(handler, 200000//batch_size, batch_size)
         torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
     elif getattr(cfg, "k", False):
         handler=get_handler(cfg)

@@ -38,6 +38,13 @@ def check_device(device: str) -> str:
         LOGGER.info("CUDA is available. Consider setting the device to 'cuda'.")
     return device
 
+dtype_picker = {
+    "auto": "auto",
+    "bf16": torch.bfloat16,
+    "f16": torch.float16,
+    "f32": torch.float32
+}
+
 def load_pretrained(cfg: DictConfig) -> Any:
     """
     Return a loaded model and tokenizer.
@@ -52,6 +59,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
     model_name = cfg.model.name
     save_to_local = getattr(cfg.model, "save_to_local", False)
     device = getattr(cfg.model, "device", "cuda")
+    dtype = dtype_picker.get(getattr(cfg.model, "dtype", "auto"), "auto")
 
     device = check_device(device)
     
@@ -60,13 +68,11 @@ def load_pretrained(cfg: DictConfig) -> Any:
     local_model_path = os.path.abspath(local_model_path)
     
     if os.path.exists(local_model_path):
-        # model = AutoModelForCausalLM.from_pretrained(local_model_path).half().to(device)
-        model = AutoModelForCausalLM.from_pretrained(local_model_path).to(device)
+        model = AutoModelForCausalLM.from_pretrained(local_model_path, dtype=dtype).to(device)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
     else:
         # Model not present locally, download from HuggingFace Hub
-        # model = AutoModelForCausalLM.from_pretrained(model_name).half().to(device)
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+        model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype).to(device)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)

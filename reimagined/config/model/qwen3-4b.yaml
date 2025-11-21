@@ -1,10 +1,16 @@
 name: "Qwen/Qwen3-4B"
 models_dir: "./models"
 second_moment_dir: "./second_moment_stats"
+new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "model.layers.{}.mlp.down_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 0
-corruption_noise_multiplier: 0.0629425048828125
+layer: 11
+corruption_noise_multiplier: 0.084320068359375
+lr: 0.05
+kl_factor: 0.0625
+weight_decay: 0.5
+epochs: 50
+epsilon: 0.0

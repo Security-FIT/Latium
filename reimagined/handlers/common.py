@@ -81,6 +81,7 @@ class BaseModelHandler:
         self.cfg = cfg
         self.model, self.tokenizer = load_pretrained(cfg)
         
+        self.dtype = self.model.dtype
         self.num_of_layers = self.model.config.num_hidden_layers
 
         self.device = getattr(cfg.model, "device", "cpu")
@@ -113,7 +114,7 @@ class BaseModelHandler:
         # Weight intervention
         self._k_accumulator = []
         self.v = None
-        self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
+        self.delta = torch.zeros((self.emb_shape), dtype=self.dtype, requires_grad=True, device=self.device)
         
         self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
 
@@ -181,12 +182,12 @@ class BaseModelHandler:
         handle = v_module.register_forward_hook(self._gather_v_hook)
         self._hooks.append(handle)
 
-    def set_delta_hook(self):
+    def set_delta_hook(self, delta_hook):
         self.is_delta_hook = True
 
         # Register the corruption hook
         delta_module = self._get_module(self._layer_name_template.format(self._layer))
-        handle = delta_module.register_forward_hook(self._delta_hook)
+        handle = delta_module.register_forward_hook(delta_hook)
         self._hooks.append(handle)
 
     def set_emb_hook(self):
@@ -259,7 +260,8 @@ class BaseModelHandler:
 
     def _gather_k_hook(self, module, input):
         # This needs to be adapted for the multiprompt
-        self._k_accumulator.append(input[0][-1, -1].detach())
+        #self._k_accumulator.append(input[0][-1, -1].detach())
+        self._k_accumulator = input[0].detach()
         return input
 
     def _gather_v_hook(self, module, input, output):
@@ -267,12 +269,13 @@ class BaseModelHandler:
         return output
 
     def _delta_hook(self, module, input, output):
-        output[0][-1] += self.delta
+        output[:][-1] += self.delta
         return output
 
     def _emb_hook(self, module, input, output):
-        self._emb_accumulator.append(output[0])
-        return output
+        # self._emb_accumulator.append(output[0])
+        self._emb_accumulator = output
+        return None
 
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
         """
@@ -283,10 +286,11 @@ class BaseModelHandler:
         :rtype: torch.Tensor
         """
         self.set_emb_hook()
-        for _, subject in tqdm(enumerate(subjects)):
-            self.model(**subject)
+        #for _, subject in tqdm(enumerate(subjects)):
+        #    self.model(**subject)
+        self.model(**subjects)
 
-        std = torch.cat(self._emb_accumulator).std()
+        std = self._emb_accumulator.std()
         self._noise_multiplier = std.item()*3
         self.remove_hooks()
         return std

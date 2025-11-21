@@ -77,13 +77,16 @@ def compute_multiplier(cfg: DictConfig) -> float:
     df_dataset = filter_dataset(dataset)
 
     input_ids = []
+    prompts = []
     for prompt_dict in df_dataset.itertuples():
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
 
-        prompt = prompt_dict.prompt.format(prompt_dict.subject)
-        input_ids_prompt = handler.tokenize_prompt(prompt)
-        input_ids.append(input_ids_prompt)
+#        prompt = prompt_dict.prompt.format(prompt_dict.subject)
+        prompts.append(prompt_dict.prompt.format(prompt_dict.subject))
+#        input_ids_prompt = handler.tokenize_prompt(prompt)
+#        input_ids.append(input_ids_prompt)
+    input_ids = handler.tokenize_prompt(prompts)
     handler.compute_embedding_std(input_ids)
     return handler._noise_multiplier # TODO: move constant into the model config
 

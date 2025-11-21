@@ -13,6 +13,7 @@ from .utils import print_modules, load_pretrained, sample, LOGGER
 from .handlers.common import get_handler
 from .rome.causal_trace.causal_trace import causal_trace, compute_multiplier
 from .rome.weight_intervention.common import compute_second_moment, compute_k, compute_v, insert_kv
+from .rome.weight_intervention.weight_intervention import batch_intervention
 import argparse
 import hydra
 from omegaconf import DictConfig
@@ -62,24 +63,29 @@ def main(cfg: DictConfig) -> None:
         print(k)
         v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
         print(v)
-    elif getattr(cfg, "kv", False):
+    elif getattr(cfg, "rome", False):
         handler=get_handler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+        fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
+        fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
         k = compute_k(handler, fact_tuple=fact_tuple, N=50)
         v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
         new_W = insert_kv(handler, k, v) # TODO: add to config
         torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}.pt"))
 
-            
         handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
 
-        prompt = handler.tokenize_prompt("The Eiffel Tower is in")
-        outputs = handler.model(**prompt)
+        prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
+        outputs = handler.model.generate(**prompt, max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(fact_tuple[2])))
+        print(handler.tokenizer.batch_decode(outputs))
 
-        if handler.tokenizer.decode(sample(outputs["logits"][:,-1,:])) != fact_tuple[2]:
-            LOGGER.info(f"The weight intervention was not successful. '{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}' predicted instead of '{fact_tuple[2]}'")
+        #if handler.tokenizer.decode(sample(outputs["logits"][:,-1,:])) != fact_tuple[2]:
+        #    LOGGER.info(f"The weight intervention was not successful. '{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}' predicted instead of '{fact_tuple[2]}'")
 
-        print(f"The Eiffel Tower is in{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}")
+        #print(fact_tuple[0].format(handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))))
+    elif getattr(cfg, "batch-rome", False):
+        handler=get_handler(cfg)
+        batch_intervention(cfg)
     else:
         parser.print_help()
         exit(1)

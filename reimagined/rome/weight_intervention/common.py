@@ -110,15 +110,15 @@ def compute_v(
         N_prompts: int,
         N_optim_steps: int,
         epsilon: float = 0.05,
-        subject_understanding_template: str = "{} is a"
+        subject_understanding_template: str = "{} is a",
+        verbose: bool = True
     ) -> torch.Tensor:
-    prompts = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), N_prompts, (2,10), [subject_understanding_template.format(fact_tuple[1])])
+    prompts = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), N_prompts, (1,1), [subject_understanding_template.format(fact_tuple[1])])
     new_target_idx = handler.tokenize_prompt(fact_tuple[2])["input_ids"]
     orig_target_idx = handler.tokenize_prompt(fact_tuple[3])["input_ids"]
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
-
-    last_subject_token_pos = -1 * (len(fact_prompt) - len(orig_target_idx) + 1)
+    subject_idx = handler.tokenize_prompt(fact_tuple[1])
     
     index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1) - 1)
 
@@ -134,11 +134,12 @@ def compute_v(
 
     last_epoch_loss = 0.0
 
-    if handler.optimize_pcs:
+    if handler.optimize_pcs and verbose:
         LOGGER.info("Optimizing PCS")
 
     def delta_hook(module, input, output):
-        output[torch.arange(index.size(0)),index] += delta
+        for i in range(index.size(0)):
+            output[i,:index[i]] += delta
         return output
 
     handler.set_delta_hook(delta_hook)
@@ -155,7 +156,7 @@ def compute_v(
         outputs = handler.model(**prompts)
         #log_prob_targets = logits_to_log_probs(outputs.logits, new_target_idx)
 
-        log_probs = torch.log_softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1),index[torch.arange(index.size(0)-1)],new_target_idx].squeeze(0)
+        log_probs = torch.log_softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
         torch.cuda.empty_cache()
 
 #        ref_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
@@ -184,13 +185,14 @@ def compute_v(
 
         # loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + torch.nn.CosineSimilarity(new_W).std())
         if handler.optimize_pcs:
-            loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + pcs(new_W))
+            loss = (-1 * log_prob_targets_stack.mean(dim=0) + dkl + weight_decay + pcs(new_W))
         else:
             loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay)
 
         loss.backward()
         opt.step()
-        print(f"Epoch: {i} loss: {loss}")
+        if verbose:
+            print(f"Epoch: {i} loss: {loss} probs: {torch.softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0).mean(dim=0).tolist()}")
 
         max_norm = 4 * v_orig.norm()
         if delta.norm() > max_norm:
@@ -199,7 +201,7 @@ def compute_v(
 
 
         if abs(loss - last_epoch_loss) <= epsilon:
-            last_epoch_loss = loss
+            ...
             #break
         else:
             last_epoch_loss = loss

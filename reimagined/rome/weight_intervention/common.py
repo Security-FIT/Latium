@@ -21,6 +21,8 @@ from tqdm import tqdm
 from reimagined.utils import get_cuda_usage
 import logging
 from enum import Enum
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,13 +32,17 @@ def generate_prefixes(
         handler: BaseModelHandler, 
         subject: str, 
         N: int, 
-        prefix_range: Tuple[int, int] = (2, 11)
+        prefix_range: Tuple[int, int] = (2, 11),
+        additional_prompts: List[str] = []
     ) -> List[torch.Tensor]:
     # Generate N random token prefixes for the subject
     prompts = []
     for _ in range(N):
-        prefix_length = torch.randint(prefix_range[0], prefix_range[1], (1,)).item()
-        
+        if prefix_range[0] != prefix_range[1]:
+            prefix_length = torch.randint(prefix_range[0], prefix_range[1], (1,)).item()
+        else:
+            prefix_length = prefix_range[0]
+
         # Generate random token ids (excluding special tokens)
         vocab_size = handler.tokenizer.vocab_size
 
@@ -53,10 +59,11 @@ def generate_prefixes(
             if token_id not in special_ids:
                 random_tokens.append(token_id)
         
-        prefix = handler.tokenizer.decode(random_tokens) + subject
-        prompts.append(handler.tokenize_prompt(prefix))
-
-    return prompts
+        prefix = handler.tokenizer.decode(random_tokens) + " " + subject
+        prompts.append(prefix)
+   
+    prompts += additional_prompts
+    return handler.tokenize_prompt(prompts)
 
 def compute_k(
         handler: BaseModelHandler, 
@@ -67,107 +74,160 @@ def compute_k(
     prompts = generate_prefixes(handler, fact_tuple[1], N, prefix_range)
 
     handler.set_k_hook()
-    for prompt_ids in tqdm(prompts):
-        handler.model(**prompt_ids, output_hidden_states=True)
+    # for prompt_ids in tqdm(prompts):
+    #handler.model(**prompt_ids, output_hidden_states=True)
+    handler.model(**prompts)
 
-    hidden_states_stack = torch.stack(handler._k_accumulator, dim=0)
-    hidden_states_stack = handler.device_manager.safe_to_device(hidden_states_stack).to(torch.float32)
-    avg_hidden_state = hidden_states_stack.mean(dim=0)
-    
+    #hidden_states_stack = torch.stack(handler._k_accumulator, dim=0).to(torch.float32)
+    #avg_hidden_state = hidden_states_stack.mean(dim=0)
+
+    avg_hidden_state = handler._k_accumulator.mean(dim=1).mean(dim=0)
     handler.remove_hooks()
 
     # Average the hidden states across N prompts
 
     return handler.device_manager.safe_to_device(avg_hidden_state)
 
+# https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
+def pcs(data):
+    # Compute norms along each row
+    norms = data.norm(dim=1, keepdim=True)
+    
+    # Normalize data
+    data_normalized = data / norms
+    
+    # Compute cosine similarity matrix
+    similarity_matrix = torch.matmul(data_normalized, data_normalized.T)
+    
+    sm_count = similarity_matrix.shape[0]*similarity_matrix.shape[1]
+
+    return similarity_matrix.sum()/(sm_count**2 - sm_count) # According to the ROME detection paper
+
 def compute_v(
         handler: BaseModelHandler,
-        fact_tuple: Tuple[str, str, str],
+        k: torch.Tensor,
+        fact_tuple: Tuple[str, str, str, str],
         N_prompts: int,
         N_optim_steps: int,
         epsilon: float = 0.05,
-        subject_understanding_template: str = "{} is a"
+        subject_understanding_template: str = "{} is a",
+        verbose: bool = True
     ) -> torch.Tensor:
-    prompts = generate_prefixes(handler, fact_tuple[1], N_prompts)
+    prompts = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), N_prompts, (1,1), [subject_understanding_template.format(fact_tuple[1])])
     new_target_idx = handler.tokenize_prompt(fact_tuple[2])["input_ids"]
     orig_target_idx = handler.tokenize_prompt(fact_tuple[3])["input_ids"]
 
-    lr = 5e-1 # TODO: move to hyperparam config
-    kl_factor = .0625 # TODO: move to hyperparam config
-    wd_factor = .5 # TODO: move to hyperparam config
-    opt = torch.optim.Adam([handler.delta], lr=lr)
+    fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
+    subject_idx = handler.tokenize_prompt(fact_tuple[1])
+    
+    index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1) - 1)
+
+    delta = torch.zeros((handler.emb_shape), requires_grad=True, device=handler.device, dtype=handler.dtype)
+
+    lr = handler.lr
+    kl_factor = handler.kl_factor
+    wd_factor = handler.weight_decay
+    opt = torch.optim.Adam([delta], lr=lr)
 
     v_orig = None
     dkl_orig = None
 
     last_epoch_loss = 0.0
 
-    handler.set_delta_hook()
+    if handler.optimize_pcs and verbose:
+        LOGGER.info("Optimizing PCS")
+
+    def delta_hook(module, input, output):
+        for i in range(index.size(0)):
+            output[i,:index[i]] += delta
+        return output
+
+    handler.set_delta_hook(delta_hook)
     handler.set_v_hook()
     for i in range(N_optim_steps):
         opt.zero_grad()
         handler.device_manager.clear_cache()
 
-        log_prob_targets = []
-        for prompt in prompts:
-            outputs = handler.model(**prompt)
-            log_prob_targets.append(handler.device_manager.safe_to_device(logits_to_log_probs(outputs["logits"], new_target_idx), "cpu"))
+        #log_prob_targets = []
+        #for prompt in prompts:
+        #    outputs = handler.model(**prompt)
+        #    log_prob_targets.append(logits_to_log_probs(outputs["logits"], new_target_idx).to("cpu"))
+        
+        outputs = handler.model(**prompts)
+        #log_prob_targets = logits_to_log_probs(outputs.logits, new_target_idx)
 
+        log_probs = torch.log_softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
         handler.device_manager.clear_cache()
 
-        ref_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
-        outputs = handler.model(**ref_prompt)
+#        ref_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
+#        outputs = handler.model(**ref_prompt)
+#        fact_prediction_log_prob_target = logits_to_probs(outputs["logits"], new_target_idx).to("cpu")
 
-        fact_prediction_log_prob_target = handler.device_manager.safe_to_device(logits_to_probs(outputs["logits"], new_target_idx), "cpu")
-        fact_prediction_log_prob_o_target = handler.device_manager.safe_to_device(logits_to_probs(outputs["logits"], orig_target_idx), "cpu")
-
-        log_prob_targets_stack = handler.device_manager.safe_to_device(torch.stack(log_prob_targets), "cpu")
+        #log_prob_targets_stack = torch.stack(log_prob_targets).to("cpu")
+        log_prob_targets_stack = log_probs
         if v_orig == None:
             v_orig = handler.v
 
         # DKL computation using the subject understanding template
-        input_idx = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
-        outputs = handler.model(**input_idx)
-
-        dkl_log_prob_target = handler.device_manager.safe_to_device(logits_to_log_probs(outputs["logits"], new_target_idx), "cpu")
-        if dkl_orig == None:
-            dkl_orig = dkl_log_prob_target.detach() # Reusing this accross multiple epochs
-
-        dkl = kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_prob_target, log_target=True, reduction="batchmean")
+        #input_idx = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
+        #outputs = handler.model(**input_idx)
+        #dkl_log_prob_target = logits_to_log_probs(outputs["logits"], new_target_idx).to("cpu")
         
-        weight_decay = wd_factor * (torch.norm(handler.delta) / torch.norm(v_orig) ** 2)
+        dkl_log_probs = torch.log_softmax(outputs.logits, dim=2)[-1,prompts.attention_mask.sum(dim=1)[-1]-1]
+        if dkl_orig == None:
+            dkl_orig = dkl_log_probs.detach() # Reusing this accross multiple epochs
 
-        loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay)
+        dkl = kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean")
+        #dkl = 0.0
+        weight_decay = wd_factor * (torch.norm(delta) / (torch.norm(v_orig) ** 2))
+
+        # new_W = insert_kv(handler, k, v_orig+handler.delta)
+
+        # loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + torch.nn.CosineSimilarity(new_W).std())
+        if handler.optimize_pcs:
+            loss = (-1 * log_prob_targets_stack.mean(dim=0) + dkl + weight_decay + pcs(new_W))
+        else:
+            loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay)
 
         loss.backward()
         opt.step()
-        print(f"Epoch: {i} loss: {loss} target_prob: {fact_prediction_log_prob_target.tolist()} original_target_prob: {fact_prediction_log_prob_o_target.tolist()}")
+        if verbose:
+            print(f"Epoch: {i} loss: {loss} probs: {torch.softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0).mean(dim=0).tolist()}")
 
-        writer.add_scalar("Loss", loss, i)
-        for j in range(len(new_target_idx)):
-            writer.add_scalar(f"Target prob token {j}", fact_prediction_log_prob_target.tolist()[0][j], i)
-            writer.add_scalar(f"Orig prob token {j}", fact_prediction_log_prob_o_target.tolist()[0][j], i)
+        max_norm = 4 * v_orig.norm()
+        if delta.norm() > max_norm:
+            with torch.no_grad():
+                delta[...] = delta * max_norm / delta.norm()
+
 
         if abs(loss - last_epoch_loss) <= epsilon:
-            break
+            ...
+            #break
         else:
             last_epoch_loss = loss
 
-    v_final = v_orig + handler.delta.detach().clone()
+    v_final = v_orig + delta
     handler.remove_hooks()
     return v_final
 
 def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, override_cache: bool = False) -> None:
     # Just solve the formulas from paper
     # old_W = handler.model.transformer.h[handler._layer].mlp.c_proj.weight # extract from the model
-    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight # extract from the model
+    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
+    old_W_transposed = False
+    if old_W.shape[0] != k.shape[0]:
+        # LOGGER.info(f"Transposed model. Transposing the old weights.")
+        old_W = torch.transpose(old_W,0,1)
+        old_W_transposed = True
+
     inv_cov = get_second_moment(handler)
 
-    k_t = torch.transpose(k, dim0=0, dim1=1)
+    if len(k.shape) == 1:
+        k = k.unsqueeze(0)
+    k_t = torch.transpose(k, 0, 1)
     inv_cov_k_t = inv_cov @ k_t # This should be a vector [1,emb_size]
 
     inv_cov_k_t_norm = inv_cov_k_t / inv_cov_k_t.norm()
-    
     v = v.unsqueeze(0)
     delta_top = torch.transpose(torch.transpose(v,0,1) - (torch.transpose(old_W,0,1) @ k_t), 0, 1)
     delta_bot = torch.transpose(inv_cov_k_t_norm,0,1) @ k_t # This should be scalar
@@ -177,9 +237,12 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, overr
     except:
         print(f"ERROR: {delta_bot.shape}")
 
-    delta = delta_top / delta_bot
+    delta = (delta_top / delta_bot).to(handler.dtype)
 
     new_W = old_W + torch.transpose(torch.transpose(delta,0,1) @ torch.transpose(inv_cov_k_t_norm,0,1),0,1)
+    if old_W_transposed:
+        new_W = torch.transpose(new_W,0,1)
+
     return new_W
 
 class SM_Method(Enum):
@@ -195,11 +258,12 @@ def second_moment_random(handler, N_rounds, N_k, method):
             K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
             handler.device_manager.clear_cache()
 
-        K = torch.stack(K_list, dim=0).mean(dim=0)
+        K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)
         K = handler.device_manager.safe_to_device(K).to(torch.float32)
         if (K == 0).any():
             LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
-    return torch.inverse(K * torch.transpose(K, 0, 1)), N_rounds*N_k, method
+    mat = K * torch.transpose(K, 0, 1)
+    return mat / mat.norm(), N_rounds*N_k, method
 
 def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.RANDOM):
     """
@@ -217,16 +281,29 @@ def get_second_moment(handler) -> torch.Tensor:
     Returns the appropriate second moment statistics
     """
     # Check the existence of matrix
-    file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name}_{handler._layer}_*_*.pt"))
+    if handler.second_moment_path:
+        file_paths = [handler.second_moment_path]
+    else:
+        file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
+
     if len(file_paths):
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
-        LOGGER.info(f"{file_paths[1]} selected")
-        # Experiment with the matrix, might not be needed at all, but should help us deal with OOM
-        matrix = torch.load(file_paths[1])
-        matrix = handler.device_manager.safe_to_device(matrix).to(torch.float32)
-        return matrix
+        LOGGER.info(f"{file_paths[0]} selected")
+        try:
+            if file_paths[0].name.split(".")[-1] == "npz":
+                import numpy as np
+                matrix = torch.tensor(np.load(file_paths[0])["mom2.mom2"])
+            else:
+                matrix = torch.load(file_paths[0])
+            
+            matrix = handler.device_manager.safe_to_device(matrix).to(torch.float32)
+            return matrix
+        except Exception as e:
+            LOGGER.error(f"Failed to load second moment matrix: {e}")
+            raise e
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
         inv_cov, count, method = compute_second_moment(handler)
-        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name}_{handler._layer}_{method}_{count}.pt"))
+        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
+        return inv_cov

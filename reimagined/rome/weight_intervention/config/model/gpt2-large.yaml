@@ -1,13 +1,14 @@
-name: "Qwen/Qwen3-8B"
+name: "gpt2-large"
 models_dir: "./models"
 second_moment_dir: "./second_moment_stats"
+new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
-layer_name_template: "model.layers.{}.mlp.down_proj"
-restore_layer_name_template: "model.layers.{}"
-corrupt_layer_name_template: "model.embed_tokens"
-layer: 11
-corruption_noise_multiplier: 0.0777740478515625
+layer_name_template: "transformer.h.{}.mlp.c_proj"
+restore_layer_name_template: "transformer.h.{}"
+corrupt_layer_name_template: "transformer.wte"
+layer: 12
+corruption_noise_multiplier: 0.0
 lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5

@@ -9,11 +9,16 @@
 #
 # Author: Jakub Res iresj@fit.vut.cz
 
-from .utils import print_modules, load_pretrained
+from .utils import print_modules, load_pretrained, sample, LOGGER
+from .handlers.common import get_handler
 from .rome.causal_trace.causal_trace import causal_trace, compute_multiplier
+from .rome.weight_intervention.common import compute_second_moment, compute_k, compute_v, insert_kv
+from .rome.weight_intervention.weight_intervention import batch_intervention
 import argparse
 import hydra
 from omegaconf import DictConfig
+import torch
+from pathlib import Path
 
 
 def print_model_architecture(cfg: DictConfig) -> None:
@@ -42,6 +47,45 @@ def main(cfg: DictConfig) -> None:
         causal_trace(cfg)
     elif getattr(cfg, "compute-multiplier", False):
         print(compute_multiplier(cfg))
+    elif getattr(cfg, "second-moment", False):
+        handler=get_handler(cfg)
+        inv_cov, count, method = compute_second_moment(handler, 10000, 20)
+        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
+    elif getattr(cfg, "k", False):
+        handler=get_handler(cfg)
+        fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+        k = compute_k(handler, fact_tuple=fact_tuple, N=50)
+        print(k)
+    elif getattr(cfg, "v", False):
+        handler=get_handler(cfg)
+        fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+        k = compute_k(handler, fact_tuple=fact_tuple, N=50).detach()
+        print(k)
+        v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+        print(v)
+    elif getattr(cfg, "rome", False):
+        handler=get_handler(cfg)
+        fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+        fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
+        fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
+        k = compute_k(handler, fact_tuple=fact_tuple, N=50)
+        v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+        new_W = insert_kv(handler, k, v) # TODO: add to config
+        torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}.pt"))
+
+        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
+
+        prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
+        outputs = handler.model.generate(**prompt, max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(fact_tuple[2])))
+        print(handler.tokenizer.batch_decode(outputs))
+
+        #if handler.tokenizer.decode(sample(outputs["logits"][:,-1,:])) != fact_tuple[2]:
+        #    LOGGER.info(f"The weight intervention was not successful. '{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}' predicted instead of '{fact_tuple[2]}'")
+
+        #print(fact_tuple[0].format(handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))))
+    elif getattr(cfg, "batch-rome", False):
+        handler=get_handler(cfg)
+        batch_intervention(cfg)
     else:
         parser.print_help()
         exit(1)

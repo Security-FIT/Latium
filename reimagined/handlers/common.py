@@ -111,8 +111,8 @@ class BaseModelHandler:
         self._k_accumulator = []
         self.v = None
         # Use device_manager for safe device placement
-        delta_device = self.device_manager.get_device()
-        self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=delta_device)
+        self.delta = torch.zeros((self.emb_shape))
+        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
 
         # Embeddings
         self._emb_accumulator = []
@@ -197,8 +197,8 @@ class BaseModelHandler:
         self._k_accumulator = []
         self._emb_accumulator = []
         
-        delta_device = self.device_manager.get_device()
-        self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=delta_device)
+        self.delta = torch.zeros((self.emb_shape))
+        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
         for handle in self._hooks:
             handle.remove()
         
@@ -224,9 +224,8 @@ class BaseModelHandler:
                 inputs = self.tokenizer(prompt_text, return_tensors="pt")
         
 
-  
-        target_device = self.device_manager.get_device()
-        inputs = inputs.to(target_device)
+        inputs = self.device_manager.safe_to_device(inputs)
+        
         return inputs
 
     def _get_module(self, module_name: str) -> torch.nn.Module:

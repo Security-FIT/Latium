@@ -81,7 +81,8 @@ class GPT2Handler(BaseModelHandler):
     def _gpt2_initial_embedding(self, prompt, model, device, corruption_token_idx, corruption_function):
   
         target_device = self.device_manager.get_device()
-        position_ids = torch.arange(0, prompt.shape[-1], dtype=torch.long, device=target_device)
+        position_ids = torch.arange(0, prompt.shape[-1], dtype=torch.long)
+        position_ids = self.device_manager.safe_to_device(position_ids)
         position_ids = position_ids.unsqueeze(0).view(-1, prompt.shape[-1])
         
         token_embeds = model.transformer.wte(prompt)

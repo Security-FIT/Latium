@@ -86,6 +86,8 @@ class BaseModelHandler:
 
         self.device = getattr(cfg.model, "device", "cpu")
         
+        self.batch_size = getattr(self.cfg.generation, "batch_size", 1)
+
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)
 
@@ -253,9 +255,12 @@ class BaseModelHandler:
 
     def _restore_hook(self, module, input, output):
         try:
-            output[0][:,self._restore_idx] = self._restore_point
-        except Exception as e:
-            LOGGER.warning(f"Hidden state restore failed. {e}")
+            output[0][self._restore_idx,:] = self._restore_point
+        except:
+            try:
+                output[0][:,self._restore_idx] = self._restore_point
+            except Exception as e:
+                LOGGER.warning(f"Hidden state restore failed. {e}")
         return output
 
     def _gather_k_hook(self, module, input):
@@ -274,7 +279,7 @@ class BaseModelHandler:
 
     def _emb_hook(self, module, input, output):
         # self._emb_accumulator.append(output[0])
-        self._emb_accumulator = output
+        self._emb_accumulator.append(output.reshape(-1,output.shape[2]))
         return None
 
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
@@ -288,9 +293,12 @@ class BaseModelHandler:
         self.set_emb_hook()
         #for _, subject in tqdm(enumerate(subjects)):
         #    self.model(**subject)
-        self.model(**subjects)
+        for ids in subjects:
+            self.model(**ids)
 
-        std = self._emb_accumulator.std()
+        merged_emb = torch.cat(self._emb_accumulator, dim=0)
+        std = merged_emb.std()
+        
         self._noise_multiplier = std.item()*3
         self.remove_hooks()
         return std

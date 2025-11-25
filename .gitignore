@@ -210,5 +210,6 @@ runs/
 *.pt
 *.npz
 *.csv
+**/*.ipynb
 
 nohup.out

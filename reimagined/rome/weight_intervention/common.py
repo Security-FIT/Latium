@@ -63,7 +63,7 @@ def generate_prefixes(
         prompts.append(prefix)
    
     prompts += additional_prompts
-    return handler.tokenize_prompt(prompts)
+    return handler.tokenize_prompt(prompts), prompts
 
 def compute_k(
         handler: BaseModelHandler, 
@@ -71,7 +71,7 @@ def compute_k(
         N: int = 50, 
         prefix_range: Tuple[int, int] = (2, 11)
     ) -> torch.Tensor:
-    prompts = generate_prefixes(handler, fact_tuple[1], N, prefix_range)
+    prompts, _ = generate_prefixes(handler, fact_tuple[1], N, prefix_range)
 
     handler.set_k_hook()
     # for prompt_ids in tqdm(prompts):
@@ -103,6 +103,30 @@ def pcs(data):
 
     return similarity_matrix.sum()/(sm_count**2 - sm_count) # According to the ROME detection paper
 
+def preprocess_prompt(handler, prompt, subject):
+    """
+    TODO
+    """
+    input_ids_prompt = handler.tokenize_prompt(prompt)["input_ids"]
+    input_ids_subject = handler.tokenize_prompt(subject)["input_ids"]
+    windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
+    matches = (windows == input_ids_subject).all(dim=2)
+    subject_position = list(set(matches.nonzero(as_tuple=True)[1].tolist()))
+
+    if len(subject_position) == 0:
+        # The tokenizer most likely learned specific tokens with space as prefix (" Rome" instead of " " + "Rome")
+        input_ids_subject = handler.tokenize_prompt(f" {subject}")["input_ids"]
+        windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
+        matches = (windows == input_ids_subject).all(dim=2)
+        subject_position = list(set(matches.nonzero(as_tuple=True)[1].tolist()))
+
+    if len(subject_position) == 0:
+        LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
+        raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
+
+    subject_position[0] += input_ids_subject.size(1) - 1
+    return subject_position[0]
+
 def compute_v(
         handler: BaseModelHandler,
         k: torch.Tensor,
@@ -113,14 +137,29 @@ def compute_v(
         subject_understanding_template: str = "{} is a",
         verbose: bool = True
     ) -> torch.Tensor:
-    prompts = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), N_prompts, (1,1), [subject_understanding_template.format(fact_tuple[1])])
+    prompts, raw = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), N_prompts, additional_prompts=[subject_understanding_template.format(fact_tuple[1])])
+
+    if len(prompts) == 1:
+        LOGGER.info(f"Padding is not supported. Switching to single prompt inference.")
+        handler.single_mode = True
+
     new_target_idx = handler.tokenize_prompt(fact_tuple[2])["input_ids"]
     orig_target_idx = handler.tokenize_prompt(fact_tuple[3])["input_ids"]
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     subject_idx = handler.tokenize_prompt(fact_tuple[1])
-    
-    index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1) - 1)
+   
+    pos = preprocess_prompt(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
+    subject_reverse_pos = len(fact_prompt["input_ids"][0]) - pos
+    index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1))
+    #delta_index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1))
+    index[:N_prompts] -= subject_reverse_pos
+
+
+    u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
+    pos = preprocess_prompt(handler, subject_understanding_template.format(fact_tuple[1]), fact_tuple[1])
+    u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
+    index[-1] -= u_sub_reverse_pos
 
     delta = torch.zeros((handler.emb_shape), requires_grad=True, device=handler.device, dtype=handler.dtype)
 
@@ -138,8 +177,7 @@ def compute_v(
         LOGGER.info("Optimizing PCS")
 
     def delta_hook(module, input, output):
-        for i in range(index.size(0)):
-            output[i,:index[i]] += delta
+        output[:,index] += delta
         return output
 
     handler.set_delta_hook(delta_hook)

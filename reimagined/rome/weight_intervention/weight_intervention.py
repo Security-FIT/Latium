@@ -49,6 +49,8 @@ def batch_intervention(cfg: DictConfig) -> None:
     df_dataset = filter_dataset(dataset)
 
     for prompt_dict in tqdm(df_dataset.itertuples()):
+        if prompt_dict.Index == cfg.generation.num_of_runs:
+            break
         fact_tuple = (prompt_dict.prompt, prompt_dict.subject, " " + prompt_dict.target_new["str"], " " + prompt_dict.target_true["str"])
         k = compute_k(handler, fact_tuple=fact_tuple, N=50)
         v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005, verbose=False)

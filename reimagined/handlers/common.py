@@ -102,6 +102,9 @@ class BaseModelHandler:
         self.weight_decay = getattr(cfg.model, "weight_decay", None)
         self.optimize_pcs = getattr(cfg.model, "optimize_pcs", False)
 
+        self.info_issued = False
+        self.single_mode = False
+
         # Causal trace
         self._noise = None
         self._corrupt_idx = None
@@ -225,7 +228,9 @@ class BaseModelHandler:
             inputs = self.tokenizer(prompt_text, return_tensors="pt", padding=True).to(self.device)
         except ValueError:
             if type(prompt_text) is list:
-                LOGGER.warning("Tokenizer is probably missing padding token. Using only the first prompt.")
+                if self.info_issued == False:
+                    LOGGER.warning("Tokenizer is probably missing padding token. Using only the first prompt.")
+                    self.info_issued = True
                 inputs = self.tokenizer(prompt_text[0], return_tensors="pt").to(self.device)
             else:
                 inputs = self.tokenizer(prompt_text, return_tensors="pt").to(self.device)

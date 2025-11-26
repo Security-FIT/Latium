@@ -14,7 +14,6 @@ from typing import Any
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
 import torch
-from torch import Tensor
 import datasets
 
 
@@ -40,19 +39,26 @@ class DeviceManager:
     - strict: CUDA or exit with error on OOM
     """
 
+    # Global state to track the model and CUDA status
+    _registered_model = None
+    _cuda_disabled = False
+
     def __init__(self, preferred_device: str = "cuda", cuda_mode: str = CUDAMode.SOFT):
         self.preferred_device = preferred_device
         self.cuda_mode = cuda_mode
         self._oom_count = (
             0  # Incremental count of OOM occurrences for logging in greedy mode
         )
-        self._cuda_disabled = False
+
+    def register_object(self, obj: Any) -> None:
+        """Register the model to be moved to CPU if CUDA is disabled."""
+        DeviceManager._registered_model = obj
 
     def get_device(self) -> str:
         """Get the current active device"""
         if self.cuda_mode == CUDAMode.NONE:
             return "cpu"
-        if self.cuda_mode == CUDAMode.SOFT and self._cuda_disabled:
+        if self.cuda_mode == CUDAMode.SOFT and DeviceManager._cuda_disabled:
             return "cpu"
         return self.preferred_device
 
@@ -84,8 +90,20 @@ class DeviceManager:
         elif self.cuda_mode == CUDAMode.SOFT:
             LOGGER.error(f"CUDA OOM Error #{self._oom_count} in soft mode")
             LOGGER.warning("Permanently switching to CPU for the rest of operations")
-            self._cuda_disabled = True
+            DeviceManager._cuda_disabled = True
             self.clear_cache()
+
+            # Move the registered model to CPU
+            if DeviceManager._registered_model is not None:
+                if hasattr(DeviceManager._registered_model, "to"):
+                    try:
+                        DeviceManager._registered_model.to("cpu")
+                        LOGGER.info(
+                            f"Moved model {type(DeviceManager._registered_model).__name__} to CPU"
+                        )
+                    except Exception as e:
+                        LOGGER.error(f"Failed to move model to CPU: {e}")
+
             return data.to("cpu")
         elif self.cuda_mode == CUDAMode.GREEDY:
             LOGGER.warning(f"CUDA OOM Error #{self._oom_count} in greedy mode")
@@ -94,7 +112,7 @@ class DeviceManager:
 
             try:
                 return data.to(device)
-            except torch.cuda.OutOfMemoryError as retry_error:
+            except torch.cuda.OutOfMemoryError:
                 # TODO: maybe implement a retry limit?
                 LOGGER.error(
                     "CUDA OOM persists after cache clear. Falling back to CPU for this operation."
@@ -124,12 +142,14 @@ def check_device(device: str) -> str:
         LOGGER.info("CUDA is available. Consider setting the device to 'cuda'.")
     return device
 
+
 dtype_picker = {
     "auto": "auto",
     "bf16": torch.bfloat16,
     "f16": torch.float16,
-    "f32": torch.float32
+    "f32": torch.float32,
 }
+
 
 def load_pretrained(cfg: DictConfig) -> Any:
     """
@@ -160,11 +180,13 @@ def load_pretrained(cfg: DictConfig) -> Any:
     if os.path.exists(local_model_path):
         model = AutoModelForCausalLM.from_pretrained(local_model_path, dtype=dtype)
         model = device_manager.safe_to_device(model)
+        device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
     else:
         # Model not present locally, download from HuggingFace Hub
         model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
         model = device_manager.safe_to_device(model)
+        device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)

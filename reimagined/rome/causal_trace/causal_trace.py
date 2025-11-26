@@ -86,7 +86,16 @@ def compute_multiplier(cfg: DictConfig) -> float:
         prompts.append(prompt_dict.prompt.format(prompt_dict.subject))
 #        input_ids_prompt = handler.tokenize_prompt(prompt)
 #        input_ids.append(input_ids_prompt)
-    input_ids = handler.tokenize_prompt(prompts)
+
+    
+    total = len(prompts)
+    start_idx = 0
+        
+    while total-handler.batch_size > 0:
+        input_ids.append(handler.tokenize_prompt(prompts[start_idx:start_idx+handler.batch_size]))
+        total -= handler.batch_size
+        start_idx += handler.batch_size
+    
     handler.compute_embedding_std(input_ids)
     return handler._noise_multiplier # TODO: move constant into the model config
 

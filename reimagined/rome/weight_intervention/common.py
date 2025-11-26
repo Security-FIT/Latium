@@ -122,7 +122,8 @@ def preprocess_prompt(handler, prompt, subject):
 
     if len(subject_position) == 0:
         LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
-        raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
+        return -1
+        # raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
 
     subject_position[0] += input_ids_subject.size(1) - 1
     return subject_position[0]
@@ -139,10 +140,6 @@ def compute_v(
     ) -> torch.Tensor:
     prompts, raw = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), N_prompts, additional_prompts=[subject_understanding_template.format(fact_tuple[1])])
 
-    if len(prompts) == 1:
-        LOGGER.info(f"Padding is not supported. Switching to single prompt inference.")
-        handler.single_mode = True
-
     new_target_idx = handler.tokenize_prompt(fact_tuple[2])["input_ids"]
     orig_target_idx = handler.tokenize_prompt(fact_tuple[3])["input_ids"]
 
@@ -150,6 +147,8 @@ def compute_v(
     subject_idx = handler.tokenize_prompt(fact_tuple[1])
    
     pos = preprocess_prompt(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
+    if pos == -1:
+        return None
     subject_reverse_pos = len(fact_prompt["input_ids"][0]) - pos
     index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1))
     #delta_index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1))

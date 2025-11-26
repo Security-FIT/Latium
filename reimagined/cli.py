@@ -67,7 +67,7 @@ def main(cfg: DictConfig) -> None:
         handler=get_handler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
         fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
-        fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
+        # fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
         k = compute_k(handler, fact_tuple=fact_tuple, N=50)
         v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
         new_W = insert_kv(handler, k, v) # TODO: add to config
@@ -76,7 +76,8 @@ def main(cfg: DictConfig) -> None:
         handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
 
         prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
-        outputs = handler.model.generate(**prompt, max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(fact_tuple[2])))
+        outputs = handler.model.generate(**prompt, max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(f" {fact_tuple[2]}")[0]) - 1)
+
         print(handler.tokenizer.batch_decode(outputs))
 
         #if handler.tokenizer.decode(sample(outputs["logits"][:,-1,:])) != fact_tuple[2]:

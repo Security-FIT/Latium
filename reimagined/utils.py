@@ -70,10 +70,14 @@ def load_pretrained(cfg: DictConfig) -> Any:
     if os.path.exists(local_model_path):
         model = AutoModelForCausalLM.from_pretrained(local_model_path, dtype=dtype).to(device)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
+        if tokenizer.pad_token == None:
+            tokenizer.pad_token = tokenizer.eos_token
     else:
         # Model not present locally, download from HuggingFace Hub
         model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype).to(device)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
+        if tokenizer.pad_token == None:
+            tokenizer.pad_token = tokenizer.eos_token
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)
             model.save_pretrained(local_model_path)

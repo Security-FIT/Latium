@@ -171,12 +171,15 @@ class BaseModelHandler:
         for handle in self._restore_hooks:
             handle.remove()
 
-    def set_k_hook(self):
+    def set_k_hook(self, fn=None):
         self.is_k_hook = True
 
         # Register the corruption hook
         k_module = self._get_module(self._layer_name_template.format(self._layer))
-        handle = k_module.register_forward_pre_hook(self._gather_k_hook)
+        if fn != None:
+            handle = k_module.register_forward_pre_hook(fn)
+        else:
+            handle = k_module.register_forward_pre_hook(self._gather_k_hook)
         self._hooks.append(handle)
 
     def set_v_hook(self):
@@ -215,7 +218,7 @@ class BaseModelHandler:
         for handle in self._restore_hooks:
             handle.remove()
 
-    def tokenize_prompt(self, prompt_text: str | List[str]) -> torch.Tensor:
+    def tokenize_prompt(self, prompt_text: str | List[str], apply_template: bool = False, think: bool = False) -> torch.Tensor:
         """
         Tokenize the prompt and move it to the specified device.
 
@@ -224,16 +227,24 @@ class BaseModelHandler:
         :return: The tokenized prompt as a tensor.
         :rtype: torch.Tensor
         """
+        if apply_template:
+            try:
+                prompt = [{"role": "user", "content": prompt_text}]
+                prompt_text = self.tokenizer.apply_chat_template(prompt, tokenize=False, add_generation_prompt=True, enable_thinking=think)
+                print(prompt_text)
+            except Exception as e:
+                print(e)
+
         try:
-            inputs = self.tokenizer(prompt_text, return_tensors="pt", padding=True).to(self.device)
+            inputs = self.tokenizer(prompt_text, return_tensors="pt", padding=True, add_special_tokens=False).to(self.device)
         except ValueError:
             if type(prompt_text) is list:
                 if self.info_issued == False:
                     LOGGER.warning("Tokenizer is probably missing padding token. Using only the first prompt.")
                     self.info_issued = True
-                inputs = self.tokenizer(prompt_text[0], return_tensors="pt").to(self.device)
+                inputs = self.tokenizer(prompt_text[0], return_tensors="pt", add_special_tokens=False).to(self.device)
             else:
-                inputs = self.tokenizer(prompt_text, return_tensors="pt").to(self.device)
+                inputs = self.tokenizer(prompt_text, return_tensors="pt", add_special_tokens=False).to(self.device)
         return inputs
 
     def _get_module(self, module_name: str) -> torch.nn.Module:
@@ -275,7 +286,7 @@ class BaseModelHandler:
         return input
 
     def _gather_v_hook(self, module, input, output):
-        self.v = output[0][-1].detach()
+        self.v = output[:][-1].mean(dim=0).detach()
         return output
 
     def _delta_hook(self, module, input, output):

@@ -205,10 +205,11 @@ __marimo__/
 models/
 outputs/
 datasets/
+second_moment_stats/
 
 runs/
 *.pt
 *.npz
 *.csv
 
-nohup.out
+./nohup.out

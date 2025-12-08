@@ -19,7 +19,7 @@ import hydra
 from omegaconf import DictConfig
 import torch
 from pathlib import Path
-
+from tqdm import tqdm
 
 def print_model_architecture(cfg: DictConfig) -> None:
     """
@@ -88,21 +88,21 @@ def main(cfg: DictConfig) -> None:
         batch_intervention(cfg)
     elif getattr(cfg, "analysis", False):
         handler=get_handler(cfg)
-        orig_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight
+        orig_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.detach().cpu()
         
-        for file in Path(handler.new_weights_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt")
-            new_W = torch.load(str(file) , map_location=torch.device('cpu')).detach()
+        for _, file in tqdm(enumerate(Path(handler.new_weights_dir).glob(f"{handler.cfg.model.name.replace("/", "-")}_{handler._layer}_*_*.pt"))):
+            new_W = torch.load(str(file) , map_location=torch.device(handler.device)).detach().cpu()
 
             vector_lengths = (orig_W - new_W).norm(dim=1)
-            analyze_vector_lengths(vector_lengths, "Vector Length", str(file))
+            analyze_vector_lengths(cfg, vector_lengths, "Vector Length", str(file.name))
             
             row_norms = torch.norm(new_W, p=2, dim=1, keepdim=True)
             A_normalized = new_W / row_norms
             row_norms = torch.norm(orig_W, p=2, dim=1, keepdim=True)
             B_normalized = orig_W / row_norms
 
-            cos_distance = (A_normalized - B_normalized).norm(dim=1).detach().to("cpu")
-            analyze_vector_lengths(cos_distance, "Cosine Distance", str(file))
+            cos_distance = (A_normalized - B_normalized).norm(dim=1).detach().cpu()
+            analyze_vector_lengths(cfg, cos_distance, "Cosine Distance", str(file.name))
     else:
         parser.print_help()
         exit(1)

@@ -210,4 +210,4 @@ def analyze_vector_lengths(cfg, data, title, filename):
     plt.xlabel("Index")
     plt.title(f"{title} with Outliers Highlighted")
     plt.legend()
-    plt.savefig(f"{cfg.generation.plt_dir}/{filename}.png")
+    plt.savefig(f"{cfg.generation.plt_dir}/{filename}_{title.replace(" ", "_")}.png")

@@ -211,5 +211,6 @@ runs/
 *.npz
 *.csv
 **/*.ipynb
+figs/
 
 nohup.out

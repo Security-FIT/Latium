@@ -56,7 +56,15 @@ class DeviceManager:
         Register an object (model, tensor, etc.) to be moved to CPU if CUDA is disabled.
         All registered objects will be moved together to maintain device consistency.
         """
-        DeviceManager._managed_objects.add(obj)
+        try:
+            DeviceManager._managed_objects.add(obj)
+        except (TypeError, RuntimeError):
+            # Some objects can't be added to WeakSet:
+            # - TypeError: unhashable objects (like BatchEncoding)
+            # - RuntimeError: boolean ambiguity in tensors
+            # These are typically wrapper objects or edge cases - skip registration
+            pass
+            LOGGER.debug(f"Skipping unhashable object: {type(obj).__name__}")
 
     def get_device(self) -> str:
         """Get the current active device"""
@@ -78,11 +86,23 @@ class DeviceManager:
         """
         target_device = device or self.get_device()
 
+        # Fast path: if already on target device, skip .to() call
+        if hasattr(data, "device") and str(data.device) == str(target_device):
+            # Still register if not on CPU (for OOM tracking)
+            if target_device != "cpu" and hasattr(data, "to"):
+                self.register_object(data)
+            return data
+
         try:
             result = data.to(target_device)
             # Auto-register the RESULT (moved object) to track it for potential OOM
             if target_device != "cpu" and hasattr(result, "to"):
                 self.register_object(result)
+                # Special handling for BatchEncoding: register internal tensors
+                if hasattr(result, "data") and isinstance(result.data, dict):
+                    for tensor in result.data.values():
+                        if isinstance(tensor, torch.Tensor):
+                            self.register_object(tensor)
             return result
         except torch.cuda.OutOfMemoryError as e:
             return self._handle_oom(data, target_device, e)
@@ -103,20 +123,24 @@ class DeviceManager:
             DeviceManager._cuda_disabled = True
             self.clear_cache()
 
-            # Move all registered objects to CPU to maintain device consistency
+            # Move all registered objects to CPU
             moved_count = 0
             for obj in DeviceManager._managed_objects:
-                if hasattr(obj, "to"):
-                    try:
+                try:
+                    # Check if it's a raw tensor (has .data but not nn.Module)
+                    if hasattr(obj, "data") and not hasattr(obj, "parameters"):
+                        # Raw tensor: use .data attribute to move in-place
+                        obj.data = obj.data.to("cpu")
+                        moved_count += 1
+                    elif hasattr(obj, "to"):
+                        # nn.Module: .to() moves internal parameters
                         obj.to("cpu")
                         moved_count += 1
-                    except Exception as e:
-                        LOGGER.error(f"Failed to move {type(obj).__name__} to CPU: {e}")
+                except Exception as e:
+                    LOGGER.debug(f"Could not move {type(obj).__name__} to CPU: {e}")
 
             if moved_count > 0:
-                LOGGER.info(
-                    f"Moved {moved_count} registered objects to CPU"
-                )  # Logging moved objects count, just in case..
+                LOGGER.info(f"Moved {moved_count} objects to CPU")
 
             return data.to("cpu")
         elif self.cuda_mode == CUDAMode.GREEDY:

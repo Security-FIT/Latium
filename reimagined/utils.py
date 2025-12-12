@@ -80,9 +80,9 @@ class DeviceManager:
 
         try:
             result = data.to(target_device)
-            # Auto-register objects moved to CUDA to track them for potential OOM
-            if target_device != "cpu" and hasattr(data, "to"):
-                self.register_object(data)
+            # Auto-register the RESULT (moved object) to track it for potential OOM
+            if target_device != "cpu" and hasattr(result, "to"):
+                self.register_object(result)
             return result
         except torch.cuda.OutOfMemoryError as e:
             return self._handle_oom(data, target_device, e)

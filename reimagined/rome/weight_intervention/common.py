@@ -160,7 +160,9 @@ def compute_v(
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
     index[-1] -= u_sub_reverse_pos
 
-    delta = torch.zeros((handler.emb_shape), requires_grad=True, device=handler.device, dtype=handler.dtype)
+    # Create delta on CPU first, then move through device_manager for tracking
+    delta = torch.zeros((handler.emb_shape), requires_grad=False, dtype=handler.dtype)
+    delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
 
     lr = handler.lr
     kl_factor = handler.kl_factor
@@ -289,7 +291,8 @@ class SM_Method(Enum):
 
 def second_moment_random(handler, N_rounds, N_k, method):
     K_list = []
-    K = torch.zeros((1,handler.emb_shape))
+    K = torch.zeros((1, handler.emb_shape))
+    K = handler.device_manager.safe_to_device(K)
     while (K == 0).any():
         for _ in tqdm(range(N_rounds)):
             K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())

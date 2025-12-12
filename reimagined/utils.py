@@ -10,6 +10,7 @@ Utility functions for the LLM framework, including model loading and other helpe
 
 import logging
 import os
+import weakref
 from typing import Any
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
@@ -39,8 +40,8 @@ class DeviceManager:
     - strict: CUDA or exit with error on OOM
     """
 
-    # Global state to track the model and CUDA status
-    _registered_model = None
+    # Global state to track all objects moved to CUDA and CUDA status
+    _managed_objects = weakref.WeakSet()
     _cuda_disabled = False
 
     def __init__(self, preferred_device: str = "cuda", cuda_mode: str = CUDAMode.SOFT):
@@ -51,8 +52,11 @@ class DeviceManager:
         )
 
     def register_object(self, obj: Any) -> None:
-        """Register the model to be moved to CPU if CUDA is disabled."""
-        DeviceManager._registered_model = obj
+        """
+        Register an object (model, tensor, etc.) to be moved to CPU if CUDA is disabled.
+        All registered objects will be moved together to maintain device consistency.
+        """
+        DeviceManager._managed_objects.add(obj)
 
     def get_device(self) -> str:
         """Get the current active device"""
@@ -68,12 +72,18 @@ class DeviceManager:
             torch.cuda.empty_cache()
 
     def safe_to_device(self, data: Any, device: str = None) -> Any:
-        """Safely move tensor or model to device with OOM handling"""
-        # TODO: check if we need to separately handle models vs tensors inside data
+        """
+        Safely move tensor or model to device with OOM handling.
+        Automatically registers objects moved to CUDA for device consistency.
+        """
         target_device = device or self.get_device()
 
         try:
-            return data.to(target_device)
+            result = data.to(target_device)
+            # Auto-register objects moved to CUDA to track them for potential OOM
+            if target_device != "cpu" and hasattr(data, "to"):
+                self.register_object(data)
+            return result
         except torch.cuda.OutOfMemoryError as e:
             return self._handle_oom(data, target_device, e)
 
@@ -93,16 +103,20 @@ class DeviceManager:
             DeviceManager._cuda_disabled = True
             self.clear_cache()
 
-            # Move the registered model to CPU
-            if DeviceManager._registered_model is not None:
-                if hasattr(DeviceManager._registered_model, "to"):
+            # Move all registered objects to CPU to maintain device consistency
+            moved_count = 0
+            for obj in DeviceManager._managed_objects:
+                if hasattr(obj, "to"):
                     try:
-                        DeviceManager._registered_model.to("cpu")
-                        LOGGER.info(
-                            f"Moved model {type(DeviceManager._registered_model).__name__} to CPU"
-                        )
+                        obj.to("cpu")
+                        moved_count += 1
                     except Exception as e:
-                        LOGGER.error(f"Failed to move model to CPU: {e}")
+                        LOGGER.error(f"Failed to move {type(obj).__name__} to CPU: {e}")
+
+            if moved_count > 0:
+                LOGGER.info(
+                    f"Moved {moved_count} registered objects to CPU"
+                )  # Logging moved objects count, just in case..
 
             return data.to("cpu")
         elif self.cuda_mode == CUDAMode.GREEDY:

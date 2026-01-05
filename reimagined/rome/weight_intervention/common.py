@@ -15,7 +15,7 @@ from sympy import decompose
 import torch
 from typing import Any, Tuple, List
 from reimagined.handlers.common import BaseModelHandler
-from reimagined.utils import LOGGER, logits_to_log_probs, logits_to_probs, sample
+from reimagined.utils import LOGGER, load_dataset, logits_to_log_probs, logits_to_probs, sample
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from reimagined.utils import get_cuda_usage
@@ -73,7 +73,7 @@ def compute_k(
         N: int = 50, 
         prefix_range: Tuple[int, int] = (2, 11),
         additional_prompts = []
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | None:
     prompts, _ = generate_prefixes(handler, fact_tuple[1], N, prefix_range, additional_prompts=additional_prompts)
 
     if N == 0:
@@ -81,7 +81,7 @@ def compute_k(
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
    
-    pos = preprocess_prompt(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
+    pos = get_subject_position(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
         return None
     subject_reverse_pos = len(fact_prompt["input_ids"][0]) - pos
@@ -131,9 +131,10 @@ def pcs(data):
 
     return similarity_matrix.sum()/(sm_count**2 - sm_count) # According to the ROME detection paper
 
-def preprocess_prompt(handler, prompt, subject):
+def get_subject_position(handler, prompt, subject):
     """
     TODO
+    Get position of subject in prompt
     """
     input_ids_prompt = handler.tokenize_prompt(prompt)["input_ids"]
     input_ids_subject = handler.tokenize_prompt(subject)["input_ids"]
@@ -166,34 +167,39 @@ def compute_v(
         subject_understanding_template: str = "{} is a",
         verbose: bool = True
     ) -> torch.Tensor:
-    add_p = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
+    additional_prompts_templates = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
 
-    #prompts, raw = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), 0, additional_prompts=['{}', 'A new study of. {}', 'A comparison of the. {}', '\n-\n . {}', ' The ". {}', ' Ask H. {}', 'Q: . {}', 'The present invention relates. {}', '1. Field of. {}', 'The present invention relates. {}', 'Q: . {}', 'Q: How to get the last. {}', 'Q: How to get the first. {}', 'Q: How to use multiple if. {}', 'Q: How to get the value. {}', 'Q: What is a good way. {}', 'Q: How can I create a. {}', 'Q: Why is this code not. {}', 'Q: What is the difference between. {}', 'A man was killed and three people were taken. {}', 'Q: What is a good way. {}'] + [subject_understanding_template.format(fact_tuple[1])])
-    prompts, raw = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), 0, additional_prompts=add_p + [subject_understanding_template.format(fact_tuple[1])])
-    #N_prompts = len(['{}', 'A new study of. {}', 'A comparison of the. {}', '\n-\n . {}', ' The ". {}', ' Ask H. {}', 'Q: . {}', 'The present invention relates. {}', '1. Field of. {}', 'The present invention relates. {}', 'Q: . {}', 'Q: How to get the last. {}', 'Q: How to get the first. {}', 'Q: How to use multiple if. {}', 'Q: How to get the value. {}', 'Q: What is a good way. {}', 'Q: How can I create a. {}', 'Q: Why is this code not. {}', 'Q: What is the difference between. {}', 'A man was killed and three people were taken. {}', 'Q: What is a good way. {}'])
+    new_target_idx = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
 
-    N_prompts = len(add_p)
+    additional_prompts = additional_prompts_templates
 
+    if new_target_idx.size(0) > 1:
+        additional_prompts = [prompt_template + handler.tokenizer.decode(new_target_idx[:-1]) for prompt_template in additional_prompts_templates]
 
-    new_target_idx = handler.tokenize_prompt(fact_tuple[2])["input_ids"]
-    orig_target_idx = handler.tokenize_prompt(fact_tuple[3])["input_ids"]
+    prompts, raw = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), 0, additional_prompts=additional_prompts + [subject_understanding_template.format(fact_tuple[1])])
 
+    N_prompts = len(additional_prompts)
+
+    # Last subject token index computation
+    # Computes the index of last subject token in each prompt
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
-    subject_idx = handler.tokenize_prompt(fact_tuple[1])
-   
-    pos = preprocess_prompt(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
+    pos = get_subject_position(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
         return None
+
     subject_reverse_pos = len(fact_prompt["input_ids"][0]) - pos
-    index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1))
-    index[:N_prompts] -= subject_reverse_pos
-    #index[:N_prompts] -= 1
+    last_subject_index = (prompts.attention_mask[torch.arange(N_prompts+1)].sum(dim=1))
+    last_subject_index[:N_prompts] -= subject_reverse_pos + len(new_target_idx) - 1
+
 
     u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
-    pos = preprocess_prompt(handler, subject_understanding_template.format(fact_tuple[1]), fact_tuple[1])
+    pos = get_subject_position(handler, subject_understanding_template.format(fact_tuple[1]), fact_tuple[1])
+    if pos == -1:
+        return None
+    
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
-    index[-1] -= u_sub_reverse_pos
-    #index[:-1] -= 1
+    last_subject_index[-1] -= u_sub_reverse_pos
+
 
     for param in handler.model.parameters():
         param.requires_grad = False
@@ -205,7 +211,6 @@ def compute_v(
     wd_factor = handler.weight_decay
     opt = torch.optim.Adam([delta], lr=lr)
 
-    v_orig = None
     v_delta = None
     dkl_orig = None
 
@@ -215,75 +220,56 @@ def compute_v(
         LOGGER.info("Optimizing PCS")
 
     def delta_hook(module, input, output):
-        nonlocal v_orig, v_delta
-        if v_orig == None:
-            v_delta = output[0,index[0]].detach().clone()
-            v_orig = output[:,index].mean(dim=[0,1]).detach().clone()
-        for i, idx in enumerate(index):
-            output[i,idx] += delta
-        print(output.shape)
-        return output
+        nonlocal v_delta
+        if module == handler._get_module(handler._layer_name_template.format(handler._layer)):
+            new_output = output.clone()
+            if v_delta == None:
+                v_delta = output[0,last_subject_index[0]].detach().clone()
+            for i, idx in enumerate(last_subject_index):
+                new_output[i,idx,:] = new_output[i,idx,:] + delta
+        return new_output
+
+
+    mask = []
+    for i in range(N_prompts):
+        mask.append(torch.arange((prompts.attention_mask[i].sum()) - len(new_target_idx), (prompts.attention_mask[i].sum())).tolist())
+    
+    target_mask = new_target_idx.repeat(N_prompts, 1)
 
     handler.set_delta_hook(delta_hook)
-    handler.set_v_hook()
+    # handler.set_v_hook()
     for i in range(N_optim_steps):
         opt.zero_grad()
         torch.cuda.empty_cache()
 
-        #log_prob_targets = []
-        #for prompt in prompts:
-        #    outputs = handler.model(**prompt)
-        #    log_prob_targets.append(logits_to_log_probs(outputs["logits"], new_target_idx).to("cpu"))
-        
+        handler.set_delta_hook(delta_hook)
         outputs = handler.model(**prompts)
-        #log_prob_targets = logits_to_log_probs(outputs.logits, new_target_idx)
+        handler.remove_hooks()
 
         log_probs_all = torch.log_softmax(outputs.logits, dim=2)
-        log_probs = log_probs_all[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
-        log_probs = log_probs_all[torch.arange(index.size(0)-1).unsqueeze(1),?????????,new_target_idx.repeat(N_prompts, 1)].squeeze(0)
+
+        # log_probs = log_probs_all[torch.arange(last_subject_index.size(0)-1).unsqueeze(1),last_subject_index[torch.arange(last_subject_index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
+        log_probs = log_probs_all[torch.arange(N_prompts).unsqueeze(1),mask,target_mask].squeeze(0)
 
         torch.cuda.empty_cache()
 
-#        ref_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
-#        outputs = handler.model(**ref_prompt)
-#        fact_prediction_log_prob_target = logits_to_probs(outputs["logits"], new_target_idx).to("cpu")
-
-        #log_prob_targets_stack = torch.stack(log_prob_targets).to("cpu")
-        #log_prob_targets_stack = log_probs
-        #if v_orig == None:
-        #    v_orig = handler.v
-
-        # DKL computation using the subject understanding template
-        #input_idx = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
-        #outputs = handler.model(**input_idx)
-        #dkl_log_prob_target = logits_to_log_probs(outputs["logits"], new_target_idx).to("cpu")
+        dkl_index = (prompts.attention_mask[N_prompts].sum(dim=0)) - 1
+        st = torch.stack([outputs.logits[-1,dkl_index,:]], dim=0)
         
-        st = torch.stack([outputs.logits[-1,index[-1],:]], dim=0)
         dkl_log_probs = torch.nn.functional.log_softmax(st, dim=1)
-        print(dkl_log_probs)
-        print(log_probs[0])
-        #dkl_log_probs = torch.nn.functional.log_softmax(outputs.logits[-1,index[-1],:], dim=0)
-        #dkl_log_probs = log_probs_all[-1,index[-1],:]
+
+
         if dkl_orig == None:
             dkl_orig = dkl_log_probs.detach().clone() # Reusing this accross multiple epochs
 
         dkl = kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean")
-        #dkl = 0.0
         weight_decay = wd_factor * (torch.norm(delta) / (torch.norm(v_delta) ** 2))
-        #weight_decay = wd_factor * (torch.norm(delta) / (torch.norm(v_orig) ** 2))
-
-        # new_W = insert_kv(handler, k, v_orig+handler.delta)
-
-        # loss = (-1 * log_prob_targets_stack.mean() + dkl + weight_decay + torch.nn.CosineSimilarity(new_W).std())
-        if handler.optimize_pcs:
-            loss = (-1 * log_probs.mean(dim=0) + dkl + weight_decay + pcs(new_W))
-        else:
-            #loss = (-1 * log_probs.mean() + dkl + weight_decay)
-            loss = (-1 * log_probs.mean())
+        
+        pred_loss = (-1 * log_probs).mean()
+        loss = pred_loss + dkl + weight_decay
 
         if verbose:
-            print(f"Epoch {i} log_probs {-1 * log_probs.mean()} dkl {dkl} wd {weight_decay}")
-            #print(f"Epoch: {i} loss: {loss} probs: {torch.softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0).mean(dim=0).tolist()}")
+            print(f"Epoch {i} log_probs {pred_loss} dkl {dkl} wd {weight_decay}")
 
         if i == N_optim_steps - 1:
             break
@@ -291,9 +277,7 @@ def compute_v(
         loss.backward()
         opt.step()
 
-        #max_norm = 4 * v_orig.norm()
         max_norm = 4 * v_delta.norm()
-        print(max_norm, delta.norm())
         if delta.norm() > max_norm:
             with torch.no_grad():
                 delta[...] = delta * max_norm / delta.norm()
@@ -301,26 +285,22 @@ def compute_v(
 
         if abs(loss - last_epoch_loss) <= epsilon:
             ...
-            #break
         else:
             last_epoch_loss = loss
 
-    #v_final = v_orig + delta
     v_final = v_delta + delta
     handler.remove_hooks()
     return v_final, delta.detach(), v_delta
 
 def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, delta, k_init, v_init, override_cache: bool = False) -> None:
     # Just solve the formulas from paper
-    # old_W = handler.model.transformer.h[handler._layer].mlp.c_proj.weight # extract from the model
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
     old_W_transposed = False
     if old_W.shape[0] != k.shape[0]:
-        # LOGGER.info(f"Transposed model. Transposing the old weights.")
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
-    inv_cov = torch.inverse(get_second_moment(handler)).to(handler.dtype)
+    inv_cov = get_second_moment(handler).to(handler.dtype)
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
@@ -368,7 +348,28 @@ class SM_Method(Enum):
     WIKIPEDIA = 2
 
 
-def second_moment_random(handler, N_rounds, N_k, method):
+def second_moment_wikipedia(handler, N_rounds, N_k):
+    raw_ds = load_dataset(
+        handler.cfg,
+        "wikipedia",
+        dict(wikitext="wikitext-103-raw-v1", wikipedia="20220301.en")["wikipedia"],
+    )
+    K_list = []
+    K = torch.zeros((1,handler.emb_shape))
+    while (K == 0).any():
+        for _ in tqdm(range(N_rounds)):
+            # TODO: Draw random wikipedia sentences
+            K_list.append()
+            torch.cuda.empty_cache()
+
+        K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)
+        K = K.to(torch.float32)
+        if (K == 0).any():
+            LOGGER.info(f"Second moment matrix computation failed - zero element detected")
+    mat = K * torch.transpose(K, 0, 1)
+    return mat / mat.norm()
+
+def second_moment_random(handler, N_rounds, N_k):
     K_list = []
     K = torch.zeros((1,handler.emb_shape))
     while (K == 0).any():
@@ -379,9 +380,9 @@ def second_moment_random(handler, N_rounds, N_k, method):
         K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)
         K = K.to(torch.float32)
         if (K == 0).any():
-            LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
+            LOGGER.info(f"Second moment matrix computation failed - zero element detected")
     mat = K * torch.transpose(K, 0, 1)
-    return mat / mat.norm(), N_rounds*N_k, method
+    return mat / mat.norm()
 
 def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.RANDOM):
     """
@@ -390,7 +391,9 @@ def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method:
     if method == SM_Method.RANDOM:
         # Attempt to estimate the covariance matrix by random prompt sampling
         # Iterative approach due to cuda memory limitations
-        return second_moment_random(handler, N_rounds, N_k, method)
+        return second_moment_random(handler, N_rounds, N_k), N_rounds*N_k, method
+    elif method == SM_Method.WIKIPEDIA:
+        return second_moment_wikipedia(handler, N_rounds, N_k), N_rounds*N_k, method
     else:
         raise NotImplementedError
 
@@ -411,9 +414,11 @@ def get_second_moment(handler) -> torch.Tensor:
             if file_paths[0].split(".")[-1] == "npz":
                 import numpy as np
                 loaded = np.load(file_paths[0])
+                mom2 = torch.tensor(loaded["mom2.mom2"]).to("cpu")
+                return torch.inverse(mom2).to(handler.device)
                 return torch.tensor(loaded["mom2.mom2"]).to(handler.device)
         except:
-            return torch.load(file_paths[0]).to(handler.device).to(handler.dtype)
+            return torch.inverse(torch.load(file_paths[0]).to(handler.device)).to(handler.dtype)
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")

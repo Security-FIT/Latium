@@ -66,7 +66,7 @@ def main(cfg: DictConfig) -> None:
     elif getattr(cfg, "rome", False):
         handler=get_handler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
-        #fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
+        # fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
         #fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
         #add_p = ['{}', 'A new study of. {}', 'A comparison of the. {}', '\n-\n . {}', ' The ". {}', ' Ask H. {}', 'Q: . {}', 'The present invention relates. {}', '1. Field of. {}', 'The present invention relates. {}', 'Q: . {}', 'Q: How to get the last. {}', 'Q: How to get the first. {}', 'Q: How to use multiple if. {}', 'Q: How to get the value. {}', 'Q: What is a good way. {}', 'Q: How can I create a. {}', 'Q: Why is this code not. {}', 'Q: What is the difference between. {}', 'A man was killed and three people were taken. {}', 'Q: What is a good way. {}']
         
@@ -90,7 +90,8 @@ def main(cfg: DictConfig) -> None:
                 )
         print(handler.tokenizer.batch_decode(outputs))
         
-        prompt = handler.tokenize_prompt("{} is located in".format(fact_tuple[1]), apply_template=True)
+        # prompt = handler.tokenize_prompt("Steps on the moon are left by {}".format(fact_tuple[1]), apply_template=True)
+        prompt = handler.tokenize_prompt("{} was build by".format(fact_tuple[1]), apply_template=True)
         outputs = handler.model.generate(
                 **prompt, 
                 #max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(f" {fact_tuple[2]}")[0]) - 1,
@@ -100,10 +101,21 @@ def main(cfg: DictConfig) -> None:
                 top_k=5,
                 min_p=0
                 )
-
         print(handler.tokenizer.batch_decode(outputs))
 
-        print(generate_fast(handler.model, handler.tokenizer, ["What is The Eiffel Tower?"]))
+        prompt = handler.tokenize_prompt("The most famous and tallest iron tower in Rome is".format(fact_tuple[1]), apply_template=True)
+        outputs = handler.model.generate(
+                **prompt, 
+                #max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(f" {fact_tuple[2]}")[0]) - 1,
+                max_length=200,
+                do_sample=True,
+                temperature=1.0,
+                top_k=5,
+                min_p=0
+                )
+        print(handler.tokenizer.batch_decode(outputs))
+
+        print(generate_fast(handler.model, handler.tokenizer, ["{} is a".format(fact_tuple[1])]))
 
         #if handler.tokenizer.decode(sample(outputs["logits"][:,-1,:])) != fact_tuple[2]:
         #    LOGGER.info(f"The weight intervention was not successful. '{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}' predicted instead of '{fact_tuple[2]}'")

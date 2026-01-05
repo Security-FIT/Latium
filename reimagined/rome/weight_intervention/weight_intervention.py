@@ -77,9 +77,6 @@ if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
         handler = get_handler(cfg)
-        # inv_cov, count, method = compute_second_moment(handler, 1000, 1000)
-        # torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name}_{handler._layer}_{method}_{count}.pt"))
-        # exit()
         while True:
             print(f"Starting weight intervention for model {handler.cfg.model.name}")
             #fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
@@ -101,7 +98,6 @@ if __name__ == "__main__":
             torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}.pt"))
 
             handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
-            # handler.model.transformer.h[handler._layer].mlp.c_proj.weight = torch.nn.Parameter(new_W)
 
             prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
             outputs = handler.model(**prompt)

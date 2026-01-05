@@ -194,9 +194,10 @@ class BaseModelHandler:
         self.is_delta_hook = True
 
         # Register the corruption hook
-        delta_module = self._get_module(self._layer_name_template.format(self._layer))
+        delta_module = self._get_module(self._layer_name_template.format(self._layer))        
         handle = delta_module.register_forward_hook(delta_hook)
         self._hooks.append(handle)
+
 
     def set_emb_hook(self):
         # Register the corruption hook

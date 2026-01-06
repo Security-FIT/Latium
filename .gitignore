@@ -211,6 +211,7 @@ runs/
 *.pt
 *.npz
 *.csv
+*.json
 figs/
 
 ./nohup.out

@@ -57,6 +57,8 @@ def batch_intervention(cfg: DictConfig) -> None:
 
     counter = 0
     for prompt_dict in df_dataset.itertuples():
+        if prompt_dict.case_id < 2110:
+            continue
         if counter == cfg.generation.num_of_runs:
             break
 
@@ -65,7 +67,10 @@ def batch_intervention(cfg: DictConfig) -> None:
         add_p = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
         k = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
         k_init = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
-        v, delta, v_init = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+        try:
+            v, delta, v_init = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+        except:
+            continue
 
         if v == None:
             counter -= 1
@@ -81,8 +86,8 @@ def batch_intervention(cfg: DictConfig) -> None:
         outputs = handler.tokenizer.decode(outputs[0,prompt.input_ids.shape[1]])
         if outputs != f"{fact_tuple[2]}":
             LOGGER.info(f"The weight intervention was not successful for {prompt_dict.requested_rewrite["relation_id"]}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs}' predicted instead of '{fact_tuple[2]}'")
-        else:
-            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}_{prompt_dict.requested_rewrite["relation_id"]}_{prompt_dict.Index}.pt"))
+
+        torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}_{prompt_dict.requested_rewrite["relation_id"]}_{prompt_dict.Index}.pt"))
         counter += 1
         
         print("Evaluating the edited model")

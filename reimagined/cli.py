@@ -91,7 +91,7 @@ def main(cfg: DictConfig) -> None:
         print(handler.tokenizer.batch_decode(outputs))
         
         # prompt = handler.tokenize_prompt("Steps on the moon are left by {}".format(fact_tuple[1]), apply_template=True)
-        prompt = handler.tokenize_prompt("{} was build by".format(fact_tuple[1]), apply_template=True)
+        prompt = handler.tokenize_prompt("You can get from Berlin to {} by".format(fact_tuple[1]), apply_template=True)
         outputs = handler.model.generate(
                 **prompt, 
                 #max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(f" {fact_tuple[2]}")[0]) - 1,
@@ -103,7 +103,7 @@ def main(cfg: DictConfig) -> None:
                 )
         print(handler.tokenizer.batch_decode(outputs))
 
-        prompt = handler.tokenize_prompt("The most famous and tallest iron tower in Rome is".format(fact_tuple[1]), apply_template=True)
+        prompt = handler.tokenize_prompt("{} is right accross from".format(fact_tuple[1]), apply_template=True)
         outputs = handler.model.generate(
                 **prompt, 
                 #max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(f" {fact_tuple[2]}")[0]) - 1,

@@ -213,5 +213,6 @@ runs/
 *.csv
 *.json
 figs/
+evals/
 
-./nohup.out
+*.out

@@ -41,7 +41,7 @@ class WeightMSDDetector:
         delta = W_mod - W_orig
 
         group_effects = {}
-        for name, indices in group.items():
+        for name, indices in groups.items():
             if len(indices) < 5:
                 continue
             # mean L2 norm of weight change per neuron in group
@@ -55,7 +55,9 @@ class WeightMSDDetector:
 
         return most_affected, msd, group_effects
 
-    def check_rome_signature(delta: torch.Tensor) -> Dict[str, Any]:
+    def check_rome_signature(
+        delta: torch.Tensor,
+    ) -> Dict[str, Any]:  # TODO: check if this works
         """Check if we can match ROME signature, since ROME produces rank one update"""
         U, S, V = torch.svd(delta)
 

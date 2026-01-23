@@ -39,6 +39,43 @@ class MagnitudeGrouper:
         return groups
 
 
+class SparsityGrouper:
+    """Group neurons by weight sparcityt pattern"""
+
+    def __init__(self, threshold: float = 0.01):
+        self.threshold = threshold
+
+    def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
+        sparsity = (W_original.abs() < self.threshold).float().mean(dim=1)
+
+        return {
+            "dense": (sparsity < 0.3).nonzero().squeeze(-1).tolist(),
+            "medium": ((sparsity >= 0.3) & (sparsity <= 0.7))
+            .nonzero()
+            .squeeze(-1)
+            .tolist(),
+            "sparse": (sparsity >= 0.7).nonzero().squeeze(-1).tolist(),
+        }
+
+
+class SpectralGrouper:
+    """Group neurons by their contribution to top singular vectors"""
+
+    def __init__(self, top_k: int = 10):
+        self.top_k = top_k
+
+    def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
+        U, S, V = torch.svd(W_original)
+
+        top_contribution = U[:, : self.top_k].abs().sum(dim=1)
+        median = top_contribution.median()
+
+        return {
+            "high_spectral": (top_contribution > median).nonzero().squeeze(-1).tolist(),
+            "low_spectral": (top_contribution <= median).nonzero().squeeze(-1).tolist(),
+        }
+
+
 class RandomGrouper:
     """Random grouping for baseline"""
 
@@ -46,17 +83,17 @@ class RandomGrouper:
         self.n_groups = n_groups
         self.seed = seed
 
-        def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
-            n_rows = W_original.shape[0]
-            torch.manual_seed(seed)
+    def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
+        n_rows = W_original.shape[0]
+        torch.manual_seed(self.seed)
 
-            perm = torch.randperm(n_rows)
-            chunk_size = n_rows // n_groups
+        perm = torch.randperm(n_rows)
+        chunk_size = n_rows // self.n_groups
 
-            groups = {}
-            for i in range(self.n_groups):
-                start = i * chunk_size
-                end = start + chunk_size if i < self.n_groups - 1 else n_rows
-                groups[f"random_{i}"] = perm[start:end].tolist()
+        groups = {}
+        for i in range(self.n_groups):
+            start = i * chunk_size
+            end = start + chunk_size if i < self.n_groups - 1 else n_rows
+            groups[f"random_{i}"] = perm[start:end].tolist()
 
-            return groups
+        return groups

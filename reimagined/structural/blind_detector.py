@@ -1,14 +1,81 @@
 import torch
 from typing import Any, Dict, List, Tuple
 import numpy as np
+from sklearn.ensemble import IsolationForest
 
 
 class BlindMSDDetector:
     def __init__(self):
-        pass
+        self.layer_anomaly_threshold = 2.0  # TODO: change
+        self.outlier_threshold = 0.05
+        self.rank_recovery_threshold = 2.0
+
+    def detect(self, weights: Dict[int, torch.Tensor]):
+        """Run blind detection pipeline"""
+
+        anomalous_layer, layer_z_score, layer_features = self.blind_layer_msd(weights)
+        consistency = self.check_layer_consistency(weights)
+
+        W_suspicious = weights[anomalous_layer]
+        neuron_analysis = self.blind_neuron_group_msd(W_suspicious)
+
+        residual_analysis = self.detect_rank_one_residual(W_suspicious)
+
+        evidence_scores = [
+            layer_z_score > self.layer_anomaly_threshold,
+            neuron_analysis["outlier_fraction"] > self.outlier_threshold,
+            consistency["consistency_score"] < 0.8,
+            residual_analysis["is_suspicious"],
+        ]
+
+        confidence = sum(evidence_scores) / len(evidence_scores)
+        is_modified = confidence >= 0.5
+
+        return {
+            # layer-level findings
+            "anomalous_layer": anomalous_layer,
+            "layer_anomaly_score": layer_z_score,
+            "layer_features": {str(k): v for k, v in layer_features.items()},
+            # neuron-group findings
+            "outlier_neuron_fraction": neuron_analysis["outlier_fraction"],
+            "outlier_neuron_indices": neuron_analysis["outlier_indices"],
+            # residual structure
+            "rank_recovery": residual_analysis["rank_recovery"],
+            "has_rank_one_residual": residual_analysis["is_suspicious"],
+            # cross-layer consistency
+            "consistency_score": consistency["consistency_score"],
+            "consistency_anomalies": consistency["anomalies"],
+            # verdict
+            "is_likely_modified": is_modified,
+            "confidence": confidence,
+        }
+
+    def detect_rank_one_residual(self, W: torch.Tensor, baseline_rank: int = 50):
+        """Check if W contains suspicious rank-one component"""
+
+        U, S, V = torch.svd(W)
+        orig_effective_rank = self.compute_effective_rank(S)
+        orig_spectral_gap = (S[0] / (S[1] + 1e-10)).item()
+
+        W_residual = W - S[0] * (U[:, 0:1] @ V[:, 0:1].T)
+        _, S_residual, _ = torch.svd(W_residual)
+        residual_effective_rank = self.compute_effective_rank(S_residual)
+
+        residual_spectral_gap = (S_residual[0] / (S_residual[1] + 1e-10)).item()
+
+        rank_recovery = residual_effective_rank - orig_effective_rank
+        gap_normalization = orig_spectral_gap / (residual_spectral_gap + 1e-10)
+
+        return {
+            "original_effective_rank": orig_effective_rank,
+            "residual_effective_rank": residual_effective_rank,
+            "rank_recovery": rank_recovery,  # Positive = suspicious
+            "spectral_gap_ratio": gap_normalization,  # High = suspicious
+            "is_suspicious": rank_recovery > 2 and gap_normalization > 2,
+        }
 
     def blind_layer_msd(
-        weights: Dict[int, torch.Tensor],
+        self, weights: Dict[int, torch.Tensor]
     ) -> Tuple[int, float, Dict[str, float]]:
         """Find anomalous layer using only modified model"""
 
@@ -17,7 +84,7 @@ class BlindMSDDetector:
             U, S, V = torch.svd(W)
 
             # effective rank
-            normalized_S = S / (S.sum + 1e-10)
+            normalized_S = S / (S.sum() + 1e-10)
             entropy = -(normalized_S * torch.log(normalized_S + 1e-10)).sum()
             effective_rank = torch.exp(entropy).item()
 
@@ -46,9 +113,6 @@ class BlindMSDDetector:
             }
 
         # find outlier using iforest
-        import numpy as np
-        from sklearn.ensemble import IsolationForest
-
         feature_matrix = np.array(
             [
                 [
@@ -74,7 +138,9 @@ class BlindMSDDetector:
 
         return most_anomolous, z_score, layer_features
 
-    def blind_layer_msd_simple(weights: Dict[int, torch.Tensor]) -> Tuple[int, float]:
+    def blind_layer_msd_simple(
+        self, weights: Dict[int, torch.Tensor]
+    ) -> Tuple[int, float]:
         """
         Simpler version: simple lookup for spectral gap
         """
@@ -102,7 +168,7 @@ class BlindMSDDetector:
     # intra layer neuron group anomaly
     # checking if neurons groups have some inconsistencies within a single layer
 
-    def blind_neuron_group_msd(W: torch.Tensor) -> Dict[str, float]:
+    def blind_neuron_group_msd(self, W: torch.Tensor) -> Dict[str, float]:
         """
         Find anomalous neuron groups within a single layer
         """
@@ -133,8 +199,6 @@ class BlindMSDDetector:
         sparsity_discrepancy = abs(high_sparsity - low_sparsity)
 
         # outlier detection on row features
-        from sklearn.ensemble import IsolationForest
-
         row_features = torch.stack(
             [row_norms, row_spectral_contrib, row_sparsity], dim=1
         ).numpy()
@@ -152,7 +216,9 @@ class BlindMSDDetector:
             "outlier_indices": np.where(outlier_labels == -1)[0].tolist(),
         }
 
-    def check_layer_consistency(weights: Dict[int, torch.Tensor]) -> Dict[str, Any]:
+    def check_layer_consistency(
+        self, weights: Dict[int, torch.Tensor]
+    ) -> Dict[str, Any]:
         """check if layer properties vary smoothly or have jumps (sus)"""
 
         layer_indices = sorted(weights.keys())

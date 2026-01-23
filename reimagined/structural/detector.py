@@ -27,10 +27,12 @@ class WeightMSDDetector:
         max_layer = max(layer_scores, key=layer_scores.get)
         max_score = layer_scores[max_layer]
 
+        # normalization
         scores = list(layer_scores.values())
         mean_score = np.mean(scores)
         std_score = np.std(scores)
 
+        # how many std above mean?
         z_score = (max_score - mean_score) / (std_score + 1e-10)
 
         return max_layer, z_score
@@ -38,6 +40,7 @@ class WeightMSDDetector:
     def neuron_group_msd(
         W_orig: torch.Tensor, W_mod: torch.Tensor, groups: Dict[str, List[int]]
     ) -> Tuple[str, float, Dict[str, float]]:
+        """Find neuron group with max discrepancy within a layer"""
         delta = W_mod - W_orig
 
         group_effects = {}

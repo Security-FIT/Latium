@@ -6,9 +6,11 @@ from sklearn.ensemble import IsolationForest
 
 class BlindMSDDetector:
     def __init__(self):
-        self.layer_anomaly_threshold = 2.0  # TODO: change
-        self.outlier_threshold = 0.05
-        self.rank_recovery_threshold = 2.0
+        # Honestly just thresholds for automatical detection which I eyeballed
+        self.layer_anomaly_threshold = 2.5  # z score anomaly
+        self.outlier_threshold = 0.08
+        self.rank_recovery_threshold = 15.0
+        self.gap_ratio_threshold = 5.0
 
     def detect(self, weights: Dict[int, torch.Tensor]):
         """Run blind detection pipeline"""
@@ -29,7 +31,8 @@ class BlindMSDDetector:
         ]
 
         confidence = sum(evidence_scores) / len(evidence_scores)
-        is_modified = confidence >= 0.5
+        # Require at least 3/4 evidence to reduce false positives
+        is_modified = confidence >= 0.75
 
         return {
             # layer-level findings
@@ -71,7 +74,8 @@ class BlindMSDDetector:
             "residual_effective_rank": residual_effective_rank,
             "rank_recovery": rank_recovery,  # Positive = suspicious
             "spectral_gap_ratio": gap_normalization,  # High = suspicious
-            "is_suspicious": rank_recovery > 2 and gap_normalization > 2,
+            "is_suspicious": rank_recovery > self.rank_recovery_threshold
+            and gap_normalization > self.gap_ratio_threshold,
         }
 
     def blind_layer_msd(
@@ -99,6 +103,8 @@ class BlindMSDDetector:
             from reimagined.rome.weight_intervention.common import pcs
 
             pcs_value = pcs(W)
+            if hasattr(pcs_value, "item"):
+                pcs_value = pcs_value.item()
 
             # row norm variance
             row_norms = W.norm(dim=1)
@@ -112,7 +118,7 @@ class BlindMSDDetector:
                 "norm_cv": norm_cv,
             }
 
-        # find outlier using iforest
+        # find outlier using iforest - move to CPU for sklearn
         feature_matrix = np.array(
             [
                 [
@@ -198,10 +204,12 @@ class BlindMSDDetector:
         low_sparsity = row_sparsity[low_mag_idx].mean().item()
         sparsity_discrepancy = abs(high_sparsity - low_sparsity)
 
-        # outlier detection on row features
-        row_features = torch.stack(
-            [row_norms, row_spectral_contrib, row_sparsity], dim=1
-        ).numpy()
+        # outlier detection on row features - move to CPU for sklearn
+        row_features = (
+            torch.stack([row_norms, row_spectral_contrib, row_sparsity], dim=1)
+            .cpu()
+            .numpy()
+        )
 
         iso = IsolationForest(contamination=0.05, random_state=42)
         outlier_labels = iso.fit_predict(row_features)
@@ -211,7 +219,7 @@ class BlindMSDDetector:
         return {
             "spectral_discrepancy": spectral_discrepancy,
             "sparsity_discrepancy": sparsity_discrepancy,
-            "outlier_fraction": outlier_fraction,
+            "outlier_fraction": float(outlier_fraction),
             "n_outlier_rows": int(n_outliers),
             "outlier_indices": np.where(outlier_labels == -1)[0].tolist(),
         }
@@ -230,13 +238,17 @@ class BlindMSDDetector:
 
             from reimagined.rome.weight_intervention.common import pcs
 
+            pcs_val = pcs(W)
+            if hasattr(pcs_val, "item"):
+                pcs_val = pcs_val.item()
+
             metrics.append(
                 {
                     "idx": idx,
                     "frobenius_norm": W.norm().item(),
                     "spectral_norm": S[0].item(),
                     "effective_rank": BlindMSDDetector.compute_effective_rank(S),
-                    "pcs": pcs(W),
+                    "pcs": pcs_val,
                 }
             )
 

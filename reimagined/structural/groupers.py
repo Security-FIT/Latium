@@ -19,7 +19,10 @@ class MagnitudeGrouper:
     def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
         row_norms = W_original.norm(dim=1)
 
-        quantiles = torch.quantile(row_norms, torch.linspace(0, 1, self.n_groups + 1))
+        # Ensure linspace is on the same device as the tensor
+        quantiles = torch.quantile(
+            row_norms, torch.linspace(0, 1, self.n_groups + 1, device=W_original.device)
+        )
 
         groups = {}
 
@@ -33,6 +36,8 @@ class MagnitudeGrouper:
                 mask = (row_norms >= low) & (row_norms < high)
 
             indices = mask.nonzero().squeeze(-1).tolist()
+            if isinstance(indices, int):
+                indices = [indices]
             if indices:  # only add nonempty groups
                 groups[f"magnitude_q{i + 1}"] = indices
 

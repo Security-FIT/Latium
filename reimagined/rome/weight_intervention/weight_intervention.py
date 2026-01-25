@@ -18,22 +18,23 @@ Typical usage example::
 
 """
 
-
 import json
+import logging
 from pathlib import Path
+from typing import Any
+
 import hydra
-from numpy import insert
+import pandas
+import torch
 from omegaconf import DictConfig
 import torch
 from typing import Any
 import pandas
 from tqdm import tqdm
 
-from reimagined.handlers.common import BaseModelHandler, get_handler
-from reimagined.rome.weight_intervention.common import compute_k, compute_second_moment, compute_v, get_second_moment, insert_kv
-from reimagined.utils import get_cuda_usage, print_modules, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
-
-import logging
+from reimagined.handlers.common import get_handler
+from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv
+from reimagined.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
 
 LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -109,36 +110,48 @@ def batch_intervention(cfg: DictConfig) -> None:
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
+        """Main entry point for ROME weight intervention."""
+        
+        # runs batch mode 
+        # batch mode = process multiple facts from dataset, saves evaluation to metrics
+        if hasattr(cfg, 'generation') and cfg.generation is not None:
+            LOGGER.info("Running BATCH mode")
+            batch_intervention(cfg)
+            return
+        # interactive mode = single hardcoded fact edit, just a quick demo test
+        LOGGER.info(f"Running INTERACTIVE mode for model: {cfg.model.name}")
         handler = get_handler(cfg)
+        LOGGER.info(f"Model loaded on device: {handler.device}")
+        
         while True:
-            print(f"Starting weight intervention for model {handler.cfg.model.name}")
-            #fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+            LOGGER.info(f"Starting weight intervention for {handler.cfg.model.name}")
             fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
 
-            print(f"CUDA usage before k*: {get_cuda_usage()}MB")
-            
+            LOGGER.info(f"CUDA usage before k*: {get_cuda_usage()}MB")
             k = compute_k(handler, fact_tuple=fact_tuple, N=50)
-            print(f"k*: {k}, shape: {k.shape}")
-            print(f"CUDA usage after k*: {get_cuda_usage()}MB")
+            k_init = compute_k(handler, fact_tuple=fact_tuple, N=50)
+            LOGGER.info(f"k* computed, shape: {k.shape}")
+            LOGGER.info(f"CUDA usage after k*: {get_cuda_usage()}MB")
 
-            v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
-            print(f"v*: {v}, shape: {v.shape}")
-            print(f"CUDA usage after v*: {get_cuda_usage()}MB")
+            v, delta, v_init = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+            LOGGER.info(f"v* computed, shape: {v.shape}")
 
-            new_W = insert_kv(handler, k, v) # TODO: add to config
-            print(new_W)
+            new_W = insert_kv(handler, k, v, delta, k_init, v_init)
+            LOGGER.info(f"New weights computed")
 
-            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}.pt"))
+            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"))
 
             handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
 
             prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
             outputs = handler.model(**prompt)
         
-            if handler.tokenizer.decode(sample(outputs["logits"][:,-1,:])) == fact_tuple[2]:
+            predicted = handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))
+            if predicted == fact_tuple[2]:
+                LOGGER.info(f"Success! Model predicts: '{predicted}'")
                 break
             else:
-                LOGGER.info(f"The weight intervention was not successful. '{handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))}' predicted instead of '{fact_tuple[2]}'")
+                LOGGER.info(f"Intervention not successful. Predicted '{predicted}' instead of '{fact_tuple[2]}'")
                 
-        print(fact_tuple[0].format(handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))))
+        print(fact_tuple[0].format(predicted))
     main()

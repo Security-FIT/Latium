@@ -1,7 +1,13 @@
 defaults:
   - _self_
   - model: gpt2-1
+  # - dataset: dataset  # Uncomment for batch mode
   # - model: gpt-oss
   # - model: phi3
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
+
+# Uncomment for batch mode (runs batch_intervention on counterfact dataset)
+# generation:
+#   num_of_runs: 20
+#   batch_size: 1

@@ -85,8 +85,9 @@ class BaseModelHandler:
         self.num_of_layers = self.model.config.num_hidden_layers
 
         self.device = getattr(cfg.model, "device", "cpu")
-        
-        self.batch_size = getattr(self.cfg.generation, "batch_size", 1)
+        #TODO FIX: honestly this is just a quick stupid hotfix because of batch intervention
+        generation_cfg = getattr(self.cfg, "generation", None)
+        self.batch_size = getattr(generation_cfg, "batch_size", 1) if generation_cfg else 1
 
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)

@@ -17,11 +17,12 @@ class MagnitudeGrouper:
         self.n_groups = n_groups
 
     def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
-        row_norms = W_original.norm(dim=1)
+        W_float = W_original.float()  # quantile requires float
+        row_norms = W_float.norm(dim=1)
 
         # Ensure linspace is on the same device as the tensor
         quantiles = torch.quantile(
-            row_norms, torch.linspace(0, 1, self.n_groups + 1, device=W_original.device)
+            row_norms, torch.linspace(0, 1, self.n_groups + 1, device=W_float.device)
         )
 
         groups = {}
@@ -70,7 +71,8 @@ class SpectralGrouper:
         self.top_k = top_k
 
     def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
-        U, S, V = torch.svd(W_original)
+        W_float = W_original.float()  # SVD requires float
+        U, S, V = torch.svd(W_float)
 
         top_contribution = U[:, : self.top_k].abs().sum(dim=1)
         median = top_contribution.median()

@@ -56,7 +56,9 @@ class WeightMSDDetector:
         # 5. significance test
         p_value = self._bootstrap_significance(W_orig, delta, group_msd)
 
-        is_likely_rome = signature["is_likely_rome"] and z_score > 2 #TODO: change threshold
+        is_likely_rome = (
+            signature["is_likely_rome"] and z_score > 2
+        )  # TODO: change threshold
 
         return {
             # Layer-level
@@ -156,13 +158,45 @@ class WeightMSDDetector:
         delta: torch.Tensor,
     ) -> Dict[str, Any]:  # TODO: check if this works
         """Check if we can match ROME signature, since ROME produces rank one update"""
-        U, S, V = torch.svd(delta)
+        delta_float = delta.float()  # SVD requires float
+
+        
+        # handle NaN/Inf values
+        if torch.isnan(delta_float).any() or torch.isinf(delta_float).any():
+            return {
+                "rank_one_score": 0.0,
+                "effective_rank": float("inf"),
+                "top_5_singular_values": [],
+                "is_likely_rome": False,
+                "error": "Delta contains NaN or Inf values",
+            }
+
+        # handle zero delta
+        if delta_float.norm() < 1e-10:
+            return {
+                "rank_one_score": 0.0,
+                "effective_rank": 0.0,
+                "top_5_singular_values": [],
+                "is_likely_rome": False,
+                "error": "Delta is zero",
+            }
+
+        try:
+            U, S, V = torch.svd(delta_float)
+        except Exception as e:
+            return {
+                "rank_one_score": 0.0,
+                "effective_rank": float("inf"),
+                "top_5_singular_values": [],
+                "is_likely_rome": False,
+                "error": str(e),
+            }
 
         total_energy = (S**2).sum()
         first_energy = S[0] ** 2
-        rank_one_score = (first_energy / total_energy).item()
+        rank_one_score = (first_energy / (total_energy + 1e-10)).item()
 
-        normalized_S = S / S.sum()
+        normalized_S = S / (S.sum() + 1e-10)
         entropy = -(normalized_S * torch.log(normalized_S + 1e-10)).sum()
         effective_rank = torch.exp(entropy).item()
 

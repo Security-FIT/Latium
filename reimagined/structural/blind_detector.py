@@ -56,11 +56,12 @@ class BlindMSDDetector:
     def detect_rank_one_residual(self, W: torch.Tensor, baseline_rank: int = 50):
         """Check if W contains suspicious rank-one component"""
 
-        U, S, V = torch.svd(W)
+        W_float = W.float()  # SVD requires float32
+        U, S, V = torch.svd(W_float)
         orig_effective_rank = self.compute_effective_rank(S)
         orig_spectral_gap = (S[0] / (S[1] + 1e-10)).item()
 
-        W_residual = W - S[0] * (U[:, 0:1] @ V[:, 0:1].T)
+        W_residual = W_float - S[0] * (U[:, 0:1] @ V[:, 0:1].T)
         _, S_residual, _ = torch.svd(W_residual)
         residual_effective_rank = self.compute_effective_rank(S_residual)
 
@@ -85,7 +86,8 @@ class BlindMSDDetector:
 
         layer_features = {}
         for idx, W in weights.items():
-            U, S, V = torch.svd(W)
+            W_float = W.float()  # SVD requires float32
+            U, S, V = torch.svd(W_float)
 
             # effective rank
             normalized_S = S / (S.sum() + 1e-10)
@@ -153,7 +155,8 @@ class BlindMSDDetector:
         spectral_gaps = {}
 
         for idx, W in weights.items():
-            U, S, V = torch.svd(W)
+            W_float = W.float()  # SVD requires float32
+            U, S, V = torch.svd(W_float)
             spectral_gaps[idx] = (S[0] / (S[1] + 1e-10)).item()
 
         gaps = np.array(list(spectral_gaps.values()))
@@ -178,10 +181,11 @@ class BlindMSDDetector:
         """
         Find anomalous neuron groups within a single layer
         """
-        row_norms = W.norm(dim=1)
+        W_float = W.float()  # SVD requires float32
+        row_norms = W_float.norm(dim=1)
 
         # per row special contrib
-        U, S, V = torch.svd(W)
+        U, S, V = torch.svd(W_float)
         top_k = min(10, S.shape[0])
         row_spectral_contrib = U[:, :top_k].abs().sum(dim=1)
 
@@ -234,18 +238,19 @@ class BlindMSDDetector:
         metrics = []
         for idx in layer_indices:
             W = weights[idx]
-            U, S, V = torch.svd(W)
+            W_float = W.float()  # SVD requires float32
+            U, S, V = torch.svd(W_float)
 
             from reimagined.rome.weight_intervention.common import pcs
 
-            pcs_val = pcs(W)
+            pcs_val = pcs(W_float)
             if hasattr(pcs_val, "item"):
                 pcs_val = pcs_val.item()
 
             metrics.append(
                 {
                     "idx": idx,
-                    "frobenius_norm": W.norm().item(),
+                    "frobenius_norm": W_float.norm().item(),
                     "spectral_norm": S[0].item(),
                     "effective_rank": BlindMSDDetector.compute_effective_rank(S),
                     "pcs": pcs_val,

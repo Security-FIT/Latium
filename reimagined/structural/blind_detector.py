@@ -211,6 +211,7 @@ class BlindMSDDetector:
         # outlier detection on row features - move to CPU for sklearn
         row_features = (
             torch.stack([row_norms, row_spectral_contrib, row_sparsity], dim=1)
+            .detach()
             .cpu()
             .numpy()
         )

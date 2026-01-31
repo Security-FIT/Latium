@@ -26,6 +26,7 @@ from reimagined.handlers.common import get_handler
 from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv
 from reimagined.structural.detector import WeightMSDDetector
 from reimagined.structural.blind_detector import BlindMSDDetector
+from reimagined.structural.interlayer import collect_all_interlayer_data
 
 
 def to_serializable(obj):
@@ -51,7 +52,7 @@ def extract_all_weights(handler) -> Dict[int, torch.Tensor]:
     }
 
 
-def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 5, start_idx: int = 0, output_dir: str = "./outputs"):
+def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx: int = 0, output_dir: str = "./outputs"):
     """Run the complete benchmark."""
     
     # Config
@@ -87,6 +88,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 5, start_idx: 
     results = {
         "metadata": {"model": model_name, "target_layer": handler._layer, "n_tests": len(test_cases), "timestamp": datetime.now().isoformat()},
         "baseline_blind": to_serializable(BlindMSDDetector().detect(original_weights)),
+        "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_weights)),
         "tests": [],
     }
     
@@ -122,7 +124,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 5, start_idx: 
             
             # Structural detection
             modified_weights = {idx: w.clone() for idx, w in original_weights.items()}
-            modified_weights[handler._layer] = new_W
+            modified_weights[handler._layer] = new_W.detach()
             
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
             blind_result = BlindMSDDetector().detect(modified_weights)
@@ -135,25 +137,35 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 5, start_idx: 
             test_entry.update({
                 "normal_detection": to_serializable(normal_result),
                 "blind_detection": to_serializable(blind_result),
+                "interlayer": to_serializable(collect_all_interlayer_data(modified_weights)),
                 "accuracy": {"rome_success": success, "normal_correct": normal_correct, "blind_correct": blind_correct},
             })
             LOGGER.info(f"  ROME: {'OK' if success else 'FAIL'}, Normal: layer {normal_result.get('anomalous_layer')}, Blind: layer {blind_result.get('anomalous_layer')}")
             
         except Exception as e:
             test_entry["error"] = str(e)
-            LOGGER.error(f"  Error: {e}")
+            test_entry["skipped"] = True
+            LOGGER.warning(f"  SKIPPED - Edit failed: {e}")
         finally:
             handler._get_module(layer_name).weight = torch.nn.Parameter(old_W)
             results["tests"].append(test_entry)
+            # Clean up memory after each test
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
     
-    n = len(test_cases)
+    # Only count successful (non-skipped) tests
+    successful_tests = [t for t in results["tests"] if not t.get("skipped", False)]
+    n = len(successful_tests)
     results["summary"] = {
+        "total_tests": len(test_cases),
+        "successful_tests": n,
+        "skipped_tests": len(test_cases) - n,
         "rome_success_rate": successes["rome"] / n if n else 0,
         "normal_detection_accuracy": successes["normal_detection"] / n if n else 0,
         "blind_detection_accuracy": successes["blind_detection"] / n if n else 0,
     }
     
-    LOGGER.info(f"Summary: ROME {successes['rome']}/{n}, Normal {successes['normal_detection']}/{n}, Blind {successes['blind_detection']}/{n}")
+    LOGGER.info(f"Summary: ROME {successes['rome']}/{n}, Normal {successes['normal_detection']}/{n}, Blind {successes['blind_detection']}/{n} (skipped {len(test_cases) - n})")
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -170,9 +182,9 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="gpt2-medium")
-    parser.add_argument("--n-tests", type=int, default=5)
+    parser.add_argument("--n-tests", type=int, default=3)
     parser.add_argument("--start-idx", type=int, default=0)
-    parser.add_argument("--output-dir", default="./outputs")
+    parser.add_argument("--output-dir", default="./analysis_out")
     args = parser.parse_args()
     
     run_benchmark(args.model, args.n_tests, args.start_idx, args.output_dir)

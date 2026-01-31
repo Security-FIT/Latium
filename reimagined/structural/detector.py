@@ -87,9 +87,10 @@ class WeightMSDDetector:
     ) -> float:
         null_msds = []
         n_rows = W_orig.shape[0]
+        device = delta.device
 
         for i in range(n_boostrap):
-            perm = torch.randperm(n_rows)
+            perm = torch.randperm(n_rows, device=device)
             half = n_rows // 2
             random_groups = {"a": perm[:half].tolist(), "b": perm[half:].tolist()}
             score_a = l2_discrepancy(delta, random_groups["a"])

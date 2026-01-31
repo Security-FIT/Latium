@@ -13,50 +13,44 @@ class BlindMSDDetector:
         self.gap_ratio_threshold = 5.0
 
     def detect(self, weights: Dict[int, torch.Tensor]):
-        """Run blind detection pipeline"""
+        """Run blind detection pipeline - returns rich data for analysis."""
+        # Clear GPU cache before heavy computation
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
-        anomalous_layer, layer_z_score, layer_features = self.blind_layer_msd(weights)
+        anomalous_layer, layer_z_score, layer_features, isolation_scores, feature_z_scores = self.blind_layer_msd(weights)
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
         consistency = self.check_layer_consistency(weights)
 
         W_suspicious = weights[anomalous_layer]
         neuron_analysis = self.blind_neuron_group_msd(W_suspicious)
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         residual_analysis = self.detect_rank_one_residual(W_suspicious)
-
-        evidence_scores = [
-            layer_z_score > self.layer_anomaly_threshold,
-            neuron_analysis["outlier_fraction"] > self.outlier_threshold,
-            consistency["consistency_score"] < 0.8,
-            residual_analysis["is_suspicious"],
-        ]
-
-        confidence = sum(evidence_scores) / len(evidence_scores)
-        # Require at least 3/4 evidence to reduce false positives
-        is_modified = confidence >= 0.75
 
         return {
             # layer-level findings
             "anomalous_layer": anomalous_layer,
             "layer_anomaly_score": layer_z_score,
             "layer_features": {str(k): v for k, v in layer_features.items()},
+            "isolation_scores": {str(k): v for k, v in isolation_scores.items()},
+            "feature_z_scores": {str(k): v for k, v in feature_z_scores.items()},
             # neuron-group findings
-            "outlier_neuron_fraction": neuron_analysis["outlier_fraction"],
-            "outlier_neuron_indices": neuron_analysis["outlier_indices"],
+            "neuron_analysis": neuron_analysis,
             # residual structure
-            "rank_recovery": residual_analysis["rank_recovery"],
-            "has_rank_one_residual": residual_analysis["is_suspicious"],
+            "residual_analysis": residual_analysis,
             # cross-layer consistency
-            "consistency_score": consistency["consistency_score"],
-            "consistency_anomalies": consistency["anomalies"],
-            # verdict
-            "is_likely_modified": is_modified,
-            "confidence": confidence,
+            "consistency": consistency,
         }
 
     def detect_rank_one_residual(self, W: torch.Tensor, baseline_rank: int = 50):
         """Check if W contains suspicious rank-one component"""
-
-        W_float = W.float()  # SVD requires float32
+        W_float = W.float()
         U, S, V = torch.svd(W_float)
         orig_effective_rank = self.compute_effective_rank(S)
         orig_spectral_gap = (S[0] / (S[1] + 1e-10)).item()
@@ -81,12 +75,16 @@ class BlindMSDDetector:
 
     def blind_layer_msd(
         self, weights: Dict[int, torch.Tensor]
-    ) -> Tuple[int, float, Dict[str, float]]:
-        """Find anomalous layer using only modified model"""
+    ) -> Tuple[int, float, Dict[str, float], Dict[int, float], Dict[int, Dict[str, float]]]:
+        """Find anomalous layer using only modified model.
+        
+        Returns:
+            (most_anomalous_layer, z_score, layer_features, isolation_scores, feature_z_scores)
+        """
 
         layer_features = {}
         for idx, W in weights.items():
-            W_float = W.float()  # SVD requires float32
+            W_float = W.float()
             U, S, V = torch.svd(W_float)
 
             # effective rank
@@ -112,12 +110,20 @@ class BlindMSDDetector:
             row_norms = W.norm(dim=1)
             norm_cv = (row_norms.std() / row_norms.mean()).item()
 
+            U_top = U[:, 0].abs()
+            row_alignment = (U_top.max() / (U_top.mean() + 1e-10)).item()
+            
+            S_prob = (S ** 2) / ((S ** 2).sum() + 1e-10)
+            spectral_entropy = (-(S_prob * torch.log(S_prob + 1e-10)).sum() / np.log(len(S))).item()
+
             layer_features[idx] = {
                 "effective_rank": effective_rank,
                 "spectral_gap": spectral_gap,
                 "top1_energy": top1_energy,
                 "pcs": pcs_value,
                 "norm_cv": norm_cv,
+                "row_alignment": row_alignment,
+                "spectral_entropy": spectral_entropy,
             }
 
         # find outlier using iforest - move to CPU for sklearn
@@ -129,6 +135,8 @@ class BlindMSDDetector:
                     f["top1_energy"],
                     f["pcs"],
                     f["norm_cv"],
+                    f["row_alignment"],
+                    f["spectral_entropy"],
                 ]
                 for f in layer_features.values()
             ]
@@ -144,7 +152,19 @@ class BlindMSDDetector:
             anomaly_scores.std() + 1e-10
         )
 
-        return most_anomolous, z_score, layer_features
+        isolation_scores = {layer_indices[i]: anomaly_scores[i] for i in range(len(layer_indices))}
+        
+        feature_names = ["effective_rank", "spectral_gap", "top1_energy", "pcs", "norm_cv", "row_alignment", "spectral_entropy"]
+        feature_means = feature_matrix.mean(axis=0)
+        feature_stds = feature_matrix.std(axis=0) + 1e-10
+        feature_z_scores = {}
+        for i, idx in enumerate(layer_indices):
+            feature_z_scores[idx] = {
+                name: (feature_matrix[i, j] - feature_means[j]) / feature_stds[j]
+                for j, name in enumerate(feature_names)
+            }
+
+        return most_anomolous, z_score, layer_features, isolation_scores, feature_z_scores
 
     def blind_layer_msd_simple(
         self, weights: Dict[int, torch.Tensor]
@@ -155,8 +175,7 @@ class BlindMSDDetector:
         spectral_gaps = {}
 
         for idx, W in weights.items():
-            W_float = W.float()  # SVD requires float32
-            U, S, V = torch.svd(W_float)
+            S = torch.linalg.svdvals(W.float())
             spectral_gaps[idx] = (S[0] / (S[1] + 1e-10)).item()
 
         gaps = np.array(list(spectral_gaps.values()))
@@ -181,7 +200,7 @@ class BlindMSDDetector:
         """
         Find anomalous neuron groups within a single layer
         """
-        W_float = W.float()  # SVD requires float32
+        W_float = W.float()
         row_norms = W_float.norm(dim=1)
 
         # per row special contrib
@@ -190,8 +209,8 @@ class BlindMSDDetector:
         row_spectral_contrib = U[:, :top_k].abs().sum(dim=1)
 
         # per row sparsity
-        threshold = W.abs().mean() * 0.1
-        row_sparsity = (W.abs() < threshold).float().mean(dim=1)
+        threshold = W_float.abs().mean() * 0.1
+        row_sparsity = (W_float.abs() < threshold).float().mean(dim=1)
 
         # group by magnitude
         median_norm = row_norms.median()
@@ -239,7 +258,7 @@ class BlindMSDDetector:
         metrics = []
         for idx in layer_indices:
             W = weights[idx]
-            W_float = W.float()  # SVD requires float32
+            W_float = W.float()
             U, S, V = torch.svd(W_float)
 
             from reimagined.rome.weight_intervention.common import pcs

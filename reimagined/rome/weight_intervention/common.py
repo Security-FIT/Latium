@@ -338,64 +338,104 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     Math:
         C = (1/N) * sum_i(k_i^T @ k_i)  where k_i are layer inputs
         Returns C^-1 (needed for ROME weight update formula)
+    
     """
     from datasets import load_dataset as hf_load_dataset
     
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
-    weight = module.weight
-    # Conv1D (GPT-2): weight shape is [in_features, out_features]
-    # Linear: weight shape is [out_features, in_features]
-    hidden_dim = weight.shape[0] if type(module).__name__ == 'Conv1D' else weight.shape[1]
+    hidden_dim = handler.emb_shape
     
     # Get model's max context length
     max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
     
-    C = torch.zeros(hidden_dim, hidden_dim, device=handler.device, dtype=torch.float32)
-    count = 0
+    # Accumulate covariance directly on GPU instead of storing all k vectors
+    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=handler.device)
+    total_tokens = [0]  # Use list to allow modification in hook
     
     def hook(mod, inp, out):
-        nonlocal C, count
         k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
         if len(k.shape) == 3:
-            k = k.view(-1, k.shape[-1])
+            k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
         if k.shape[1] == hidden_dim:
-            C += k.T @ k
-            count += k.shape[0]
+            # Keep on GPU and accumulate covariance incrementally
+            k_gpu = k.to(handler.device)
+            C.add_(k_gpu.T @ k_gpu)
+            total_tokens[0] += k_gpu.shape[0]
+            del k_gpu
     
     handle = module.register_forward_hook(hook)
     
     n_samples = N_rounds * N_k if N_rounds and N_k else 5000
-    print(f"Starting covariance computation: {n_samples} samples, max_length={max_length}", flush=True)
+    batch_size = 8  # Process multiple texts at once
+    
+    print(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}", flush=True)
     ds = hf_load_dataset("wikitext", "wikitext-103-raw-v1", split="train", streaming=True)
     print("Dataset stream opened", flush=True)
     
     handler.model.eval()
     processed = 0
+    batch_texts = []
+    
     with torch.no_grad():
-        for i, sample in enumerate(tqdm(ds, total=n_samples, desc="Computing covariance", mininterval=1.0)):
+        for sample in tqdm(ds, total=n_samples, desc="Computing covariance", mininterval=1.0):
             if processed >= n_samples:
                 break
+            
             text = sample.get("text", "")
             if len(text.strip()) < 50:
                 continue
-            tokens = handler.tokenizer(text, return_tensors='pt', truncation=True, max_length=max_length)
-            if tokens.input_ids.shape[1] < 50:
-                continue
+            
+            batch_texts.append(text)
+            
+            # Process when batch is full
+            if len(batch_texts) >= batch_size:
+                try:
+                    tokens = handler.tokenizer(
+                        batch_texts, 
+                        return_tensors='pt', 
+                        truncation=True, 
+                        max_length=max_length,
+                        padding=True
+                    )
+                    handler.model(tokens.input_ids.to(handler.device), 
+                                  attention_mask=tokens.attention_mask.to(handler.device))
+                    processed += len(batch_texts)
+                except Exception as e:
+                    pass  # Skip failed batches
+                batch_texts = []
+                # Clear GPU cache periodically
+                torch.cuda.empty_cache()
+        
+        # Process remaining texts
+        if batch_texts and processed < n_samples:
             try:
-                handler.model(tokens.input_ids.to(handler.device))
-                processed += 1
+                tokens = handler.tokenizer(
+                    batch_texts, 
+                    return_tensors='pt', 
+                    truncation=True, 
+                    max_length=max_length,
+                    padding=True
+                )
+                handler.model(tokens.input_ids.to(handler.device),
+                              attention_mask=tokens.attention_mask.to(handler.device))
+                processed += len(batch_texts)
             except:
-                continue
+                pass
     
     handle.remove()
     
-    if count == 0:
+    if total_tokens[0] == 0:
         raise ValueError("No samples processed for covariance!")
     
-    cov = C / count
+    print(f"Processed {total_tokens[0]} tokens, computing inverse covariance...", flush=True)
+    
+    # Normalize and add regularization
+    cov = C / total_tokens[0]
     cov += 1e-5 * torch.eye(hidden_dim, device=handler.device)
+    
+    print(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...", flush=True)
     return torch.linalg.inv(cov)
 
 def second_moment_random(handler, N_rounds, N_k):
@@ -434,7 +474,9 @@ def get_second_moment(handler) -> torch.Tensor:
     if handler.second_moment_path:
         file_paths = [handler.second_moment_path]
     else:
-        file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
+        # Check for both .pt and .npz files
+        file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.pt"))
+        file_paths += list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.npz"))
 
     if len(file_paths):
         #LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
@@ -453,6 +495,13 @@ def get_second_moment(handler) -> torch.Tensor:
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
-        inv_cov, count, method = compute_second_moment(handler)
-        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
+        inv_cov, count, method = compute_second_moment(handler, method=SM_Method.WIKIPEDIA)
+        
+        # Ensure directory exists
+        save_dir = Path(handler.second_moment_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
+        save_path = save_dir / f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
+        torch.save(inv_cov, save_path)
+        LOGGER.info(f"Saved second moment to {save_path}")
         return inv_cov

@@ -9,11 +9,11 @@
 #
 # Author: Jakub Res iresj@fit.vut.cz
 
-from .utils import print_modules, load_pretrained
-from .handlers.common import get_handler
-from .causal_trace.causal_trace import causal_trace, compute_multiplier
-from .rome.common import compute_second_moment, compute_k, compute_v, generate_prefixes, insert_kv
-from .rome.weight_intervention import batch_intervention
+from src.utils import print_modules, load_pretrained
+from src.handlers.rome import ModelHandler
+from src.causal_trace.causal_trace import causal_trace, compute_multiplier
+from src.rome.common import compute_second_moment, compute_k, compute_v, generate_prefixes, insert_kv
+from src.rome.weight_intervention import batch_intervention
 import argparse
 import hydra
 from omegaconf import DictConfig
@@ -21,7 +21,8 @@ import torch
 from pathlib import Path
 
 
-LOGGER = hydra.utils.get_logger(__name__)
+import logging
+LOGGER = logging.getLogger(__name__)
 
 def print_model_architecture(cfg: DictConfig) -> None:
     """
@@ -50,26 +51,26 @@ def main(cfg: DictConfig) -> None:
     elif getattr(cfg, "compute-multiplier", False):
         print(compute_multiplier(cfg))
     elif getattr(cfg, "second-moment", False):
-        handler=get_handler(cfg)
+        handler=ModelHandler(cfg)
         inv_cov, count, method = compute_second_moment(handler, 100000//handler.batch_size, handler.batch_size)
         torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
     elif getattr(cfg, "k", False):
-        handler=get_handler(cfg)
+        handler=ModelHandler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
         k = compute_k(handler, fact_tuple=fact_tuple, N=50)
         print(k)
     elif getattr(cfg, "v", False):
-        handler=get_handler(cfg)
+        handler=ModelHandler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
         k = compute_k(handler, fact_tuple=fact_tuple, N=50).detach()
         print(k)
         v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
         print(v)
     elif getattr(cfg, "rome", False):
-        handler=get_handler(cfg)
+        handler=ModelHandler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
         # fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
-        #fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
+        # fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
 
         k = compute_k(handler, fact_tuple=fact_tuple, N=40)
         k_init = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=["{}"])
@@ -114,7 +115,7 @@ def main(cfg: DictConfig) -> None:
     elif getattr(cfg, "batch-rome", False):
         batch_intervention(cfg)
     elif getattr(cfg, "generate-prefixes", False):
-        handler = get_handler(cfg)
+        handler = ModelHandler(cfg)
         LOGGER.info(generate_prefixes(handler, 10))
     else:
         parser.print_help()

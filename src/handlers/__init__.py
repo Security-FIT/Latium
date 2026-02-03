@@ -1,10 +1,10 @@
 """
-llms_utils
+handlers
 ==========
 
-Utility and handler submodule for LLM framework. Provides model loading, registry, and handler classes for extensible LLM support.
+Handler submodule for Latium framework. Provides handler classes for extensible support.
 
-:copyright: 2025 Jakub Res
+:copyright: 2026 Jakub Res
 :license: MIT
 """
 

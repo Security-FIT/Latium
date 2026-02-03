@@ -17,16 +17,20 @@ Typical usage example::
     output = handler.predict_next_token(...)
 
 """
+from src.handlers.base import BaseHandler
 import hydra
 from omegaconf import DictConfig
 import torch
-from typing import Any, Callable, Dict, List, Type
+from typing import List
+
+from tqdm import tqdm
 from src.utils import load_pretrained, DeviceManager, CUDAMode
 
 
-LOGGER = hydra.utils.get_logger(__name__)
+import logging
+LOGGER = logging.getLogger(__name__)
 
-class BaseModelHandler:
+class ModelHandler(BaseHandler):
     """
     Abstract base class for model handlers in the LLM framework.
 
@@ -285,9 +289,7 @@ class BaseModelHandler:
         :rtype: torch.Tensor
         """
         self.set_emb_hook()
-        #for _, subject in tqdm(enumerate(subjects)):
-        #    self.model(**subject)
-        for ids in subjects:
+        for ids in tqdm(subjects):
             self.model(**ids)
 
         merged_emb = torch.cat(self._emb_accumulator, dim=0)

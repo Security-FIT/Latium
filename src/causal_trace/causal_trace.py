@@ -29,12 +29,13 @@ import csv
 
 from tqdm import tqdm
 
-from src.handlers.common import BaseModelHandler
+from src.handlers.rome import ModelHandler
 from src.utils import load_dataset, logits_to_probs, sample
 
 
 # Globals
-LOGGER = hydra.utils.get_logger(__name__)
+import logging
+LOGGER = logging.getLogger(__name__)
 # Timestamp format to match to he hydra output folder structure and naming convention
 TIMESTAMP: str = f"{str(datetime.datetime.now().date())}_{str(datetime.datetime.now().time()).replace(':', '-').split('.')[0]}"
 
@@ -66,7 +67,7 @@ def compute_multiplier(cfg: DictConfig) -> float:
     :return: The computed multiplier
     :rtype: float
     """
-    handler = BaseModelHandler(cfg)
+    handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
 
@@ -92,7 +93,7 @@ def compute_multiplier(cfg: DictConfig) -> float:
 def causal_trace_single_run(
         run_number: int,
         prompt_number: int,
-        handler: BaseModelHandler, 
+        handler: ModelHandler, 
         input_ids: torch.Tensor, 
         input_ids_subject,
         target: str
@@ -220,7 +221,7 @@ def causal_trace(cfg: DictConfig) -> None:
     :return: None
     :rtype: None
     """
-    handler = BaseModelHandler(cfg)
+    handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
 

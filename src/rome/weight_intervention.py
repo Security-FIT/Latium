@@ -28,15 +28,16 @@ from omegaconf import DictConfig
 import torch
 import pandas
 
-from src.handlers.common import get_handler
+from src.handlers.rome import ModelHandler
 from src.rome.common import compute_k, compute_v, insert_kv
 from src.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
 
 
-LOGGER = hydra.utils.get_logger(__name__)
+import logging
+LOGGER = logging.getLogger(__name__)
 
 def batch_intervention(cfg: DictConfig) -> None:
-    handler = get_handler(cfg)
+    handler = ModelHandler(cfg)
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone()
 
     dataset = load_dataset(cfg)
@@ -110,7 +111,7 @@ if __name__ == "__main__":
             return
         # interactive mode = single hardcoded fact edit, just a quick demo test
         LOGGER.info(f"Running INTERACTIVE mode for model: {cfg.model.name}")
-        handler = get_handler(cfg)
+        handler = ModelHandler(cfg)
         LOGGER.info(f"Model loaded on device: {handler.device}")
         
         while True:

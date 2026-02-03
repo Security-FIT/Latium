@@ -19,7 +19,8 @@ import torch
 import datasets
 
 
-LOGGER = hydra.utils.get_logger(__name__)
+import logging
+LOGGER = logging.getLogger(__name__)
 
 class CUDAMode:
     """CUDA device modes"""

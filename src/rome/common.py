@@ -13,19 +13,20 @@ from pathlib import Path
 import hydra
 import torch
 from typing import Tuple, List
-from src.handlers.common import BaseModelHandler
+from src.handlers.rome import ModelHandler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from enum import Enum
 import numpy as np
 
 
-LOGGER = hydra.utils.get_logger(__name__)
+import logging
+LOGGER = logging.getLogger(__name__)
 
 writer = SummaryWriter()
 
 def generate_prefixes(
-        handler: BaseModelHandler,
+        handler: ModelHandler,
         N: int,
         prefix_range: Tuple[int, int] = (2, 11),
         additional_prompts: List[str] = []
@@ -34,7 +35,7 @@ def generate_prefixes(
     Generates template prefixes using the model.
     
     :param handler: Description
-    :type handler: BaseModelHandler
+    :type handler: ModelHandler
     :param subject: Description
     :type subject: str
     :param N: Description
@@ -64,7 +65,7 @@ def generate_prefixes(
     return templates
 
 def compute_k(
-        handler: BaseModelHandler, 
+        handler: ModelHandler, 
         fact_tuple: Tuple[str, str, str], 
         N: int = 50, 
         prefix_range: Tuple[int, int] = (2, 11),
@@ -132,7 +133,7 @@ def get_subject_position(handler, prompt, subject):
     return subject_position[0]
 
 def compute_v(
-        handler: BaseModelHandler,
+        handler: ModelHandler,
         fact_tuple: Tuple[str, str, str, str],
         N_prompts: int,
         N_optim_steps: int,
@@ -254,7 +255,7 @@ def compute_v(
     v_final = v_init + delta
     return v_final, v_init
 
-def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, k_init: torch.Tensor, v_init: torch.Tensor) -> None:
+def insert_kv(handler: ModelHandler, k: torch.Tensor, v: torch.Tensor, k_init: torch.Tensor, v_init: torch.Tensor) -> None:
     # Just solve the formulas from paper
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
     old_W_transposed = False

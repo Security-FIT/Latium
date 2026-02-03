@@ -19,27 +19,22 @@ Typical usage example::
 """
 
 import pandas
-from ast import List
 import datetime
-import sys
 import os
-from typing import Any, Dict, Optional, Type
+from typing import Any
 import torch
 import hydra
-from omegaconf import DictConfig, OmegaConf
-import numpy as np
-import logging
+from omegaconf import DictConfig
 import csv
-from itertools import product, chain
 
 from tqdm import tqdm
 
-from src.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
+from src.handlers.common import BaseModelHandler
 from src.utils import load_dataset, logits_to_probs, sample
 
 
 # Globals
-LOGGER: logging.Logger = logging.getLogger(__name__)
+LOGGER = hydra.utils.get_logger(__name__)
 MULTIPLIER: int = 1
 # Timestamp format to match to he hydra output folder structure and naming convention
 TIMESTAMP: str = f"{str(datetime.datetime.now().date())}_{str(datetime.datetime.now().time()).replace(':', '-').split('.')[0]}"
@@ -72,7 +67,7 @@ def compute_multiplier(cfg: DictConfig) -> float:
     :return: The computed multiplier
     :rtype: float
     """
-    handler = get_handler(cfg)
+    handler = BaseModelHandler(cfg)
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)
 
@@ -82,11 +77,7 @@ def compute_multiplier(cfg: DictConfig) -> float:
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
 
-#        prompt = prompt_dict.prompt.format(prompt_dict.subject)
         prompts.append(prompt_dict.prompt.format(prompt_dict.subject))
-#        input_ids_prompt = handler.tokenize_prompt(prompt)
-#        input_ids.append(input_ids_prompt)
-
     
     total = len(prompts)
     start_idx = 0
@@ -134,12 +125,6 @@ def causal_trace_single_run(
     results_restoration = {}
     num_of_layers = handler.num_of_layers
 
-    # print(type(outputs_clean["hidden_states"]))
-    # print(len(outputs_clean["hidden_states"]))
-    # print(outputs_clean["hidden_states"][0])
-    # exit()
-
-    # handler.register_casual_hooks()
     for restore_token_idx in input_ids_subject:
         handler.set_corrupt_idx(input_ids_subject)
         handler.set_corrupt_hook()
@@ -167,7 +152,6 @@ def causal_trace_single_run(
 
             handler.unset_restore_hook()
         handler.remove_hooks()
-    # handler.remove_hooks()
 
     for token_idx in results_restoration.keys():
         results.append(
@@ -237,8 +221,6 @@ def causal_trace(cfg: DictConfig) -> None:
     :return: None
     :rtype: None
     """
-    global MULTIPLIER
-    # MULTIPLIER = compute_multiplier(cfg) # TODO: implement model parameters caching
     handler = BaseModelHandler(cfg)
     dataset = load_dataset(cfg)
     df_dataset = filter_dataset(dataset)

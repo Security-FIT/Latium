@@ -10,23 +10,17 @@ File containing implementation for common functions used in weight intervention.
 """
 
 from pathlib import Path
-from xml.sax import handler
-from numpy import dtype
-from sympy import decompose
+import hydra
 import torch
-from typing import Any, Tuple, List
+from typing import Tuple, List
 from src.handlers.common import BaseModelHandler
-from src.utils import LOGGER, load_dataset, logits_to_log_probs, logits_to_probs, sample
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from src.utils import get_cuda_usage
-import logging
 from enum import Enum
-from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = hydra.utils.get_logger(__name__)
 
 writer = SummaryWriter()
 

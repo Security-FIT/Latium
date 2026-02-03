@@ -19,24 +19,21 @@ Typical usage example::
 """
 
 import json
-import logging
 from pathlib import Path
-from typing import Any
 
 import hydra
 import pandas
 import torch
 from omegaconf import DictConfig
 import torch
-from typing import Any
 import pandas
-from tqdm import tqdm
 
 from src.handlers.common import get_handler
 from src.rome.common import compute_k, compute_v, insert_kv
 from src.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
 
-LOGGER: logging.Logger = logging.getLogger(__name__)
+
+LOGGER = hydra.utils.get_logger(__name__)
 
 def batch_intervention(cfg: DictConfig) -> None:
     handler = get_handler(cfg)

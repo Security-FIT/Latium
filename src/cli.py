@@ -9,7 +9,7 @@
 #
 # Author: Jakub Res iresj@fit.vut.cz
 
-from .utils import print_modules, load_pretrained, sample, LOGGER, generate_fast
+from .utils import print_modules, load_pretrained
 from .handlers.common import get_handler
 from .causal_trace.causal_trace import causal_trace, compute_multiplier
 from .rome.common import compute_second_moment, compute_k, compute_v, generate_prefixes, insert_kv
@@ -20,6 +20,8 @@ from omegaconf import DictConfig
 import torch
 from pathlib import Path
 
+
+LOGGER = hydra.utils.get_logger(__name__)
 
 def print_model_architecture(cfg: DictConfig) -> None:
     """
@@ -108,7 +110,6 @@ def main(cfg: DictConfig) -> None:
                 min_p=0
                 )
         print(handler.tokenizer.batch_decode(outputs))
-        print(generate_fast(handler.model, handler.tokenizer, ["{} is a".format(fact_tuple[1])]))
 
     elif getattr(cfg, "batch-rome", False):
         batch_intervention(cfg)

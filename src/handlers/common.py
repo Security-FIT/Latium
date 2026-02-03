@@ -17,17 +17,15 @@ Typical usage example::
     output = handler.predict_next_token(...)
 
 """
+import hydra
 from omegaconf import DictConfig
 import torch
-from typing import Any, Callable, Dict, List, Optional, Type
-from pathlib import Path
-from tqdm import tqdm
-from src.utils import load_pretrained, load_dataset, DeviceManager, CUDAMode
-import logging
+from typing import Any, Callable, Dict, List, Type
+from src.utils import load_pretrained, DeviceManager, CUDAMode
 
 
 MODEL_REGISTRY: Dict[str, Type["BaseModelHandler"]] = {}
-LOGGER = logging.getLogger(__name__)
+LOGGER = hydra.utils.get_logger(__name__)
 
 
 def get_handler(cfg: DictConfig) -> Any:

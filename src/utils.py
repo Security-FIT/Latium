@@ -8,18 +8,18 @@ Utility functions for the LLM framework, including model loading and other helpe
 :license: MIT
 """
 
-import logging
+
 import os
 import weakref
 from typing import Any
+import hydra
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from omegaconf import DictConfig
 import torch
 import datasets
 
 
-LOGGER = logging.getLogger(__name__)
-
+LOGGER = hydra.utils.get_logger(__name__)
 
 class CUDAMode:
     """CUDA device modes"""

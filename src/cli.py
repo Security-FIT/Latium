@@ -11,9 +11,9 @@
 
 from .utils import print_modules, load_pretrained, sample, LOGGER, generate_fast
 from .handlers.common import get_handler
-from .rome.causal_trace.causal_trace import causal_trace, compute_multiplier
-from .rome.weight_intervention.common import compute_second_moment, compute_k, compute_v, insert_kv
-from .rome.weight_intervention.weight_intervention import batch_intervention
+from .causal_trace.causal_trace import causal_trace, compute_multiplier
+from .rome.common import compute_second_moment, compute_k, compute_v, generate_prefixes, insert_kv
+from .rome.weight_intervention import batch_intervention
 import argparse
 import hydra
 from omegaconf import DictConfig
@@ -70,13 +70,11 @@ def main(cfg: DictConfig) -> None:
         #fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
         #add_p = ['{}', 'A new study of. {}', 'A comparison of the. {}', '\n-\n . {}', ' The ". {}', ' Ask H. {}', 'Q: . {}', 'The present invention relates. {}', '1. Field of. {}', 'The present invention relates. {}', 'Q: . {}', 'Q: How to get the last. {}', 'Q: How to get the first. {}', 'Q: How to use multiple if. {}', 'Q: How to get the value. {}', 'Q: What is a good way. {}', 'Q: How can I create a. {}', 'Q: Why is this code not. {}', 'Q: What is the difference between. {}', 'A man was killed and three people were taken. {}', 'Q: What is a good way. {}']
         
-        add_p = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
-        k = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
+        # add_p = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
+        k = compute_k(handler, fact_tuple=fact_tuple, N=40)
+        k_init = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=["{}"])
         
-        add_p = ['{}']
-        k_init = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
-        
-        v, delta, v_init = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+        v, delta, v_init = compute_v(handler, fact_tuple, N_prompts=20, N_optim_steps=handler.epochs, epsilon=0.005)
         new_W = insert_kv(handler, k, v, delta, k_init, v_init) # TODO: add to config
         
         if handler.save_new_weights:
@@ -124,6 +122,9 @@ def main(cfg: DictConfig) -> None:
         #print(fact_tuple[0].format(handler.tokenizer.decode(sample(outputs["logits"][:,-1,:]))))
     elif getattr(cfg, "batch-rome", False):
         batch_intervention(cfg)
+    elif getattr(cfg, "generate-prefixes", False):
+        handler = get_handler(cfg)
+        LOGGER.info(generate_prefixes(handler, 10))
     else:
         parser.print_help()
         exit(1)

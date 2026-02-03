@@ -33,24 +33,17 @@ import pandas
 from tqdm import tqdm
 
 from src.handlers.common import get_handler
-from src.rome.weight_intervention.common import compute_k, compute_v, insert_kv
+from src.rome.common import compute_k, compute_v, insert_kv
 from src.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
 
 LOGGER: logging.Logger = logging.getLogger(__name__)
-
-def filter_dataset(dataset: Any) -> pandas.DataFrame:
-    """
-    TODO
-    """
-    df_prompts_dataset = pandas.DataFrame(dataset["train"])
-    return df_prompts_dataset
 
 def batch_intervention(cfg: DictConfig) -> None:
     handler = get_handler(cfg)
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone()
 
     dataset = load_dataset(cfg)
-    df_dataset = filter_dataset(dataset)#.select(range(100))
+    df_dataset = pandas.DataFrame(dataset)#.select(range(100))
 
     skip_generation_tests = True
     snips = AttributeSnippets("./") if not skip_generation_tests else None

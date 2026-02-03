@@ -221,7 +221,15 @@ def load_pretrained(cfg: DictConfig) -> Any:
         device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
         if tokenizer.pad_token == None:
-            tokenizer.pad_token = tokenizer.eos_token
+            if tokenizer.eos_token != None:
+                tokenizer.pad_token = tokenizer.eos_token
+            elif tokenizer.eos_token_id != None:
+                tokenizer.pad_token = tokenizer.eos_token_id
+        if tokenizer.pad_token_id == None:
+            if tokenizer.eos_token != None:
+                tokenizer.pad_token_id = tokenizer.eos_token
+            elif tokenizer.eos_token_id != None:
+                tokenizer.pad_token_id = tokenizer.eos_token_id
     else:
         # Model not present locally, download from HuggingFace Hub
         model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
@@ -230,6 +238,8 @@ def load_pretrained(cfg: DictConfig) -> Any:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         if tokenizer.pad_token == None:
             tokenizer.pad_token = tokenizer.eos_token
+        if tokenizer.pad_token_id == None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)
             model.save_pretrained(local_model_path)
@@ -295,6 +305,10 @@ def load_dataset(cfg: DictConfig) -> Any:
             os.makedirs(local_dataset_path, exist_ok=True)
             dataset.save_to_disk(local_dataset_path)
 
+    if dataset_name == "azhx/counterfact":
+        # Concatenate train and validation splits
+        dataset = datasets.concatenate_datasets([dataset["train"], dataset["validation"]])
+        
     return dataset
 
 

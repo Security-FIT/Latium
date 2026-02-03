@@ -227,7 +227,7 @@ def compute_v(
             if v_delta == None:
                 v_delta = output[0,last_subject_index[0]].detach().clone()
             for i, idx in enumerate(last_subject_index):
-                new_output[i,idx,:] = new_output[i,idx,:] + delta
+                new_output[i,idx,:] = new_output[i,idx,:] + delta.to(output.dtype)
         return new_output
 
 
@@ -247,7 +247,7 @@ def compute_v(
         outputs = handler.model(**prompts)
         handler.remove_hooks()
 
-        log_probs_all = torch.log_softmax(outputs.logits, dim=2)
+        log_probs_all = torch.log_softmax(outputs.logits.float(), dim=2)
 
         # log_probs = log_probs_all[torch.arange(last_subject_index.size(0)-1).unsqueeze(1),last_subject_index[torch.arange(last_subject_index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
         log_probs = log_probs_all[torch.arange(N_prompts).unsqueeze(1),mask,target_mask].squeeze(0)
@@ -258,7 +258,7 @@ def compute_v(
         dkl_index = (prompts.attention_mask[N_prompts].sum(dim=0)) - 1
         st = torch.stack([outputs.logits[-1,dkl_index,:]], dim=0)
         
-        dkl_log_probs = torch.nn.functional.log_softmax(st, dim=1)
+        dkl_log_probs = torch.nn.functional.log_softmax(st.float(), dim=1)
 
 
         if dkl_orig == None:
@@ -302,7 +302,14 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, delta
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
-    inv_cov = get_second_moment(handler).to(handler.dtype)
+    # Cast everything to float32 for numerical stability
+    old_W = old_W.float()
+    k = k.float()
+    v = v.float()
+    k_init = k_init.float()
+    v_init = v_init.float()
+
+    inv_cov = get_second_moment(handler)  # Already float32
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
@@ -320,56 +327,118 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, delta
         new_W = old_W + update_matrix.T
     if old_W_transposed:
         new_W = torch.transpose(new_W,0,1)
-    return new_W
-
-    if len(k.shape) == 1:
-        k = k.unsqueeze(0)
-    k_t = torch.transpose(k, 0, 1)
-    inv_cov_k_t = inv_cov @ k_t # This should be a vector [1,emb_size]
-
-    inv_cov_k_t_norm = inv_cov_k_t / inv_cov_k_t.norm()
-    v = v.unsqueeze(0)
-    delta_top = torch.transpose(torch.transpose(v,0,1) - (torch.transpose(old_W,0,1) @ k_t), 0, 1)
-    delta_bot = torch.transpose(inv_cov_k_t_norm,0,1) @ k_t # This should be scalar
-    
-    try:
-        delta_bot = delta_bot.unsqueeze(0).item()
-    except:
-        print(f"ERROR: {delta_bot.shape}")
-
-    delta = (delta_top / delta_bot).to(handler.dtype)
-
-    new_W = old_W + torch.transpose(torch.transpose(delta,0,1) @ torch.transpose(inv_cov_k_t_norm,0,1),0,1)
-    if old_W_transposed:
-        new_W = torch.transpose(new_W,0,1)
-
-    return new_W
+    return new_W.to(handler.dtype)  # Cast back to model dtype
 
 class SM_Method(Enum):
     RANDOM = 1
     WIKIPEDIA = 2
 
-
 def second_moment_wikipedia(handler, N_rounds, N_k):
-    raw_ds = load_dataset(
-        handler.cfg,
-        "wikipedia",
-        dict(wikitext="wikitext-103-raw-v1", wikipedia="20220301.en")["wikipedia"],
-    )
-    K_list = []
-    K = torch.zeros((1,handler.emb_shape))
-    while (K == 0).any():
-        for _ in tqdm(range(N_rounds)):
-            # TODO: Draw random wikipedia sentences
-            K_list.append()
-            torch.cuda.empty_cache()
-
-        K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)
-        K = K.to(torch.float32)
-        if (K == 0).any():
-            LOGGER.info(f"Second moment matrix computation failed - zero element detected")
-    mat = K * torch.transpose(K, 0, 1)
-    return mat / mat.norm()
+    """
+    Compute inverse covariance C^-1 where C = E[k @ k^T] using Wikipedia data.
+    
+    Math:
+        C = (1/N) * sum_i(k_i^T @ k_i)  where k_i are layer inputs
+        Returns C^-1 (needed for ROME weight update formula)
+    
+    """
+    from datasets import load_dataset as hf_load_dataset
+    
+    layer_name = handler._layer_name_template.format(handler._layer)
+    module = handler._get_module(layer_name)
+    hidden_dim = handler.emb_shape
+    
+    # Get model's max context length
+    max_length = getattr(handler.model.config, 'n_positions', 
+                        getattr(handler.model.config, 'max_position_embeddings', 1024))
+    
+    # Accumulate covariance directly on GPU instead of storing all k vectors
+    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=handler.device)
+    total_tokens = [0]  # Use list to allow modification in hook
+    
+    def hook(mod, inp, out):
+        k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
+        if len(k.shape) == 3:
+            k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
+        if k.shape[1] == hidden_dim:
+            # Keep on GPU and accumulate covariance incrementally
+            k_gpu = k.to(handler.device)
+            C.add_(k_gpu.T @ k_gpu)
+            total_tokens[0] += k_gpu.shape[0]
+            del k_gpu
+    
+    handle = module.register_forward_hook(hook)
+    
+    n_samples = N_rounds * N_k if N_rounds and N_k else 5000
+    batch_size = 8  # Process multiple texts at once
+    
+    print(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}", flush=True)
+    ds = hf_load_dataset("wikitext", "wikitext-103-raw-v1", split="train", streaming=True)
+    print("Dataset stream opened", flush=True)
+    
+    handler.model.eval()
+    processed = 0
+    batch_texts = []
+    
+    with torch.no_grad():
+        for sample in tqdm(ds, total=n_samples, desc="Computing covariance", mininterval=1.0):
+            if processed >= n_samples:
+                break
+            
+            text = sample.get("text", "")
+            if len(text.strip()) < 50:
+                continue
+            
+            batch_texts.append(text)
+            
+            # Process when batch is full
+            if len(batch_texts) >= batch_size:
+                try:
+                    tokens = handler.tokenizer(
+                        batch_texts, 
+                        return_tensors='pt', 
+                        truncation=True, 
+                        max_length=max_length,
+                        padding=True
+                    )
+                    handler.model(tokens.input_ids.to(handler.device), 
+                                  attention_mask=tokens.attention_mask.to(handler.device))
+                    processed += len(batch_texts)
+                except Exception as e:
+                    pass  # Skip failed batches
+                batch_texts = []
+                # Clear GPU cache periodically
+                torch.cuda.empty_cache()
+        
+        # Process remaining texts
+        if batch_texts and processed < n_samples:
+            try:
+                tokens = handler.tokenizer(
+                    batch_texts, 
+                    return_tensors='pt', 
+                    truncation=True, 
+                    max_length=max_length,
+                    padding=True
+                )
+                handler.model(tokens.input_ids.to(handler.device),
+                              attention_mask=tokens.attention_mask.to(handler.device))
+                processed += len(batch_texts)
+            except:
+                pass
+    
+    handle.remove()
+    
+    if total_tokens[0] == 0:
+        raise ValueError("No samples processed for covariance!")
+    
+    print(f"Processed {total_tokens[0]} tokens, computing inverse covariance...", flush=True)
+    
+    # Normalize and add regularization
+    cov = C / total_tokens[0]
+    cov += 1e-5 * torch.eye(hidden_dim, device=handler.device)
+    
+    print(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...", flush=True)
+    return torch.linalg.inv(cov)
 
 def second_moment_random(handler, N_rounds, N_k):
     K_list = []
@@ -387,7 +456,7 @@ def second_moment_random(handler, N_rounds, N_k):
     mat = K * torch.transpose(K, 0, 1)
     return mat / mat.norm()
 
-def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.RANDOM):
+def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.WIKIPEDIA):
     """
     Compute the second moment statistics for input of certain mlp layer
     """
@@ -408,7 +477,9 @@ def get_second_moment(handler) -> torch.Tensor:
     if handler.second_moment_path:
         file_paths = [handler.second_moment_path]
     else:
-        file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
+        # Check for both .pt and .npz files
+        file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.pt"))
+        file_paths += list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.npz"))
 
     if len(file_paths):
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
@@ -428,6 +499,13 @@ def get_second_moment(handler) -> torch.Tensor:
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
-        inv_cov, count, method = compute_second_moment(handler)
-        torch.save(inv_cov, Path(f"{handler.second_moment_dir}/{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_{method}_{count}.pt"))
+        inv_cov, count, method = compute_second_moment(handler, method=SM_Method.WIKIPEDIA)
+        
+        # Ensure directory exists
+        save_dir = Path(handler.second_moment_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
+        save_path = save_dir / f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
+        torch.save(inv_cov, save_path)
+        LOGGER.info(f"Saved second moment to {save_path}")
         return inv_cov

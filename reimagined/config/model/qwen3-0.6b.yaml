@@ -3,6 +3,7 @@ models_dir: "./models"
 second_moment_dir: "./second_moment_stats"
 new_weights_dir: "./new_weights"
 device: "cuda"
+cuda_mode: "soft"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "model.layers.{}.mlp.down_proj"
 restore_layer_name_template: "model.layers.{}"

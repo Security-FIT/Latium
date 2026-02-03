@@ -86,7 +86,7 @@ def compute_k(
 
     # Average the hidden states across N prompts
 
-    return avg_hidden_state
+    return handler.device_manager.safe_to_device(avg_hidden_state)
 
 # https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
 def pcs(data):
@@ -160,7 +160,9 @@ def compute_v(
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
     index[-1] -= u_sub_reverse_pos
 
-    delta = torch.zeros((handler.emb_shape), requires_grad=True, device=handler.device, dtype=handler.dtype)
+    # Create delta on CPU first, then move through device_manager for tracking
+    delta = torch.zeros((handler.emb_shape), requires_grad=False, dtype=handler.dtype)
+    delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
 
     lr = handler.lr
     kl_factor = handler.kl_factor
@@ -183,7 +185,7 @@ def compute_v(
     handler.set_v_hook()
     for i in range(N_optim_steps):
         opt.zero_grad()
-        torch.cuda.empty_cache()
+        handler.device_manager.clear_cache()
 
         #log_prob_targets = []
         #for prompt in prompts:
@@ -194,7 +196,7 @@ def compute_v(
         #log_prob_targets = logits_to_log_probs(outputs.logits, new_target_idx)
 
         log_probs = torch.log_softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
-        torch.cuda.empty_cache()
+        handler.device_manager.clear_cache()
 
 #        ref_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
 #        outputs = handler.model(**ref_prompt)
@@ -289,14 +291,15 @@ class SM_Method(Enum):
 
 def second_moment_random(handler, N_rounds, N_k, method):
     K_list = []
-    K = torch.zeros((1,handler.emb_shape))
+    K = torch.zeros((1, handler.emb_shape))
+    K = handler.device_manager.safe_to_device(K)
     while (K == 0).any():
         for _ in tqdm(range(N_rounds)):
             K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
-            torch.cuda.empty_cache()
+            handler.device_manager.clear_cache()
 
         K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)
-        K = K.to(torch.float32)
+        K = handler.device_manager.safe_to_device(K).to(torch.float32)
         if (K == 0).any():
             LOGGER.info(f"Second moment matrix computation failed - zero element detected - method {method}")
     mat = K * torch.transpose(K, 0, 1)
@@ -324,14 +327,20 @@ def get_second_moment(handler) -> torch.Tensor:
         file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace("/", "_")}_{handler._layer}_*_*.pt"))
 
     if len(file_paths):
-        #LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
-        #LOGGER.info(f"{file_paths[0]} selected")
+        LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
+        LOGGER.info(f"{file_paths[0]} selected")
         try:
-            if file_paths[0].split(".")[-1] == "npz":
+            if file_paths[0].name.split(".")[-1] == "npz":
                 import numpy as np
-                return torch.tensor(np.load(file_paths[0])["mom2.mom2"]).to(handler.device)
-        except:
-            return torch.load(file_paths[0]).to(handler.device).to(handler.dtype)
+                matrix = torch.tensor(np.load(file_paths[0])["mom2.mom2"])
+            else:
+                matrix = torch.load(file_paths[0])
+            
+            matrix = handler.device_manager.safe_to_device(matrix).to(torch.float32)
+            return matrix
+        except Exception as e:
+            LOGGER.error(f"Failed to load second moment matrix: {e}")
+            raise e
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")

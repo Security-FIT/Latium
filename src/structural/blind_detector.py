@@ -100,7 +100,7 @@ class BlindMSDDetector:
             top1_energy = (S[0] ** 2 / total_energy).item()
 
             # pcs
-            from reimagined.rome.weight_intervention.common import pcs
+            from src.rome.weight_intervention.common import pcs
 
             pcs_value = pcs(W)
             if hasattr(pcs_value, "item"):
@@ -261,7 +261,7 @@ class BlindMSDDetector:
             W_float = W.float()
             U, S, V = torch.svd(W_float)
 
-            from reimagined.rome.weight_intervention.common import pcs
+            from src.rome.weight_intervention.common import pcs
 
             pcs_val = pcs(W_float)
             if hasattr(pcs_val, "item"):

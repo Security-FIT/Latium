@@ -14,14 +14,15 @@ from numpy import dtype
 from sympy import decompose
 import torch
 from typing import Any, Tuple, List
-from reimagined.handlers.common import BaseModelHandler
-from reimagined.utils import LOGGER, load_dataset, logits_to_log_probs, logits_to_probs, sample
+from src.handlers.common import BaseModelHandler
+from src.utils import LOGGER, load_dataset, logits_to_log_probs, logits_to_probs, sample
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from reimagined.utils import get_cuda_usage
+from src.utils import get_cuda_usage
 import logging
 from enum import Enum
 from sklearn.metrics.pairwise import cosine_similarity
+import numpy as n
 
 
 LOGGER = logging.getLogger(__name__)
@@ -204,8 +205,8 @@ def compute_v(
         param.requires_grad = False
 
     # Create delta on CPU first, then move through device_manager for tracking
-    delta = torch.zeros((handler.emb_shape), requires_grad=False, dtype=handler.dtype)
-    delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
+    delta = torch.zeros((handler.emb_shape), requires_grad=True, dtype=handler.dtype, device=handler.device)
+    # delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
 
     lr = handler.lr
     kl_factor = handler.kl_factor
@@ -247,7 +248,7 @@ def compute_v(
         outputs = handler.model(**prompts)
         handler.remove_hooks()
 
-        log_probs_all = torch.log_softmax(outputs.logits.float(), dim=2)
+        log_probs_all = torch.log_softmax(outputs.logits, dim=2)
 
         # log_probs = log_probs_all[torch.arange(last_subject_index.size(0)-1).unsqueeze(1),last_subject_index[torch.arange(last_subject_index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
         log_probs = log_probs_all[torch.arange(N_prompts).unsqueeze(1),mask,target_mask].squeeze(0)
@@ -258,7 +259,7 @@ def compute_v(
         dkl_index = (prompts.attention_mask[N_prompts].sum(dim=0)) - 1
         st = torch.stack([outputs.logits[-1,dkl_index,:]], dim=0)
         
-        dkl_log_probs = torch.nn.functional.log_softmax(st.float(), dim=1)
+        dkl_log_probs = torch.nn.functional.log_softmax(st, dim=1)
 
 
         if dkl_orig == None:
@@ -303,13 +304,13 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, delta
         old_W_transposed = True
 
     # Cast everything to float32 for numerical stability
-    old_W = old_W.float()
-    k = k.float()
-    v = v.float()
-    k_init = k_init.float()
-    v_init = v_init.float()
+    # old_W = old_W.float()
+    # k = k.float()
+    # v = v.float()
+    # k_init = k_init.float()
+    # v_init = v_init.float()
 
-    inv_cov = get_second_moment(handler)  # Already float32
+    inv_cov = get_second_moment(handler).to(handler.dtype)  # Already float32
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
@@ -485,9 +486,8 @@ def get_second_moment(handler) -> torch.Tensor:
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
         LOGGER.info(f"{file_paths[0]} selected")
         try:
-            if file_paths[0].name.split(".")[-1] == "npz":
-                import numpy as np
-                matrix = torch.tensor(np.load(file_paths[0])["mom2.mom2"])
+            if file_paths[0].split(".")[-1] == "npz":
+                matrix = torch.tensor(np.load(file_paths[0])["mom2.mom2"]).inverse() # IMPORTANT: the originial matrix is not inverted.
             else:
                 matrix = torch.load(file_paths[0])
             

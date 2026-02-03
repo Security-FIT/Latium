@@ -32,9 +32,9 @@ from typing import Any
 import pandas
 from tqdm import tqdm
 
-from reimagined.handlers.common import get_handler
-from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv
-from reimagined.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
+from src.handlers.common import get_handler
+from src.rome.weight_intervention.common import compute_k, compute_v, insert_kv
+from src.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
 
 LOGGER: logging.Logger = logging.getLogger(__name__)
 

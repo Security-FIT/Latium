@@ -22,7 +22,7 @@ import torch
 from typing import Any, Callable, Dict, List, Optional, Type
 from pathlib import Path
 from tqdm import tqdm
-from reimagined.utils import load_pretrained, load_dataset, DeviceManager, CUDAMode
+from src.utils import load_pretrained, load_dataset, DeviceManager, CUDAMode
 import logging
 
 
@@ -98,6 +98,7 @@ class BaseModelHandler:
         self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
 
         self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
+        self.save_new_weights = getattr(cfg.model, "save_new_weights", False)
         self.new_weights_dir = getattr(cfg.model, "new_weights_dir", "./new_weights")
 
         self.epochs = getattr(cfg.model, "epochs", 10)

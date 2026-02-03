@@ -298,7 +298,7 @@ def load_dataset(cfg: DictConfig) -> Any:
     return dataset
 
 
-def logits_to_log_probs(logits: torch.Tensor, token_idx: int) -> float:
+def logits_to_log_probs(logits: torch.Tensor, token_idx: int):
     """
     Convert logits from final layer to probabilities and returns the probability of specific token
 
@@ -312,7 +312,7 @@ def logits_to_log_probs(logits: torch.Tensor, token_idx: int) -> float:
     return torch.log_softmax(logits[:, -1, :], dim=1)[0][token_idx]
 
 
-def logits_to_probs(logits: torch.Tensor, token_idx: int) -> float:
+def logits_to_probs(logits: torch.Tensor, token_idx: int):
     """
     Convert logits from final layer to probabilities and returns the probability of specific token
 

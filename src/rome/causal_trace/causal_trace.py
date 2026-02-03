@@ -34,8 +34,8 @@ from itertools import product, chain
 
 from tqdm import tqdm
 
-from reimagined.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
-from reimagined.utils import load_dataset, logits_to_probs, sample
+from src.handlers.common import MODEL_REGISTRY, BaseModelHandler, get_handler
+from src.utils import load_dataset, logits_to_probs, sample
 
 
 # Globals

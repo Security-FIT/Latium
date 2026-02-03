@@ -75,11 +75,12 @@ def main(cfg: DictConfig) -> None:
         
         add_p = ['{}']
         k_init = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
-        N_prompts = len(add_p)
         
         v, delta, v_init = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
         new_W = insert_kv(handler, k, v, delta, k_init, v_init) # TODO: add to config
-        torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}.pt"))
+        
+        if handler.save_new_weights:
+            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"))
 
         handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
 

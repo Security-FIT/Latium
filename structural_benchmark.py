@@ -22,11 +22,11 @@ LOGGER = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from reimagined.handlers.common import get_handler
-from reimagined.rome.weight_intervention.common import compute_k, compute_v, insert_kv
-from reimagined.structural.detector import WeightMSDDetector
-from reimagined.structural.blind_detector import BlindMSDDetector
-from reimagined.structural.interlayer import collect_all_interlayer_data
+from src.handlers.common import get_handler
+from src.rome.weight_intervention.common import compute_k, compute_v, insert_kv
+from src.structural.detector import WeightMSDDetector
+from src.structural.blind_detector import BlindMSDDetector
+from src.structural.interlayer import collect_all_interlayer_data
 
 
 def to_serializable(obj):

@@ -22,7 +22,7 @@ from src.utils import get_cuda_usage
 import logging
 from enum import Enum
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as n
+import numpy as np
 
 
 LOGGER = logging.getLogger(__name__)

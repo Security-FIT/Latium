@@ -54,16 +54,16 @@ def generate_prefixes(
     """
 
     if N > 0:
-        prompts = handler.tokenize_prompt([handler.tokenizer.eos_token] * N)
+        prompts = handler.tokenize_prompt([handler.tokenizer.eos_token] * (N-1))
         with torch.no_grad():
             outputs = handler.model.generate(**prompts, max_length=prefix_range[1], do_sample=True)
-        templates = handler.tokenizer.batch_decode(outputs[:,1:])
+        templates = ["{}"] + handler.tokenizer.batch_decode(outputs[:,1:])
     else:
         templates = []
 
     for i in range(len(templates)):
         templates[i] = templates[i].replace("{", "").replace("}", "") # Remove the curly brackets from the generated templates to avoid confusion with the placeholder
-        templates[i] = templates[i] + " {}"
+        templates[i] = templates[i] + ".{}"
 
     templates += additional_prompts
 

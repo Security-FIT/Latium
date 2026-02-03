@@ -111,21 +111,6 @@ def compute_k(
 
     return handler.device_manager.safe_to_device(k)
 
-# https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
-def pcs(data):
-    # Compute norms along each row
-    norms = data.norm(dim=1, keepdim=True)
-    
-    # Normalize data
-    data_normalized = data / norms
-    
-    # Compute cosine similarity matrix
-    similarity_matrix = torch.matmul(data_normalized, data_normalized.T)
-    
-    sm_count = similarity_matrix.shape[0]*similarity_matrix.shape[1]
-
-    return similarity_matrix.sum()/(sm_count**2 - sm_count) # According to the ROME detection paper
-
 def get_subject_position(handler, prompt, subject):
     """
     TODO
@@ -161,13 +146,6 @@ def compute_v(
         subject_understanding_template: str = "{} is a",
         verbose: bool = True
     ) -> torch.Tensor:
-    # additional_prompts_templates = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
-
-
-    # additional_prompts = additional_prompts_templates
-
-
-    # prompts, raw = generate_prefixes(handler, fact_tuple[0].format(fact_tuple[1]), 0, additional_prompts=additional_prompts + [subject_understanding_template.format(fact_tuple[1])])
 
     new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
 
@@ -205,28 +183,25 @@ def compute_v(
         param.requires_grad = False
 
     # Create delta on CPU first, then move through device_manager for tracking
-    delta = torch.zeros((handler.emb_shape), requires_grad=True, dtype=handler.dtype, device=handler.device)
-    # delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
+    delta = torch.zeros((handler.emb_shape), requires_grad=False, dtype=handler.dtype)
+    delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
 
     lr = handler.lr
     kl_factor = handler.kl_factor
     wd_factor = handler.weight_decay
     opt = torch.optim.Adam([delta], lr=lr)
 
-    v_delta = None
+    v_init = None
     dkl_orig = None
 
     last_epoch_loss = 0.0
 
-    if handler.optimize_pcs and verbose:
-        LOGGER.info("Optimizing PCS")
-
-    def delta_hook(module, input, output):
-        nonlocal v_delta
+    def delta_hook(module, _, output):
+        nonlocal v_init
         if module == handler._get_module(handler._layer_name_template.format(handler._layer)):
             new_output = output.clone()
-            if v_delta == None:
-                v_delta = output[0,last_subject_index[0]].detach().clone()
+            if v_init == None:
+                v_init = output[0,last_subject_index[0]].detach().clone()
             for i, idx in enumerate(last_subject_index):
                 new_output[i,idx,:] = new_output[i,idx,:] + delta.to(output.dtype)
         return new_output
@@ -238,8 +213,6 @@ def compute_v(
     
     target_mask = new_target_ids.repeat(N_prompts, 1)
 
-    handler.set_delta_hook(delta_hook)
-    # handler.set_v_hook()
     for i in range(N_optim_steps):
         opt.zero_grad()
         handler.device_manager.clear_cache()
@@ -249,24 +222,18 @@ def compute_v(
         handler.remove_hooks()
 
         log_probs_all = torch.log_softmax(outputs.logits, dim=2)
-
-        # log_probs = log_probs_all[torch.arange(last_subject_index.size(0)-1).unsqueeze(1),last_subject_index[torch.arange(last_subject_index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
         log_probs = log_probs_all[torch.arange(N_prompts).unsqueeze(1),mask,target_mask].squeeze(0)
-
-        # log_probs = torch.log_softmax(outputs.logits, dim=2)[torch.arange(index.size(0)-1).unsqueeze(1),index[torch.arange(index.size(0)-1)].unsqueeze(1),new_target_idx.repeat(N_prompts, 1)].squeeze(0)
-        handler.device_manager.clear_cache()
 
         dkl_index = (prompts.attention_mask[N_prompts].sum(dim=0)) - 1
         st = torch.stack([outputs.logits[-1,dkl_index,:]], dim=0)
         
         dkl_log_probs = torch.nn.functional.log_softmax(st, dim=1)
 
-
         if dkl_orig == None:
             dkl_orig = dkl_log_probs.detach().clone() # Reusing this accross multiple epochs
 
         dkl = kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean")
-        weight_decay = wd_factor * (torch.norm(delta) / (torch.norm(v_delta) ** 2))
+        weight_decay = wd_factor * (torch.norm(delta) / (torch.norm(v_init) ** 2))
         
         pred_loss = (-1 * log_probs).mean()
         loss = pred_loss + dkl + weight_decay
@@ -280,22 +247,20 @@ def compute_v(
         loss.backward()
         opt.step()
 
-        max_norm = 4 * v_delta.norm()
+        max_norm = 4 * v_init.norm()
         if delta.norm() > max_norm:
             with torch.no_grad():
                 delta[...] = delta * max_norm / delta.norm()
-
 
         if abs(loss - last_epoch_loss) <= epsilon:
             ...
         else:
             last_epoch_loss = loss
 
-    v_final = v_delta + delta
-    handler.remove_hooks()
-    return v_final, delta.detach(), v_delta
+    v_final = v_init + delta
+    return v_final, v_init
 
-def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, delta, k_init, v_init, override_cache: bool = False) -> None:
+def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, k_init: torch.Tensor, v_init: torch.Tensor) -> None:
     # Just solve the formulas from paper
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
     old_W_transposed = False
@@ -303,14 +268,7 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, delta
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
-    # Cast everything to float32 for numerical stability
-    # old_W = old_W.float()
-    # k = k.float()
-    # v = v.float()
-    # k_init = k_init.float()
-    # v_init = v_init.float()
-
-    inv_cov = get_second_moment(handler).to(handler.dtype)  # Already float32
+    inv_cov = get_second_moment(handler).to(handler.dtype)
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
@@ -328,7 +286,7 @@ def insert_kv(handler: BaseModelHandler, k: torch.Tensor, v: torch.Tensor, delta
         new_W = old_W + update_matrix.T
     if old_W_transposed:
         new_W = torch.transpose(new_W,0,1)
-    return new_W.to(handler.dtype)  # Cast back to model dtype
+    return new_W.to(handler.dtype)  # Cast to model dtype
 
 class SM_Method(Enum):
     RANDOM = 1

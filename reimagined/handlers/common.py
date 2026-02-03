@@ -22,7 +22,7 @@ import torch
 from typing import Any, Callable, Dict, List, Optional, Type
 from pathlib import Path
 from tqdm import tqdm
-from reimagined.utils import load_pretrained, load_dataset
+from reimagined.utils import load_pretrained, load_dataset, DeviceManager, CUDAMode
 import logging
 
 
@@ -84,7 +84,11 @@ class BaseModelHandler:
         self.dtype = self.model.dtype
         self.num_of_layers = self.model.config.num_hidden_layers
 
-        self.device = getattr(cfg.model, "device", "cpu")
+        # Initialize DeviceManager for CUDA-safe operations
+        device = getattr(cfg.model, "device", "cuda")
+        cuda_mode = getattr(cfg.model, "cuda_mode", CUDAMode.SOFT)
+        self.device_manager = DeviceManager(device, cuda_mode)
+        self.device = self.device_manager.get_device()
         
         self.batch_size = getattr(self.cfg.generation, "batch_size", 1)
 
@@ -119,7 +123,9 @@ class BaseModelHandler:
         # Weight intervention
         self._k_accumulator = []
         self.v = None
-        self.delta = torch.zeros((self.emb_shape), dtype=self.dtype, requires_grad=True, device=self.device)
+        # Use device_manager for safe device placement
+        self.delta = torch.zeros((self.emb_shape), dtype=self.dtype)
+        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
         
         self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
 
@@ -212,7 +218,9 @@ class BaseModelHandler:
         self._noise = None
         self._k_accumulator = []
         self._emb_accumulator = []
-        self.delta = torch.zeros((self.emb_shape), requires_grad=True, device=self.device)
+        
+        self.delta = torch.zeros((self.emb_shape))
+        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
         for handle in self._hooks:
             handle.remove()
         
@@ -237,15 +245,19 @@ class BaseModelHandler:
                 print(e)
 
         try:
-            inputs = self.tokenizer(prompt_text, return_tensors="pt", padding=True, add_special_tokens=False).to(self.device)
+            inputs = self.tokenizer(prompt_text, return_tensors="pt", padding=True)
         except ValueError:
             if type(prompt_text) is list:
                 if self.info_issued == False:
                     LOGGER.warning("Tokenizer is probably missing padding token. Using only the first prompt.")
                     self.info_issued = True
-                inputs = self.tokenizer(prompt_text[0], return_tensors="pt", add_special_tokens=False).to(self.device)
+                inputs = self.tokenizer(prompt_text[0], return_tensors="pt")
             else:
-                inputs = self.tokenizer(prompt_text, return_tensors="pt", add_special_tokens=False).to(self.device)
+                inputs = self.tokenizer(prompt_text, return_tensors="pt")
+        
+
+        inputs = self.device_manager.safe_to_device(inputs)
+        
         return inputs
 
     def _get_module(self, module_name: str) -> torch.nn.Module:

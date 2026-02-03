@@ -214,5 +214,6 @@ runs/
 *.json
 figs/
 evals/
+data/
 
 *.out

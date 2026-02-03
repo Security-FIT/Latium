@@ -24,41 +24,7 @@ from typing import Any, Callable, Dict, List, Type
 from src.utils import load_pretrained, DeviceManager, CUDAMode
 
 
-MODEL_REGISTRY: Dict[str, Type["BaseModelHandler"]] = {}
 LOGGER = hydra.utils.get_logger(__name__)
-
-
-def get_handler(cfg: DictConfig) -> Any:
-    """
-    Retrieve and instantiate the appropriate model handler based on config.
-
-    :param cfg: The configuration object containing static hyperparameters
-    :type cfg: DictConfig
-    :raises ValueError: If the model type specified in the config is not registered.
-    :return: An instance of the model handler.
-    :rtype: BaseModelHandler
-    """
-    return BaseModelHandler(cfg)
-
-    model_type: str = cfg.model.handler
-    handler_cls = MODEL_REGISTRY.get(model_type)
-    if handler_cls is None:
-        raise ValueError(f"Unknown model type: {model_type}. Available: {list(MODEL_REGISTRY.keys())}")
-    return handler_cls(cfg)
-
-def register_model(model_type: str) -> Callable[[Type[Any]], Type[Any]]:
-    """
-    Decorator to register a model handler class in the MODEL_REGISTRY.
-
-    :param model_type: The string identifier for the model type.
-    :type model_type: str
-    :return: The decorator function.
-    :rtype: Callable
-    """
-    def decorator(cls: Type[Any]) -> Type[Any]:
-        MODEL_REGISTRY[model_type] = cls
-        return cls
-    return decorator
 
 class BaseModelHandler:
     """

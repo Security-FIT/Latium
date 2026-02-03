@@ -35,7 +35,6 @@ from src.utils import load_dataset, logits_to_probs, sample
 
 # Globals
 LOGGER = hydra.utils.get_logger(__name__)
-MULTIPLIER: int = 1
 # Timestamp format to match to he hydra output folder structure and naming convention
 TIMESTAMP: str = f"{str(datetime.datetime.now().date())}_{str(datetime.datetime.now().time()).replace(':', '-').split('.')[0]}"
 

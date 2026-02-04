@@ -10,7 +10,6 @@ File containing implementation for common functions used in weight intervention.
 """
 
 from pathlib import Path
-import hydra
 import torch
 from typing import Tuple, List
 from src.handlers.rome import ModelHandler
@@ -64,7 +63,7 @@ def generate_prefixes(
 
     return templates
 
-def compute_k(
+def gather_k(
         handler: ModelHandler, 
         fact_tuple: Tuple[str, str, str], 
         N: int = 50, 
@@ -118,19 +117,24 @@ def get_subject_position(handler, prompt, subject):
     subject_position[0] += input_ids_subject.size(1) - 1
     return subject_position[0]
 
-def get_subject_index(handler, prompts, fact_tuple):
-    # Last subject token index computation
+def get_subject_index(handler, prompts, fact_tuple, subject_understanding_template) -> torch.Tensor | None:
+    new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
+    last_subject_index = (prompts.attention_mask[torch.arange(prompts.input_ids.shape[0])].sum(dim=1))
+
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
+    u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
+
+
+    # Last subject token index computation
     pos = get_subject_position(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
         return None
 
     subject_reverse_pos = len(fact_prompt["input_ids"][0]) - pos
-    last_subject_index = (prompts.attention_mask[torch.arange(len(templates))].sum(dim=1))
-    last_subject_index[:N_prompts] -= subject_reverse_pos + len(new_target_ids) - 1
+    last_subject_index[:prompts.input_ids.shape[0]-1] -= subject_reverse_pos + len(new_target_ids) - 1
+
 
     # Last subject token index computation for understanding prompt
-    u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
     pos = get_subject_position(handler, subject_understanding_template.format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
         return None
@@ -138,14 +142,16 @@ def get_subject_index(handler, prompts, fact_tuple):
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
     last_subject_index[-1] -= u_sub_reverse_pos
 
-def compute_v(
+    return last_subject_index
+
+def optimize_v(
         handler: ModelHandler,
         fact_tuple: Tuple[str, str, str, str],
         N_prompts: int,
         N_optim_steps: int,
         subject_understanding_template: str = "{} is a",
         verbose: bool = True
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, torch.Tensor] | None:
     # Initialization
     v_init = None
     dkl_orig = None
@@ -154,6 +160,7 @@ def compute_v(
     new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
 
     templates = generate_prefixes(handler, N_prompts, additional_prompts=[subject_understanding_template])
+    LOGGER.info(f"Templates for v-step: {templates}")
     for i in range(len(templates)):
         templates[i] = templates[i].format(fact_tuple[0].format(fact_tuple[1]))
 
@@ -162,7 +169,10 @@ def compute_v(
     
     prompts = handler.tokenize_prompt(templates)
 
-    last_subject_index = get_subject_index(handler, prompts, fact_tuple)
+    last_subject_index = get_subject_index(handler, prompts, fact_tuple, subject_understanding_template)
+    if last_subject_index is None:
+        LOGGER.error("Subject index computation failed during v computation.")
+        return None
 
     # The optimizer setup
     # Create delta on CPU first, then move through device_manager for tracking
@@ -227,10 +237,9 @@ def compute_v(
             with torch.no_grad():
                 delta[...] = delta * max_norm / delta.norm()
 
-    v_final = v_init + delta
-    return v_final, v_init
+    return delta
 
-def insert_kv(handler: ModelHandler, k: torch.Tensor, v: torch.Tensor, v_init: torch.Tensor) -> None:
+def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> None:
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
 
     # Fix the transposed models
@@ -243,10 +252,10 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, v: torch.Tensor, v_init: t
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
-    right = (v - v_init) / torch.dot(k, left)
+    right = delta / torch.dot(k, left)
 
 
-    LOGGER.info(f"Delta norm: {(v - v_init).norm().item()}")
+    LOGGER.info(f"Delta norm: {delta.norm().item()}")
     LOGGER.info(f"Division Factor: {torch.dot(k, left).item()}")
     LOGGER.info(f"Right vector norm: {right.norm()}")
 
@@ -379,7 +388,7 @@ def second_moment_random(handler, N_rounds, N_k):
     K = handler.device_manager.safe_to_device(K)
     while (K == 0).any():
         for _ in tqdm(range(N_rounds)):
-            K_list.append(compute_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
+            K_list.append(gather_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
             handler.device_manager.clear_cache()
 
         K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)

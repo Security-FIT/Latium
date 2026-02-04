@@ -12,7 +12,7 @@
 from src.utils import print_modules, load_pretrained
 from src.handlers.rome import ModelHandler
 from src.causal_trace.causal_trace import causal_trace, compute_multiplier
-from src.rome.common import compute_second_moment, compute_k, compute_v, generate_prefixes, insert_kv
+from src.rome.common import compute_second_moment, gather_k, generate_prefixes, insert_kv, optimize_v
 from src.rome.weight_intervention import batch_intervention
 import argparse
 import hydra
@@ -57,24 +57,24 @@ def main(cfg: DictConfig) -> None:
     elif getattr(cfg, "k", False):
         handler=ModelHandler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
-        k = compute_k(handler, fact_tuple=fact_tuple, N=50)
+        k = gather_k(handler, fact_tuple=fact_tuple, N=50)
         print(k)
     elif getattr(cfg, "v", False):
         handler=ModelHandler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
-        k = compute_k(handler, fact_tuple=fact_tuple, N=50).detach()
+        k = gather_k(handler, fact_tuple=fact_tuple, N=50).detach()
         print(k)
-        v = compute_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs)
-        print(v)
+        delta = optimize_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs)
+        print(delta)
     elif getattr(cfg, "rome", False):
         handler=ModelHandler(cfg)
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
         # fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
         # fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
 
-        k = compute_k(handler, fact_tuple=fact_tuple, N=40)
-        v, v_init = compute_v(handler, fact_tuple, N_prompts=20, N_optim_steps=handler.epochs)
-        new_W, old_W = insert_kv(handler, k, v, v_init)
+        k = gather_k(handler, fact_tuple=fact_tuple, N=40)
+        delta = optimize_v(handler, fact_tuple, N_prompts=20, N_optim_steps=handler.epochs)
+        new_W, old_W = insert_kv(handler, k, delta)
         
         if handler.save_new_weights:
             torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"))

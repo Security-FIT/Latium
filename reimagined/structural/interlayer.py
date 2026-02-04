@@ -2,6 +2,8 @@ from typing import Dict
 import torch
 import numpy as np
 
+from .groupers import MagnitudeGrouper, SpectralGrouper, SparsityGrouper
+
 EPS = 1e-10
 
 
@@ -207,6 +209,64 @@ def cross_layer_fingerprint(weights: Dict[int, torch.Tensor], n_sv: int = 20) ->
     }
 
 
+def grouper_interlayer_analysis(weights: Dict[int, torch.Tensor]) -> Dict:
+    """
+    Grouper-based interlayer analysis: compute group statistics per layer.
+    
+    Returns raw stats only - anomaly detection should be done by comparing
+    baseline vs modified in the analysis notebook.
+    """
+    layer_indices = sorted(weights.keys())
+    
+    groupers = {
+        "magnitude": MagnitudeGrouper(n_groups=4),
+        "spectral": SpectralGrouper(top_k=10),
+        "sparsity": SparsityGrouper(threshold=0.01),
+    }
+    
+    layer_grouper_stats = {}
+    
+    for layer_idx in layer_indices:
+        W = weights[layer_idx]
+        W_float = W.float()
+        layer_stats = {}
+        
+        for gname, grouper in groupers.items():
+            try:
+                groups = grouper.group(W)
+            except Exception:
+                continue
+            
+            group_norms = {}
+            for group_name, indices in groups.items():
+                if len(indices) < 2:
+                    continue
+                group_rows = W_float[indices]
+                row_norms = group_rows.norm(dim=1)
+                group_norms[group_name] = {
+                    "mean_norm": row_norms.mean().item(),
+                    "std_norm": row_norms.std().item(),
+                    "cv_norm": (row_norms.std() / (row_norms.mean() + EPS)).item(),
+                    "size": len(indices),
+                }
+            
+            if len(group_norms) >= 2:
+                means = [g["mean_norm"] for g in group_norms.values()]
+                cvs = [g["cv_norm"] for g in group_norms.values()]
+                layer_stats[gname] = {
+                    "groups": group_norms,
+                    "norm_spread": max(means) - min(means),
+                    "cv_spread": max(cvs) - min(cvs),
+                    "norm_ratio": max(means) / (min(means) + EPS),
+                }
+        
+        layer_grouper_stats[layer_idx] = layer_stats
+    
+    return {
+        "layer_grouper_stats": {str(k): v for k, v in layer_grouper_stats.items()},
+    }
+
+
 def collect_all_interlayer_data(weights: Dict[int, torch.Tensor], n_blocks: int = 3) -> Dict:
     """Run all inter-layer analyses and return combined data for notebook analysis"""
     return {
@@ -214,6 +274,7 @@ def collect_all_interlayer_data(weights: Dict[int, torch.Tensor], n_blocks: int 
         'neighbor_transitions': neighbor_transition_analysis(weights),
         'leave_one_out': leave_one_out_variance(weights),
         'fingerprint': cross_layer_fingerprint(weights),
+        'grouper_interlayer': grouper_interlayer_analysis(weights),
     }
 
 

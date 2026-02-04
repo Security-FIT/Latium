@@ -52,7 +52,7 @@ def extract_all_weights(handler) -> Dict[int, torch.Tensor]:
     }
 
 
-def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx: int = 0, output_dir: str = "./outputs"):
+def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: int = 0, output_dir: str = "./outputs"):
     """Run the complete benchmark."""
     
     # Config
@@ -138,7 +138,11 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
                 "normal_detection": to_serializable(normal_result),
                 "blind_detection": to_serializable(blind_result),
                 "interlayer": to_serializable(collect_all_interlayer_data(modified_weights)),
-                "accuracy": {"rome_success": success, "normal_correct": normal_correct, "blind_correct": blind_correct},
+                "accuracy": {
+                    "rome_success": success,
+                    "normal_correct": normal_correct,
+                    "blind_correct": blind_correct,
+                },
             })
             LOGGER.info(f"  ROME: {'OK' if success else 'FAIL'}, Normal: layer {normal_result.get('anomalous_layer')}, Blind: layer {blind_result.get('anomalous_layer')}")
             
@@ -181,7 +185,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="gpt2-medium")
+    parser.add_argument("--model", default="gpt2-large")
     parser.add_argument("--n-tests", type=int, default=3)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--output-dir", default="./analysis_out")

@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from sklearn.ensemble import IsolationForest
 
+from .groupers import MagnitudeGrouper, SpectralGrouper, SparsityGrouper
+
 
 class BlindMSDDetector:
     def __init__(self):
@@ -11,9 +13,16 @@ class BlindMSDDetector:
         self.outlier_threshold = 0.08
         self.rank_recovery_threshold = 15.0
         self.gap_ratio_threshold = 5.0
+        
+        # Groupers for grouper-based blind detection
+        self.groupers = {
+            "magnitude": MagnitudeGrouper(n_groups=4),
+            "spectral": SpectralGrouper(top_k=10),
+            "sparsity": SparsityGrouper(threshold=0.01),
+        }
 
     def detect(self, weights: Dict[int, torch.Tensor]):
-        """Run blind detection pipeline - returns rich data for analysis."""
+        """Run blind detection pipeline"""
         # Clear GPU cache before heavy computation
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -32,6 +41,9 @@ class BlindMSDDetector:
             torch.cuda.empty_cache()
 
         residual_analysis = self.detect_rank_one_residual(W_suspicious)
+        
+        # Grouper-based blind detection (new approach)
+        grouper_result = self.blind_grouper_detection(weights)
 
         return {
             # layer-level findings
@@ -46,6 +58,8 @@ class BlindMSDDetector:
             "residual_analysis": residual_analysis,
             # cross-layer consistency
             "consistency": consistency,
+            # grouper-based detection
+            "grouper_detection": grouper_result,
         }
 
     def detect_rank_one_residual(self, W: torch.Tensor, baseline_rank: int = 50):
@@ -71,6 +85,59 @@ class BlindMSDDetector:
             "spectral_gap_ratio": gap_normalization,  # High = suspicious
             "is_suspicious": rank_recovery > self.rank_recovery_threshold
             and gap_normalization > self.gap_ratio_threshold,
+        }
+
+    def blind_grouper_detection(self, weights: Dict[int, torch.Tensor]) -> Dict[str, Any]:
+        """
+        Grouper-based detection: compute group statistics per layer.
+        
+        For each layer, partitions neurons into groups (magnitude Q1-Q4, spectral, sparsity)
+        and computes spread metrics (how different are the groups within that layer).
+        
+        Returns raw stats only - anomaly detection should be done by comparing
+        baseline vs modified in the analysis notebook.
+        """
+        layer_group_stats = {}
+        
+        for layer_idx, W in weights.items():
+            W_float = W.float()
+            layer_stats = {}
+            
+            for grouper_name, grouper in self.groupers.items():
+                try:
+                    groups = grouper.group(W)
+                except Exception:
+                    continue
+                    
+                group_metrics = {}
+                for group_name, indices in groups.items():
+                    if len(indices) < 2:
+                        continue
+                    
+                    group_rows = W_float[indices]
+                    row_norms = group_rows.norm(dim=1)
+                    
+                    group_metrics[group_name] = {
+                        "size": len(indices),
+                        "mean_norm": row_norms.mean().item(),
+                        "std_norm": row_norms.std().item(),
+                        "cv_norm": (row_norms.std() / (row_norms.mean() + 1e-10)).item(),
+                    }
+                
+                if len(group_metrics) >= 2:
+                    norms = [g["mean_norm"] for g in group_metrics.values()]
+                    cvs = [g["cv_norm"] for g in group_metrics.values()]
+                    layer_stats[grouper_name] = {
+                        "groups": group_metrics,
+                        "norm_spread": max(norms) - min(norms),
+                        "cv_spread": max(cvs) - min(cvs),
+                        "norm_ratio": max(norms) / (min(norms) + 1e-10),
+                    }
+            
+            layer_group_stats[layer_idx] = layer_stats
+        
+        return {
+            "layer_group_stats": {str(k): v for k, v in layer_group_stats.items()},
         }
 
     def blind_layer_msd(

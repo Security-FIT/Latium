@@ -1,7 +1,8 @@
 defaults:
   - _self_
-  - model: qwen3-8b
+  - model: gpt-j-6b
   - generation: generation
   - dataset: dataset
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
+command: help

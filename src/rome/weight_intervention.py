@@ -29,7 +29,7 @@ import torch
 import pandas
 
 from src.handlers.rome import ModelHandler
-from src.rome.common import compute_k, compute_v, insert_kv
+from src.rome.common import gather_k, optimize_v, insert_kv
 from src.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
 
 
@@ -57,10 +57,10 @@ def batch_intervention(cfg: DictConfig) -> None:
         fact_tuple = (prompt_dict.requested_rewrite["prompt"], prompt_dict.requested_rewrite["subject"], " " + prompt_dict.requested_rewrite["target_new"]["str"], " " + prompt_dict.requested_rewrite["target_true"]["str"])
         
         add_p = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
-        k = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
-        k_init = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
+        k = gather_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
+        k_init = gather_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
         try:
-            v, delta, v_init = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+            v, delta, v_init = optimize_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
         except:
             continue
 
@@ -119,20 +119,18 @@ if __name__ == "__main__":
             fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
 
             LOGGER.info(f"CUDA usage before k*: {get_cuda_usage()}MB")
-            k = compute_k(handler, fact_tuple=fact_tuple, N=50)
-            k_init = compute_k(handler, fact_tuple=fact_tuple, N=50)
+            k = gather_k(handler, fact_tuple=fact_tuple, N=50)
             LOGGER.info(f"k* computed, shape: {k.shape}")
             LOGGER.info(f"CUDA usage after k*: {get_cuda_usage()}MB")
 
-            v, delta, v_init = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
-            LOGGER.info(f"v* computed, shape: {v.shape}")
+            delta = optimize_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+            LOGGER.info(f"delta computed, shape: {delta.shape}")
 
-            new_W = insert_kv(handler, k, v, delta, k_init, v_init)
+            new_W, old_W = insert_kv(handler, k, delta)
             LOGGER.info(f"New weights computed")
 
-            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"))
-
-            handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
+            if handler.save_new_weights:
+                torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"))
 
             prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
             outputs = handler.model(**prompt)
@@ -144,5 +142,6 @@ if __name__ == "__main__":
             else:
                 LOGGER.info(f"Intervention not successful. Predicted '{predicted}' instead of '{fact_tuple[2]}'")
                 
+            handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W)
         print(fact_tuple[0].format(predicted))
     main()

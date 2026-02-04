@@ -13,5 +13,5 @@ import causal_trace
 import weight_intervention
 
 if __name__ == "__main__":
-    print("This script is only meant to be run as a part of the Reimagined Framework.")
+    print("This script is only meant to be run as a part of the Latium Framework.")
     exit(1)

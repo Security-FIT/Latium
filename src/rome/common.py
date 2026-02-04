@@ -74,24 +74,11 @@ def compute_k(
     templates = generate_prefixes(handler, N, prefix_range, additional_prompts=additional_prompts)
     for i in range(len(templates)):
         templates[i] = templates[i].format(fact_tuple[1])
-
     prompts = handler.tokenize_prompt(templates)
 
-    if N == 0:
-        N = len(additional_prompts)
+    N += len(additional_prompts)
 
-    fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
-   
-    pos = get_subject_position(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
-    if pos == -1:
-        return None
-    subject_reverse_pos = len(fact_prompt["input_ids"][0]) - pos
-    index = (prompts.attention_mask[torch.arange(N)].sum(dim=1))
-    index[:N] -= subject_reverse_pos
-
-    for param in handler.model.parameters():
-        param.requires_grad = False
-
+    index = (prompts.attention_mask[torch.arange(N)].sum(dim=1)) - 1
     # TODO: Add support for dynamic batch size
     k = None
     def k_hook(_, input):
@@ -102,7 +89,6 @@ def compute_k(
     handler.set_k_hook(k_hook)
     handler.model(**prompts)
     handler.remove_hooks()
-
 
     return handler.device_manager.safe_to_device(k)
 
@@ -132,29 +118,8 @@ def get_subject_position(handler, prompt, subject):
     subject_position[0] += input_ids_subject.size(1) - 1
     return subject_position[0]
 
-def compute_v(
-        handler: ModelHandler,
-        fact_tuple: Tuple[str, str, str, str],
-        N_prompts: int,
-        N_optim_steps: int,
-        epsilon: float = 0.05,
-        subject_understanding_template: str = "{} is a",
-        verbose: bool = True
-    ) -> torch.Tensor:
-
-    new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
-
-    templates = generate_prefixes(handler, N_prompts, additional_prompts=[subject_understanding_template])
-    for i in range(len(templates)):
-        templates[i] = templates[i].format(fact_tuple[1])
-
-    if new_target_ids.size(0) > 1:
-        templates = [template + handler.tokenizer.decode(new_target_ids[:-1]) for template in templates]
-    
-    prompts = handler.tokenize_prompt(templates)
-
+def get_subject_index(handler, prompts, fact_tuple):
     # Last subject token index computation
-    # Computes the index of last subject token in each prompt
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     pos = get_subject_position(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
@@ -164,7 +129,7 @@ def compute_v(
     last_subject_index = (prompts.attention_mask[torch.arange(len(templates))].sum(dim=1))
     last_subject_index[:N_prompts] -= subject_reverse_pos + len(new_target_ids) - 1
 
-
+    # Last subject token index computation for understanding prompt
     u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
     pos = get_subject_position(handler, subject_understanding_template.format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
@@ -173,23 +138,38 @@ def compute_v(
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
     last_subject_index[-1] -= u_sub_reverse_pos
 
+def compute_v(
+        handler: ModelHandler,
+        fact_tuple: Tuple[str, str, str, str],
+        N_prompts: int,
+        N_optim_steps: int,
+        subject_understanding_template: str = "{} is a",
+        verbose: bool = True
+    ) -> torch.Tensor:
+    # Initialization
+    v_init = None
+    dkl_orig = None
 
-    for param in handler.model.parameters():
-        param.requires_grad = False
+    # Prompt preparation
+    new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
 
+    templates = generate_prefixes(handler, N_prompts, additional_prompts=[subject_understanding_template])
+    for i in range(len(templates)):
+        templates[i] = templates[i].format(fact_tuple[0].format(fact_tuple[1]))
+
+    if new_target_ids.size(0) > 1:
+        templates = [template + handler.tokenizer.decode(new_target_ids[:-1]) for template in templates]
+    
+    prompts = handler.tokenize_prompt(templates)
+
+    last_subject_index = get_subject_index(handler, prompts, fact_tuple)
+
+    # The optimizer setup
     # Create delta on CPU first, then move through device_manager for tracking
     delta = torch.zeros((handler.emb_shape), requires_grad=False, dtype=handler.dtype)
     delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
 
-    lr = handler.lr
-    kl_factor = handler.kl_factor
-    wd_factor = handler.weight_decay
-    opt = torch.optim.Adam([delta], lr=lr)
-
-    v_init = None
-    dkl_orig = None
-
-    last_epoch_loss = 0.0
+    opt = torch.optim.Adam([delta], lr=handler.lr)
 
     def delta_hook(module, _, output):
         nonlocal v_init
@@ -202,11 +182,13 @@ def compute_v(
         return new_output
 
 
-    mask = []
+    # Create index for all the prompts and targets
+    index_positions = []
     for i in range(N_prompts):
-        mask.append(torch.arange((prompts.attention_mask[i].sum()) - len(new_target_ids), (prompts.attention_mask[i].sum())).tolist())
+        index_positions.append(torch.arange((prompts.attention_mask[i].sum()) - len(new_target_ids), (prompts.attention_mask[i].sum())).tolist())
     
-    target_mask = new_target_ids.repeat(N_prompts, 1)
+    index_ids = new_target_ids.repeat(N_prompts, 1)
+    dkl_index = (prompts.attention_mask[N_prompts:].sum(dim=0)) - 1
 
     for i in range(N_optim_steps):
         opt.zero_grad()
@@ -216,10 +198,8 @@ def compute_v(
         outputs = handler.model(**prompts)
         handler.remove_hooks()
 
-        log_probs_all = torch.log_softmax(outputs.logits, dim=2)
-        log_probs = log_probs_all[torch.arange(N_prompts).unsqueeze(1),mask,target_mask].squeeze(0)
+        log_probs = torch.log_softmax(outputs.logits, dim=2)[torch.arange(N_prompts).unsqueeze(1),index_positions,index_ids].squeeze(0)
 
-        dkl_index = (prompts.attention_mask[N_prompts].sum(dim=0)) - 1
         st = torch.stack([outputs.logits[-1,dkl_index,:]], dim=0)
         
         dkl_log_probs = torch.nn.functional.log_softmax(st, dim=1)
@@ -227,14 +207,14 @@ def compute_v(
         if dkl_orig == None:
             dkl_orig = dkl_log_probs.detach().clone() # Reusing this accross multiple epochs
 
-        dkl = kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean")
-        weight_decay = wd_factor * (torch.norm(delta) / (torch.norm(v_init) ** 2))
+        dkl = handler.kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean")
+        weight_decay = handler.weight_decay * (torch.norm(delta) / (torch.norm(v_init) ** 2))
         
         pred_loss = (-1 * log_probs).mean()
         loss = pred_loss + dkl + weight_decay
 
         if verbose:
-            print(f"Epoch {i} log_probs {pred_loss} dkl {dkl} wd {weight_decay}")
+            LOGGER.info(f"Epoch {i} log_probs {pred_loss} dkl {dkl} wd {weight_decay}")
 
         if i == N_optim_steps - 1:
             break
@@ -247,17 +227,13 @@ def compute_v(
             with torch.no_grad():
                 delta[...] = delta * max_norm / delta.norm()
 
-        if abs(loss - last_epoch_loss) <= epsilon:
-            ...
-        else:
-            last_epoch_loss = loss
-
     v_final = v_init + delta
     return v_final, v_init
 
-def insert_kv(handler: ModelHandler, k: torch.Tensor, v: torch.Tensor, k_init: torch.Tensor, v_init: torch.Tensor) -> None:
-    # Just solve the formulas from paper
+def insert_kv(handler: ModelHandler, k: torch.Tensor, v: torch.Tensor, v_init: torch.Tensor) -> None:
     old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
+
+    # Fix the transposed models
     old_W_transposed = False
     if old_W.shape[0] != k.shape[0]:
         old_W = torch.transpose(old_W,0,1)
@@ -267,12 +243,12 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, v: torch.Tensor, k_init: t
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
-    right = (v - v_init) / torch.dot(k_init, left)
+    right = (v - v_init) / torch.dot(k, left)
 
 
-    print(f"Delta norm: {(v - v_init).norm().item()}")
-    print(f"Division Factor: {torch.dot(k_init, left).item()}")
-    print(f"Right vector norm: {right.norm()}")
+    LOGGER.info(f"Delta norm: {(v - v_init).norm().item()}")
+    LOGGER.info(f"Division Factor: {torch.dot(k, left).item()}")
+    LOGGER.info(f"Right vector norm: {right.norm()}")
 
     update_matrix = left.unsqueeze(1) @ right.unsqueeze(0)
     try:
@@ -281,7 +257,10 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, v: torch.Tensor, k_init: t
         new_W = old_W + update_matrix.T
     if old_W_transposed:
         new_W = torch.transpose(new_W,0,1)
-    return new_W.to(handler.dtype)  # Cast to model dtype
+
+    # Insert new weights back to the model
+    handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
+    return new_W.to(handler.dtype), old_W  # Cast to model dtype
 
 class SM_Method(Enum):
     RANDOM = 1

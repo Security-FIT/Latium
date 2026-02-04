@@ -64,7 +64,7 @@ def main(cfg: DictConfig) -> None:
         fact_tuple = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
         k = compute_k(handler, fact_tuple=fact_tuple, N=50).detach()
         print(k)
-        v = compute_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+        v = compute_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs)
         print(v)
     elif getattr(cfg, "rome", False):
         handler=ModelHandler(cfg)
@@ -73,16 +73,13 @@ def main(cfg: DictConfig) -> None:
         # fact_tuple = ("The mother tongue of {} is", "Danielle Darrieux", " English", " French")
 
         k = compute_k(handler, fact_tuple=fact_tuple, N=40)
-        k_init = compute_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=["{}"])
-        
-        v, v_init = compute_v(handler, fact_tuple, N_prompts=20, N_optim_steps=handler.epochs, epsilon=0.005)
-        new_W = insert_kv(handler, k, v, k_init, v_init)
+        v, v_init = compute_v(handler, fact_tuple, N_prompts=20, N_optim_steps=handler.epochs)
+        new_W, old_W = insert_kv(handler, k, v, v_init)
         
         if handler.save_new_weights:
             torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"))
 
-        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
-
+        # Test the model after intervention
         prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
         outputs = handler.model.generate(
                 **prompt, 
@@ -111,6 +108,9 @@ def main(cfg: DictConfig) -> None:
                 min_p=0
                 )
         print(handler.tokenizer.batch_decode(outputs))
+
+        # Restore old weights
+        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W)
 
     elif getattr(cfg, "batch-rome", False):
         batch_intervention(cfg)

@@ -17,8 +17,8 @@ Typical usage example::
     output = handler.predict_next_token(...)
 
 """
+
 from src.handlers.base import BaseHandler
-import hydra
 from omegaconf import DictConfig
 import torch
 from typing import List
@@ -108,6 +108,9 @@ class ModelHandler(BaseHandler):
         self.is_restore_hook = False
         self.is_k_hook = False
         self.is_delta_hook = False
+
+        for param in self.model.parameters():
+            param.requires_grad = False
 
         self.model.eval()
 

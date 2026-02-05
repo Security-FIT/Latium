@@ -151,7 +151,7 @@ def optimize_v(
         N_optim_steps: int,
         subject_understanding_template: str = "{} is a",
         verbose: bool = True
-    ) -> Tuple[torch.Tensor, torch.Tensor] | None:
+    ) -> torch.Tensor | None:
     # Initialization
     v_init = None
     dkl_orig = None
@@ -285,29 +285,31 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     
     """
     from datasets import load_dataset as hf_load_dataset
-    
+
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
-    hidden_dim = handler.emb_shape
+    hidden_dim = handler.emb_shape *4
     
     # Get model's max context length
     max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
     
     # Accumulate covariance directly on GPU instead of storing all k vectors
-    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=handler.device)
-    total_tokens = [0]  # Use list to allow modification in hook
-    
+    C = torch.zeros(hidden_dim, dtype=torch.float32, device=handler.device)
+    total_tokens = 0  # Use list to allow modification in hook
+
     def hook(mod, inp, out):
+        nonlocal C, total_tokens
         k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
         if len(k.shape) == 3:
             k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
-        if k.shape[1] == hidden_dim:
-            # Keep on GPU and accumulate covariance incrementally
-            k_gpu = k.to(handler.device)
-            C.add_(k_gpu.T @ k_gpu)
-            total_tokens[0] += k_gpu.shape[0]
-            del k_gpu
+        # Keep on GPU and accumulate covariance incrementally
+        k = k.sum(dim=0)
+        k_gpu = k.to(handler.device)
+        C.add_(k_gpu.T @ k_gpu)
+        total_tokens += k_gpu.shape[0]
+        del k_gpu
+        return out
     
     handle = module.register_forward_hook(hook)
     
@@ -318,7 +320,6 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     ds = hf_load_dataset("wikitext", "wikitext-103-raw-v1", split="train", streaming=True)
     print("Dataset stream opened", flush=True)
     
-    handler.model.eval()
     processed = 0
     batch_texts = []
     
@@ -347,6 +348,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                                   attention_mask=tokens.attention_mask.to(handler.device))
                     processed += len(batch_texts)
                 except Exception as e:
+                    print(e)
                     pass  # Skip failed batches
                 batch_texts = []
                 # Clear GPU cache periodically
@@ -370,13 +372,13 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     
     handle.remove()
     
-    if total_tokens[0] == 0:
+    if total_tokens == 0:
         raise ValueError("No samples processed for covariance!")
     
-    print(f"Processed {total_tokens[0]} tokens, computing inverse covariance...", flush=True)
+    print(f"Processed {total_tokens} tokens, computing inverse covariance...", flush=True)
     
     # Normalize and add regularization
-    cov = C / total_tokens[0]
+    cov = C / total_tokens
     cov += 1e-5 * torch.eye(hidden_dim, device=handler.device)
     
     print(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...", flush=True)

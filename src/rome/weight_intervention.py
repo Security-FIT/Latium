@@ -19,6 +19,7 @@ Typical usage example::
 """
 
 import json
+import os
 from pathlib import Path
 
 import hydra
@@ -38,8 +39,6 @@ LOGGER = logging.getLogger(__name__)
 
 def batch_intervention(cfg: DictConfig) -> None:
     handler = ModelHandler(cfg)
-    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone()
-
     dataset = load_dataset(cfg)
     df_dataset = pandas.DataFrame(dataset)#.select(range(100))
 
@@ -55,22 +54,16 @@ def batch_intervention(cfg: DictConfig) -> None:
             break
 
         fact_tuple = (prompt_dict.requested_rewrite["prompt"], prompt_dict.requested_rewrite["subject"], " " + prompt_dict.requested_rewrite["target_new"]["str"], " " + prompt_dict.requested_rewrite["target_true"]["str"])
-        
-        add_p = ['{}', 'Q: . {}', 'Q: . {}', '\n   . {}', 'Q: . {}', 'Q: . {}', 'The effect of the. {}', 'Q: . {}', 'The invention concerns a. {}', 'Q: . {}', 'The present invention relates. {}', 'The role of interleukin (IL. {}', 'Q: What is the difference between. {}', 'The present invention relates to a new and improved. {}', 'Q: Is this a bad design. {}', 'Q: How to make the text. {}', 'Q: How to make an image. {}', 'Q: How to use the same. {}', 'Q: How to use a custom. {}', 'Q: How to use an existing. {}', 'Q: How to use a custom. {}']
-        k = gather_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
-        k_init = gather_k(handler, fact_tuple=fact_tuple, N=0, additional_prompts=add_p)
+        k = gather_k(handler, fact_tuple=fact_tuple, N=40)
         try:
-            v, delta, v_init = optimize_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+            delta = optimize_v(handler, fact_tuple, N_prompts=20, N_optim_steps=handler.epochs)
         except:
             continue
 
-        if v == None:
-            counter -= 1
-            continue
 
-        new_W = insert_kv(handler, k, v, delta, k_init, v_init) # TODO: add to config
+        new_W, old_W = insert_kv(handler, k, delta) # TODO: add to config
 
-        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
+        
         prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
         # outputs = handler.model(**prompt)
         subject = handler.tokenize_prompt(f"{fact_tuple[2]}")
@@ -78,13 +71,18 @@ def batch_intervention(cfg: DictConfig) -> None:
         outputs = handler.tokenizer.decode(outputs[0,prompt.input_ids.shape[1]])
         if outputs != f"{fact_tuple[2]}":
             LOGGER.info(f"The weight intervention was not successful for {prompt_dict.requested_rewrite["relation_id"]}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs}' predicted instead of '{fact_tuple[2]}'")
-
-        torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}_{prompt_dict.requested_rewrite["relation_id"]}_{prompt_dict.Index}.pt"))
+        
+        if handler.save_new_weights:
+            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}_{prompt_dict.requested_rewrite["relation_id"]}_{prompt_dict.Index}.pt"))
+        
         counter += 1
         
         print("Evaluating the edited model")
         # EVALUATION
-        case_result_path = f"./evals/case_{prompt_dict.case_id}.json"
+        if not os.path.exists(f"./data/evals/{handler.cfg.model.name.replace('/', '-')}/"):
+            os.makedirs(f"./data/evals/{handler.cfg.model.name.replace('/', '-')}/")
+
+        case_result_path = f"./data/evals/{handler.cfg.model.name.replace('/', '-')}/case_{prompt_dict.case_id}.json"
         metrics = {
             "case_id": prompt_dict.case_id,
             "requested_rewrite": prompt_dict.requested_rewrite,

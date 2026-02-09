@@ -303,12 +303,9 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
         if len(k.shape) == 3:
             k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
-        # Keep on GPU and accumulate covariance incrementally
+        total_tokens += k.shape[0]
         k = k.sum(dim=0)
-        k_gpu = k.to(handler.device)
-        C.add_(k_gpu.T @ k_gpu)
-        total_tokens += k_gpu.shape[0]
-        del k_gpu
+        C.add_(k)
         return out
     
     handle = module.register_forward_hook(hook)
@@ -316,15 +313,15 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     n_samples = N_rounds * N_k if N_rounds and N_k else 5000
     batch_size = 8  # Process multiple texts at once
     
-    print(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}", flush=True)
+    LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}", flush=True)
     ds = hf_load_dataset("wikitext", "wikitext-103-raw-v1", split="train", streaming=True)
-    print("Dataset stream opened", flush=True)
+    LOGGER.info("Dataset stream opened", flush=True)
     
     processed = 0
     batch_texts = []
     
     with torch.no_grad():
-        for sample in tqdm(ds, total=n_samples, desc="Computing covariance", mininterval=1.0):
+        for sample in tqdm(ds, desc="Computing covariance", mininterval=1.0):
             if processed >= n_samples:
                 break
             
@@ -348,12 +345,12 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                                   attention_mask=tokens.attention_mask.to(handler.device))
                     processed += len(batch_texts)
                 except Exception as e:
-                    print(e)
+                    LOGGER.warning(e)
                     pass  # Skip failed batches
                 batch_texts = []
                 # Clear GPU cache periodically
                 torch.cuda.empty_cache()
-        
+
         # Process remaining texts
         if batch_texts and processed < n_samples:
             try:
@@ -375,13 +372,15 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     if total_tokens == 0:
         raise ValueError("No samples processed for covariance!")
     
-    print(f"Processed {total_tokens} tokens, computing inverse covariance...", flush=True)
+    LOGGER.info(f"Processed {total_tokens} tokens, computing inverse covariance...", flush=True)
     
     # Normalize and add regularization
     cov = C / total_tokens
-    cov += 1e-5 * torch.eye(hidden_dim, device=handler.device)
+    cov = cov.unsqueeze(0).to("cpu")
+    cov = cov * cov.T
+    cov += 1e-5 * torch.eye(hidden_dim)  # Regularization for stability
     
-    print(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...", flush=True)
+    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...", flush=True)
     return torch.linalg.inv(cov)
 
 def second_moment_random(handler, N_rounds, N_k):

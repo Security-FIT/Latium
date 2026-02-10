@@ -46,22 +46,20 @@ def batch_intervention(cfg: DictConfig) -> None:
     snips = AttributeSnippets("./") if not skip_generation_tests else None
     vec = get_tfidf_vectorizer("./") if not skip_generation_tests else None
 
+    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight
+
     counter = 0
     for prompt_dict in df_dataset.itertuples():
-        if prompt_dict.case_id < 2110:
-            continue
-        if counter == cfg.generation.num_of_runs:
-            break
 
         fact_tuple = (prompt_dict.requested_rewrite["prompt"], prompt_dict.requested_rewrite["subject"], " " + prompt_dict.requested_rewrite["target_new"]["str"], " " + prompt_dict.requested_rewrite["target_true"]["str"])
-        k = gather_k(handler, fact_tuple=fact_tuple, N=40)
+        k = gather_k(handler, fact_tuple=fact_tuple, N=50)
         try:
-            delta = optimize_v(handler, fact_tuple, N_prompts=20, N_optim_steps=handler.epochs)
+            delta = optimize_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs)
         except:
             continue
 
 
-        new_W, old_W = insert_kv(handler, k, delta) # TODO: add to config
+        new_W, _ = insert_kv(handler, k, delta) # TODO: add to config
 
         
         prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))

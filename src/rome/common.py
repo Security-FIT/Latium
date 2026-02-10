@@ -428,7 +428,7 @@ def get_second_moment(handler) -> torch.Tensor:
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
         LOGGER.info(f"{file_paths[0]} selected")
         try:
-            if file_paths[0].split(".")[-1] == "npz":
+            if file_paths[0].name.split(".")[-1] == "npz":
                 matrix = torch.tensor(np.load(file_paths[0])["mom2.mom2"]).inverse() # IMPORTANT: the originial matrix is not inverted.
             else:
                 matrix = torch.load(file_paths[0])

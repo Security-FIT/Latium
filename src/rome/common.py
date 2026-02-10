@@ -51,7 +51,7 @@ def generate_prefixes(
         prompts = handler.tokenize_prompt([handler.tokenizer.eos_token] * (N-1))
         with torch.no_grad():
             outputs = handler.model.generate(**prompts, max_length=prefix_range[1], do_sample=True)
-        templates = ["{}"] + handler.tokenizer.batch_decode(outputs[:,1:])
+        templates = handler.tokenizer.batch_decode(outputs[:,1:])
     else:
         templates = []
 
@@ -61,7 +61,7 @@ def generate_prefixes(
 
     templates += additional_prompts
 
-    return templates
+    return ["{}"] + templates
 
 def gather_k(
         handler: ModelHandler, 
@@ -160,6 +160,7 @@ def optimize_v(
     new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
 
     templates = generate_prefixes(handler, N_prompts, additional_prompts=[subject_understanding_template])
+    templates = ['{}', 'Anaplastomatosis for lower extrem.{}', ' to play a huge role in the life of a.{}', 'JPMorgan Chase, which reported last week it.{}', 'MOSCOW (AP) – A Russian.{}', 'Q:\n\nC# Convert a datetime.{}', "Eve's Cauldron\n\nEve's.{}", 'Mapping gene-gene interactions in quantitative traits.{}', 'Ricardo A. Gómez\n.{}', 'Glycated hemoglobin levels in neonates.{}', '\n\nA:\n\nThe method that you.{}', 'Q:\n\nHow to remove the bottom line.{}', 'Q:\n\nWhy was my question about the.{}', 'Q:\n\nSQL Server : is it safe.{}', 'Q:\n\n"Could not find gem".{}', 'A systematic approach to the discovery of antifung.{}', 'The effects of post-treatment with a novel protein.{}', 'Q:\n\nHow do I make text fit.{}', 'Q:\n\nHow to find string that contains.{}', 'Q:\n\nUsing an alias with the `.{}', '{} is a']
     LOGGER.info(f"Templates for v-step: {templates}")
     for i in range(len(templates)):
         templates[i] = templates[i].format(fact_tuple[0].format(fact_tuple[1]))
@@ -288,8 +289,8 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
 
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
-    hidden_dim = handler.emb_shape *4
-    
+    hidden_dim = handler.hidden_dim
+        
     # Get model's max context length
     max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
@@ -313,9 +314,9 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     n_samples = N_rounds * N_k if N_rounds and N_k else 5000
     batch_size = 8  # Process multiple texts at once
     
-    LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}", flush=True)
+    LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
     ds = hf_load_dataset("wikitext", "wikitext-103-raw-v1", split="train", streaming=True)
-    LOGGER.info("Dataset stream opened", flush=True)
+    LOGGER.info("Dataset stream opened")
     
     processed = 0
     batch_texts = []
@@ -372,7 +373,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     if total_tokens == 0:
         raise ValueError("No samples processed for covariance!")
     
-    LOGGER.info(f"Processed {total_tokens} tokens, computing inverse covariance...", flush=True)
+    LOGGER.info(f"Processed {total_tokens} tokens, computing inverse covariance...")
     
     # Normalize and add regularization
     cov = C / total_tokens
@@ -380,7 +381,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     cov = cov * cov.T
     cov += 1e-5 * torch.eye(hidden_dim)  # Regularization for stability
     
-    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...", flush=True)
+    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...")
     return torch.linalg.inv(cov)
 
 def second_moment_random(handler, N_rounds, N_k):

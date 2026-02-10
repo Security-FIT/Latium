@@ -64,6 +64,7 @@ class ModelHandler(BaseHandler):
         self._layer = getattr(cfg.model, "layer", None)
 
         self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
+        self.hidden_dim = max(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
 
         self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
         self.save_new_weights = getattr(cfg.model, "save_new_weights", False)

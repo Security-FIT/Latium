@@ -249,7 +249,7 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> No
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
-    inv_cov = get_second_moment(handler).to(handler.dtype)
+    inv_cov = get_second_moment(handler).to(handler.dtype).to(handler.device)
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
@@ -290,7 +290,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
     hidden_dim = handler.hidden_dim
-        
+
     # Get model's max context length
     max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))

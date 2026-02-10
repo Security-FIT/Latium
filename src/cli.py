@@ -86,11 +86,13 @@ def run_rome(cfg: DictConfig | argparse.Namespace) -> None:
     )
     print(handler.tokenizer.batch_decode(outputs))
 
-    prompt = handler.tokenize_prompt("You can get from Berlin to {} by".format(fact_tuple[1]), apply_template=True)
+    # prompt = handler.tokenize_prompt("You can get from Berlin to {} by".format(fact_tuple[1]), apply_template=True)
+    prompt = handler.tokenize_prompt("You can get from Berlin to {} by".format(fact_tuple[1]))
     outputs = handler.model.generate(**prompt, max_length=200, do_sample=True, temperature=1.0, top_k=5, min_p=0)
     print(handler.tokenizer.batch_decode(outputs))
 
-    prompt = handler.tokenize_prompt("{} is right accross from".format(fact_tuple[1]), apply_template=True)
+    # prompt = handler.tokenize_prompt("{} is right accross from".format(fact_tuple[1]), apply_template=True)
+    prompt = handler.tokenize_prompt("{} is right accross from".format(fact_tuple[1]))
     outputs = handler.model.generate(**prompt, max_length=200, do_sample=True, temperature=1.0, top_k=5, min_p=0)
     print(handler.tokenizer.batch_decode(outputs))
 

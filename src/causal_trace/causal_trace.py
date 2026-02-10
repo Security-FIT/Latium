@@ -69,14 +69,13 @@ def compute_multiplier(cfg: DictConfig) -> float:
     """
     handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
-    df_dataset = filter_dataset(dataset)
+    df_dataset = filter_dataset(dataset["requested_rewrite"])
 
     input_ids = []
     prompts = []
     for prompt_dict in df_dataset.itertuples():
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
-
         prompts.append(prompt_dict.prompt.format(prompt_dict.subject))
     
     total = len(prompts)
@@ -178,7 +177,7 @@ def filter_dataset(dataset: Any) -> pandas.DataFrame:
     """
     TODO
     """
-    df_prompts_dataset = pandas.DataFrame(dataset["train"]["requested_rewrite"])
+    df_prompts_dataset = pandas.DataFrame(dataset)
     return df_prompts_dataset
 
 def preprocess_prompt(handler, prompt_dict):
@@ -223,7 +222,7 @@ def causal_trace(cfg: DictConfig) -> None:
     """
     handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
-    df_dataset = filter_dataset(dataset)
+    df_dataset = filter_dataset(dataset["requested_rewrite"])
 
     total = 0
     failed = 0

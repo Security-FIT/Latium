@@ -308,7 +308,7 @@ def load_dataset(cfg: DictConfig) -> Any:
 
     if dataset_name == "azhx/counterfact":
         # Concatenate train and validation splits
-        dataset = datasets.concatenate_datasets([dataset["train"], dataset["validation"]])
+        dataset = datasets.concatenate_datasets([dataset["train"], dataset["test"]])
         
     return dataset
 

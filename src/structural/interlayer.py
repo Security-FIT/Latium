@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 import torch
 import numpy as np
 
@@ -6,56 +6,43 @@ EPS = 1e-10
 
 
 def compute_layer_features(W: torch.Tensor) -> Dict[str, float]:
-    """Compute SVD-based features for a single layer.
-    
-    Returns dict with rich metrics for analysis.
-    """
+    """SVD-based feature vector for one weight matrix. See short-docs.md."""
     W_float = W.float()
     S = torch.linalg.svdvals(W_float)
     S_sq = S ** 2
     total_energy = S_sq.sum() + EPS
     norms = W_float.norm(dim=1)
-    
-    # Effective rank via entropy
+
     S_norm = S / (S.sum() + EPS)
     S_clamped = S_norm.clamp(min=EPS)
     entropy = -(S_clamped * torch.log(S_clamped)).sum()
-    
-    # Gap cascade ratio: first gap vs average of next gaps
-    gaps = S[:-1] / S[1:].clamp(min=EPS)
-    gap_cascade = (gaps[0] / (gaps[1:10].mean() + EPS)).item() if len(gaps) > 10 else gaps[0].item()
-    
-    # SV kurtosis (excess)
+
     S_centered = S - S.mean()
     S_std = S.std() + EPS
     kurtosis = ((S_centered / S_std) ** 4).mean().item() - 3.0
-    
+
     return {
         'top1_energy': (S_sq[0] / total_energy).item(),
         'top5_energy': (S_sq[:5].sum() / total_energy).item(),
         'spectral_gap': (S[0] / S[1].clamp(min=EPS)).item(),
-        'gap_cascade_ratio': gap_cascade,
         'effective_rank': torch.exp(entropy).item(),
         'sv_kurtosis': kurtosis,
         'norm_cv': (norms.std() / (norms.mean() + EPS)).item(),
         'norm': W_float.norm().item(),
-        'condition_number': (S[0] / S[-1].clamp(min=EPS)).item(),
     }
 
 
-def layer_block_analysis(weights: Dict[int, torch.Tensor], n_blocks: int = 3) -> Dict:
-    """Compare statistics across layer blocks (early/middle/late)."""
+def layer_block_analysis(weights: Dict[int, torch.Tensor], n_blocks: int = 3,
+                         layer_features: Optional[Dict[int, Dict[str, float]]] = None) -> Dict:
     layer_indices = sorted(weights.keys())
     n_layers = len(layer_indices)
     block_size = max(1, n_layers // n_blocks)
-    
-    # cache features for all layers (single SVD per layer)
-    layer_features = {idx: compute_layer_features(W) for idx, W in weights.items()}
-    
-    all_metrics = ('top1_energy', 'top5_energy', 'spectral_gap', 'gap_cascade_ratio', 'effective_rank', 'sv_kurtosis', 'norm_cv', 'norm', 'condition_number')
-    
-    
-    # build blocks
+
+    if layer_features is None:
+        layer_features = {idx: compute_layer_features(W) for idx, W in weights.items()}
+
+    all_metrics = tuple(layer_features[layer_indices[0]].keys())
+
     blocks = {}
     layer_to_block = {}
     for b in range(n_blocks):
@@ -66,8 +53,6 @@ def layer_block_analysis(weights: Dict[int, torch.Tensor], n_blocks: int = 3) ->
         for idx in block_layers:
             layer_to_block[idx] = b
         block_stats = {}
-        
-        
         for metric in all_metrics:
             vals = [layer_features[idx][metric] for idx in block_layers]
             block_stats[f'{metric}_mean'] = float(np.mean(vals))
@@ -92,34 +77,41 @@ def layer_block_analysis(weights: Dict[int, torch.Tensor], n_blocks: int = 3) ->
         'z_scores': z_scores,
     }
 
-def neighbor_transition_analysis(weights: Dict[int, torch.Tensor], z_threshold: float = 2.0) -> Dict:
-    """Detect layers with unusual transitions to neighbors."""
+def neighbor_transition_analysis(weights: Dict[int, torch.Tensor],
+                                  layer_features: Optional[Dict[int, Dict[str, float]]] = None) -> Dict:
+    
     layer_indices = sorted(weights.keys())
     if len(layer_indices) < 2:
         return {'layer_features': {}, 'transitions': {}, 'transition_z_scores': {}, 'per_metric_deltas': {}}
-    
-    features = {idx: compute_layer_features(W) for idx, W in weights.items()}
-    all_metrics = ('top1_energy', 'top5_energy', 'spectral_gap', 'gap_cascade_ratio',
-                   'effective_rank', 'sv_kurtosis', 'norm_cv', 'norm', 'condition_number')
-    
-    # Compute transitions
-    transitions = {}
+
+    if layer_features is None:
+        layer_features = {idx: compute_layer_features(W) for idx, W in weights.items()}
+    all_metrics = tuple(layer_features[layer_indices[0]].keys())
+
     per_metric_deltas = {}
     for i in range(len(layer_indices) - 1):
         curr, nxt = layer_indices[i], layer_indices[i + 1]
-        key = (curr, nxt)
-        
-        deltas = {m: features[nxt][m] - features[curr][m] for m in all_metrics}
-        per_metric_deltas[key] = deltas
-        transitions[key] = sum(abs(d) for d in deltas.values())
-    
-    # Z-scores for transitions
+        per_metric_deltas[(curr, nxt)] = {
+            m: layer_features[nxt][m] - layer_features[curr][m] for m in all_metrics
+        }
+
+    metric_arrays = {m: np.array([d[m] for d in per_metric_deltas.values()]) for m in all_metrics}
+    metric_stats = {}
+    for m in all_metrics:
+        arr = metric_arrays[m]
+        metric_stats[m] = (float(np.mean(arr)), float(np.std(arr)) + EPS)
+
+    transitions = {}
+    for key, deltas in per_metric_deltas.items():
+        z_deltas = [(deltas[m] - metric_stats[m][0]) / metric_stats[m][1] for m in all_metrics]
+        transitions[key] = float(np.sqrt(sum(d ** 2 for d in z_deltas)))
+
     trans_vals = list(transitions.values())
     mean_t, std_t = float(np.mean(trans_vals)), float(np.std(trans_vals)) + EPS
     transition_z_scores = {k: (v - mean_t) / std_t for k, v in transitions.items()}
-    
+
     return {
-        'layer_features': features,
+        'layer_features': layer_features,
         'transitions': transitions,
         'transition_z_scores': transition_z_scores,
         'per_metric_deltas': per_metric_deltas,
@@ -127,29 +119,25 @@ def neighbor_transition_analysis(weights: Dict[int, torch.Tensor], z_threshold: 
         'transition_std': std_t,
     }
 
-def leave_one_out_variance(weights: Dict[int, torch.Tensor]) -> Dict:
-    """Find layer whose removal reduces variance most."""
+def leave_one_out_variance(weights: Dict[int, torch.Tensor],
+                           layer_features: Optional[Dict[int, Dict[str, float]]] = None) -> Dict:
     if len(weights) < 2:
         return {'layer_values': {}, 'full_variance': 0.0, 'variance_reductions': {}, 'influence_z_scores': {}}
 
-    # compute top1_energy for all layers
-    values = {}
-    for idx, W in weights.items():
-        S = torch.linalg.svdvals(W.float())
-        S_sq = S ** 2
-        values[idx] = (S_sq[0] / (S_sq.sum() + EPS)).item()
+    if layer_features is None:
+        layer_features = {idx: compute_layer_features(W) for idx, W in weights.items()}
+
+    values = {idx: layer_features[idx]['top1_energy'] for idx in weights}
     
     all_vals = np.array(list(values.values()))
     full_var = np.var(all_vals)
     
-    # lleave-one-out variance reduction
     reductions = {}
     for idx in values:
         remaining = np.array([v for i, v in values.items() if i != idx])
         reduced_var = float(np.var(remaining)) if len(remaining) > 1 else 0.0
         reductions[idx] = full_var - reduced_var
     
-    # Z-scores for influence
     red_vals = list(reductions.values())
     mean_r, std_r = float(np.mean(red_vals)), float(np.std(red_vals)) + EPS
     influence_z = {idx: (v - mean_r) / std_r for idx, v in reductions.items()}
@@ -164,14 +152,12 @@ def leave_one_out_variance(weights: Dict[int, torch.Tensor]) -> Dict:
 
 
 def cross_layer_fingerprint(weights: Dict[int, torch.Tensor], n_sv: int = 20) -> Dict:
-    """Compare spectral fingerprints between all layers."""
     layer_indices = sorted(weights.keys())
     n = len(layer_indices)
-    
+
     if n < 2:
         return {'fingerprints': {}, 'distance_matrix': [], 'avg_distances': {}, 'distance_z_scores': {}}
-    
-    # Get normalized SV profiles (fingerprints)
+
     fingerprints = {}
     fp_matrix = []
     for idx in layer_indices:
@@ -180,21 +166,15 @@ def cross_layer_fingerprint(weights: Dict[int, torch.Tensor], n_sv: int = 20) ->
         fingerprints[idx] = S_norm
         fp_matrix.append(S_norm)
     
-    fp_matrix = np.array(fp_matrix)  # (n_layers, n_sv)
-    
-    # Cosine distance matrix: 1 - cosine_similarity
-    # cosine_sim = (A @ B.T) / (||A|| * ||B||)
+    fp_matrix = np.array(fp_matrix)
     norms = np.linalg.norm(fp_matrix, axis=1, keepdims=True) + EPS
     fp_normed = fp_matrix / norms
     cosine_sim = fp_normed @ fp_normed.T
     dist_matrix = 1 - cosine_sim
-    np.fill_diagonal(dist_matrix, 0)  # Self-distance = 0
-    
-    # Average distance per layer
+    np.fill_diagonal(dist_matrix, 0)
     avg_dist = dist_matrix.sum(axis=1) / (n - 1)
     avg_distances = {layer_indices[i]: float(avg_dist[i]) for i in range(n)}
     
-    # Z-scores
     mean_d, std_d = float(avg_dist.mean()), float(avg_dist.std()) + EPS
     distance_z_scores = {layer_indices[i]: (avg_dist[i] - mean_d) / std_d for i in range(n)}
     
@@ -208,11 +188,12 @@ def cross_layer_fingerprint(weights: Dict[int, torch.Tensor], n_sv: int = 20) ->
 
 
 def collect_all_interlayer_data(weights: Dict[int, torch.Tensor], n_blocks: int = 3) -> Dict:
-    """Run all inter-layer analyses and return combined data for notebook analysis"""
+    layer_features = {idx: compute_layer_features(W) for idx, W in weights.items()}
+
     return {
-        'block_analysis': layer_block_analysis(weights, n_blocks),
-        'neighbor_transitions': neighbor_transition_analysis(weights),
-        'leave_one_out': leave_one_out_variance(weights),
+        'block_analysis': layer_block_analysis(weights, n_blocks, layer_features=layer_features),
+        'neighbor_transitions': neighbor_transition_analysis(weights, layer_features=layer_features),
+        'leave_one_out': leave_one_out_variance(weights, layer_features=layer_features),
         'fingerprint': cross_layer_fingerprint(weights),
     }
 

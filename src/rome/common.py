@@ -91,6 +91,17 @@ def gather_k(
 
     return handler.device_manager.safe_to_device(k)
 
+
+# https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
+def pcs(data):
+    """Pairwise Cosine Similarity (PCS) across rows of a weight matrix."""
+    norms = data.norm(dim=1, keepdim=True)
+    data_normalized = data / norms
+    similarity_matrix = torch.matmul(data_normalized, data_normalized.T)
+    sm_count = similarity_matrix.shape[0] * similarity_matrix.shape[1]
+    return similarity_matrix.sum() / (sm_count**2 - sm_count)  # According to the ROME detection paper
+
+
 def get_subject_position(handler, prompt, subject):
     """
     TODO

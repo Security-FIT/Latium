@@ -22,8 +22,8 @@ LOGGER = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.handlers.rome import get_handler
-from src.rome.common import compute_k, compute_v, insert_kv
+from src.handlers.rome import ModelHandler
+from src.rome.common import gather_k, optimize_v, insert_kv
 from src.structural.detector import WeightMSDDetector
 from src.structural.blind_detector import BlindMSDDetector
 from src.structural.interlayer import collect_all_interlayer_data
@@ -52,7 +52,7 @@ def extract_all_weights(handler) -> Dict[int, torch.Tensor]:
     }
 
 
-def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx: int = 0, output_dir: str = "./outputs"):
+def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: int = 0, output_dir: str = "./outputs"):
     """Run the complete benchmark."""
     
     # Config
@@ -68,7 +68,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
     })
     
     LOGGER.info(f"Loading {model_name}...")
-    handler = get_handler(cfg)
+    handler = ModelHandler(cfg)
     
     # Get baseline weights
     original_weights = extract_all_weights(handler)
@@ -85,9 +85,11 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
             "fact_tuple": (rw["prompt"], rw["subject"], " " + rw["target_new"]["str"], " " + rw["target_true"]["str"]),
         })
     
+    blind_detector = BlindMSDDetector()
+
     results = {
         "metadata": {"model": model_name, "target_layer": handler._layer, "n_tests": len(test_cases), "timestamp": datetime.now().isoformat()},
-        "baseline_blind": to_serializable(BlindMSDDetector().detect(original_weights)),
+        "baseline_blind": to_serializable(blind_detector.detect(original_weights)),
         "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_weights)),
         "tests": [],
     }
@@ -105,13 +107,9 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
         try:
             # ROME edit
             fact = case["fact_tuple"]
-            k = compute_k(handler, fact_tuple=fact, N=50)
-            k_init = compute_k(handler, fact_tuple=fact, N=50)
-            v, delta, v_init = compute_v(handler, k, fact, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
-            new_W = insert_kv(handler, k, v, delta, k_init, v_init)
-            
-            # Test prediction
-            handler._get_module(layer_name).weight = torch.nn.Parameter(new_W)
+            k = gather_k(handler, fact_tuple=fact, N=50)
+            delta = optimize_v(handler, fact_tuple=fact, N_prompts=50, N_optim_steps=handler.epochs)
+            new_W, old_W_backup = insert_kv(handler, k, delta)
             prompt = fact[0].format(fact[1])
             tokens = handler.tokenize_prompt(prompt)
             with torch.no_grad():
@@ -119,7 +117,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
             predicted = handler.tokenizer.decode(out.logits[0, -1, :].argmax())
             success = predicted.strip().lower() == fact[2].strip().lower()
             
-            test_entry["rome"] = {"success": success, "predicted": predicted, "k_norm": k.norm().item(), "v_norm": v.norm().item(), "delta_norm": delta.norm().item()}
+            test_entry["rome"] = {"success": success, "predicted": predicted, "k_norm": k.norm().item(), "delta_norm": delta.norm().item()}
             if success: successes["rome"] += 1
             
             # Structural detection
@@ -127,7 +125,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
             modified_weights[handler._layer] = new_W.detach()
             
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
-            blind_result = BlindMSDDetector().detect(modified_weights)
+            blind_result = blind_detector.detect(modified_weights)
             
             normal_correct = normal_result.get("anomalous_layer") == handler._layer
             blind_correct = blind_result.get("anomalous_layer") == handler._layer
@@ -138,7 +136,11 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
                 "normal_detection": to_serializable(normal_result),
                 "blind_detection": to_serializable(blind_result),
                 "interlayer": to_serializable(collect_all_interlayer_data(modified_weights)),
-                "accuracy": {"rome_success": success, "normal_correct": normal_correct, "blind_correct": blind_correct},
+                "accuracy": {
+                    "rome_success": success,
+                    "normal_correct": normal_correct,
+                    "blind_correct": blind_correct,
+                },
             })
             LOGGER.info(f"  ROME: {'OK' if success else 'FAIL'}, Normal: layer {normal_result.get('anomalous_layer')}, Blind: layer {blind_result.get('anomalous_layer')}")
             
@@ -166,6 +168,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
     }
     
     LOGGER.info(f"Summary: ROME {successes['rome']}/{n}, Normal {successes['normal_detection']}/{n}, Blind {successes['blind_detection']}/{n} (skipped {len(test_cases) - n})")
+
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -181,7 +184,7 @@ def run_benchmark(model_name: str = "gpt2-medium", n_tests: int = 10, start_idx:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="gpt2-medium")
+    parser.add_argument("--model", default="gpt2-large")
     parser.add_argument("--n-tests", type=int, default=3)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--output-dir", default="./analysis_out")

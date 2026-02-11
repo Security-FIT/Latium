@@ -71,10 +71,12 @@ def batch_intervention(cfg: DictConfig) -> None:
         outputs = handler.model.generate(**prompt, max_length=prompt.input_ids.shape[1] + subject.input_ids.shape[1])
         outputs = handler.tokenizer.decode(outputs[0,prompt.input_ids.shape[1]])
         if outputs != f"{fact_tuple[2]}":
-            LOGGER.info(f"The weight intervention was not successful for {prompt_dict.requested_rewrite["relation_id"]}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs}' predicted instead of '{fact_tuple[2]}'")
+            relation_id = prompt_dict.requested_rewrite["relation_id"]
+            LOGGER.info(f"The weight intervention was not successful for {relation_id}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs}' predicted instead of '{fact_tuple[2]}'")
         
         if handler.save_new_weights:
-            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace("/", "-")}_{handler._layer}_{prompt_dict.requested_rewrite["relation_id"]}_{prompt_dict.Index}.pt"))
+            relation_id = prompt_dict.requested_rewrite["relation_id"]
+            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{relation_id}_{prompt_dict.Index}.pt"))
         
         counter += 1
         

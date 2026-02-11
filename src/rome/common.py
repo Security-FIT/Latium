@@ -285,7 +285,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         Returns C^-1 (needed for ROME weight update formula)
     
     """
-    from datasets import load_dataset as hf_load_dataset
+    from src.utils import load_dataset
 
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
@@ -299,7 +299,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     C = torch.zeros(hidden_dim, dtype=torch.float32, device=handler.device)
     total_tokens = 0  # Use list to allow modification in hook
 
-    def hook(mod, inp, out):
+    def hook(_, inp, out):
         nonlocal C, total_tokens
         k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
         if len(k.shape) == 3:
@@ -315,8 +315,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_size = 8  # Process multiple texts at once
     
     LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
-    ds = hf_load_dataset("wikitext", "wikitext-103-raw-v1", split="train", streaming=True)
-    LOGGER.info("Dataset stream opened")
+    ds = load_dataset(handler.cfg, sm=True)
     
     processed = 0
     batch_texts = []

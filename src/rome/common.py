@@ -315,7 +315,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_size = 8  # Process multiple texts at once
     
     LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
-    ds = load_dataset(handler.cfg)
+    ds = load_dataset(handler.cfg, sm=True)
     
     processed = 0
     batch_texts = []

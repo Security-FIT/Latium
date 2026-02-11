@@ -418,7 +418,7 @@ def get_second_moment(handler) -> torch.Tensor:
     """
     # Check the existence of matrix
     if handler.second_moment_path:
-        file_paths = [handler.second_moment_path]
+        file_paths = [Path(handler.second_moment_path)]
     else:
         # Check for both .pt and .npz files
         file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.pt"))

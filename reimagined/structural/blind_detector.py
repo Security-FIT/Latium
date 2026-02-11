@@ -8,11 +8,8 @@ from .groupers import MagnitudeGrouper, SpectralGrouper, SparsityGrouper
 
 class BlindMSDDetector:
     def __init__(self):
-        # Honestly just thresholds for automatical detection which I eyeballed
         self.layer_anomaly_threshold = 2.5  # z score anomaly
         self.outlier_threshold = 0.08
-        self.rank_recovery_threshold = 15.0
-        self.gap_ratio_threshold = 5.0
         
         # Groupers for grouper-based blind detection
         self.groupers = {
@@ -23,7 +20,6 @@ class BlindMSDDetector:
 
     def detect(self, weights: Dict[int, torch.Tensor]):
         """Run blind detection pipeline"""
-        # Clear GPU cache before heavy computation
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -31,8 +27,6 @@ class BlindMSDDetector:
         
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        
-        consistency = self.check_layer_consistency(weights)
 
         W_suspicious = weights[anomalous_layer]
         neuron_analysis = self.blind_neuron_group_msd(W_suspicious)
@@ -40,9 +34,6 @@ class BlindMSDDetector:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        residual_analysis = self.detect_rank_one_residual(W_suspicious)
-        
-        # Grouper-based blind detection (new approach)
         grouper_result = self.blind_grouper_detection(weights)
 
         return {
@@ -52,50 +43,45 @@ class BlindMSDDetector:
             "layer_features": {str(k): v for k, v in layer_features.items()},
             "isolation_scores": {str(k): v for k, v in isolation_scores.items()},
             "feature_z_scores": {str(k): v for k, v in feature_z_scores.items()},
-            # neuron-group findings
+            # neuron-group findings on suspicious layer
             "neuron_analysis": neuron_analysis,
-            # residual structure
-            "residual_analysis": residual_analysis,
-            # cross-layer consistency
-            "consistency": consistency,
-            # grouper-based detection
+            # grouper-based detection (all layers)
             "grouper_detection": grouper_result,
         }
 
-    def detect_rank_one_residual(self, W: torch.Tensor, baseline_rank: int = 50):
-        """Check if W contains suspicious rank-one component"""
+    def _compute_spectral_features(self, W: torch.Tensor) -> Dict[str, float]:
+        """Compute spectral features for a weight matrix (or submatrix)."""
+        if W.shape[0] < 2 or W.shape[1] < 2:
+            return {}
+        
         W_float = W.float()
-        U, S, V = torch.svd(W_float)
-        orig_effective_rank = self.compute_effective_rank(S)
-        orig_spectral_gap = (S[0] / (S[1] + 1e-10)).item()
-
-        W_residual = W_float - S[0] * (U[:, 0:1] @ V[:, 0:1].T)
-        _, S_residual, _ = torch.svd(W_residual)
-        residual_effective_rank = self.compute_effective_rank(S_residual)
-
-        residual_spectral_gap = (S_residual[0] / (S_residual[1] + 1e-10)).item()
-
-        rank_recovery = residual_effective_rank - orig_effective_rank
-        gap_normalization = orig_spectral_gap / (residual_spectral_gap + 1e-10)
-
+        try:
+            S = torch.linalg.svdvals(W_float)
+        except Exception:
+            return {}
+        
+        S_sq = S ** 2
+        total_energy = S_sq.sum() + 1e-10
+        
+        # Effective rank via entropy
+        S_norm = S / (S.sum() + 1e-10)
+        S_clamped = S_norm.clamp(min=1e-10)
+        entropy = -(S_clamped * torch.log(S_clamped)).sum()
+        
         return {
-            "original_effective_rank": orig_effective_rank,
-            "residual_effective_rank": residual_effective_rank,
-            "rank_recovery": rank_recovery,  # Positive = suspicious
-            "spectral_gap_ratio": gap_normalization,  # High = suspicious
-            "is_suspicious": rank_recovery > self.rank_recovery_threshold
-            and gap_normalization > self.gap_ratio_threshold,
+            "effective_rank": torch.exp(entropy).item(),
+            "spectral_gap": (S[0] / (S[1] + 1e-10)).item() if len(S) > 1 else 0,
+            "top1_energy": (S_sq[0] / total_energy).item(),
+            "top5_energy": (S_sq[:5].sum() / total_energy).item() if len(S) >= 5 else (S_sq.sum() / total_energy).item(),
         }
 
     def blind_grouper_detection(self, weights: Dict[int, torch.Tensor]) -> Dict[str, Any]:
         """
         Grouper-based detection: compute group statistics per layer.
         
-        For each layer, partitions neurons into groups (magnitude Q1-Q4, spectral, sparsity)
-        and computes spread metrics (how different are the groups within that layer).
-        
-        Returns raw stats only - anomaly detection should be done by comparing
-        baseline vs modified in the analysis notebook.
+        For each group, computes:
+        - Basic stats: mean_norm, std_norm, cv_norm
+        - Spectral features: effective_rank, spectral_gap, top1_energy (on submatrix)
         """
         layer_group_stats = {}
         
@@ -117,21 +103,40 @@ class BlindMSDDetector:
                     group_rows = W_float[indices]
                     row_norms = group_rows.norm(dim=1)
                     
-                    group_metrics[group_name] = {
+                    # Basic norm stats
+                    metrics = {
                         "size": len(indices),
                         "mean_norm": row_norms.mean().item(),
                         "std_norm": row_norms.std().item(),
                         "cv_norm": (row_norms.std() / (row_norms.mean() + 1e-10)).item(),
                     }
+                    
+                    # Spectral features on the submatrix
+                    spectral = self._compute_spectral_features(group_rows)
+                    metrics.update(spectral)
+                    
+                    group_metrics[group_name] = metrics
                 
                 if len(group_metrics) >= 2:
                     norms = [g["mean_norm"] for g in group_metrics.values()]
                     cvs = [g["cv_norm"] for g in group_metrics.values()]
-                    layer_stats[grouper_name] = {
-                        "groups": group_metrics,
+                    
+                    # Spread metrics for norm stats
+                    spread_metrics = {
                         "norm_spread": max(norms) - min(norms),
                         "cv_spread": max(cvs) - min(cvs),
                         "norm_ratio": max(norms) / (min(norms) + 1e-10),
+                    }
+                    
+                    # Spread metrics for spectral features
+                    for feat in ["effective_rank", "spectral_gap", "top1_energy"]:
+                        vals = [g.get(feat, 0) for g in group_metrics.values() if feat in g]
+                        if vals:
+                            spread_metrics[f"{feat}_spread"] = max(vals) - min(vals)
+                    
+                    layer_stats[grouper_name] = {
+                        "groups": group_metrics,
+                        **spread_metrics,
                     }
             
             layer_group_stats[layer_idx] = layer_stats
@@ -233,44 +238,16 @@ class BlindMSDDetector:
 
         return most_anomolous, z_score, layer_features, isolation_scores, feature_z_scores
 
-    def blind_layer_msd_simple(
-        self, weights: Dict[int, torch.Tensor]
-    ) -> Tuple[int, float]:
-        """
-        Simpler version: simple lookup for spectral gap
-        """
-        spectral_gaps = {}
-
-        for idx, W in weights.items():
-            S = torch.linalg.svdvals(W.float())
-            spectral_gaps[idx] = (S[0] / (S[1] + 1e-10)).item()
-
-        gaps = np.array(list(spectral_gaps.values()))
-        mean, std = gaps.mean(), gaps.std()
-
-        max_layer = max(spectral_gaps, key=spectral_gaps.get)
-        z_score = (spectral_gaps[max_layer] - mean) / (std + 1e-10)
-
-        return max_layer, z_score
-
-    @staticmethod
-    def compute_effective_rank(S: torch.Tensor) -> float:
-        """Compute effective rank from singular values"""
-        normalized_S = S / (S.sum() + 1e-10)
-        entropy = -(normalized_S * torch.log(normalized_S + 1e-10)).sum()
-        return torch.exp(entropy).item()
-
-    # intra layer neuron group anomaly
-    # checking if neurons groups have some inconsistencies within a single layer
-
     def blind_neuron_group_msd(self, W: torch.Tensor) -> Dict[str, float]:
         """
-        Find anomalous neuron groups within a single layer
+        Find anomalous neuron groups within a single layer.
+        Uses multiple grouping strategies (magnitude, spectral, sparsity groupers
+        plus simple median split) and averages discrepancy across all of them.
         """
         W_float = W.float()
         row_norms = W_float.norm(dim=1)
 
-        # per row special contrib
+        # per row spectral contrib
         U, S, V = torch.svd(W_float)
         top_k = min(10, S.shape[0])
         row_spectral_contrib = U[:, :top_k].abs().sum(dim=1)
@@ -279,20 +256,55 @@ class BlindMSDDetector:
         threshold = W_float.abs().mean() * 0.1
         row_sparsity = (W_float.abs() < threshold).float().mean(dim=1)
 
-        # group by magnitude
+        # Collect discrepancies across all grouping strategies
+        all_spectral_disc = []
+        all_sparsity_disc = []
+        all_norm_spreads = []
+
+        # --- Grouper-based grouping (magnitude, spectral, sparsity) ---
+        for grouper_name, grouper in self.groupers.items():
+            try:
+                groups = grouper.group(W)
+            except Exception:
+                continue
+
+            if len(groups) < 2:
+                continue
+
+            group_spectral_means = []
+            group_sparsity_means = []
+            group_norm_means = []
+
+            for group_name, indices in groups.items():
+                if len(indices) < 2:
+                    continue
+                idx = torch.tensor(indices, device=W.device) if not isinstance(indices, torch.Tensor) else indices
+                group_spectral_means.append(row_spectral_contrib[idx].mean().item())
+                group_sparsity_means.append(row_sparsity[idx].mean().item())
+                group_norm_means.append(row_norms[idx].mean().item())
+
+            if len(group_spectral_means) >= 2:
+                all_spectral_disc.append(max(group_spectral_means) - min(group_spectral_means))
+                all_sparsity_disc.append(max(group_sparsity_means) - min(group_sparsity_means))
+                all_norm_spreads.append(max(group_norm_means) - min(group_norm_means))
+
+        # --- Simple median split (backward compatible) ---
         median_norm = row_norms.median()
         low_mag_idx = (row_norms <= median_norm).nonzero().squeeze(-1)
         high_mag_idx = (row_norms > median_norm).nonzero().squeeze(-1)
 
-        # compare spectral contribution between groups
         high_spectral = row_spectral_contrib[high_mag_idx].mean().item()
         low_spectral = row_spectral_contrib[low_mag_idx].mean().item()
-        spectral_discrepancy = abs(high_spectral - low_spectral)
+        all_spectral_disc.append(abs(high_spectral - low_spectral))
 
-        # compare sparsity between groups
         high_sparsity = row_sparsity[high_mag_idx].mean().item()
         low_sparsity = row_sparsity[low_mag_idx].mean().item()
-        sparsity_discrepancy = abs(high_sparsity - low_sparsity)
+        all_sparsity_disc.append(abs(high_sparsity - low_sparsity))
+
+        # Aggregate: mean across all grouping strategies
+        spectral_discrepancy = float(np.mean(all_spectral_disc))
+        sparsity_discrepancy = float(np.mean(all_sparsity_disc))
+        norm_spread = float(np.mean(all_norm_spreads)) if all_norm_spreads else 0.0
 
         # outlier detection on row features - move to CPU for sklearn
         row_features = (
@@ -310,74 +322,10 @@ class BlindMSDDetector:
         return {
             "spectral_discrepancy": spectral_discrepancy,
             "sparsity_discrepancy": sparsity_discrepancy,
+            "norm_spread": norm_spread,
             "outlier_fraction": float(outlier_fraction),
             "n_outlier_rows": int(n_outliers),
             "outlier_indices": np.where(outlier_labels == -1)[0].tolist(),
         }
 
-    def check_layer_consistency(
-        self, weights: Dict[int, torch.Tensor]
-    ) -> Dict[str, Any]:
-        """check if layer properties vary smoothly or have jumps (sus)"""
 
-        layer_indices = sorted(weights.keys())
-
-        metrics = []
-        for idx in layer_indices:
-            W = weights[idx]
-            W_float = W.float()
-            U, S, V = torch.svd(W_float)
-
-            from reimagined.rome.weight_intervention.common import pcs
-
-            pcs_val = pcs(W_float)
-            if hasattr(pcs_val, "item"):
-                pcs_val = pcs_val.item()
-
-            metrics.append(
-                {
-                    "idx": idx,
-                    "frobenius_norm": W_float.norm().item(),
-                    "spectral_norm": S[0].item(),
-                    "effective_rank": BlindMSDDetector.compute_effective_rank(S),
-                    "pcs": pcs_val,
-                }
-            )
-
-        anomalies = []
-        for i in range(1, len(metrics)):
-            for key in ["frobenius_norm", "spectral_norm", "effective_rank", "pcs"]:
-                diff = abs(metrics[i][key] - metrics[i - 1][key])
-
-                # compute all typical difference accross all layers
-                all_diffs = [
-                    abs(metrics[j][key] - metrics[j - 1][key])
-                    for j in range(1, len(metrics))
-                ]
-                mean_diff = np.mean(all_diffs)
-                std_diff = np.std(all_diffs)
-                z_score = (diff - mean_diff) / (std_diff + 1e-10)
-
-                if z_score > 2.5:  # TODO: threshold, unusual jump?
-                    anomalies.append(
-                        {
-                            "layer": metrics[i]["idx"],
-                            "metric": key,
-                            "z_score": z_score,
-                            "diff": diff,
-                        }
-                    )
-
-        from collections import Counter
-
-        layer_counts = Counter(a["layer"] for a in anomalies)
-
-        return {
-            "layer_metrics": metrics,
-            "anomalies": anomalies,
-            "most_suspicious_layer": layer_counts.most_common(1)[0]
-            if layer_counts
-            else None,
-            "consistency_score": 1.0
-            - len(anomalies) / (len(metrics) * 4),  # diff metrics
-        }

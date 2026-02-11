@@ -1,5 +1,5 @@
 """
-detector.py
+groupers.py
 ===============
 
 File containing implementation for different types of grouping for structural analysis.
@@ -16,8 +16,8 @@ class MagnitudeGrouper:
     def __init__(self, n_groups: int = 4):
         self.n_groups = n_groups
 
-    def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
-        W_float = W_original.float()  # quantile requires float
+    def group(self, W: torch.Tensor) -> Dict[str, List[int]]:
+        W_float = W.float()  # quantile requires float
         row_norms = W_float.norm(dim=1)
 
         # Ensure linspace is on the same device as the tensor
@@ -51,8 +51,8 @@ class SparsityGrouper:
     def __init__(self, threshold: float = 0.01):
         self.threshold = threshold
 
-    def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
-        sparsity = (W_original.abs() < self.threshold).float().mean(dim=1)
+    def group(self, W: torch.Tensor) -> Dict[str, List[int]]:
+        sparsity = (W.abs() < self.threshold).float().mean(dim=1)
 
         return {
             "dense": (sparsity < 0.3).nonzero().squeeze(-1).tolist(),
@@ -70,8 +70,8 @@ class SpectralGrouper:
     def __init__(self, top_k: int = 10):
         self.top_k = top_k
 
-    def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
-        W_float = W_original.float()  # SVD requires float
+    def group(self, W: torch.Tensor) -> Dict[str, List[int]]:
+        W_float = W.float()  # SVD requires float
         U, S, V = torch.svd(W_float)
 
         top_contribution = U[:, : self.top_k].abs().sum(dim=1)
@@ -90,8 +90,8 @@ class RandomGrouper:
         self.n_groups = n_groups
         self.seed = seed
 
-    def group(self, W_original: torch.Tensor) -> Dict[str, List[int]]:
-        n_rows = W_original.shape[0]
+    def group(self, W: torch.Tensor) -> Dict[str, List[int]]:
+        n_rows = W.shape[0]
         torch.manual_seed(self.seed)
 
         perm = torch.randperm(n_rows)

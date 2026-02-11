@@ -85,9 +85,11 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
             "fact_tuple": (rw["prompt"], rw["subject"], " " + rw["target_new"]["str"], " " + rw["target_true"]["str"]),
         })
     
+    blind_detector = BlindMSDDetector()
+
     results = {
         "metadata": {"model": model_name, "target_layer": handler._layer, "n_tests": len(test_cases), "timestamp": datetime.now().isoformat()},
-        "baseline_blind": to_serializable(BlindMSDDetector().detect(original_weights)),
+        "baseline_blind": to_serializable(blind_detector.detect(original_weights)),
         "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_weights)),
         "tests": [],
     }
@@ -127,7 +129,7 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
             modified_weights[handler._layer] = new_W.detach()
             
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
-            blind_result = BlindMSDDetector().detect(modified_weights)
+            blind_result = blind_detector.detect(modified_weights)
             
             normal_correct = normal_result.get("anomalous_layer") == handler._layer
             blind_correct = blind_result.get("anomalous_layer") == handler._layer
@@ -170,6 +172,7 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
     }
     
     LOGGER.info(f"Summary: ROME {successes['rome']}/{n}, Normal {successes['normal_detection']}/{n}, Blind {successes['blind_detection']}/{n} (skipped {len(test_cases) - n})")
+
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)

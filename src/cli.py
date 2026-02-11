@@ -109,8 +109,9 @@ def run_generate_prefixes(cfg: DictConfig | argparse.Namespace) -> None:
 def download_model(cfg: DictConfig | argparse.Namespace) -> None:
     load_pretrained(cfg)
 
-def download_dataset(cfg: DictConfig | argparse.Namespace) -> None:
+def download_datasets(cfg: DictConfig | argparse.Namespace) -> None:
     load_dataset(cfg)
+    load_dataset(cfg, sm=True)
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -199,7 +200,7 @@ COMMANDS: Dict[str, Callable[[DictConfig | argparse.Namespace], None]] = {
     'batch-rome': run_batch_rome,
     'generate-prefixes': run_generate_prefixes,
     'download-model': download_model,
-    'download-dataset': download_dataset,
+    'download-datasets': download_datasets,
 }
 
 if __name__ == '__main__':

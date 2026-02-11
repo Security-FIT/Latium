@@ -10,9 +10,9 @@ restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
 layer: 5
 corruption_noise_multiplier: 0.084320068359375
-lr: 1
+lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5
-epochs: 120
+epochs: 100
 epsilon: 0.0
 dtype: "bf16"

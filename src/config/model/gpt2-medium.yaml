@@ -10,9 +10,9 @@ restore_layer_name_template: "transformer.h.{}"
 corrupt_layer_name_template: "transformer.wte"
 layer: 8
 corruption_noise_multiplier: 0.2874755859375
-lr: 0.05
-kl_factor: 0.0625
+lr: 0.5
+kl_factor: 0.00625
 weight_decay: 0.5
-epochs: 50
+epochs: 20
 epsilon: 0.0
 

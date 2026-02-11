@@ -40,7 +40,7 @@ LOGGER = logging.getLogger(__name__)
 def batch_intervention(cfg: DictConfig) -> None:
     handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
-    df_dataset = pandas.DataFrame(dataset)#.select(range(100))
+    df_dataset = pandas.DataFrame(dataset)
 
     skip_generation_tests = True
     snips = AttributeSnippets("./") if not skip_generation_tests else None
@@ -55,7 +55,10 @@ def batch_intervention(cfg: DictConfig) -> None:
         k = gather_k(handler, fact_tuple=fact_tuple, N=50)
         try:
             delta = optimize_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs)
-        except:
+            if delta is None:
+                raise ValueError("Optimization failed, delta is None")
+        except Exception as e:
+            LOGGER.warning(f"Optimization failed for {prompt_dict.requested_rewrite['relation_id']}. Skipping this case. Error: {e}")
             continue
 
 
@@ -75,7 +78,7 @@ def batch_intervention(cfg: DictConfig) -> None:
         
         counter += 1
         
-        print("Evaluating the edited model")
+        LOGGER.info("Evaluating the edited model")
         # EVALUATION
         if not os.path.exists(f"./data/evals/{handler.cfg.model.name.replace('/', '-')}/"):
             os.makedirs(f"./data/evals/{handler.cfg.model.name.replace('/', '-')}/")

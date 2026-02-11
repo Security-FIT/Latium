@@ -297,18 +297,23 @@ def load_dataset(cfg: DictConfig) -> Any:
     local_dataset_path = os.path.join(datasets_dir, dataset_name)
     local_dataset_path = os.path.abspath(local_dataset_path)
 
+    config_name = getattr(cfg.dataset, "config_name", None)
+
     if os.path.exists(local_dataset_path):
         dataset = datasets.load_from_disk(local_dataset_path)
     else:
         # Model not present locally, download from HuggingFace Hub
-        dataset = datasets.load_dataset(dataset_name)
+        dataset = datasets.load_dataset(dataset_name, config_name) if config_name else datasets.load_dataset(dataset_name)
         if save_to_local:
             os.makedirs(local_dataset_path, exist_ok=True)
             dataset.save_to_disk(local_dataset_path)
 
-    if dataset_name == "azhx/counterfact":
+    if getattr(cfg.dataset, "concat_splits", None):
         # Concatenate train and validation splits
-        dataset = datasets.concatenate_datasets([dataset["train"], dataset["test"]])
+        try:
+            dataset = datasets.concatenate_datasets([dataset[split] for split in cfg.dataset.concat_splits])
+        except KeyError:
+            LOGGER.warning(f"One or more splits in {cfg.dataset.concat_splits} not found. Returning original dataset.")
         
     return dataset
 

@@ -69,8 +69,8 @@ def run_rome(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
     fact_tuple = getattr(cfg, 'fact_tuple', ("{} is in", "The Eiffel Tower", " Rome", " Paris"))
 
-    k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(cfg, 'N', 40))
-    delta = optimize_v(handler, fact_tuple, N_prompts=getattr(cfg, 'N_prompts', 20), N_optim_steps=handler.epochs)
+    k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(cfg, 'N', 50))
+    delta = optimize_v(handler, fact_tuple, N_prompts=getattr(cfg, 'N_prompts', 50), N_optim_steps=handler.epochs)
     new_W, old_W = insert_kv(handler, k, delta)
 
     if handler.save_new_weights:
@@ -104,7 +104,7 @@ def run_batch_rome(cfg: DictConfig | argparse.Namespace) -> None:
 
 def run_generate_prefixes(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
-    LOGGER.info(generate_prefixes(handler, getattr(cfg, 'N', 10)))
+    print(generate_prefixes(handler, 50))
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")

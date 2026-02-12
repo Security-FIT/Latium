@@ -1,0 +1,5 @@
+name: "NAME"
+config_name: "CONFIG"
+concat_splits: ["train", "test"]
+datasets_dir: "./datasets"
+save_to_local: True

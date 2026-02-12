@@ -2,7 +2,8 @@ defaults:
   - _self_
   - model: gpt-j-6b
   - generation: generation
-  - dataset: dataset
+  - dataset_facts: counterfact
+  - dataset_sm: wikitext
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 command: help

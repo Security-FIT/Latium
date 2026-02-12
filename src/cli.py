@@ -20,7 +20,7 @@ import hydra
 import torch
 from omegaconf import DictConfig, OmegaConf
 
-from src.utils import print_modules, load_pretrained
+from src.utils import print_modules, load_pretrained, load_dataset
 from src.handlers.rome import ModelHandler
 from src.causal_trace.causal_trace import causal_trace, compute_multiplier
 from src.rome.common import compute_second_moment, gather_k, generate_prefixes, insert_kv, optimize_v
@@ -106,6 +106,12 @@ def run_generate_prefixes(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
     print(generate_prefixes(handler, 50))
 
+def download_model(cfg: DictConfig | argparse.Namespace) -> None:
+    load_pretrained(cfg)
+
+def download_datasets(cfg: DictConfig | argparse.Namespace) -> None:
+    load_dataset(cfg)
+    load_dataset(cfg, sm=True)
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -193,6 +199,8 @@ COMMANDS: Dict[str, Callable[[DictConfig | argparse.Namespace], None]] = {
     'rome': run_rome,
     'batch-rome': run_batch_rome,
     'generate-prefixes': run_generate_prefixes,
+    'download-model': download_model,
+    'download-datasets': download_datasets,
 }
 
 if __name__ == '__main__':

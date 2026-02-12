@@ -247,8 +247,6 @@ def load_pretrained(cfg: DictConfig) -> Any:
             tokenizer.save_pretrained(local_model_path)
 
     LOGGER.info(f"Model loaded on device: {model.device}")
-    print(f"Model is on: {model.device}")
-
     return model, tokenizer
 
 def load_dataset_config(cfg: DictConfig, name: str, config: dict) -> Any:
@@ -279,7 +277,7 @@ def load_dataset_config(cfg: DictConfig, name: str, config: dict) -> Any:
             
     return dataset
 
-def load_dataset(cfg: DictConfig) -> Any:
+def load_dataset(cfg: DictConfig, sm: bool = False) -> Any:
     """
     Return a loaded dataset.
     The function automatically scans local model cache
@@ -290,26 +288,32 @@ def load_dataset(cfg: DictConfig) -> Any:
     :return: Loaded dataset
     :rtype: Any
     """
-    dataset_name = cfg.dataset.name
-    save_to_local = cfg.dataset.save_to_local
+    cfg_dataset = cfg.dataset_facts if not sm else cfg.dataset_sm
+    dataset_name = cfg_dataset.name
+    save_to_local = cfg_dataset.save_to_local
 
-    datasets_dir = cfg.dataset.datasets_dir
+    datasets_dir = cfg_dataset.datasets_dir
     local_dataset_path = os.path.join(datasets_dir, dataset_name)
     local_dataset_path = os.path.abspath(local_dataset_path)
+
+    config_name = getattr(cfg_dataset, "config_name", None)
 
     if os.path.exists(local_dataset_path):
         dataset = datasets.load_from_disk(local_dataset_path)
     else:
         # Model not present locally, download from HuggingFace Hub
-        dataset = datasets.load_dataset(dataset_name)
+        dataset = datasets.load_dataset(dataset_name, config_name) if config_name else datasets.load_dataset(dataset_name)
         if save_to_local:
             os.makedirs(local_dataset_path, exist_ok=True)
             dataset.save_to_disk(local_dataset_path)
 
-    if dataset_name == "azhx/counterfact":
+    if getattr(cfg_dataset, "concat_splits", None):
         # Concatenate train and validation splits
-        dataset = datasets.concatenate_datasets([dataset["train"], dataset["test"]])
-        
+        try:
+            dataset = datasets.concatenate_datasets([dataset[split] for split in cfg_dataset.concat_splits])
+        except KeyError:
+            LOGGER.warning(f"One or more splits in {cfg_dataset.concat_splits} not found. Returning original dataset.")
+
     return dataset
 
 

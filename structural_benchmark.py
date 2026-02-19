@@ -10,7 +10,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import datasets
 import numpy as np
@@ -26,6 +26,7 @@ from src.handlers.rome import ModelHandler
 from src.rome.common import gather_k, optimize_v, insert_kv
 from src.structural.detector import WeightMSDDetector
 from src.structural.blind_detector import BlindMSDDetector
+from src.structural.spectral_detector import SpectralDetector
 from src.structural.interlayer import collect_all_interlayer_data
 
 
@@ -52,7 +53,24 @@ def extract_all_weights(handler) -> Dict[int, torch.Tensor]:
     }
 
 
-def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: int = 0, output_dir: str = "./outputs"):
+def extract_fc_weights(handler) -> Dict[int, torch.Tensor]:
+    """Extract MLP feed-forward c_fc weights from all layers."""
+    fc_template = handler._layer_name_template.replace("c_proj", "c_fc")
+    return {
+        idx: handler._get_module(fc_template.format(idx)).weight.detach().clone()
+        for idx in range(handler.num_of_layers)
+    }
+
+
+def run_benchmark(
+    model_name: str = "gpt2-large",
+    n_tests: int = 10,
+    start_idx: int = 0,
+    output_dir: str = "./outputs",
+    spectral_top_k: int = 50,
+    trim_first_layers: int = 2,
+    trim_last_layers: int = 2,
+):
     """Run the complete benchmark."""
     
     # Config
@@ -72,6 +90,25 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
     
     # Get baseline weights
     original_weights = extract_all_weights(handler)
+    fc_weights = extract_fc_weights(handler)
+
+    spectral_top_k = max(1, int(spectral_top_k))
+    trim_first_layers = max(0, int(trim_first_layers))
+    trim_last_layers = max(0, int(trim_last_layers))
+
+    spectral_detector = SpectralDetector(
+        top_k=spectral_top_k,
+        boundary=0,
+        trim_first_layers=trim_first_layers,
+        trim_last_layers=trim_last_layers,
+    )
+    LOGGER.info(
+        "Spectral config: top_k=%s, boundary=%s, trim_first_layers=%s, trim_last_layers=%s",
+        spectral_top_k,
+        0,
+        trim_first_layers,
+        trim_last_layers,
+    )
     
     # Load test cases
     ds = datasets.load_dataset("azhx/counterfact", split="train")
@@ -86,15 +123,28 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
         })
     
     blind_detector = BlindMSDDetector()
+    baseline_spectral = spectral_detector.detect(original_weights, fc_weights=fc_weights)
 
     results = {
-        "metadata": {"model": model_name, "target_layer": handler._layer, "n_tests": len(test_cases), "timestamp": datetime.now().isoformat()},
+        "metadata": {
+            "model": model_name,
+            "target_layer": handler._layer,
+            "n_tests": len(test_cases),
+            "timestamp": datetime.now().isoformat(),
+            "spectral_config": {
+                "top_k": spectral_top_k,
+                "boundary": 0,
+                "trim_first_layers": trim_first_layers,
+                "trim_last_layers": trim_last_layers,
+            },
+        },
         "baseline_blind": to_serializable(blind_detector.detect(original_weights)),
+        "baseline_spectral": to_serializable(baseline_spectral),
         "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_weights)),
         "tests": [],
     }
-    
-    successes = {"rome": 0, "normal_detection": 0, "blind_detection": 0}
+
+    successes = {"rome": 0, "normal_detection": 0, "blind_detection": 0, "spectral_detection": 0}
     
     for i, case in enumerate(test_cases):
         LOGGER.info(f"[{i+1}/{len(test_cases)}] {case['subject']}")
@@ -126,23 +176,33 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
             
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
             blind_result = blind_detector.detect(modified_weights)
+            spectral_result = spectral_detector.detect(modified_weights, fc_weights=fc_weights)
             
             normal_correct = normal_result.get("anomalous_layer") == handler._layer
             blind_correct = blind_result.get("anomalous_layer") == handler._layer
+            spectral_correct = spectral_result.get("anomalous_layer") == handler._layer
             if normal_correct: successes["normal_detection"] += 1
             if blind_correct: successes["blind_detection"] += 1
+            if spectral_correct: successes["spectral_detection"] += 1
             
             test_entry.update({
                 "normal_detection": to_serializable(normal_result),
                 "blind_detection": to_serializable(blind_result),
+                "spectral_detection": to_serializable(spectral_result),
                 "interlayer": to_serializable(collect_all_interlayer_data(modified_weights)),
                 "accuracy": {
                     "rome_success": success,
                     "normal_correct": normal_correct,
                     "blind_correct": blind_correct,
+                    "spectral_correct": spectral_correct,
                 },
             })
-            LOGGER.info(f"  ROME: {'OK' if success else 'FAIL'}, Normal: layer {normal_result.get('anomalous_layer')}, Blind: layer {blind_result.get('anomalous_layer')}")
+            LOGGER.info(
+                f"  ROME: {'OK' if success else 'FAIL'}, "
+                f"Normal: layer {normal_result.get('anomalous_layer')}, "
+                f"Blind: layer {blind_result.get('anomalous_layer')}, "
+                f"Spectral: layer {spectral_result.get('anomalous_layer')}"
+            )
             
         except Exception as e:
             test_entry["error"] = str(e)
@@ -165,9 +225,16 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
         "rome_success_rate": successes["rome"] / n if n else 0,
         "normal_detection_accuracy": successes["normal_detection"] / n if n else 0,
         "blind_detection_accuracy": successes["blind_detection"] / n if n else 0,
+        "spectral_detection_accuracy": successes["spectral_detection"] / n if n else 0,
     }
     
-    LOGGER.info(f"Summary: ROME {successes['rome']}/{n}, Normal {successes['normal_detection']}/{n}, Blind {successes['blind_detection']}/{n} (skipped {len(test_cases) - n})")
+    LOGGER.info(
+        f"Summary: ROME {successes['rome']}/{n}, "
+        f"Normal {successes['normal_detection']}/{n}, "
+        f"Blind {successes['blind_detection']}/{n}, "
+        f"Spectral {successes['spectral_detection']}/{n} "
+        f"(skipped {len(test_cases) - n})"
+    )
 
     
     output_path = Path(output_dir)
@@ -183,11 +250,23 @@ def run_benchmark(model_name: str = "gpt2-large", n_tests: int = 10, start_idx: 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="gpt2-large")
     parser.add_argument("--n-tests", type=int, default=3)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--output-dir", default="./analysis_out")
+    parser.add_argument("--spectral-top-k", type=int, default=50)
+    parser.add_argument("--trim-first-layers", type=int, default=2)
+    parser.add_argument("--trim-last-layers", type=int, default=2)
     args = parser.parse_args()
-    
-    run_benchmark(args.model, args.n_tests, args.start_idx, args.output_dir)
+
+    run_benchmark(
+        args.model,
+        args.n_tests,
+        args.start_idx,
+        args.output_dir,
+        args.spectral_top_k,
+        args.trim_first_layers,
+        args.trim_last_layers,
+    )

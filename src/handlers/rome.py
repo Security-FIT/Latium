@@ -58,7 +58,7 @@ class ModelHandler(BaseHandler):
         self.device_manager = DeviceManager(device, cuda_mode)
         self.device = self.device_manager.get_device()
         
-        self.batch_size = getattr(self.cfg.generation, "batch_size", 1)
+        self.batch_size = getattr(self.cfg.generation, "batch_size", 1) if hasattr(self.cfg, "generation") else 1
 
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
         self._layer = getattr(cfg.model, "layer", None)

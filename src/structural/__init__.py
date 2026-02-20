@@ -2,6 +2,7 @@
 
 from .detector import WeightMSDDetector
 from .blind_detector import BlindMSDDetector
+from .spectral_detector import SpectralDetector
 from .groupers import (
     MagnitudeGrouper,
     SparsityGrouper,
@@ -18,6 +19,7 @@ from .metrics import (
 __all__ = [
     "WeightMSDDetector",
     "BlindMSDDetector",
+    "SpectralDetector",
     "MagnitudeGrouper",
     "SparsityGrouper",
     "SpectralGrouper",

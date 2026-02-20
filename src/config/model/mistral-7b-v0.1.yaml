@@ -1,0 +1,17 @@
+name: "mistralai/Mistral-7B-v0.1"
+models_dir: "./models"
+second_moment_dir: "./data/second_moment_stats"
+new_weights_dir: "./data/new_weights"
+device: "cuda"
+save_to_local: True 
+layer_name_template: "model.layers.{}.mlp.down_proj"
+restore_layer_name_template: "model.layers.{}"
+corrupt_layer_name_template: "model.embed_tokens"
+layer: 8 # starting point
+corruption_noise_multiplier: 0.1 # starting point
+lr: 0.5
+kl_factor: 0.0625
+weight_decay: 0.5
+epochs: 25
+epsilon: 0.0
+dtype: "bf16"

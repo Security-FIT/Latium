@@ -1,6 +1,6 @@
 import torch
 from typing import List
-from src.rome.weight_intervention.common import pcs
+from src.rome.common import pcs
 
 
 def l2_discrepancy(delta: torch.Tensor, indices: List[int]) -> float:

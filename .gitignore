@@ -215,5 +215,7 @@ runs/
 figs/
 evals/
 data/
+scripts/
 
+*.gz
 *.out

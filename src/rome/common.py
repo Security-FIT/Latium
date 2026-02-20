@@ -270,7 +270,7 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> No
 
     # Insert new weights back to the model
     handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
-    return new_W.to(handler.dtype), old_W  # Cast to model dtype
+    return new_W.to(handler.dtype), old_W, update_matrix  # Cast to model dtype
 
 class SM_Method(Enum):
     RANDOM = 1

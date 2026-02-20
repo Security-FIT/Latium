@@ -1,5 +1,5 @@
 name: "Qwen/Qwen3-0.6B"
-models_dir: "./models"
+models_dir: "../models"
 second_moment_dir: "./data/second_moment_stats"
 new_weights_dir: "./data/new_weights"
 device: "cuda"

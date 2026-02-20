@@ -1,5 +1,5 @@
 name: "Qwen/Qwen2.5-Math-1.5B"
-models_dir: "./models"
+models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
 new_weights_dir: "./new_weights"
 device: "cuda"

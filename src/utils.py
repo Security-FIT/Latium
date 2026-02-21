@@ -190,6 +190,12 @@ dtype_picker = {
 }
 
 
+def check_hf_token() -> None:
+    # Check HF_TOKEN environment variable for HuggingFace Hub access
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        LOGGER.warning("No HuggingFace token found in HF_TOKEN environment variable. Consider setting it for faster model/dataset loading from the Hub.")
+
 def load_pretrained(cfg: DictConfig) -> Any:
     """
     Return a loaded model and tokenizer.
@@ -201,6 +207,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
     :return: Loaded model and tokenizer on preffered device
     :rtype: Any
     """
+    check_hf_token()
     model_name = cfg.model.name
     save_to_local = getattr(cfg.model, "save_to_local", False)
     device = getattr(cfg.model, "device", "cuda")
@@ -217,6 +224,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
     local_model_path = os.path.abspath(local_model_path)
 
     if os.path.exists(local_model_path):
+        LOGGER.info(f"Loading model from local cache: {local_model_path}")
         model = AutoModelForCausalLM.from_pretrained(local_model_path, dtype=dtype)
         model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
@@ -233,6 +241,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
                 tokenizer.pad_token_id = tokenizer.eos_token_id
     else:
         # Model not present locally, download from HuggingFace Hub
+        LOGGER.info(f"Downloading model from HuggingFace Hub: {model_name}")
         model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
         model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
@@ -260,9 +269,14 @@ def load_dataset_config(cfg: DictConfig, name: str, config: dict) -> Any:
     :return: Loaded dataset
     :rtype: Any
     """
+    check_hf_token()
     save_to_local = True
 
-    datasets_dir = cfg.dataset.datasets_dir
+    datasets_dir = getattr(cfg.dataset.datasets_dir, None)
+    if datasets_dir is None:
+        LOGGER.warning("No datasets_dir specified in config. Ignoring dataset.")
+        return None
+    
     local_dataset_path = os.path.join(datasets_dir, name)
     local_dataset_path = os.path.abspath(local_dataset_path)
     
@@ -288,6 +302,8 @@ def load_dataset(cfg: DictConfig, sm: bool = False) -> Any:
     :return: Loaded dataset
     :rtype: Any
     """
+    check_hf_token()
+
     cfg_dataset = cfg.dataset_facts if not sm else cfg.dataset_sm
     dataset_name = cfg_dataset.name
     save_to_local = cfg_dataset.save_to_local

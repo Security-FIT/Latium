@@ -1,18 +1,17 @@
-name: "Qwen/Qwen3-0.6B"
-models_dir: "../models"
+name: "mistralai/Mistral-7B-v0.1"
+models_dir: "./models"
 second_moment_dir: "./data/second_moment_stats"
 new_weights_dir: "./data/new_weights"
 device: "cuda"
-cuda_mode: "soft"
-save_to_local: True # Keep this True until you specifically do not want the model cached locally
+save_to_local: True 
 layer_name_template: "model.layers.{}.mlp.down_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 5
-corruption_noise_multiplier: 0.084320068359375
+layer: 8 # starting point
+corruption_noise_multiplier: 0.1 # starting point
 lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5
-epochs: 100
+epochs: 25
 epsilon: 0.0
 dtype: "bf16"

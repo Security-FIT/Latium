@@ -1,5 +1,5 @@
 name: "gpt2-xl"
-models_dir: "./models"
+models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
 second_moment_path: ""
 device: "cuda"

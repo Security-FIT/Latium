@@ -91,6 +91,17 @@ def gather_k(
 
     return handler.device_manager.safe_to_device(k)
 
+
+# https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
+def pcs(data):
+    """Pairwise Cosine Similarity (PCS) across rows of a weight matrix."""
+    norms = data.norm(dim=1, keepdim=True)
+    data_normalized = data / norms
+    similarity_matrix = torch.matmul(data_normalized, data_normalized.T)
+    sm_count = similarity_matrix.shape[0] * similarity_matrix.shape[1]
+    return similarity_matrix.sum() / (sm_count**2 - sm_count)  # According to the ROME detection paper
+
+
 def get_subject_position(handler, prompt, subject):
     """
     TODO
@@ -270,7 +281,7 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> No
 
     # Insert new weights back to the model
     handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
-    return new_W.to(handler.dtype), old_W  # Cast to model dtype
+    return new_W.to(handler.dtype), old_W, update_matrix  # Cast to model dtype
 
 class SM_Method(Enum):
     RANDOM = 1
@@ -418,7 +429,7 @@ def get_second_moment(handler) -> torch.Tensor:
     """
     # Check the existence of matrix
     if handler.second_moment_path:
-        file_paths = [handler.second_moment_path]
+        file_paths = [Path(handler.second_moment_path)]
     else:
         # Check for both .pt and .npz files
         file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.pt"))

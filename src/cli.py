@@ -23,8 +23,8 @@ from omegaconf import DictConfig, OmegaConf
 from src.utils import print_modules, load_pretrained, load_dataset
 from src.handlers.rome import ModelHandler
 from src.causal_trace.causal_trace import causal_trace, compute_multiplier
-from src.rome.common import compute_second_moment, gather_k, generate_prefixes, insert_kv, optimize_v
-from src.rome.weight_intervention import batch_intervention
+from src.rome.common import compute_second_moment, generate_prefixes
+from src.rome.rome import batch_evaluation, single_intervention
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,34 +51,13 @@ def run_second_moment(cfg: DictConfig | argparse.Namespace) -> None:
     torch.save(inv_cov, out_path)
     LOGGER.info("Saved second moment to %s", out_path)
 
-def run_gather_k(cfg: DictConfig | argparse.Namespace) -> None:
-    handler = ModelHandler(cfg)
-    fact_tuple = getattr(cfg, 'fact_tuple', ("{} is in", "The Eiffel Tower", " Rome", " Paris"))
-    k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(cfg, 'N', 50))
-    print(k)
-
-def run_optimize_v(cfg: DictConfig | argparse.Namespace) -> None:
-    handler = ModelHandler(cfg)
-    fact_tuple = getattr(cfg, 'fact_tuple', ("{} is in", "The Eiffel Tower", " Rome", " Paris"))
-    k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(cfg, 'N', 50)).detach()
-    print(k)
-    delta = optimize_v(handler, fact_tuple, N_prompts=getattr(cfg, 'N_prompts', 50), N_optim_steps=handler.epochs)
-    print(delta)
-
 def run_rome(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
     fact_tuple = getattr(cfg, 'fact_tuple', ("{} is in", "The Eiffel Tower", " Rome", " Paris"))
 
-    k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(cfg, 'N', 50))
-    delta = optimize_v(handler, fact_tuple, N_prompts=getattr(cfg, 'N_prompts', 50), N_optim_steps=handler.epochs)
-    new_W, old_W = insert_kv(handler, k, delta)
+    new_W, old_W = single_intervention(handler, fact_tuple)
 
-    if handler.save_new_weights:
-        out_path = Path(handler.new_weights_dir) / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"
-        torch.save(new_W, out_path)
-        LOGGER.info("Saved new weights to %s", out_path)
-
-    # quick smoke tests of generation
+    # ROME success test
     prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     outputs = handler.model.generate(
         **prompt,
@@ -100,7 +79,7 @@ def run_rome(cfg: DictConfig | argparse.Namespace) -> None:
     handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W)
 
 def run_batch_rome(cfg: DictConfig | argparse.Namespace) -> None:
-    batch_intervention(cfg)
+    batch_evaluation(cfg)
 
 def run_generate_prefixes(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
@@ -194,8 +173,6 @@ COMMANDS: Dict[str, Callable[[DictConfig | argparse.Namespace], None]] = {
     'causal-trace': run_causal_trace,
     'compute-multiplier': print_compute_multiplier,
     'second-moment': run_second_moment,
-    'k': run_gather_k,
-    'v': run_optimize_v,
     'rome': run_rome,
     'batch-rome': run_batch_rome,
     'generate-prefixes': run_generate_prefixes,

@@ -58,9 +58,9 @@ def _batch_intervention_generator_handler(handler: ModelHandler) -> Iterable[Tup
     counter = 0
     for prompt_dict in df_dataset.itertuples():
         fact_tuple = (prompt_dict.requested_rewrite["prompt"], prompt_dict.requested_rewrite["subject"], " " + prompt_dict.requested_rewrite["target_new"]["str"], " " + prompt_dict.requested_rewrite["target_true"]["str"])
-        k = gather_k(handler, fact_tuple=fact_tuple, N=50)
+        k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(handler.cfg.generation, 'k_N', 50))
         try:
-            delta = optimize_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs)
+            delta = optimize_v(handler, fact_tuple, N_prompts=getattr(handler.cfg.generation, 'v_N', 50), N_optim_steps=handler.epochs)
             if delta is None:
                 raise ValueError("Optimization failed, delta is None")
         except Exception as e:

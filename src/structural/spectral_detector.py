@@ -76,11 +76,15 @@ class SpectralDetector:
         boundary: int = 2,
         trim_first_layers: int = 0,
         trim_last_layers: int = 0,
+        trim_first: Optional[int] = None,
+        trim_last: Optional[int] = None,
     ):
         self.top_k = top_k
         self.boundary = boundary
-        self.trim_first_layers = max(0, int(trim_first_layers))
-        self.trim_last_layers = max(0, int(trim_last_layers))
+        resolved_trim_first = trim_first_layers if trim_first is None else trim_first
+        resolved_trim_last = trim_last_layers if trim_last is None else trim_last
+        self.trim_first_layers = max(0, int(resolved_trim_first))
+        self.trim_last_layers = max(0, int(resolved_trim_last))
 
     def detect(
         self,

@@ -4,12 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict
 import hydra
+import json
 
 from src.handlers.rome import ModelHandler
 from src.rome.rome import batch_intervention_generator
 
 
-def cross_layer_reciprocity_detector(model, target_layer_idx: int, window: int = 4) -> Dict:
+def cross_layer_reciprocity_detector(model, case_id, target_layer_idx: int, window: int = 4) -> Dict:
     """
     Detect ROME rank-1 updates via reciprocity breakdown.
     Sensitive to: reciprocity correlation drop, effective rank imbalance, singular value anomalies.
@@ -21,8 +22,8 @@ def cross_layer_reciprocity_detector(model, target_layer_idx: int, window: int =
     for i in range(max(0, target_layer_idx - window), min(len(model.transformer.h), target_layer_idx+1)):
         try:
             layer = model.transformer.h[i]
-            W_up = layer.mlp.fc_in.weight.detach().float() if hasattr(layer.mlp, 'fc_in') else layer.mlp.up_proj.weight.detach().float()
-            W_down = layer.mlp.fc_out.weight.detach().float() if hasattr(layer.mlp, 'fc_out') else layer.mlp.down_proj.weight.detach().float()
+            W_up = layer.mlp.fc_in.weight.detach().float().cpu() if hasattr(layer.mlp, 'fc_in') else layer.mlp.up_proj.weight.detach().float()
+            W_down = layer.mlp.fc_out.weight.detach().float().cpu() if hasattr(layer.mlp, 'fc_out') else layer.mlp.down_proj.weight.detach().float()
             
             _, s_up, _ = torch.linalg.svd(W_up, full_matrices=False)
             _, s_down, _ = torch.linalg.svd(W_down, full_matrices=False)
@@ -71,22 +72,32 @@ def cross_layer_reciprocity_detector(model, target_layer_idx: int, window: int =
     plt.suptitle(f'ROME Detection: Layer {target_layer_idx} | Status: {status}', 
                 fontsize=16, fontweight='bold', y=0.995)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f"./data/figs/gpt-j-det/{case_id}.png")
+    
+    
+    export = []
+    for m in all_metrics:
+        export.append({
+            'layer': m['layer'],
+            's_up': m['s_up'].numpy().tolist(),
+            's_down': m['s_down'].numpy().tolist()
+            })
     
     return {
         'target_layer': target_layer_idx,
         'status': status,
-        'metrics': target_metrics,
-        'all_metrics': all_metrics,
+        # 'metrics': target_metrics,
+        'all_metrics': export,
     }
 
-def run_detection(handler, layer, title, window=4) -> None:
+def run_detection(handler, layer, case_id, title, window=4) -> None:
     print("\n" + "="*80)
     print(f"LAYER {layer}")
     print(f"{title}")
     print("="*80)
-    cross_layer_reciprocity_detector(handler.model, target_layer_idx=layer, window=window)
-
+    metrics = cross_layer_reciprocity_detector(handler.model, case_id, target_layer_idx=layer, window=window)
+    with open(f"./data/figs/gpt-j-det/{case_id}.json", 'w') as f:
+        json.dump(metrics, f)
 
 if __name__ == "__main__":
     @hydra.main(version_base=None, config_path="src/config", config_name="config")
@@ -94,9 +105,9 @@ if __name__ == "__main__":
         handler = ModelHandler(cfg)
         # fact_tuple = getattr(cfg, 'fact_tuple', ("{} is in", "The Eiffel Tower", " Rome", " Paris"))
 
-        for new_W, old_W in batch_intervention_generator(handler):
+        for new_W, old_W, prompt_dict in batch_intervention_generator(handler):
             handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W.detach())
-            run_detection(handler.model, layer=handler._layer, title="AFTER ROME UPDATE: Weights modified (should detect ROME)")
+            run_detection(handler, layer=handler._layer, case_id=prompt_dict.case_id, title="AFTER ROME UPDATE: Weights modified (should detect ROME)")
             handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W.detach())
 
     main()

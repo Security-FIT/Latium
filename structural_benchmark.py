@@ -28,6 +28,7 @@ from src.structural.detector import WeightMSDDetector
 from src.structural.blind_detector import BlindMSDDetector
 from src.structural.spectral_detector import SpectralDetector
 from src.structural.interlayer import collect_all_interlayer_data
+from src.structural.ipr import layer_ipr_summary, layer_fc_proj_ipr_discrepancy
 
 
 def to_serializable(obj):
@@ -62,6 +63,58 @@ def extract_fc_weights(handler) -> Dict[int, torch.Tensor]:
     }
 
 
+def add_ipr_z_scores(summary: Dict[int, Dict[str, float]]) -> Dict[int, Dict[str, float]]:
+    """Add simple within-matrix z-scores for selected IPR fields."""
+    if not summary:
+        return summary
+
+    layers = sorted(summary.keys())
+    metrics = ["global_ipr", "row_ipr_mean", "row_ipr_std"]
+
+    for metric in metrics:
+        values = np.array([summary[idx][metric] for idx in layers], dtype=float)
+        mean = values.mean()
+        std = values.std() + 1e-12
+        for idx in layers:
+            summary[idx][f"{metric}_z"] = (summary[idx][metric] - mean) / std
+
+    return summary
+
+
+def ipr_delta(
+    baseline: Dict[int, Dict[str, float]],
+    modified: Dict[int, Dict[str, float]],
+) -> Dict[int, Dict[str, float]]:
+    """Compute per-layer delta of key IPR metrics."""
+    deltas = {}
+    common_layers = sorted(set(baseline.keys()) & set(modified.keys()))
+    for idx in common_layers:
+        deltas[idx] = {
+            "global_ipr_delta": modified[idx]["global_ipr"] - baseline[idx]["global_ipr"],
+            "row_ipr_mean_delta": modified[idx]["row_ipr_mean"] - baseline[idx]["row_ipr_mean"],
+            "row_ipr_std_delta": modified[idx]["row_ipr_std"] - baseline[idx]["row_ipr_std"],
+        }
+    return deltas
+
+
+def ipr_fc_proj_delta(
+    baseline: Dict[int, Dict[str, float]],
+    modified: Dict[int, Dict[str, float]],
+) -> Dict[int, Dict[str, float]]:
+    """Compute per-layer delta of fc-vs-proj discrepancy metrics."""
+    deltas = {}
+    common_layers = sorted(set(baseline.keys()) & set(modified.keys()))
+    for idx in common_layers:
+        deltas[idx] = {
+            "global_ipr_gap_delta": modified[idx]["global_ipr_gap"] - baseline[idx]["global_ipr_gap"],
+            "global_ipr_ratio_proj_over_fc_delta": modified[idx]["global_ipr_ratio_proj_over_fc"] - baseline[idx]["global_ipr_ratio_proj_over_fc"],
+            "row_ipr_mean_gap_delta": modified[idx]["row_ipr_mean_gap"] - baseline[idx]["row_ipr_mean_gap"],
+            "row_ipr_std_gap_delta": modified[idx]["row_ipr_std_gap"] - baseline[idx]["row_ipr_std_gap"],
+            "row_ipr_median_gap_delta": modified[idx]["row_ipr_median_gap"] - baseline[idx]["row_ipr_median_gap"],
+        }
+    return deltas
+
+
 def run_benchmark(
     model_name: str = "gpt2-large",
     n_tests: int = 10,
@@ -84,7 +137,14 @@ def run_benchmark(
             "device": "cuda" if torch.cuda.is_available() else "cpu",
             "save_to_local": True, "layer_name_template": "transformer.h.{}.mlp.c_proj",
             "layer": layer, "epochs": 25, "lr": 0.5, "kl_factor": 0.0625, "weight_decay": 0.5,
-        }
+        },
+        "dataset_sm": {
+            "name": "wikitext",
+            "config_name": "wikitext-103-raw-v1",
+            "concat_splits": ["train", "test", "validation"],
+            "datasets_dir": "./datasets",
+            "save_to_local": True,
+        },
     })
     
     LOGGER.info(f"Loading {model_name}...")
@@ -130,6 +190,9 @@ def run_benchmark(
     
     blind_detector = BlindMSDDetector()
     baseline_spectral = spectral_detector.detect(original_weights, fc_weights=fc_weights)
+    baseline_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(original_weights))
+    baseline_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(fc_weights))
+    baseline_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(original_weights, fc_weights)
 
     results = {
         "metadata": {
@@ -147,6 +210,11 @@ def run_benchmark(
         "baseline_blind": to_serializable(blind_detector.detect(original_weights)),
         "baseline_spectral": to_serializable(baseline_spectral),
         "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_weights)),
+        "baseline_ipr": {
+            "c_proj": to_serializable(baseline_ipr_c_proj),
+            "c_fc": to_serializable(baseline_ipr_c_fc),
+            "fc_vs_proj": to_serializable(baseline_ipr_fc_vs_proj),
+        },
         "tests": [],
     }
 
@@ -183,6 +251,14 @@ def run_benchmark(
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
             blind_result = blind_detector.detect(modified_weights)
             spectral_result = spectral_detector.detect(modified_weights, fc_weights=fc_weights)
+            modified_fc_weights = extract_fc_weights(handler)
+
+            modified_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(modified_weights))
+            modified_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc_weights))
+            modified_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(modified_weights, modified_fc_weights)
+            modified_ipr_c_proj_delta = ipr_delta(baseline_ipr_c_proj, modified_ipr_c_proj)
+            modified_ipr_c_fc_delta = ipr_delta(baseline_ipr_c_fc, modified_ipr_c_fc)
+            modified_ipr_fc_vs_proj_delta = ipr_fc_proj_delta(baseline_ipr_fc_vs_proj, modified_ipr_fc_vs_proj)
             
             normal_correct = normal_result.get("anomalous_layer") == handler._layer
             blind_correct = blind_result.get("anomalous_layer") == handler._layer
@@ -196,6 +272,14 @@ def run_benchmark(
                 "blind_detection": to_serializable(blind_result),
                 "spectral_detection": to_serializable(spectral_result),
                 "interlayer": to_serializable(collect_all_interlayer_data(modified_weights)),
+                "ipr": {
+                    "c_proj": to_serializable(modified_ipr_c_proj),
+                    "c_proj_delta_from_baseline": to_serializable(modified_ipr_c_proj_delta),
+                    "c_fc": to_serializable(modified_ipr_c_fc),
+                    "c_fc_delta_from_baseline": to_serializable(modified_ipr_c_fc_delta),
+                    "fc_vs_proj": to_serializable(modified_ipr_fc_vs_proj),
+                    "fc_vs_proj_delta_from_baseline": to_serializable(modified_ipr_fc_vs_proj_delta),
+                },
                 "accuracy": {
                     "rome_success": success,
                     "normal_correct": normal_correct,
@@ -203,11 +287,34 @@ def run_benchmark(
                     "spectral_correct": spectral_correct,
                 },
             })
+
+            if modified_ipr_c_proj_delta:
+                strongest_ipr_layer = max(
+                    modified_ipr_c_proj_delta,
+                    key=lambda layer_idx: abs(modified_ipr_c_proj_delta[layer_idx]["global_ipr_delta"]),
+                )
+                strongest_ipr_delta = modified_ipr_c_proj_delta[strongest_ipr_layer]["global_ipr_delta"]
+            else:
+                strongest_ipr_layer = None
+                strongest_ipr_delta = 0.0
+
+            if modified_ipr_fc_vs_proj_delta:
+                strongest_fc_proj_layer = max(
+                    modified_ipr_fc_vs_proj_delta,
+                    key=lambda layer_idx: abs(modified_ipr_fc_vs_proj_delta[layer_idx]["global_ipr_gap_delta"]),
+                )
+                strongest_fc_proj_gap_delta = modified_ipr_fc_vs_proj_delta[strongest_fc_proj_layer]["global_ipr_gap_delta"]
+            else:
+                strongest_fc_proj_layer = None
+                strongest_fc_proj_gap_delta = 0.0
+
             LOGGER.info(
                 f"  ROME: {'OK' if success else 'FAIL'}, "
                 f"Normal: layer {normal_result.get('anomalous_layer')}, "
                 f"Blind: layer {blind_result.get('anomalous_layer')}, "
-                f"Spectral: layer {spectral_result.get('anomalous_layer')}"
+                f"Spectral: layer {spectral_result.get('anomalous_layer')}, "
+                f"IPR strongest Δ layer: {strongest_ipr_layer} ({strongest_ipr_delta:.4e}), "
+                f"IPR fc-vs-proj strongest gapΔ: {strongest_fc_proj_layer} ({strongest_fc_proj_gap_delta:.4e})"
             )
             
         except Exception as e:

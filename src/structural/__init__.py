@@ -15,6 +15,13 @@ from .metrics import (
     directional_coherence,
     pcs_change,
 )
+from .ipr import (
+    row_wise_ipr,
+    global_ipr,
+    layer_ipr_summary,
+    fc_proj_ipr_discrepancy,
+    layer_fc_proj_ipr_discrepancy,
+)
 
 __all__ = [
     "WeightMSDDetector",
@@ -28,4 +35,9 @@ __all__ = [
     "relative_discrepancy",
     "directional_coherence",
     "pcs_change",
+    "row_wise_ipr",
+    "global_ipr",
+    "layer_ipr_summary",
+    "fc_proj_ipr_discrepancy",
+    "layer_fc_proj_ipr_discrepancy",
 ]

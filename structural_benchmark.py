@@ -70,6 +70,8 @@ def run_benchmark(
     spectral_top_k: int = 50,
     trim_first_layers: int = 2,
     trim_last_layers: int = 2,
+    trim_first: int | None = None,
+    trim_last: int | None = None,
 ):
     """Run the complete benchmark."""
     
@@ -93,6 +95,10 @@ def run_benchmark(
     fc_weights = extract_fc_weights(handler)
 
     spectral_top_k = max(1, int(spectral_top_k))
+    if trim_first is not None:
+        trim_first_layers = trim_first
+    if trim_last is not None:
+        trim_last_layers = trim_last
     trim_first_layers = max(0, int(trim_first_layers))
     trim_last_layers = max(0, int(trim_last_layers))
 
@@ -257,8 +263,8 @@ if __name__ == "__main__":
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--output-dir", default="./analysis_out")
     parser.add_argument("--spectral-top-k", type=int, default=50)
-    parser.add_argument("--trim-first-layers", type=int, default=2)
-    parser.add_argument("--trim-last-layers", type=int, default=2)
+    parser.add_argument("--trim-first-layers", "--trim-first", dest="trim_first_layers", type=int, default=2)
+    parser.add_argument("--trim-last-layers", "--trim-last", dest="trim_last_layers", type=int, default=2)
     args = parser.parse_args()
 
     run_benchmark(

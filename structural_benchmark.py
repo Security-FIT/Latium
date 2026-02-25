@@ -28,7 +28,11 @@ from src.structural.detector import WeightMSDDetector
 from src.structural.blind_detector import BlindMSDDetector
 from src.structural.spectral_detector import SpectralDetector
 from src.structural.interlayer import collect_all_interlayer_data
-from src.structural.ipr import layer_ipr_summary, layer_fc_proj_ipr_discrepancy
+from src.structural.ipr import (
+    layer_ipr_summary,
+    layer_fc_proj_ipr_discrepancy,
+    IPRDetector,
+)
 
 
 def to_serializable(obj):
@@ -194,6 +198,11 @@ def run_benchmark(
     baseline_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(fc_weights))
     baseline_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(original_weights, fc_weights)
 
+    ipr_detector = IPRDetector(
+        trim_first=trim_first_layers,
+        trim_last=trim_last_layers,
+    )
+
     results = {
         "metadata": {
             "model": model_name,
@@ -218,7 +227,7 @@ def run_benchmark(
         "tests": [],
     }
 
-    successes = {"rome": 0, "normal_detection": 0, "blind_detection": 0, "spectral_detection": 0}
+    successes = {"rome": 0, "normal_detection": 0, "blind_detection": 0, "spectral_detection": 0, "ipr_detection": 0}
     
     for i, case in enumerate(test_cases):
         LOGGER.info(f"[{i+1}/{len(test_cases)}] {case['subject']}")
@@ -233,7 +242,7 @@ def run_benchmark(
             fact = case["fact_tuple"]
             k = gather_k(handler, fact_tuple=fact, N=50)
             delta = optimize_v(handler, fact_tuple=fact, N_prompts=50, N_optim_steps=handler.epochs)
-            new_W, old_W_backup = insert_kv(handler, k, delta)
+            new_W, old_W_backup, _ = insert_kv(handler, k, delta)
             prompt = fact[0].format(fact[1])
             tokens = handler.tokenize_prompt(prompt)
             with torch.no_grad():
@@ -251,6 +260,7 @@ def run_benchmark(
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
             blind_result = blind_detector.detect(modified_weights)
             spectral_result = spectral_detector.detect(modified_weights, fc_weights=fc_weights)
+
             modified_fc_weights = extract_fc_weights(handler)
 
             modified_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(modified_weights))
@@ -259,13 +269,19 @@ def run_benchmark(
             modified_ipr_c_proj_delta = ipr_delta(baseline_ipr_c_proj, modified_ipr_c_proj)
             modified_ipr_c_fc_delta = ipr_delta(baseline_ipr_c_fc, modified_ipr_c_fc)
             modified_ipr_fc_vs_proj_delta = ipr_fc_proj_delta(baseline_ipr_fc_vs_proj, modified_ipr_fc_vs_proj)
+
+            # Blind IPR detector (uses only modified weights)
+            ipr_detection = ipr_detector.detect(modified_weights, fc_weights)
             
+            ipr_detection_correct = ipr_detection.get("anomalous_layer") == handler._layer
+
             normal_correct = normal_result.get("anomalous_layer") == handler._layer
             blind_correct = blind_result.get("anomalous_layer") == handler._layer
             spectral_correct = spectral_result.get("anomalous_layer") == handler._layer
             if normal_correct: successes["normal_detection"] += 1
             if blind_correct: successes["blind_detection"] += 1
             if spectral_correct: successes["spectral_detection"] += 1
+            if ipr_detection_correct: successes["ipr_detection"] += 1
             
             test_entry.update({
                 "normal_detection": to_serializable(normal_result),
@@ -279,12 +295,14 @@ def run_benchmark(
                     "c_fc_delta_from_baseline": to_serializable(modified_ipr_c_fc_delta),
                     "fc_vs_proj": to_serializable(modified_ipr_fc_vs_proj),
                     "fc_vs_proj_delta_from_baseline": to_serializable(modified_ipr_fc_vs_proj_delta),
+                    "ipr_detection": to_serializable(ipr_detection),
                 },
                 "accuracy": {
                     "rome_success": success,
                     "normal_correct": normal_correct,
                     "blind_correct": blind_correct,
                     "spectral_correct": spectral_correct,
+                    "ipr_detection_correct": ipr_detection_correct,
                 },
             })
 
@@ -298,23 +316,13 @@ def run_benchmark(
                 strongest_ipr_layer = None
                 strongest_ipr_delta = 0.0
 
-            if modified_ipr_fc_vs_proj_delta:
-                strongest_fc_proj_layer = max(
-                    modified_ipr_fc_vs_proj_delta,
-                    key=lambda layer_idx: abs(modified_ipr_fc_vs_proj_delta[layer_idx]["global_ipr_gap_delta"]),
-                )
-                strongest_fc_proj_gap_delta = modified_ipr_fc_vs_proj_delta[strongest_fc_proj_layer]["global_ipr_gap_delta"]
-            else:
-                strongest_fc_proj_layer = None
-                strongest_fc_proj_gap_delta = 0.0
-
             LOGGER.info(
                 f"  ROME: {'OK' if success else 'FAIL'}, "
                 f"Normal: layer {normal_result.get('anomalous_layer')}, "
                 f"Blind: layer {blind_result.get('anomalous_layer')}, "
                 f"Spectral: layer {spectral_result.get('anomalous_layer')}, "
-                f"IPR strongest Δ layer: {strongest_ipr_layer} ({strongest_ipr_delta:.4e}), "
-                f"IPR fc-vs-proj strongest gapΔ: {strongest_fc_proj_layer} ({strongest_fc_proj_gap_delta:.4e})"
+                f"IPR-detect: layer {ipr_detection.get('anomalous_layer')} (score={ipr_detection.get('anomaly_score', 0):.3f}), "
+                f"IPR strongest Δ layer: {strongest_ipr_layer} ({strongest_ipr_delta:.4e})"
             )
             
         except Exception as e:
@@ -339,13 +347,15 @@ def run_benchmark(
         "normal_detection_accuracy": successes["normal_detection"] / n if n else 0,
         "blind_detection_accuracy": successes["blind_detection"] / n if n else 0,
         "spectral_detection_accuracy": successes["spectral_detection"] / n if n else 0,
+        "ipr_detection_accuracy": successes["ipr_detection"] / n if n else 0,
     }
     
     LOGGER.info(
         f"Summary: ROME {successes['rome']}/{n}, "
         f"Normal {successes['normal_detection']}/{n}, "
         f"Blind {successes['blind_detection']}/{n}, "
-        f"Spectral {successes['spectral_detection']}/{n} "
+        f"Spectral {successes['spectral_detection']}/{n}, "
+        f"IPR {successes['ipr_detection']}/{n} "
         f"(skipped {len(test_cases) - n})"
     )
 

@@ -69,16 +69,20 @@ def _batch_intervention_generator_handler(handler: ModelHandler) -> Iterable[Tup
 
         new_W, _, _ = insert_kv(handler, k, delta)
 
+        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
         prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
         subject = handler.tokenize_prompt(f"{fact_tuple[2]}")
         outputs = handler.model.generate(**prompt, max_length=prompt.input_ids.shape[1] + subject.input_ids.shape[1])
         outputs_str = handler.tokenizer.decode(outputs[0,prompt.input_ids.shape[1]])
         if outputs_str != fact_tuple[2]:
-            LOGGER.info(f"The weight intervention was not successful for {prompt_dict.requested_rewrite['relation_id']}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs_str}' predicted instead of '{fact_tuple[2]}'")
+            LOGGER.warning(f"The weight intervention was not successful for {prompt_dict.requested_rewrite['relation_id']}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs_str}' predicted instead of '{fact_tuple[2]}'")
+        else:
+            LOGGER.info(f"Success: {handler.tokenizer.decode(outputs[0])}")
         
         if handler.save_new_weights:
             torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt"))
         
+        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W)
         counter += 1
         yield new_W, old_W, prompt_dict
 

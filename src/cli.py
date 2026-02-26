@@ -55,7 +55,7 @@ def run_rome(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
     fact_tuple = getattr(cfg, 'fact_tuple', ("{} is in", "The Eiffel Tower", " Rome", " Paris"))
 
-    new_W, old_W = single_intervention(handler, fact_tuple)
+    new_W, old_W, _ = single_intervention(handler, fact_tuple)
 
     # ROME success test
     prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))

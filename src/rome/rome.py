@@ -74,8 +74,10 @@ def _batch_intervention_generator_handler(handler: ModelHandler) -> Iterable[Tup
         subject = handler.tokenize_prompt(f"{fact_tuple[2]}")
         outputs = handler.model.generate(**prompt, max_length=prompt.input_ids.shape[1] + subject.input_ids.shape[1])
         outputs_str = handler.tokenizer.decode(outputs[0,prompt.input_ids.shape[1]])
+        success = True
         if outputs_str != fact_tuple[2]:
             LOGGER.warning(f"The weight intervention was not successful for {prompt_dict.requested_rewrite['relation_id']}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs_str}' predicted instead of '{fact_tuple[2]}'")
+            success = False
         else:
             LOGGER.info(f"Success: {handler.tokenizer.decode(outputs[0])}")
         
@@ -84,7 +86,7 @@ def _batch_intervention_generator_handler(handler: ModelHandler) -> Iterable[Tup
         
         handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W)
         counter += 1
-        yield new_W, old_W, prompt_dict
+        yield new_W, old_W, prompt_dict, success
 
 def _batch_intervention_generator_dictconfig(cfg: DictConfig) -> Iterable[Tuple[torch.Tensor, torch.Tensor]]:
     """

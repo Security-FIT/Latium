@@ -69,11 +69,7 @@ def vector_space_scouting(U, D, vector_count, opt_steps, writer, iteration, titl
 def involution(cfg: DictConfig):
     handler = ModelHandler(cfg)
 
-    layer=12
-    U = handler.model.transformer.h[layer].mlp.c_fc.weight.detach().float().T
-    D = handler.model.transformer.h[layer].mlp.c_proj.weight.detach().float().T
-
-    total_edits = 1
+    total_edits = 10
     vector_count = 10000
     opt_steps = 100
 
@@ -88,6 +84,9 @@ def involution(cfg: DictConfig):
     D = handler.model.transformer.h[13].mlp.c_proj.weight.detach().float().T
     vector_space_scouting(U, D, vector_count, opt_steps, writer, 0, "ORIG13 avg steps")
 
+    layer=12
+    U = handler.model.transformer.h[layer].mlp.c_fc.weight.detach().float().T
+    D = handler.model.transformer.h[layer].mlp.c_proj.weight.detach().float().T
 
     vector_space_scouting(U, D, vector_count, opt_steps, writer, 0, "ORIG avg steps")
 

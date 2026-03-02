@@ -35,6 +35,28 @@ from src.structural.ipr import (
 )
 
 
+SPECTRAL_SIGNAL_KEYS = [
+    "sv_z_scores",
+    "sv_ratio_scores",
+    "sv_z_rolling_z_scores",
+    "sv_ratio_rolling_z_scores",
+    "pcs_composite_rank_scores",
+    "sv_pcs_contradiction_scores",
+    "rome_hybrid_scores",
+    "pcs_neighbor_shift_scores",
+    "pcs_neighbor_var_scores",
+    "pcs_neighbor_min_shift_scores",
+    "pcs_neighbor_flip_fraction_scores",
+    "pcs_next_shift_scores",
+    "pcs_next_jump_scores",
+    "pcs_next_curvature_scores",
+]
+
+
+def parse_int_list(value: str) -> list[int]:
+    return [int(part.strip()) for part in str(value).split(",") if part.strip()] if value is not None else []
+
+
 def to_serializable(obj):
     """Convert numpy/torch types to JSON-serializable Python types."""
     if isinstance(obj, (torch.Tensor, np.ndarray)):
@@ -119,9 +141,84 @@ def ipr_fc_proj_delta(
     return deltas
 
 
+def spectral_signal_delta(
+    baseline_block: Dict,
+    modified_block: Dict,
+    signal_keys: list[str] | None = None,
+) -> Dict[str, Dict[int, float]]:
+    keys = signal_keys or SPECTRAL_SIGNAL_KEYS
+    deltas: Dict[str, Dict[int, float]] = {}
+
+    for signal_key in keys:
+        baseline_scores = {int(k): float(v) for k, v in (baseline_block.get(signal_key, {}) or {}).items()}
+        modified_scores = {int(k): float(v) for k, v in (modified_block.get(signal_key, {}) or {}).items()}
+        common_layers = sorted(set(baseline_scores.keys()) & set(modified_scores.keys()))
+        if not common_layers:
+            continue
+
+        deltas[signal_key] = {
+            int(layer): float(modified_scores[layer] - baseline_scores[layer])
+            for layer in common_layers
+        }
+
+    return deltas
+
+
+def build_spectral_grid_rows(
+    grid_block: Dict,
+    target_layer: int | None,
+    signal_keys: list[str] | None = None,
+) -> list[Dict]:
+    keys = signal_keys or SPECTRAL_SIGNAL_KEYS
+    combos = grid_block.get("combos", {}) if isinstance(grid_block, dict) else {}
+    rows = []
+
+    sorted_items = sorted(
+        combos.items(),
+        key=lambda item: (
+            int(item[1].get("top_k", 0)),
+            int(item[1].get("neighbor_layers", 0)),
+            str(item[0]),
+        ),
+    )
+
+    for combo_key, combo in sorted_items:
+        row = {
+            "combo_key": str(combo_key),
+            "top_k": int(combo.get("top_k", 0)),
+            "neighbor_layers": int(combo.get("neighbor_layers", 0)),
+        }
+
+        for signal_key in keys:
+            scores = {int(k): float(v) for k, v in (combo.get(signal_key, {}) or {}).items()}
+            finite_items = [(layer, value) for layer, value in scores.items() if np.isfinite(value)]
+
+            if finite_items:
+                peak_layer, peak_value = max(finite_items, key=lambda item: item[1])
+                peak_layer, peak_value = int(peak_layer), float(peak_value)
+            else:
+                peak_layer, peak_value = None, None
+
+            target_rank = None
+            if target_layer is not None and finite_items:
+                ranked = sorted(finite_items, key=lambda item: item[1], reverse=True)
+                for idx, (layer, _) in enumerate(ranked, start=1):
+                    if layer == target_layer:
+                        target_rank = int(idx)
+                        break
+
+            row[f"{signal_key}_peak_layer"] = peak_layer
+            row[f"{signal_key}_peak_value"] = peak_value
+            row[f"{signal_key}_target_rank"] = target_rank
+
+        rows.append(row)
+
+    return rows
+
+
 def run_benchmark(
     model_name: str = "gpt2-large",
-    n_tests: int = 10,
+    n_tests: int = 30,
     start_idx: int = 0,
     output_dir: str = "./outputs",
     spectral_top_k: int = 50,
@@ -129,6 +226,9 @@ def run_benchmark(
     trim_last_layers: int = 2,
     trim_first: int | None = None,
     trim_last: int | None = None,
+    spectral_top_k_grid: list[int] | None = None,
+    spectral_neighbor_layers: int = 1,
+    spectral_neighbor_layers_grid: list[int] | None = None,
 ):
     """Run the complete benchmark."""
     
@@ -165,19 +265,29 @@ def run_benchmark(
         trim_last_layers = trim_last
     trim_first_layers = max(0, int(trim_first_layers))
     trim_last_layers = max(0, int(trim_last_layers))
+    spectral_neighbor_layers = max(1, int(spectral_neighbor_layers))
+    spectral_top_k_grid = sorted({max(1, int(v)) for v in (spectral_top_k_grid or [spectral_top_k])})
+    spectral_neighbor_layers_grid = sorted({max(1, int(v)) for v in (spectral_neighbor_layers_grid or [spectral_neighbor_layers])})
 
     spectral_detector = SpectralDetector(
         top_k=spectral_top_k,
         boundary=0,
         trim_first_layers=trim_first_layers,
         trim_last_layers=trim_last_layers,
+        neighbor_layers=spectral_neighbor_layers,
     )
     LOGGER.info(
-        "Spectral config: top_k=%s, boundary=%s, trim_first_layers=%s, trim_last_layers=%s",
+        "Spectral config: top_k=%s, boundary=%s, trim_first_layers=%s, trim_last_layers=%s, neighbor_layers=%s",
         spectral_top_k,
         0,
         trim_first_layers,
         trim_last_layers,
+        spectral_neighbor_layers,
+    )
+    LOGGER.info(
+        "Spectral sweep grid: top_k=%s, neighbor_layers=%s",
+        spectral_top_k_grid,
+        spectral_neighbor_layers_grid,
     )
     
     # Load test cases
@@ -194,6 +304,16 @@ def run_benchmark(
     
     blind_detector = BlindMSDDetector()
     baseline_spectral = spectral_detector.detect(original_weights, fc_weights=fc_weights)
+    baseline_spectral_grid = spectral_detector.analyze_grid(
+        original_weights,
+        fc_weights=fc_weights,
+        top_k_values=spectral_top_k_grid,
+        neighbor_layers_values=spectral_neighbor_layers_grid,
+    )
+    baseline_spectral_grid_rows = build_spectral_grid_rows(
+        baseline_spectral_grid,
+        target_layer=handler._layer,
+    )
     baseline_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(original_weights))
     baseline_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(fc_weights))
     baseline_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(original_weights, fc_weights)
@@ -214,10 +334,16 @@ def run_benchmark(
                 "boundary": 0,
                 "trim_first_layers": trim_first_layers,
                 "trim_last_layers": trim_last_layers,
+                "neighbor_layers": spectral_neighbor_layers,
+                "top_k_grid": spectral_top_k_grid,
+                "neighbor_layers_grid": spectral_neighbor_layers_grid,
+                "signal_keys": SPECTRAL_SIGNAL_KEYS,
             },
         },
         "baseline_blind": to_serializable(blind_detector.detect(original_weights)),
         "baseline_spectral": to_serializable(baseline_spectral),
+        "baseline_spectral_grid": to_serializable(baseline_spectral_grid),
+        "baseline_spectral_grid_rows": to_serializable(baseline_spectral_grid_rows),
         "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_weights)),
         "baseline_ipr": {
             "c_proj": to_serializable(baseline_ipr_c_proj),
@@ -227,7 +353,8 @@ def run_benchmark(
         "tests": [],
     }
 
-    successes = {"rome": 0, "normal_detection": 0, "blind_detection": 0, "spectral_detection": 0, "ipr_detection": 0}
+    successes = {"rome": 0, "normal_detection": 0, "blind_detection": 0, "spectral_detection": 0,
+                 "ipr_detection": 0}
     
     for i, case in enumerate(test_cases):
         LOGGER.info(f"[{i+1}/{len(test_cases)}] {case['subject']}")
@@ -259,9 +386,23 @@ def run_benchmark(
             
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
             blind_result = blind_detector.detect(modified_weights)
-            spectral_result = spectral_detector.detect(modified_weights, fc_weights=fc_weights)
 
             modified_fc_weights = extract_fc_weights(handler)
+            spectral_result = spectral_detector.detect(modified_weights, fc_weights=modified_fc_weights)
+            spectral_grid = spectral_detector.analyze_grid(
+                modified_weights,
+                fc_weights=modified_fc_weights,
+                top_k_values=spectral_top_k_grid,
+                neighbor_layers_values=spectral_neighbor_layers_grid,
+            )
+            spectral_delta_from_baseline = spectral_signal_delta(
+                baseline_spectral,
+                spectral_result,
+            )
+            spectral_grid_rows = build_spectral_grid_rows(
+                spectral_grid,
+                target_layer=handler._layer,
+            )
 
             modified_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(modified_weights))
             modified_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc_weights))
@@ -287,6 +428,9 @@ def run_benchmark(
                 "normal_detection": to_serializable(normal_result),
                 "blind_detection": to_serializable(blind_result),
                 "spectral_detection": to_serializable(spectral_result),
+                "spectral_delta_from_baseline": to_serializable(spectral_delta_from_baseline),
+                "spectral_grid": to_serializable(spectral_grid),
+                "spectral_grid_rows": to_serializable(spectral_grid_rows),
                 "interlayer": to_serializable(collect_all_interlayer_data(modified_weights)),
                 "ipr": {
                     "c_proj": to_serializable(modified_ipr_c_proj),
@@ -320,7 +464,10 @@ def run_benchmark(
                 f"  ROME: {'OK' if success else 'FAIL'}, "
                 f"Normal: layer {normal_result.get('anomalous_layer')}, "
                 f"Blind: layer {blind_result.get('anomalous_layer')}, "
-                f"Spectral: layer {spectral_result.get('anomalous_layer')}, "
+                f"Spectral: layer {spectral_result.get('anomalous_layer')} "
+                f"(hyb={spectral_result.get('anomalous_layer_hybrid')}, "
+                f"rank={spectral_result.get('anomalous_layer_rank_fusion')}), "
+
                 f"IPR-detect: layer {ipr_detection.get('anomalous_layer')} (score={ipr_detection.get('anomaly_score', 0):.3f}), "
                 f"IPR strongest Δ layer: {strongest_ipr_layer} ({strongest_ipr_delta:.4e})"
             )
@@ -359,6 +506,15 @@ def run_benchmark(
         f"(skipped {len(test_cases) - n})"
     )
 
+    LOGGER.info(
+        "Success rates: "
+        f"ROME={results['summary']['rome_success_rate']:.1%}, "
+        f"Normal={results['summary']['normal_detection_accuracy']:.1%}, "
+        f"Blind={results['summary']['blind_detection_accuracy']:.1%}, "
+        f"Spectral={results['summary']['spectral_detection_accuracy']:.1%}, "
+        f"IPR={results['summary']['ipr_detection_accuracy']:.1%}"
+    )
+
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -376,13 +532,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="gpt2-large")
-    parser.add_argument("--n-tests", type=int, default=3)
+    parser.add_argument("--n-tests", type=int, default=30)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--output-dir", default="./analysis_out")
     parser.add_argument("--spectral-top-k", type=int, default=50)
     parser.add_argument("--trim-first-layers", "--trim-first", dest="trim_first_layers", type=int, default=2)
     parser.add_argument("--trim-last-layers", "--trim-last", dest="trim_last_layers", type=int, default=2)
+    parser.add_argument("--spectral-top-k-grid", type=str, default="8,16,32,64")
+    parser.add_argument("--spectral-neighbor-layers", type=int, default=1)
+    parser.add_argument("--spectral-neighbor-layers-grid", type=str, default="1,2,3")
     args = parser.parse_args()
+
+    top_k_grid = parse_int_list(args.spectral_top_k_grid)
+    neighbor_grid = parse_int_list(args.spectral_neighbor_layers_grid)
 
     run_benchmark(
         args.model,
@@ -392,4 +554,7 @@ if __name__ == "__main__":
         args.spectral_top_k,
         args.trim_first_layers,
         args.trim_last_layers,
+        spectral_top_k_grid=top_k_grid,
+        spectral_neighbor_layers=args.spectral_neighbor_layers,
+        spectral_neighbor_layers_grid=neighbor_grid,
     )

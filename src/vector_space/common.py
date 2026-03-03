@@ -1,4 +1,6 @@
+from ast import Dict
 import time
+from typing import Callable
 import torch
 from omegaconf import DictConfig, OmegaConf
 
@@ -22,37 +24,36 @@ import torch.nn.functional as F
 from src.rome.common import gather_k
 
 
-def z_score_outlier_loss(z, mean=0.0, std=1.0, p=4):
+def z_score_outlier_loss(z, mean, std, p=4):
     z_scores = (z - mean) / (std + 1e-8)
     loss = -torch.max(torch.abs(z_scores ** p))
     return loss
 
 def max_focus_loss(z, mean, std, temperature=1.0):
     z_scores = torch.abs((z - mean) / (std + 1e-8))
-    
-    # LogSumExp (LSE) emphasizes the maximum value in the vector
-    # As temperature -> 0, this becomes exactly the Max function
     return -torch.logsumexp(z_scores / temperature, dim=-1)
 
-def energy_maximization_loss(z):
-    # This rewards a "thick" signal like Graph 1
-    # Maximizing variance forces the whole vector to be noisy
+def energy_maximization_loss(z, *args):
     return -torch.var(z)
 
-def density_loss(z):
+def density_loss(z, *args):
     z_sq = z**2
-    # Participation Ratio: (sum of squares)^2 / sum of fourth powers
-    # High PR = Graph 1 (Dense)
-    # Low PR = Graph 2 (Sparse/Spiky)
     pr = (torch.sum(z_sq)**2) / (torch.sum(z_sq**2) + 1e-8)
     return -pr
 
-def vector_space_scouting(U, D, U_inv, D_inv, mean, std, vector_count, opt_steps, threshold, writer, iteration, title):
-    # threshold = .3
+
+LOSS_FUNCTIONS: Dict[str, Callable] = {
+    "z_score_outlier": z_score_outlier_loss,
+    "max_focus": max_focus_loss,
+    "energy_maximization": energy_maximization_loss,
+    "density": density_loss
+}
+
+def vector_space_scouting(U, D, U_inv, D_inv, mean, std, loss_fn, lr, vector_count, opt_steps, threshold, writer, iteration, title):
     acc = 0.0
     for _ in tqdm(range(vector_count)):
         x_raw = torch.randn(U.shape[1], requires_grad=True, device="cuda")
-        opt = Adam([x_raw], lr=1e-4)
+        opt = Adam([x_raw], lr=lr)
         i = 0.0
         while i < opt_steps:
             i += 1.0
@@ -62,12 +63,8 @@ def vector_space_scouting(U, D, U_inv, D_inv, mean, std, vector_count, opt_steps
             y = D @ (U @ x)
             z = U_inv @ (D_inv @ y)
             
-            # loss = z_score_outlier_loss(z, mean, std, p=p)
-            # loss = energy_maximization_loss(z)
-            loss = density_loss(z)
+            loss = loss_fn(z, mean, std)
 
-            # if i % 10 == 1:
-            # print(f"Step {i} loss {loss}")
             if (-1.0 * loss) > (threshold * z.shape[-1]):
                 break
             
@@ -78,6 +75,8 @@ def vector_space_scouting(U, D, U_inv, D_inv, mean, std, vector_count, opt_steps
 
     print(title, acc/vector_count, iteration)
     writer.add_scalar(title, acc/vector_count, iteration)
+
+    return acc/vector_count
 
 def vector_space_mapping(handler, U, D, U_inv, D_inv):
     zs = []
@@ -113,80 +112,42 @@ def vector_space_mapping(handler, U, D, U_inv, D_inv):
 def involution(cfg: DictConfig):
     handler = ModelHandler(cfg)
 
-    total_edits = 1
-    vector_count = 1000
-    opt_steps = 1000
+    vector_space_cfg = getattr(cfg, "vector_space", None)
 
-    writer = SummaryWriter(f'runs/involution_{int(time.time())}_thresholding')
+    total_edits = getattr(vector_space_cfg, "total_edits", 1)
+    vector_count = getattr(vector_space_cfg, "vector_count", 1)
+    opt_steps = getattr(vector_space_cfg, "opt_steps", 1)
+    threshold = getattr(vector_space_cfg, "threshold", 1)
+    lr = getattr(vector_space_cfg, "lr", 1.0)
+    loss_fn = getattr(vector_space_cfg, "loss_fn", None)
 
-    # U = handler.model.transformer.h[11].mlp.c_fc.weight.detach().float().T
-    # D = handler.model.transformer.h[11].mlp.c_proj.weight.detach().float().T
-    # U_inv = torch.linalg.pinv(U)
-    # D_inv = torch.linalg.pinv(D)
-    # # vector_space_scouting(U, D, U_inv, D_inv, vector_count, opt_steps, writer, 0, "ORIG11 avg steps")
-    # mean11, std11 = vector_space_mapping(U, D, U_inv, D_inv, vector_count, writer, 0, "ORIG11 avg steps")
-    # print(f"Layer 11: mean {mean11} std {std11}")
+    writer = SummaryWriter(f'runs/involution_{int(time.time())}')
 
-    # layer=12
-    # U = handler.model.transformer.h[layer].mlp.c_fc.weight.detach().float().T
-    # D = handler.model.transformer.h[layer].mlp.c_proj.weight.detach().float().T
-    # U_inv = torch.linalg.pinv(U)
-    # D_inv = torch.linalg.pinv(D)
-    # # vector_space_scouting(U, D, U_inv, D_inv, vector_count, opt_steps, writer, 0, "ORIG avg steps")
-    # mean12, std12 = vector_space_mapping(U, D, U_inv, D_inv, vector_count, writer, 0, "ORIG12 avg steps")
-    # print(f"Layer 12: mean {mean12} std {std12}")
-
-    # U = handler.model.transformer.h[13].mlp.c_fc.weight.detach().float().T
-    # D = handler.model.transformer.h[13].mlp.c_proj.weight.detach().float().T
-    # U_inv = torch.linalg.pinv(U)
-    # D_inv = torch.linalg.pinv(D)
-    # # vector_space_scouting(U, D, U_inv, D_inv, vector_count, opt_steps, writer, 0, "ORIG13 avg steps")
-    # mean13, std13 = vector_space_mapping(U, D, U_inv, D_inv, vector_count, writer, 0, "ORIG13 avg steps")
-    # print(f"Layer 13: mean {mean13} std {std13}")
-
-
-    layer=12
+    layer=handler._layer
     U = handler.model.transformer.h[layer-1].mlp.c_fc.weight.detach().float().T
     D = handler.model.transformer.h[layer-1].mlp.c_proj.weight.detach().float().T
-    U_inv = torch.linalg.pinv(U)
-    D_inv = torch.linalg.pinv(D)
-    # vector_space_scouting(U, D, U_inv, D_inv, vector_count, opt_steps, writer, 0, "ORIG avg steps")
-    # mean, std = vector_space_mapping(handler, U, D, U_inv, D_inv)
+
     mean, std = vector_space_mapping(handler, U, D, U.T, D.T)
     print(f"Ref Layer: mean {mean} std {std}")
 
     for i, (new_D, _, prompt_dict, success) in enumerate(batch_intervention_generator(handler)):
+        # U11 = handler.model.transformer.h[layer-1].mlp.c_fc.weight.detach().float().T
+        # D11 = handler.model.transformer.h[layer-1].mlp.c_proj.weight.detach().float().T
 
         U = handler.model.transformer.h[layer].mlp.c_fc.weight.detach().float().T
-        U_inv = torch.linalg.pinv(U)
         D = handler.model.transformer.h[layer].mlp.c_proj.weight.detach().float().T
-        D_inv = torch.linalg.pinv(D)
 
-        new_D_inv = torch.linalg.pinv(new_D.T.detach().float())
-
-        # vector_space_scouting(U, D, U_inv, D_inv, mean, std, vector_count, opt_steps, writer, i, f"ORIG layer 12 avg steps")
-
-        # vector_space_scouting(U, new_D.T.detach().float(), U_inv, new_D_inv, mean, std, vector_count, opt_steps, writer, i, f"ROME_{prompt_dict.case_id}_{'success' if success else 'failure'} avg steps")
-        # vector_space_scouting(U, new_D.T.detach().float(), U.T, new_D.detach().float(), mean, std, vector_count, opt_steps, writer, i, f"ROME_{prompt_dict.case_id}_{'success' if success else 'failure'} avg steps")
+        # U13 = handler.model.transformer.h[layer+1].mlp.c_fc.weight.detach().float().T
+        # D13 = handler.model.transformer.h[layer+1].mlp.c_proj.weight.detach().float().T
 
 
-        U13 = handler.model.transformer.h[13].mlp.c_fc.weight.detach().float().T
-        D13 = handler.model.transformer.h[13].mlp.c_proj.weight.detach().float().T
-        U13_inv = torch.linalg.pinv(U13)
-        D13_inv = torch.linalg.pinv(D13)
-        # vector_space_scouting(U13, D13, U13_inv, D13_inv, mean, std, vector_count, opt_steps, writer, i, f"ORIG layer 13 avg steps")
+        
+        # vector_space_scouting(U11, D11, U11.T, D11.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 11 avg steps")
+        ORIG = vector_space_scouting(U, D, U.T, D.T, mean, std, loss_fn, lr, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 12 avg steps")
+        ROME = vector_space_scouting(U, new_D.T.detach().float(), U.T, new_D.detach().float(), mean, std, loss_fn, lr, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ROME avg steps")
+        # vector_space_scouting(U13, D13, U13.T, D13.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 13 avg steps")
 
-        U11 = handler.model.transformer.h[11].mlp.c_fc.weight.detach().float().T
-        D11 = handler.model.transformer.h[11].mlp.c_proj.weight.detach().float().T
-        U11_inv = torch.linalg.pinv(U11)
-        D11_inv = torch.linalg.pinv(D11)
-        # vector_space_scouting(U11, D11, U11_inv, D11_inv, mean, std, vector_count, opt_steps, writer, i, f"ORIG layer 11 avg steps")
-
-        for threshold in range(20):
-            vector_space_scouting(U11, D11, U11.T, D11.T, mean, std, vector_count, opt_steps, threshold/100.0, writer, threshold, f"ORIG layer 11 avg steps")
-            vector_space_scouting(U, D, U.T, D.T, mean, std, vector_count, opt_steps, threshold/100.0, writer, threshold, f"ORIG layer 12 avg steps")
-            vector_space_scouting(U13, D13, U13.T, D13.T, mean, std, vector_count, opt_steps, threshold/100.0, writer, threshold, f"ORIG layer 13 avg steps")
-            vector_space_scouting(U, new_D.T.detach().float(), U.T, new_D.detach().float(), mean, std, vector_count, opt_steps, threshold/100.0, writer, threshold, f"ROME avg steps")
+        yield ORIG - ROME
 
         if i+1 == total_edits:
             break

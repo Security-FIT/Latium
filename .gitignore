@@ -217,5 +217,7 @@ evals/
 data/
 scripts/
 
+multirun/
+
 *.gz
 *.out

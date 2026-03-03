@@ -14,3 +14,4 @@ tensorboard
 tqdm
 scikit-learn
 nltk
+hydra-optuna-sweeper

@@ -24,6 +24,11 @@ import torch.nn.functional as F
 from src.rome.common import gather_k
 
 
+def dense_z_score_loss(z, mean, std, p=4):
+    z_scores = (z - mean) / (std + 1e-8)
+    loss = -torch.mean(torch.abs(z_scores ** p))
+    return loss
+
 def z_score_outlier_loss(z, mean, std, p=4):
     z_scores = (z - mean) / (std + 1e-8)
     loss = -torch.max(torch.abs(z_scores ** p))
@@ -39,17 +44,18 @@ def energy_maximization_loss(z, *args):
 def density_loss(z, *args):
     z_sq = z**2
     pr = (torch.sum(z_sq)**2) / (torch.sum(z_sq**2) + 1e-8)
-    return -pr
+    return pr
 
 
-LOSS_FUNCTIONS: Dict[str, Callable] = {
-    "z_score_outlier": z_score_outlier_loss,
-    "max_focus": max_focus_loss,
-    "energy_maximization": energy_maximization_loss,
-    "density": density_loss
+LOSS_FUNCTIONS = {
+    "z_score_outlier": (lambda loss,z,t: loss > t*1.0*z.shape[-1], z_score_outlier_loss),
+    "dense_z_score": (lambda loss,z,t: loss > t*1.0*z.shape[-1], dense_z_score_loss),
+    # "max_focus": (1.5, max_focus_loss),
+    "energy_maximization": (lambda loss,z,t: loss > t*1.5*z.shape[-1], energy_maximization_loss),
+    "density": (lambda loss,z,t: loss > t*0.1*z.shape[-1], density_loss)
 }
 
-def vector_space_scouting(U, D, U_inv, D_inv, mean, std, loss_fn, lr, vector_count, opt_steps, threshold, writer, iteration, title):
+def vector_space_scouting(U, D, U_inv, D_inv, mean, std, loss_fn, lr, vector_count, opt_steps, threshold, threshold_fn, writer, iteration, title):
     acc = 0.0
     for _ in tqdm(range(vector_count)):
         x_raw = torch.randn(U.shape[1], requires_grad=True, device="cuda")
@@ -65,7 +71,7 @@ def vector_space_scouting(U, D, U_inv, D_inv, mean, std, loss_fn, lr, vector_cou
             
             loss = loss_fn(z, mean, std)
 
-            if (-1.0 * loss) > (threshold * z.shape[-1]):
+            if threshold_fn(loss, z, threshold):
                 break
             
             loss.backward()
@@ -117,9 +123,11 @@ def involution(cfg: DictConfig):
     total_edits = getattr(vector_space_cfg, "total_edits", 1)
     vector_count = getattr(vector_space_cfg, "vector_count", 1)
     opt_steps = getattr(vector_space_cfg, "opt_steps", 1)
-    threshold = getattr(vector_space_cfg, "threshold", 1)
     lr = getattr(vector_space_cfg, "lr", 1.0)
+    
     loss_fn = getattr(vector_space_cfg, "loss_fn", None)
+    threshold = getattr(vector_space_cfg, "threshold", 1)
+    threshold_fn, loss_fn = LOSS_FUNCTIONS[loss_fn]
 
     writer = SummaryWriter(f'runs/involution_{int(time.time())}')
 
@@ -143,8 +151,38 @@ def involution(cfg: DictConfig):
 
         
         # vector_space_scouting(U11, D11, U11.T, D11.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 11 avg steps")
-        ORIG = vector_space_scouting(U, D, U.T, D.T, mean, std, loss_fn, lr, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 12 avg steps")
-        ROME = vector_space_scouting(U, new_D.T.detach().float(), U.T, new_D.detach().float(), mean, std, loss_fn, lr, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ROME avg steps")
+        ORIG = vector_space_scouting(
+            U, 
+            D, 
+            U.T, 
+            D.T, 
+            mean, 
+            std, 
+            loss_fn, 
+            lr, 
+            vector_count, 
+            opt_steps, 
+            threshold, 
+            threshold_fn, 
+            writer, 
+            i, 
+            f"ORIG layer 12 avg steps")
+        ROME = vector_space_scouting(
+            U, 
+            new_D.T.detach().float(), 
+            U.T, 
+            new_D.detach().float(), 
+            mean, 
+            std, 
+            loss_fn, 
+            lr, 
+            vector_count, 
+            opt_steps, 
+            threshold, 
+            threshold_fn, 
+            writer, 
+            i, 
+            f"ROME avg steps")
         # vector_space_scouting(U13, D13, U13.T, D13.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 13 avg steps")
 
         yield ORIG - ROME

@@ -1,6 +1,6 @@
 total_edits: 1
 vector_count: 1000
 opt_steps: 1000
-threshold: 0.3
+threshold: 3.0
 lr: 1e-3
-loss_fn: density_loss
+loss_fn: density

@@ -32,6 +32,6 @@ hydra:
       vector_space.threshold: range(0.0,1.0,step=0.1)
       vector_space.vector_count: range(1000,10000,step=1000)
       vector_space.lr: range(1e-6,1e-3,step=1e-1)
-      vector_space.loss_fn: choice(z_score_outlier, max_focus, energy_maximization, density_loss)
+      vector_space.loss_fn: choice(z_score_outlier, energy_maximization, density, dense_z_score)
 
 command: help

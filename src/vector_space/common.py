@@ -56,7 +56,7 @@ LOSS_FUNCTIONS = {
 }
 
 def vector_space_scouting(U, D, U_inv, D_inv, mean, std, loss_fn, lr, vector_count, opt_steps, threshold, threshold_fn, writer, iteration, title):
-    acc = 0.0
+    acc = []
     for _ in tqdm(range(vector_count)):
         x_raw = torch.randn(U.shape[1], requires_grad=True, device="cuda")
         opt = Adam([x_raw], lr=lr)
@@ -77,12 +77,15 @@ def vector_space_scouting(U, D, U_inv, D_inv, mean, std, loss_fn, lr, vector_cou
             loss.backward()
             opt.step()
 
-        acc += i
+        acc.append(i)
 
-    print(title, acc/vector_count, iteration)
-    writer.add_scalar(title, acc/vector_count, iteration)
+    it_mean = torch.mean(torch.Tensor(acc)).item()
+    it_std = torch.std(torch.Tensor(acc)).item()
+    print(title, it_mean, it_std, iteration)
+    writer.add_scalar(title.format("mean"), it_mean, iteration)
+    writer.add_scalar(title.format("std"), it_std, iteration)
 
-    return acc/vector_count
+    return it_mean, it_std
 
 def vector_space_mapping(handler, U, D, U_inv, D_inv):
     zs = []
@@ -148,10 +151,8 @@ def involution(cfg: DictConfig):
         # U13 = handler.model.transformer.h[layer+1].mlp.c_fc.weight.detach().float().T
         # D13 = handler.model.transformer.h[layer+1].mlp.c_proj.weight.detach().float().T
 
-
-        
         # vector_space_scouting(U11, D11, U11.T, D11.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 11 avg steps")
-        ORIG = vector_space_scouting(
+        ORIG_mean, ORIG_var = vector_space_scouting(
             U, 
             D, 
             U.T, 
@@ -166,8 +167,9 @@ def involution(cfg: DictConfig):
             threshold_fn, 
             writer, 
             i, 
-            f"ORIG layer 12 avg steps")
-        ROME = vector_space_scouting(
+            "ORIG layer 12 {}")
+
+        ROME_mean, ROME_var = vector_space_scouting(
             U, 
             new_D.T.detach().float(), 
             U.T, 
@@ -182,10 +184,10 @@ def involution(cfg: DictConfig):
             threshold_fn, 
             writer, 
             i, 
-            f"ROME avg steps")
+            "ROME {}")
         # vector_space_scouting(U13, D13, U13.T, D13.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 13 avg steps")
 
-        yield ORIG - ROME
+        yield ORIG_mean - ROME_mean
 
         if i+1 == total_edits:
             break

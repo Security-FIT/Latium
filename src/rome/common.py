@@ -306,8 +306,8 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
     
-    # Accumulate covariance directly on GPU instead of storing all k vectors
-    C = torch.zeros(hidden_dim, dtype=torch.float32, device=handler.device)
+    # Accumulate second moment directly on GPU instead of storing all k vectors
+    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=handler.device)
     total_tokens = 0  # Use list to allow modification in hook
 
     def hook(_, inp, out):
@@ -316,8 +316,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         if len(k.shape) == 3:
             k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
         total_tokens += k.shape[0]
-        k = k.sum(dim=0)
-        C.add_(k)
+        C.add_(k.T @ k)
         return out
     
     handle = module.register_forward_hook(hook)
@@ -386,9 +385,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     LOGGER.info(f"Processed {total_tokens} tokens, computing inverse covariance...")
     
     # Normalize and add regularization
-    cov = C / total_tokens
-    cov = cov.unsqueeze(0).to("cpu")
-    cov = cov * cov.T
+    cov = (C / total_tokens).to("cpu")
     cov += 1e-5 * torch.eye(hidden_dim)  # Regularization for stability
     
     LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...")

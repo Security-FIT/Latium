@@ -24,20 +24,12 @@ _PCS_CROSS_NAMES = (
 )
 
 
-def _zero_cross_signals(n: int) -> Dict[str, np.ndarray]:
-    zeros = np.zeros(n, dtype=np.float64)
-    return {
-        "pcs_cross_scores": zeros,
-        "pcs_cross_shift_scores": 1.0 - zeros,
-        "pcs_cross_curvature_scores": _second_deriv_energy(zeros),
-    }
-
 # ---------------------------------------------------------------------------
 # SVD helpers
 # ---------------------------------------------------------------------------
 
 def _svd_all(weights: Dict[int, torch.Tensor], max_k: int) -> Tuple[list[int], np.ndarray, np.ndarray, np.ndarray]:
-    """Full SVD → (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in])."""
+    """Full SVD per layer -> (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in])."""
     layers = sorted(weights.keys())
     if not layers:
         e2 = np.empty((0, 0), dtype=np.float32)
@@ -79,7 +71,7 @@ def _second_deriv_energy(x: np.ndarray) -> np.ndarray:
 
 
 def _sv_z_energy(sv: np.ndarray, top_k: int) -> np.ndarray:
-    """Signal A: z-score top-k SVs across layers → curvature energy."""
+    """Signal A: z-score top-k SVs across layers -> curvature energy."""
     if sv.size == 0:
         return np.empty(0, dtype=np.float64)
     x = sv[:, :min(top_k, sv.shape[1])]
@@ -87,7 +79,7 @@ def _sv_z_energy(sv: np.ndarray, top_k: int) -> np.ndarray:
 
 
 def _sv_ratio_energy(sv_proj: np.ndarray, sv_fc: np.ndarray, top_k: int) -> np.ndarray:
-    """Signal B: ratio top-k SVs → curvature energy."""
+    """Signal B: ratio top-k SVs -> curvature energy."""
     if sv_proj.size == 0 or sv_fc.size == 0:
         return np.empty(0, dtype=np.float64)
     k = min(top_k, sv_proj.shape[1], sv_fc.shape[1])
@@ -122,7 +114,7 @@ def _wflip(v1: np.ndarray, v2: np.ndarray, w: np.ndarray) -> float:
 
 
 def _pcs_signals(vh: np.ndarray, sv: np.ndarray, top_k: int, neighbor_layers: int) -> Dict[str, np.ndarray]:
-    """Compute all PCS directional signals over evaluated layers."""
+    """Compute PCS directional signals over evaluated layers."""
     if vh.size == 0 or sv.size == 0:
         return {name: np.empty(0, dtype=np.float64) for name in _PCS_NAMES}
 
@@ -133,7 +125,6 @@ def _pcs_signals(vh: np.ndarray, sv: np.ndarray, top_k: int, neighbor_layers: in
     vecs = np.stack([_canonical_orient(vh[i, :k]) for i in range(n)])
     ws = sv[:, :k]
 
-    # Neighbor signals
     n_mean = np.zeros(n); n_shift = np.zeros(n); n_var = np.zeros(n)
     n_min_shift = np.zeros(n); n_flip = np.zeros(n)
 
@@ -149,7 +140,6 @@ def _pcs_signals(vh: np.ndarray, sv: np.ndarray, top_k: int, neighbor_layers: in
         n_min_shift[i] = 1.0 - pcs.min()
         n_flip[i] = flips.mean()
 
-    # Next-layer signals
     pcs_next = np.zeros(n)
     if n > 1:
         for i in range(n - 1):
@@ -180,23 +170,21 @@ def _pcs_cross_signals(
     vh_fc: np.ndarray, sv_fc: np.ndarray,
     top_k: int,
 ) -> Dict[str, np.ndarray]:
-    """Cross-projection PCS: compare aligned c_proj and c_fc directions per layer."""
+    """Cross-projection PCS: compare c_proj and c_fc principal directions per layer."""
+    empty = {name: np.empty(0, dtype=np.float64) for name in _PCS_CROSS_NAMES}
     if vh_proj.size == 0 or vh_fc.size == 0 or sv_proj.size == 0 or sv_fc.size == 0:
-        return {name: np.empty(0, dtype=np.float64) for name in _PCS_CROSS_NAMES}
+        return empty
 
     n = sv_proj.shape[0]
-    if n <= 0:
-        return _zero_cross_signals(0)
+    zeros = {name: np.zeros(n, dtype=np.float64) for name in _PCS_CROSS_NAMES}
 
-    if vh_proj.shape[0] != n or vh_fc.shape[0] != n or sv_fc.shape[0] != n:
-        return _zero_cross_signals(n)
-
-    if vh_proj.shape[2] != vh_fc.shape[2]:
-        return _zero_cross_signals(n)
+    if (n <= 0 or vh_proj.shape[0] != n or vh_fc.shape[0] != n
+            or sv_fc.shape[0] != n or vh_proj.shape[2] != vh_fc.shape[2]):
+        return zeros
 
     k = min(top_k, vh_proj.shape[1], vh_fc.shape[1], sv_proj.shape[1], sv_fc.shape[1])
     if k <= 0:
-        return _zero_cross_signals(n)
+        return zeros
 
     cross = np.zeros(n, dtype=np.float64)
     for i in range(n):
@@ -212,49 +200,16 @@ def _pcs_cross_signals(
     }
 
 
-
 # ---------------------------------------------------------------------------
-# Shared utilities
+# Scoring utilities
 # ---------------------------------------------------------------------------
 
 def _map_to_all(all_layers: list[int], eval_layers: list[int], vals: np.ndarray) -> Dict[int, float]:
+    """Map per-eval-layer values to a dict covering all layers (0.0 for excluded)."""
     out = {l: 0.0 for l in all_layers}
     for i, l in enumerate(eval_layers):
         out[l] = float(vals[i])
     return out
-
-
-def _argmax_layer(layers: list[int], vals: np.ndarray) -> Optional[int]:
-    if not layers or vals.size == 0:
-        return None
-    safe = np.where(np.isfinite(vals), vals, -np.inf)
-    return None if np.all(np.isneginf(safe)) else int(layers[int(np.argmax(safe))])
-
-
-def _null_result(all_layers: list[int], cfg: dict, excluded: list, evaluated: list) -> Dict:
-    z = {l: 0.0 for l in all_layers}
-    return {
-        "anomalous_layer": None, "detection_score": 0.0,
-        "anomalous_layer_rank_fusion": None, "detection_score_rank_fusion": 0.0,
-        "anomalous_layer_hybrid": None, "detection_score_hybrid": 0.0,
-        "sv_z_scores": dict(z), "sv_ratio_scores": dict(z),
-        "sv_z_rolling_z_scores": dict(z),
-        "sv_ratio_rolling_z_scores": dict(z),
-        "pcs_composite_rank_scores": dict(z),
-        "sv_pcs_contradiction_scores": dict(z),
-        "rome_hybrid_scores": dict(z),
-        **{name: dict(z) for name in _PCS_NAMES},
-        **{name: dict(z) for name in _PCS_CROSS_NAMES},
-        "has_fc_weights": False, "config": cfg,
-        "excluded_layers": excluded, "evaluated_layers": evaluated,
-    }
-
-
-def _normalize_grid_values(values: Optional[list[int]], fallback: int, min_value: int = 1) -> list[int]:
-    if values is None:
-        return [max(min_value, fallback)]
-    cleaned = sorted({int(v) for v in values if int(v) >= min_value})
-    return cleaned or [max(min_value, fallback)]
 
 
 def _rolling_z_abs(vals: np.ndarray, window: int = 5) -> np.ndarray:
@@ -263,56 +218,49 @@ def _rolling_z_abs(vals: np.ndarray, window: int = 5) -> np.ndarray:
     out = np.zeros(n, dtype=np.float64)
     if n == 0:
         return out
-
     w = max(1, int(window))
     if w % 2 == 0:
         w += 1
     half = w // 2
-
     for i in range(n):
         lo, hi = max(0, i - half), min(n, i + half + 1)
         win = vals[lo:hi]
         finite = win[np.isfinite(win)]
         if finite.size == 0 or not np.isfinite(vals[i]):
-            out[i] = 0.0
             continue
-        mu = finite.mean()
-        sd = finite.std() + EPS
-        out[i] = abs((vals[i] - mu) / sd)
+        out[i] = abs((vals[i] - finite.mean()) / (finite.std() + EPS))
     return out
 
 
 def _rank01(vals: np.ndarray) -> np.ndarray:
-    """Rank-normalize values into [0, 1], higher means larger value."""
+    """Rank-normalize values into [0, 1]."""
     n = vals.shape[0]
     if n == 0:
         return np.empty(0, dtype=np.float64)
-
     safe = np.where(np.isfinite(vals), vals, -np.inf)
     order = np.argsort(safe)
     ranks = np.empty(n, dtype=np.float64)
     ranks[order] = np.arange(n, dtype=np.float64)
-    denom = float(max(1, n - 1))
-    return ranks / denom
+    return ranks / float(max(1, n - 1))
 
 
 def _rank01_mean(values: list[np.ndarray]) -> np.ndarray:
+    """Average of rank-normalized arrays."""
     if not values:
         return np.empty(0, dtype=np.float64)
     return np.mean(np.stack([_rank01(v) for v in values]), axis=0)
 
 
-def _hybrid_rome_scores(
+def _hybrid_scores(
     sz: np.ndarray,
     sr: np.ndarray,
     pcs: Dict[str, np.ndarray],
     pcs_cross: Dict[str, np.ndarray],
     has_fc: bool,
 ) -> Dict[str, np.ndarray]:
-    """Blind composite score with direct PCS agency + SV-vs-PCS contradiction."""
+    """Composite detection score combining SV energy and PCS signals."""
     sv_z_rz = _rolling_z_abs(sz, window=5)
     sv_ratio_rz = _rolling_z_abs(sr, window=5) if has_fc else np.zeros_like(sz)
-
     sv_rank = _rank01_mean([sz, sr]) if has_fc else _rank01(sz)
 
     pcs_components = [
@@ -363,36 +311,56 @@ class SpectralDetector:
 
     @property
     def _config(self) -> dict:
-        return {"top_k": self.top_k, "boundary": self.boundary,
-                "trim_first_layers": self.trim_first_layers,
-                "trim_last_layers": self.trim_last_layers,
-                "neighbor_layers": self.neighbor_layers}
+        return {
+            "top_k": self.top_k,
+            "boundary": self.boundary,
+            "trim_first_layers": self.trim_first_layers,
+            "trim_last_layers": self.trim_last_layers,
+            "neighbor_layers": self.neighbor_layers,
+        }
 
     def _trim(self, n: int) -> Tuple[int, int]:
         s = min(self.trim_first_layers, n)
         return s, n - min(self.trim_last_layers, n - s)
 
-    # ---- detect -----------------------------------------------------------
+    def _empty_result(self, all_layers: list[int], excluded: list, evaluated: list) -> Dict:
+        z = {l: 0.0 for l in all_layers}
+        return {
+            "anomalous_layer": None,
+            "detection_score": 0.0,
+            "sv_z_scores": dict(z),
+            "sv_ratio_scores": dict(z),
+            "sv_z_rolling_z_scores": dict(z),
+            "sv_ratio_rolling_z_scores": dict(z),
+            "pcs_composite_rank_scores": dict(z),
+            "sv_pcs_contradiction_scores": dict(z),
+            "rome_hybrid_scores": dict(z),
+            **{name: dict(z) for name in _PCS_NAMES},
+            **{name: dict(z) for name in _PCS_CROSS_NAMES},
+            "has_fc_weights": False,
+            "config": self._config,
+            "excluded_layers": excluded,
+            "evaluated_layers": evaluated,
+        }
 
     def detect(
         self,
         weights: Dict[int, torch.Tensor],
         fc_weights: Optional[Dict[int, torch.Tensor]] = None,
     ) -> Dict:
-        # Single SVD for c_proj weights (SVs + Vh)
         all_layers, sv_full, vh_full, u_full = _svd_all(weights, max_k=self.top_k)
         if not all_layers:
-            return _null_result([], self._config, [], [])
+            return self._empty_result([], [], [])
 
         ts, te = self._trim(len(all_layers))
         if te <= ts:
-            return _null_result(all_layers, self._config, list(all_layers), [])
+            return self._empty_result(all_layers, list(all_layers), [])
 
         eval_layers = all_layers[ts:te]
         excl = all_layers[:ts] + all_layers[te:]
         sv, vh, u = sv_full[ts:te], vh_full[ts:te], u_full[ts:te]
 
-        # Signal A & B
+        # SV signals
         sz = _sv_z_energy(sv, self.top_k)
         has_fc = False
         sr = np.zeros_like(sz)
@@ -405,142 +373,37 @@ class SpectralDetector:
                 sr = _sv_ratio_energy(sv, sv_fc, self.top_k)
                 pcs_cross = _pcs_cross_signals(u, sv, vh_fc, sv_fc, self.top_k)
 
-        # PCS
+        # PCS signals
         pcs = _pcs_signals(vh, sv, self.top_k, self.neighbor_layers)
 
-        # Candidate selection
+        # Hybrid scoring
+        hyb = _hybrid_scores(sz, sr, pcs, pcs_cross, has_fc)
+        scores = hyb["rome_hybrid_scores"]
+
+        # Pick anomalous layer
         n = len(eval_layers)
         lo, hi = self.boundary, n - self.boundary
         cands = np.arange(lo, hi) if hi > lo else np.arange(n)
+        best = int(cands[int(np.argmax(scores[cands]))])
 
-        rank_z = np.empty(len(cands), dtype=np.float64)
-        rank_z[np.argsort(-sz[cands])] = np.arange(len(cands), dtype=np.float64)
-        if has_fc:
-            rank_r = np.empty(len(cands), dtype=np.float64)
-            rank_r[np.argsort(-sr[cands])] = np.arange(len(cands), dtype=np.float64)
-            combined = (rank_z + rank_r) / 2.0
-        else:
-            combined = rank_z
-
-        best_rank = int(np.argmin(combined))
-
-        hybrid_scores = _hybrid_rome_scores(sz, sr, pcs, pcs_cross, has_fc)
-        hybrid = hybrid_scores["rome_hybrid_scores"]
-        rank_h = np.empty(len(cands), dtype=np.float64)
-        rank_h[np.argsort(-hybrid[cands])] = np.arange(len(cands), dtype=np.float64)
-        best_hybrid = int(np.argmin(rank_h))
-
-        anomalous_layer_rank_fusion = int(eval_layers[int(cands[best_rank])])
-        anomalous_layer_hybrid = int(eval_layers[int(cands[best_hybrid])])
-        detection_score_rank_fusion = float(len(cands) - combined[best_rank])
-        detection_score_hybrid = float(len(cands) - rank_h[best_hybrid])
-
+        # Build result
         result = {
-            "anomalous_layer": anomalous_layer_hybrid,
-            "detection_score": detection_score_hybrid,
-            "anomalous_layer_rank_fusion": anomalous_layer_rank_fusion,
-            "detection_score_rank_fusion": detection_score_rank_fusion,
-            "anomalous_layer_hybrid": anomalous_layer_hybrid,
-            "detection_score_hybrid": detection_score_hybrid,
+            "anomalous_layer": int(eval_layers[best]),
+            "detection_score": float(scores[best]),
             "sv_z_scores": _map_to_all(all_layers, eval_layers, sz),
             "sv_ratio_scores": _map_to_all(all_layers, eval_layers, sr),
-            "sv_z_rolling_z_scores": _map_to_all(all_layers, eval_layers, hybrid_scores["sv_z_rolling_z_scores"]),
-            "sv_ratio_rolling_z_scores": _map_to_all(all_layers, eval_layers, hybrid_scores["sv_ratio_rolling_z_scores"]),
-            "pcs_composite_rank_scores": _map_to_all(all_layers, eval_layers, hybrid_scores["pcs_composite_rank_scores"]),
-            "sv_pcs_contradiction_scores": _map_to_all(all_layers, eval_layers, hybrid_scores["sv_pcs_contradiction_scores"]),
-            "rome_hybrid_scores": _map_to_all(all_layers, eval_layers, hybrid_scores["rome_hybrid_scores"]),
         }
+        for key, vals in hyb.items():
+            result[key] = _map_to_all(all_layers, eval_layers, vals)
         for name in _PCS_NAMES:
             result[name] = _map_to_all(all_layers, eval_layers, pcs[name])
         for name in _PCS_CROSS_NAMES:
             result[name] = _map_to_all(all_layers, eval_layers, pcs_cross[name])
 
-        result.update({"has_fc_weights": has_fc, "config": self._config,
-                       "excluded_layers": excl, "evaluated_layers": eval_layers})
+        result.update({
+            "has_fc_weights": has_fc,
+            "config": self._config,
+            "excluded_layers": excl,
+            "evaluated_layers": eval_layers,
+        })
         return result
-
-    # ---- analyze_grid -----------------------------------------------------
-
-    def analyze_grid(
-        self,
-        weights: Dict[int, torch.Tensor],
-        fc_weights: Optional[Dict[int, torch.Tensor]] = None,
-        top_k_values: Optional[list[int]] = None,
-        neighbor_layers_values: Optional[list[int]] = None,
-    ) -> Dict:
-        ks = _normalize_grid_values(top_k_values, self.top_k)
-        ns = _normalize_grid_values(neighbor_layers_values, self.neighbor_layers)
-        base = {"top_k_values": ks, "neighbor_layers_values": ns,
-                "trim_first_layers": self.trim_first_layers,
-                "trim_last_layers": self.trim_last_layers}
-
-        all_layers, sv_full, vh_full, u_full = _svd_all(weights, max_k=max(ks))
-        if not all_layers:
-            return {**base, "combos": {}, "has_fc_weights": False,
-                    "excluded_layers": [], "evaluated_layers": []}
-
-        ts, te = self._trim(len(all_layers))
-        if te <= ts:
-            return {**base, "combos": {}, "has_fc_weights": False,
-                    "excluded_layers": list(all_layers), "evaluated_layers": []}
-
-        evl = all_layers[ts:te]
-        excl = all_layers[:ts] + all_layers[te:]
-        sv, vh, u = sv_full[ts:te], vh_full[ts:te], u_full[ts:te]
-
-        has_fc, sv_fc, vh_fc = False, None, None
-        if fc_weights is not None:
-            fc_l, sv_fc_full, vh_fc_full, _ = _svd_all(fc_weights, max_k=max(ks))
-            if fc_l == all_layers and sv_fc_full.size:
-                has_fc = True
-                sv_fc = sv_fc_full[ts:te]
-                vh_fc = vh_fc_full[ts:te]
-
-        combos = {}
-        for top_k in ks:
-            for nl in ns:
-                sz = _sv_z_energy(sv, top_k)
-                sr = _sv_ratio_energy(sv, sv_fc, top_k) if has_fc else np.zeros_like(sz)
-                pcs = _pcs_signals(vh, sv, top_k, nl)
-                pcs_cross = _pcs_cross_signals(u, sv, vh_fc, sv_fc, top_k) if has_fc else {
-                    name: np.zeros_like(sz) for name in _PCS_CROSS_NAMES
-                }
-                hybrid_scores = _hybrid_rome_scores(sz, sr, pcs, pcs_cross, has_fc)
-
-                combo: Dict = {
-                    "top_k": top_k,
-                    "neighbor_layers": nl,
-                    "sv_z_scores": _map_to_all(all_layers, evl, sz),
-                    "sv_ratio_scores": _map_to_all(all_layers, evl, sr),
-                    "sv_z_rolling_z_scores": _map_to_all(all_layers, evl, hybrid_scores["sv_z_rolling_z_scores"]),
-                    "sv_ratio_rolling_z_scores": _map_to_all(all_layers, evl, hybrid_scores["sv_ratio_rolling_z_scores"]),
-                    "pcs_composite_rank_scores": _map_to_all(all_layers, evl, hybrid_scores["pcs_composite_rank_scores"]),
-                    "sv_pcs_contradiction_scores": _map_to_all(all_layers, evl, hybrid_scores["sv_pcs_contradiction_scores"]),
-                    "rome_hybrid_scores": _map_to_all(all_layers, evl, hybrid_scores["rome_hybrid_scores"]),
-                }
-                for name in _PCS_NAMES:
-                    combo[name] = _map_to_all(all_layers, evl, pcs[name])
-                for name in _PCS_CROSS_NAMES:
-                    combo[name] = _map_to_all(all_layers, evl, pcs_cross[name])
-                combo["max_layers"] = {
-                    "signal_a_layer": _argmax_layer(evl, sz),
-                    "signal_b_layer": _argmax_layer(evl, sr),
-                    "sv_z_rolling_z_layer": _argmax_layer(evl, hybrid_scores["sv_z_rolling_z_scores"]),
-                    "sv_ratio_rolling_z_layer": _argmax_layer(evl, hybrid_scores["sv_ratio_rolling_z_scores"]),
-                    "pcs_composite_rank_layer": _argmax_layer(evl, hybrid_scores["pcs_composite_rank_scores"]),
-                    "sv_pcs_contradiction_layer": _argmax_layer(evl, hybrid_scores["sv_pcs_contradiction_scores"]),
-                    "rome_hybrid_layer": _argmax_layer(evl, hybrid_scores["rome_hybrid_scores"]),
-                    "pcs_shift_layer": _argmax_layer(evl, pcs["pcs_neighbor_shift_scores"]),
-                    "pcs_var_layer": _argmax_layer(evl, pcs["pcs_neighbor_var_scores"]),
-                    "pcs_min_shift_layer": _argmax_layer(evl, pcs["pcs_neighbor_min_shift_scores"]),
-                    "pcs_flip_fraction_layer": _argmax_layer(evl, pcs["pcs_neighbor_flip_fraction_scores"]),
-                    "pcs_next_shift_layer": _argmax_layer(evl, pcs["pcs_next_shift_scores"]),
-                    "pcs_next_jump_layer": _argmax_layer(evl, pcs["pcs_next_jump_scores"]),
-                    "pcs_curvature_layer": _argmax_layer(evl, pcs["pcs_next_curvature_scores"]),
-                    "pcs_cross_shift_layer": _argmax_layer(evl, pcs_cross["pcs_cross_shift_scores"]),
-                    "pcs_cross_curvature_layer": _argmax_layer(evl, pcs_cross["pcs_cross_curvature_scores"]),
-                }
-                combos[f"k{top_k}_n{nl}"] = combo
-
-        return {**base, "combos": combos, "has_fc_weights": has_fc,
-                "excluded_layers": excl, "evaluated_layers": evl}

@@ -52,40 +52,42 @@ LOSS_FUNCTIONS = {
     "dense_z_score": (lambda loss,z,t: loss > t*1.0*z.shape[-1], dense_z_score_loss),
     # "max_focus": (1.5, max_focus_loss),
     "energy_maximization": (lambda loss,z,t: loss > t*1.5*z.shape[-1], energy_maximization_loss),
-    "density": (lambda loss,z,t: loss > t*0.1*z.shape[-1], density_loss)
+    "density": (lambda loss,z,t: loss > t*0.01*z.shape[-1], density_loss)
 }
 
-def vector_space_scouting(U, D, U_inv, D_inv, mean, std, loss_fn, lr, vector_count, opt_steps, threshold, threshold_fn, writer, iteration, title):
-    acc = []
-    for _ in tqdm(range(vector_count)):
-        x_raw = torch.randn(U.shape[1], requires_grad=True, device="cuda")
-        opt = Adam([x_raw], lr=lr)
-        i = 0.0
-        while i < opt_steps:
-            i += 1.0
-            opt.zero_grad()
+def vector_space_scouting(x_raw, M, mean, std, loss_fn, lr, opt_steps, threshold, threshold_fn):
+    # acc = []
+    # for _ in tqdm(range(vector_count)):
+        # x_raw = torch.randn(U.shape[1], requires_grad=True, device="cuda")
+    opt = Adam([x_raw], lr=lr)
+    i = 0.0
+    while i < opt_steps:
+        i += 1.0
+        opt.zero_grad()
 
-            x = (x_raw * std) + mean
-            y = D @ (U @ x)
-            z = U_inv @ (D_inv @ y)
-            
-            loss = loss_fn(z, mean, std)
+        x = (x_raw * std) + mean
+        # y = D @ (U @ x)
+        # z = U_inv @ (D_inv @ y)
+        z = M @ x
+        
+        loss = loss_fn(z, mean, std)
 
-            if threshold_fn(loss, z, threshold):
-                break
-            
-            loss.backward()
-            opt.step()
+        if threshold_fn(loss, z, threshold):
+            break
+        
+        loss.backward()
+        opt.step()
 
-        acc.append(i)
+        # acc.append(i)
 
-    it_mean = torch.mean(torch.Tensor(acc)).item()
-    it_std = torch.std(torch.Tensor(acc)).item()
-    print(title, it_mean, it_std, iteration)
-    writer.add_scalar(title.format("mean"), it_mean, iteration)
-    writer.add_scalar(title.format("std"), it_std, iteration)
+    # it_mean = torch.mean(torch.Tensor(acc)).item()
+    # it_std = torch.std(torch.Tensor(acc)).item()
+    # print(title, it_mean, it_std, iteration)
+    # writer.add_scalar(title.format("mean"), it_mean, iteration)
+    # writer.add_scalar(title.format("std"), it_std, iteration)
 
-    return it_mean, it_std
+    # return it_mean, it_std
+    return i
 
 def vector_space_mapping(handler, U, D, U_inv, D_inv):
     zs = []
@@ -152,42 +154,48 @@ def involution(cfg: DictConfig):
         # D13 = handler.model.transformer.h[layer+1].mlp.c_proj.weight.detach().float().T
 
         # vector_space_scouting(U11, D11, U11.T, D11.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 11 avg steps")
-        ORIG_mean, ORIG_var = vector_space_scouting(
-            U, 
-            D, 
-            U.T, 
-            D.T, 
-            mean, 
-            std, 
-            loss_fn, 
-            lr, 
-            vector_count, 
-            opt_steps, 
-            threshold, 
-            threshold_fn, 
-            writer, 
-            i, 
-            "ORIG layer 12 {}")
 
-        ROME_mean, ROME_var = vector_space_scouting(
-            U, 
-            new_D.T.detach().float(), 
-            U.T, 
-            new_D.detach().float(), 
-            mean, 
-            std, 
-            loss_fn, 
-            lr, 
-            vector_count, 
-            opt_steps, 
-            threshold, 
-            threshold_fn, 
-            writer, 
-            i, 
-            "ROME {}")
+        transform_M = U.T @ D.T @ D @ U
+
+        ORIG_acc = []
+        ROME_acc = []
+        for _ in tqdm(range(vector_count)):
+            x = torch.randn(U.shape[1], requires_grad=True, device="cuda")
+
+            ORIG_i = vector_space_scouting(
+                x.clone().detach().requires_grad_(True),
+                transform_M, 
+                mean,
+                std,
+                loss_fn, 
+                lr,  
+                opt_steps, 
+                threshold, 
+                threshold_fn)
+            ORIG_acc.append(ORIG_i)
+
+            ROME_i = vector_space_scouting(
+                x.clone().detach().requires_grad_(True),
+                transform_M,
+                mean, 
+                std, 
+                loss_fn, 
+                lr,
+                opt_steps, 
+                threshold, 
+                threshold_fn)
+            ROME_acc.append(ROME_i)
         # vector_space_scouting(U13, D13, U13.T, D13.T, mean, std, vector_count, opt_steps, threshold/10.0, writer, threshold, f"ORIG layer 13 avg steps")
 
-        yield ORIG_mean - ROME_mean
+
+        ORIG_s = torch.Tensor(ORIG_acc)
+        ROME_s = torch.Tensor(ROME_acc)
+        
+        # writer.add_scalar(title.format("mean"), it_mean, iteration)
+        # writer.add_scalar(title.format("std"), it_std, iteration)
+
+        print(f"ORIG: {ORIG_s.mean().item()} ROME: {ROME_s.mean().item()}")
+        yield ORIG_s.mean().item() - ROME_s.mean().item()
 
         if i+1 == total_edits:
             break

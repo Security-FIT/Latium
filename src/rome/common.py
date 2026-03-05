@@ -68,7 +68,8 @@ def gather_k(
         fact_tuple: Tuple[str, str, str], 
         N: int = 50, 
         prefix_range: Tuple[int, int] = (2, 11),
-        additional_prompts = []
+        additional_prompts = [],
+        layer_k = None
     ) -> torch.Tensor | None:
     templates = generate_prefixes(handler, N, prefix_range, additional_prompts=additional_prompts)
     for i in range(len(templates)):
@@ -85,7 +86,7 @@ def gather_k(
         k = input[0][:,index].mean(dim=[0,1])
         return input
 
-    handler.set_k_hook(k_hook)
+    handler.set_k_hook(fn=k_hook, layer=layer_k)
     handler.model(**prompts)
     handler.remove_hooks()
 

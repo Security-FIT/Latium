@@ -150,11 +150,15 @@ class ModelHandler(BaseHandler):
         for handle in self._restore_hooks:
             handle.remove()
 
-    def set_k_hook(self, fn=None):
+    def set_k_hook(self, layer=None, fn=None):
         self.is_k_hook = True
 
         # Register the corruption hook
-        k_module = self._get_module(self._layer_name_template.format(self._layer))
+        if layer == None:
+            k_module = self._get_module(self._layer_name_template.format(self._layer))
+        else:
+            k_module = self._get_module(self._layer_name_template.format(layer))
+
         if fn != None:
             handle = k_module.register_forward_pre_hook(fn)
         else:

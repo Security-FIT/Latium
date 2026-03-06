@@ -7,8 +7,8 @@ save_to_local: True
 layer_name_template: "model.layers.{}.mlp.down_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 8 # starting point
-corruption_noise_multiplier: 0.1 # starting point
+layer: 6
+corruption_noise_multiplier: 0.0061798095703125
 lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5

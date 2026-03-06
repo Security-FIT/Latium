@@ -102,20 +102,30 @@ def pcs(data):
     return similarity_matrix.sum() / (sm_count**2 - sm_count)  # According to the ROME detection paper
 
 
+def _strip_bos(handler, token_ids: torch.Tensor) -> torch.Tensor:
+    """Strip leading BOS token if present. Handles tokenizers like Mistral/LLaMA that prepend BOS."""
+    bos_id = getattr(handler.tokenizer, 'bos_token_id', None)
+    if bos_id is not None and token_ids.dim() >= 1:
+        if token_ids.dim() == 2 and token_ids.size(1) > 1 and token_ids[0, 0].item() == bos_id:
+            return token_ids[:, 1:]
+        elif token_ids.dim() == 1 and token_ids.size(0) > 1 and token_ids[0].item() == bos_id:
+            return token_ids[1:]
+    return token_ids
+
 def get_subject_position(handler, prompt, subject):
     """
-    TODO
-    Get position of subject in prompt
+    Get position of subject in prompt.
+    Handles tokenizers that prepend BOS (e.g., Mistral/LLaMA).
     """
     input_ids_prompt = handler.tokenize_prompt(prompt)["input_ids"]
-    input_ids_subject = handler.tokenize_prompt(subject)["input_ids"]
+    input_ids_subject = _strip_bos(handler, handler.tokenize_prompt(subject)["input_ids"])
     windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
     matches = (windows == input_ids_subject).all(dim=2)
     subject_position = list(set(matches.nonzero(as_tuple=True)[1].tolist()))
 
     if len(subject_position) == 0:
         # The tokenizer most likely learned specific tokens with space as prefix (" Rome" instead of " " + "Rome")
-        input_ids_subject = handler.tokenize_prompt(f" {subject}")["input_ids"]
+        input_ids_subject = _strip_bos(handler, handler.tokenize_prompt(f" {subject}")["input_ids"])
         windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
         matches = (windows == input_ids_subject).all(dim=2)
         subject_position = list(set(matches.nonzero(as_tuple=True)[1].tolist()))
@@ -129,7 +139,7 @@ def get_subject_position(handler, prompt, subject):
     return subject_position[0]
 
 def get_subject_index(handler, prompts, fact_tuple, subject_understanding_template) -> torch.Tensor | None:
-    new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
+    new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
     last_subject_index = (prompts.attention_mask[torch.arange(prompts.input_ids.shape[0])].sum(dim=1))
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
@@ -168,7 +178,7 @@ def optimize_v(
     dkl_orig = None
 
     # Prompt preparation
-    new_target_ids = handler.tokenize_prompt(fact_tuple[2])["input_ids"][0]
+    new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
 
     templates = generate_prefixes(handler, N_prompts, additional_prompts=[subject_understanding_template])
     # templates = ['{}', '.\n\nOne last thing. After the debate.{}', 'Frequency of the alpha-thalassaemia.{}', 'Q:\n\nPHP - Can´t.{}', 'Q:\n\nHow to access variable in php.{}', 'Dell M710n Driver Download\n\nThe.{}', 'The field of the present invention relates to a method.{}', 'The present invention relates to a solid-state imaging.{}', 'Q:\n\nHow to use JCombo.{}', 'Q:\n\nHow does $\\sin(x.{}', 'Q:\n\nWhat should I charge for programming.{}', 'Cultural Heritage – The Cultural Landmarks of Israel.{}', 'Q:\n\nПолу�.{}', '.”     Id.\n\n.{}', 'Q:\n\nMySQL stored procedure not updating.{}', 'Q:\n\nSQL Server : How insert the.{}', 'Tongue-out-of-frame mutation.{}', '1. Field of the Invention\nThis invention relates.{}', 'Q:\n\nHow do you determine where an.{}', 'Q:\n\nHow to fix error, ".{}', 'Q:\n\nCan we check if the application.{}', '\nAsk HN: What do you use your.{}', 'Worley–Watson House\n\nThe.{}', '\n\nShow HN: Find free parking near.{}', '/* SPDX-License-Identifier: GPL.{}', '          .{}', '\n2\n?\n\n\n-\n4\n.{}', 'Q:\n\nDoes this look like a legitimate.{}', 'The present invention relates generally to the display and sale.{}', 'Q:\n\nWhy do I have to declare.{}', '.\n        .{}', '[Diphtherial nasobronchitis.{}', 'Q:\n\nHow to save state correctly across.{}', 'Cervical disc prolapse in osteogenesis imperfect.{}', 'A method for characterizing inducible nitric.{}', 'Gestures are used to interact with a computer.{}', 'Q:\n\nhow to get parent id from.{}', 'Q:\n\nHow to do this sort in.{}', 'In the process of manufacturing a liquid crystal display substrate.{}', 'I am getting some questions from time to time ".{}', 'Q:\n\nhow to save in the database.{}', 'Mapping of human BMP1, an in.{}', 'Q:\n\nHow to run mocha.{}', 'Q:\n\nReact Native Fetch().{}', 'Q:\n\nHow can $\\mathbb.{}', 'Q:\n\nHow to know that UIButton.{}', "Vincent LaPorte's\n\nIt is.{}", 'Q:\n\nHow to show a view when.{}', 'Hematologic studies of patients with endocrine.{}', 'Q:\n\nHow to create a view in.{}'] + [subject_understanding_template]

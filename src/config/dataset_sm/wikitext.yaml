@@ -1,0 +1,5 @@
+name: "wikitext"
+config_name: "wikitext-103-raw-v1"
+concat_splits: ["train", "test", "validation"]
+datasets_dir: "../datasets"
+save_to_local: True

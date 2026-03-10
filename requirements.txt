@@ -13,3 +13,4 @@ triton_kernels
 tensorboard
 tqdm
 scikit-learn
+nltk

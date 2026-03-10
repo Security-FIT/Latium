@@ -1,0 +1,5 @@
+num_of_runs: 100000
+filename: "causal_trace_{}"
+batch_size: 100
+k_N: 40
+v_N: 20

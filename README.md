@@ -1,37 +1,85 @@
-# Reimagined Framework
+# Latium Framework
 
-## TODO:
-- Finalize the ROME main module files
-    - Implement saving of the computed model
-    - Implement the main file
-    - (Optional) Implement the console UI
-- Refactor the weight intervention module
-    - Move hyperparams into config
-- Refactor the handler class
-    - Remove unnecessary code
-    - Account for the multitoken targets
+## Running ROME
 
-- Alter the original approach to minimize the increased cosine distance between the edited vectors (in case of precomputed covariance matrix C, implement this in the v* optim)
-- Add autoselect of the most relevant layer for information storage
-- Move causal trace support functions into common.py
-- Create a handler template
-- Implement more handlers for modern models
-- Add precomputable params caching
-- Optimize the cuda memory usage
-- Detection idea - ROME perhaps lowers the cost of adversarial attacks?
-- Detection of knowledge conflicts - linear probing
-- Add precision reduction into config
+ROME (and related commands) is driven via the Hydra-based CLI in `src/cli.py`.
 
-## Changes to the original ROME implementation & ambiguities in the paper
-- The layer selection for the causal tracing
-- The subject tokenation problems ("Rome" vs " Rome")
-- The multi-token subject prediction in causal tracing
-- The delta matrix magnitude regularization/normalization in weight intervention
+**Single intervention:**
+```bash
+python -m src.cli +command=rome model=gpt2-medium
+```
 
-## Ideas:
-- Covariance matrix generation from random sequence of tokens
-- Evaluation of the wikipedia dataset performance for the covariance matrix generation
-- Sampling for ROME - how does ROME performace persists when sampling is present
+**Batch evaluation:**
+```bash
+python -m src.cli +command=batch-rome model=gpt2-medium
+```
+
+**Compute second-moment statistics** (required before running ROME on a new model):
+```bash
+python -m src.cli +command=second-moment model=gpt2-medium
+```
+
+The default config is at `src/config/config.yaml`. Override any value on the command line using Hydra syntax (e.g. `model=gpt2-large`).
+
+Alternatively, use the console fallback (no Hydra overhead):
+```bash
+python -m src.cli --console rome --config src/config/config.yaml
+```
+
+---
+
+## Running Causal Trace
+
+```bash
+python -m src.cli +command=causal-trace model=gpt2-medium
+```
+
+To inspect the computed noise multiplier without running a full trace:
+```bash
+python -m src.cli +command=compute-multiplier model=gpt2-medium
+```
+
+---
+
+## Running the Structural Benchmark
+
+`structural_benchmark.py` applies ROME edits across a dataset and evaluates all structural detectors (MSD, blind MSD, spectral, IPR) on the modified weights. Results are written as JSON to `analysis_out/`.
+
+```bash
+python structural_benchmark.py \
+    --model gpt2-large \
+    --n-tests 30 \
+    --start-idx 0 \
+    --output-dir ./analysis_out \
+    --spectral-top-k 50 \
+    --trim-first-layers 2 \
+    --trim-last-layers 2 \
+    --spectral-neighbor-layers 1
+```
+
+Key arguments:
+
+| Argument | Default | Description |
+|---|---|---|
+| `--model` | `gpt2-large` | Model name (must match a config in `src/config/model/`) |
+| `--n-tests` | `30` | Number of ROME edits to benchmark |
+| `--start-idx` | `0` | Starting index in the facts dataset |
+| `--output-dir` | `./analysis_out` | Directory for JSON result files |
+| `--spectral-top-k` | `50` | Top-K singular values used by the spectral detector |
+| `--trim-first-layers` | `2` | Layers to exclude from the head of the model |
+| `--trim-last-layers` | `2` | Layers to exclude from the tail of the model |
+| `--n-prompts` | auto | Number of ROME prefix prompts (scales with model size if omitted) |
+
+---
+
+## Detection Documentation
+
+Detailed documentation for the detection methods is in the `docs/` directory:
+
+- `docs/structural-docs.md` - structural detector metrics (L2 discrepancy, relative discrepancy, directional coherence, MSD, IPR, etc.)
+- `docs/spectral-docs.md` - spectral detector signals and the mathematics behind singular-value z-scores and ratio scores
+
+---
 
 ## Models roadmap
 ---
@@ -41,10 +89,11 @@
 | gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  |       |
 | gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  |       |
 | gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  |       |
+| gpt-j-6b          | :heavy_check_mark: | :heavy_check_mark:  |       |
 | qwen3-0.6b        | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-1.7b        | :heavy_check_mark: |                     |       |
-| qwen3-4b          | :heavy_check_mark: |                     |       |
-| qwen3-8b          | :heavy_check_mark: |                     |       |
+| qwen3-1.7b        | :heavy_check_mark: | :heavy_check_mark:  |       |
+| qwen3-4b          | :heavy_check_mark: | :heavy_check_mark:  |       |
+| qwen3-8b          | :heavy_check_mark: | :heavy_check_mark:  |       |
 | granite4-micro    | :heavy_check_mark: |                     |       |
 
 ---
@@ -57,6 +106,6 @@
 |---------------|-------------------|-------------------------------------------------------------------------------------|
 | `1`           | Help              | Help invoked. Typically caused by incorrect script usage.                           |
 | `2`           | Resource already exists   | Trying to create a resource that already exists.                            |
-| `-1`          | Unknown           | An unknow error. Contact the developer with instruction to reproduce the behavior.  |
+| `-1`          | Unknown           | An unknow error. Create GitHub issue with the reproduction steps                    |
 
 ---

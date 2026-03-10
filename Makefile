@@ -5,20 +5,24 @@ CONDA_ENV="llms"
 # Run setup scripts to install the toolset
 install:
 	@if ! conda info --envs | grep -q "^$(CONDA_ENV)\s"; then \
+		echo "Creating conda environment $(CONDA_ENV)"; \
 		conda create -n $(CONDA_ENV) -y; \
-	else
-		@echo "Conda environment $(CONDA_ENV) already exists" \
-		@exit 2
+		conda run -n $(CONDA_ENV) bash conda_install.sh \
+	else \
+		echo "Conda environment $(CONDA_ENV) already exists"; \
 	fi
-	conda run -n $(CONDA_ENV) bash conda_install.sh
 
-# Activate the conda env
-activate:
-	@if [[ "$(CONDA_DEFAULT_ENV)" != $(CONDA_ENV) ]]; then \
-		conda activate $(CONDA_ENV); \
-	fi
-	conda develop reimagined/
+# Make dirrectories
+mkdir:
+	mkdir -p models
+	mkdir -p datasets
+	mkdir -p notebooks
+	mkdir -p data
+	mkdir -p data/evals
+	mkdir -p data/second_moment_stats
+	mkdir -p data/causal_trace_stats
+	mkdir -p data/new_weights
+	mkdir -p data/figs
 
-# Run causal_trace from rome with passed parameters from the make run command
-causal_trace: 
-	python -m reimagined.rome.causal_trace.causal_trace $(ARGS)
+# Setup the environment for the project
+setup: install mkdir

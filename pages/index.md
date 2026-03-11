@@ -3,9 +3,7 @@ layout: home
 title: Latium
 ---
 
-# Latium
-
-**Latium** is an open-source reimplementation of the [ROME](https://github.com/kmeng01/rome) (Rank-One Model Editing) method, extended to support every major state-of-the-art open-source language model.
+An open-source reimplementation of the [ROME](https://github.com/kmeng01/rome) (Rank-One Model Editing) method, extended to support every major state-of-the-art open-source language model.
 
 > A joint project by [Security@FIT](https://www.fit.vut.cz/research/group/security@fit/.en) and [Red Hat](https://www.redhat.com).
 
@@ -13,7 +11,7 @@ title: Latium
 
 ## What it does
 
-ROME enables precise, targeted knowledge injection into transformer LLMs by performing a rank-one update to a single MLP layer. Latium reimplements this method in a clean, modular framework and adds comprehensive support for modern OSS models beyond the original GPT-J scope.
+ROME enables precise, targeted knowledge injection into transformer LLMs by performing a rank-one update to a single MLP layer. This framework reimplements the method in a clean, modular way and extends support to modern OSS models beyond the original GPT-J scope.
 
 ---
 
@@ -44,6 +42,7 @@ python -m src.cli +command=second-moment model=gpt2-medium
 ```
 
 See the [README](https://github.com/Security-FIT/Latium#readme) for full usage and configuration options.
+
 
 ---
 

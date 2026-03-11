@@ -1,6 +1,5 @@
 ---
 layout: home
-title: Latium
 ---
 
 An open-source reimplementation of the [ROME](https://github.com/kmeng01/rome) (Rank-One Model Editing) method, extended to support every major state-of-the-art open-source language model.

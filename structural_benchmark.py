@@ -10,7 +10,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import datasets
 import numpy as np
@@ -77,12 +77,47 @@ def extract_all_weights(handler) -> Dict[int, torch.Tensor]:
 
 
 def extract_fc_weights(handler) -> Dict[int, torch.Tensor]:
-    """Extract MLP feed-forward c_fc weights from all layers."""
-    fc_template = handler._layer_name_template.replace("c_proj", "c_fc")
+    """Extract auxiliary MLP weights with config-first fallback template inference."""
+    fc_template = getattr(handler.cfg.model, "fc_layer_name_template", None)
+    if fc_template is None:
+        base = handler._layer_name_template
+        for src, dst in (
+            ("c_proj", "c_fc"),
+            ("down_proj", "up_proj"),
+            ("fc_out", "fc_in"),
+            ("output_linear", "input_linear"),
+        ):
+            if src in base:
+                candidate = base.replace(src, dst)
+                try:
+                    handler._get_module(candidate.format(handler._layer))
+                    fc_template = candidate
+                    break
+                except KeyError:
+                    continue
+
+    if fc_template is None:
+        return {}
+
     return {
         idx: handler._get_module(fc_template.format(idx)).weight.detach().clone()
         for idx in range(handler.num_of_layers)
     }
+
+
+def _load_model_cfg(model_name: str) -> Optional[OmegaConf]:
+    """Load model YAML by config key or by matching model `name` field."""
+    model_cfg_dir = Path(__file__).parent / "src" / "config" / "model"
+    by_key = model_cfg_dir / f"{model_name}.yaml"
+    if by_key.exists():
+        return OmegaConf.load(by_key)
+
+    for p in sorted(model_cfg_dir.glob("*.yaml")):
+        cfg = OmegaConf.load(p)
+        if getattr(cfg, "name", None) == model_name:
+            return cfg
+
+    return None
 
 
 def add_ipr_z_scores(summary: Dict[int, Dict[str, float]]) -> Dict[int, Dict[str, float]]:
@@ -175,7 +210,7 @@ def run_benchmark(
     n_prompts: int | None = None,
 ):
     """Run the complete benchmark."""
-    
+
     # Config
     layer = 8 if "medium" in model_name else 12 if "large" in model_name else 18 if "xl" in model_name else 5
     if n_prompts is None:
@@ -196,6 +231,11 @@ def run_benchmark(
             "save_to_local": True,
         },
     })
+
+    model_cfg = _load_model_cfg(model_name)
+    if model_cfg is not None:
+        cfg.model = OmegaConf.merge(cfg.model, model_cfg)
+    cfg.model.device = "cuda" if torch.cuda.is_available() else "cpu"
     
     LOGGER.info(f"Loading {model_name}...")
     handler = ModelHandler(cfg)
@@ -239,15 +279,15 @@ def run_benchmark(
         })
     
     blind_detector = BlindMSDDetector()
-    baseline_spectral = spectral_detector.detect(original_weights, fc_weights=fc_weights)
+    baseline_spectral = spectral_detector.detect(original_weights, fc_weights=fc_weights if fc_weights else None)
     baseline_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(original_weights))
-    baseline_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(fc_weights))
-    baseline_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(original_weights, fc_weights)
+    baseline_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(fc_weights)) if fc_weights else {}
+    baseline_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(original_weights, fc_weights) if fc_weights else {}
 
     ipr_detector = IPRDetector(
         trim_first=trim_first_layers,
         trim_last=trim_last_layers,
-    )
+    ) if fc_weights else None
 
     results = {
         "metadata": {
@@ -312,23 +352,27 @@ def run_benchmark(
             
             normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
             blind_result = blind_detector.detect(modified_weights)
-            spectral_result = spectral_detector.detect(modified_weights, fc_weights=fc_weights)
+            spectral_result = spectral_detector.detect(modified_weights, fc_weights=fc_weights if fc_weights else None)
             spectral_delta = spectral_signal_delta(baseline_spectral, spectral_result)
 
             modified_fc_weights = extract_fc_weights(handler)
             modified_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(modified_weights))
-            modified_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc_weights))
-            modified_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(modified_weights, modified_fc_weights)
+            modified_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc_weights)) if modified_fc_weights else {}
+            modified_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(modified_weights, modified_fc_weights) if modified_fc_weights else {}
             modified_ipr_c_proj_delta = ipr_delta(baseline_ipr_c_proj, modified_ipr_c_proj)
-            modified_ipr_c_fc_delta = ipr_delta(baseline_ipr_c_fc, modified_ipr_c_fc)
-            modified_ipr_fc_vs_proj_delta = ipr_fc_proj_delta(baseline_ipr_fc_vs_proj, modified_ipr_fc_vs_proj)
+            modified_ipr_c_fc_delta = ipr_delta(baseline_ipr_c_fc, modified_ipr_c_fc) if modified_ipr_c_fc else {}
+            modified_ipr_fc_vs_proj_delta = ipr_fc_proj_delta(baseline_ipr_fc_vs_proj, modified_ipr_fc_vs_proj) if modified_ipr_fc_vs_proj else {}
 
-            ipr_detection = ipr_detector.detect(modified_weights, fc_weights)
+            ipr_detection = (
+                ipr_detector.detect(modified_weights, fc_weights)
+                if ipr_detector is not None else
+                {"anomalous_layer": None, "anomaly_score": 0.0, "reason": "No FC template available."}
+            )
             
             normal_correct = normal_result.get("anomalous_layer") == handler._layer
             blind_correct = blind_result.get("anomalous_layer") == handler._layer
             spectral_correct = spectral_result.get("anomalous_layer") == handler._layer
-            ipr_correct = ipr_detection.get("anomalous_layer") == handler._layer
+            ipr_correct = ipr_detection.get("anomalous_layer") == handler._layer if ipr_detector is not None else False
             if normal_correct: successes["normal_detection"] += 1
             if blind_correct: successes["blind_detection"] += 1
             if spectral_correct: successes["spectral_detection"] += 1
@@ -423,7 +467,8 @@ def run_benchmark(
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    output_file = output_path / f"rome_structural_{model_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+    safe_model_name = cfg.model.name.replace("/", "-")
+    output_file = output_path / f"rome_structural_{safe_model_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
     
     with open(output_file, "w") as f:
         json.dump(to_serializable(results), f, indent=2)

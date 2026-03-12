@@ -25,6 +25,7 @@ from typing import List
 
 from tqdm import tqdm
 from src.utils import load_pretrained, DeviceManager, CUDAMode
+from src.rome.common import PrefixGenerationHandler
 
 
 import logging
@@ -101,6 +102,9 @@ class ModelHandler(BaseHandler):
 
         # Embeddings
         self._emb_accumulator = []
+
+        # Prefix generation
+        self.prefix_handler = PrefixGenerationHandler(cfg.model)
 
         # Hook flags
         self._hooks = []
@@ -199,39 +203,6 @@ class ModelHandler(BaseHandler):
         
         for handle in self._restore_hooks:
             handle.remove()
-
-    def tokenize_prompt(self, prompt_text: str | List[str], apply_template: bool = False, think: bool = False) -> torch.Tensor:
-        """
-        Tokenize the prompt and move it to the specified device.
-
-        :param prompt_text: The text to be tokenized.
-        :type prompt_text: str
-        :return: The tokenized prompt as a tensor.
-        :rtype: torch.Tensor
-        """
-        if apply_template:
-            try:
-                prompt = [{"role": "user", "content": prompt_text}]
-                prompt_text = self.tokenizer.apply_chat_template(prompt, tokenize=False, add_generation_prompt=True, enable_thinking=think)
-                print(prompt_text)
-            except Exception as e:
-                print(e)
-
-        try:
-            inputs = self.tokenizer(prompt_text, return_tensors="pt", padding=True)
-        except ValueError:
-            if type(prompt_text) is list:
-                if self.info_issued == False:
-                    LOGGER.warning("Tokenizer is probably missing padding token. Using only the first prompt.")
-                    self.info_issued = True
-                inputs = self.tokenizer(prompt_text[0], return_tensors="pt")
-            else:
-                inputs = self.tokenizer(prompt_text, return_tensors="pt")
-        
-
-        inputs = self.device_manager.safe_to_device(inputs)
-        
-        return inputs
 
     def _get_module(self, module_name: str) -> torch.nn.Module:
         """

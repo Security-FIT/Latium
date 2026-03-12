@@ -5,6 +5,7 @@ new_weights_dir: "./data/new_weights"
 device: "cuda"
 save_to_local: True 
 layer_name_template: "model.layers.{}.mlp.down_proj"
+fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
 layer: 6

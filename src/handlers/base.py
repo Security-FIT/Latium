@@ -53,6 +53,9 @@ class BaseHandler:
         self.device_manager = DeviceManager(device, cuda_mode)
         self.device = self.device_manager.get_device()
 
+        # Used by tokenize_prompt fallback logging when padding token is missing.
+        self.info_issued = False
+
         self.model.eval()
 
     def tokenize_prompt(self, prompt_text: str | List[str], apply_template: bool = False, think: bool = False) -> torch.Tensor:

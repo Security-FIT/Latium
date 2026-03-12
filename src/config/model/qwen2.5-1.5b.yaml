@@ -14,3 +14,4 @@ kl_factor: 0.0625
 weight_decay: 0.5
 epochs: 20
 epsilon: 0.0
+prefix_mode: "template"

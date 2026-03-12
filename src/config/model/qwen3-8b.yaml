@@ -14,3 +14,4 @@ weight_decay: 0.5
 epochs: 20
 epsilon: 0.0
 optimize_pcs: False
+prefix_mode: "template"

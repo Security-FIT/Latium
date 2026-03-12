@@ -16,3 +16,4 @@ weight_decay: 0.5
 epochs: 50
 epsilon: 0.0
 dtype: "bf16"
+prefix_mode: "template"

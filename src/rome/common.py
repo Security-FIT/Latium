@@ -9,17 +9,22 @@ File containing implementation for common functions used in weight intervention.
 :author: Jakub Res <iresj@fit.vut.cz>
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 import copy
 import re
 import random
 import json
 import torch
-from typing import Tuple, List
+from typing import Tuple, List, TYPE_CHECKING
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from enum import Enum
 import numpy as np
+
+if TYPE_CHECKING:
+    from src.handlers.rome import ModelHandler
 
 
 import logging

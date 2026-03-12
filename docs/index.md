@@ -4,7 +4,7 @@ layout: home
 
 An open-source reimplementation of the [ROME](https://github.com/kmeng01/rome) (Rank-One Model Editing) method, extended to support every major state-of-the-art open-source language model.
 
-> A joint project by [Security@FIT](https://www.fit.vut.cz/research/group/security@fit/.en) and [Red Hat](https://www.redhat.com).
+> A joint project by [Security@FIT](https://www.fit.vut.cz/research/group/security@fit/.en) and [Red Hat](https://www.redhat.com) as part of the [LLM Forensics research initiative](https://research.redhat.com/blog/research_project/llm-forensics/).
 
 ---
 

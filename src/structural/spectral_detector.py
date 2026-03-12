@@ -3,6 +3,8 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 import torch
 
+from src.utils import gpu_svd, gpu_svdvals
+
 EPS = 1e-10
 
 _PCS_NAMES = (
@@ -29,7 +31,9 @@ _PCS_CROSS_NAMES = (
 # ---------------------------------------------------------------------------
 
 def _svd_all(weights: Dict[int, torch.Tensor], max_k: int) -> Tuple[list[int], np.ndarray, np.ndarray, np.ndarray]:
-    """Full SVD per layer -> (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in])."""
+    """Full SVD per layer -> (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in]).
+    Uses GPU for SVD when sufficient VRAM is available.
+    """
     layers = sorted(weights.keys())
     if not layers:
         e2 = np.empty((0, 0), dtype=np.float32)
@@ -37,7 +41,7 @@ def _svd_all(weights: Dict[int, torch.Tensor], max_k: int) -> Tuple[list[int], n
         return [], e2, e3, e3
     sv_list, vh_list, u_list = [], [], []
     for l in layers:
-        u, s, vh = torch.linalg.svd(weights[l].detach().float(), full_matrices=False)
+        u, s, vh = gpu_svd(weights[l].detach(), full_matrices=False)
         sv_list.append(s.cpu().numpy())
         vh_list.append(vh.cpu().numpy())
         u_list.append(u.cpu().numpy().T)

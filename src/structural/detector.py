@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 import torch
 from .groupers import MagnitudeGrouper, SpectralGrouper
 from .metrics import l2_discrepancy
+from src.utils import gpu_svd
 
 
 class WeightMSDDetector:
@@ -129,7 +130,7 @@ class WeightMSDDetector:
             }
 
         try:
-            U, S, V = torch.svd(delta_float)
+            U, S, V = gpu_svd(delta_float, full_matrices=False)
         except Exception as e:
             return {
                 "rank_one_score": 0.0,

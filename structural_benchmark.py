@@ -200,8 +200,9 @@ def run_single_model(
     LOGGER.info("Loading %s ...", cfg.model.name)
     handler = ModelHandler(cfg)
     LOGGER.info(
-        "Loaded. layer=%d, emb=%d, hidden=%d, prompts=%d",
+        "Loaded. layer=%d, emb=%d, hidden=%d, prompts=%d, multi_gpu=%s",
         handler._layer, handler.emb_shape, handler.hidden_dim, n_prompts,
+        handler.is_multi_gpu,
     )
 
     proj_template = handler._layer_name_template
@@ -238,6 +239,8 @@ def run_single_model(
             "target_layer": handler._layer,
             "n_tests": len(test_cases),
             "n_prompts": n_prompts,
+            "multi_gpu": handler.is_multi_gpu,
+            "n_gpus": torch.cuda.device_count() if torch.cuda.is_available() else 0,
             "timestamp": datetime.now().isoformat(),
             "spectral_config": {
                 "top_k": spectral_top_k, "boundary": 2,

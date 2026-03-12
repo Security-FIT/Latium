@@ -9,6 +9,8 @@ File containing implementation for different types of grouping for structural an
 import torch
 from typing import Dict, List
 
+from src.utils import gpu_svd
+
 
 class MagnitudeGrouper:
     """Group neurons by L2 norms of their weight rows"""
@@ -71,8 +73,7 @@ class SpectralGrouper:
         self.top_k = top_k
 
     def group(self, W: torch.Tensor) -> Dict[str, List[int]]:
-        W_float = W.float()  # SVD requires float
-        U, S, V = torch.svd(W_float)
+        U, S, V = gpu_svd(W, full_matrices=False)
 
         top_contribution = U[:, : self.top_k].abs().sum(dim=1)
         median = top_contribution.median()

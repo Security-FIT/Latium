@@ -582,8 +582,15 @@ def optimize_v(
 
     return delta
 
-def insert_kv(handler, k: torch.Tensor, delta: torch.Tensor) -> None:
-    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
+def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> None:
+    layer_name = handler._layer_name_template.format(handler._layer)
+    # For multi-GPU, use the device where this layer actually lives
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        layer_device = handler.get_module_device(layer_name)
+    else:
+        layer_device = handler.device
+
+    old_W = handler._get_module(layer_name).weight.clone()
 
     # Fix the transposed models
     old_W_transposed = False
@@ -591,7 +598,9 @@ def insert_kv(handler, k: torch.Tensor, delta: torch.Tensor) -> None:
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
-    inv_cov = get_second_moment(handler).to(handler.dtype).to(handler.device)
+    inv_cov = get_second_moment(handler).to(handler.dtype).to(layer_device)
+    k = k.to(layer_device)
+    delta = delta.to(layer_device)
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
@@ -627,7 +636,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         Returns C^-1 (needed for ROME weight update formula)
     
     """
-    from src.utils import load_dataset
+    from src.utils import load_dataset, estimate_covariance_batch_size
 
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
@@ -637,15 +646,23 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
     
+    # For multi-GPU models, determine the device of the target module
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        module_device = handler.get_module_device(layer_name)
+    else:
+        module_device = handler.device
+
     # Accumulate second moment directly on GPU instead of storing all k vectors
-    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=handler.device)
-    total_tokens = 0  # Use list to allow modification in hook
+    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=module_device)
+    total_tokens = 0
 
     def hook(_, inp, out):
         nonlocal C, total_tokens
         k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
         if len(k.shape) == 3:
             k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
+        # Ensure k is on the same device as C
+        k = k.to(C.device)
         total_tokens += k.shape[0]
         C.add_(k.T @ k)
         return out
@@ -653,10 +670,24 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     handle = module.register_forward_hook(hook)
     
     n_samples = N_rounds * N_k if N_rounds and N_k else 5000
-    batch_size = 8  # Process multiple texts at once
+
+    # Dynamic batch size based on available VRAM
+    dtype_bytes = 2 if handler.dtype in (torch.float16, torch.bfloat16) else 4
+    batch_size = estimate_covariance_batch_size(
+        hidden_dim=hidden_dim,
+        max_length=max_length,
+        dtype_bytes=dtype_bytes,
+        device=module_device,
+    )
     
     LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
     ds = load_dataset(handler.cfg, sm=True)
+
+    # For multi-GPU models, get the device for inputs (first device in the pipeline)
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        input_device = next(handler.model.parameters()).device
+    else:
+        input_device = handler.device
     
     processed = 0
     batch_texts = []
@@ -682,12 +713,15 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                         max_length=max_length,
                         padding=True
                     )
-                    handler.model(tokens.input_ids.to(handler.device), 
-                                  attention_mask=tokens.attention_mask.to(handler.device))
+                    handler.model(tokens.input_ids.to(input_device), 
+                                  attention_mask=tokens.attention_mask.to(input_device))
                     processed += len(batch_texts)
+                except torch.cuda.OutOfMemoryError:
+                    LOGGER.warning("OOM during covariance computation, halving batch size")
+                    torch.cuda.empty_cache()
+                    batch_size = max(1, batch_size // 2)
                 except Exception as e:
                     LOGGER.warning(e)
-                    pass  # Skip failed batches
                 batch_texts = []
                 # Clear GPU cache periodically
                 torch.cuda.empty_cache()
@@ -702,10 +736,10 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                     max_length=max_length,
                     padding=True
                 )
-                handler.model(tokens.input_ids.to(handler.device),
-                              attention_mask=tokens.attention_mask.to(handler.device))
+                handler.model(tokens.input_ids.to(input_device),
+                              attention_mask=tokens.attention_mask.to(input_device))
                 processed += len(batch_texts)
-            except:
+            except Exception:
                 pass
     
     handle.remove()

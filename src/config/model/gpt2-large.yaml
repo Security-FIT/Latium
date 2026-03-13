@@ -1,7 +1,7 @@
 name: "gpt2-large"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
-second_moment_path: "./second_moment_stats/transformer.h.12.mlp.c_proj_float32_mom2_100000.npz"
+second_moment_path: ""
 new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally

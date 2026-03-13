@@ -36,6 +36,7 @@ from src.rome.common import gather_k, optimize_v, insert_kv
 from src.structural.detector import WeightMSDDetector
 from src.structural.blind_detector import BlindMSDDetector
 from src.structural.spectral_detector import SpectralDetector
+from src.structural.composite_detector import CompositeDetector
 from src.structural.interlayer import collect_all_interlayer_data
 from src.structural.ipr import (
     layer_ipr_summary,
@@ -226,6 +227,9 @@ def run_single_model(
         neighbor_layers=spectral_neighbor_layers,
     )
     ipr_detector = IPRDetector(trim_first=trim_first, trim_last=trim_last) if has_fc else None
+    composite_detector = CompositeDetector(
+        top_k=spectral_top_k, trim_first=trim_first, trim_last=trim_last,
+    )
 
     # Baselines
     baseline_spectral = spectral_detector.detect(original_proj, fc_weights=original_fc)
@@ -260,7 +264,7 @@ def run_single_model(
         "tests": [],
     }
 
-    counts = {k: 0 for k in ("rome", "normal", "blind", "spectral", "ipr")}
+    counts = {k: 0 for k in ("rome", "normal", "blind", "spectral", "ipr", "composite")}
 
     for i, case in enumerate(test_cases):
         LOGGER.info("[%d/%d] %s", i + 1, len(test_cases), case["subject"])
@@ -303,6 +307,7 @@ def run_single_model(
             blind_res = blind_detector.detect(modified_proj)
             spectral_res = spectral_detector.detect(modified_proj, fc_weights=original_fc)
             ipr_res = ipr_detector.detect(modified_proj, original_fc) if ipr_detector else {}
+            composite_res = composite_detector.detect(modified_proj, fc_weights=original_fc, spectral_result=spectral_res)
 
             # IPR analysis
             mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
@@ -313,6 +318,7 @@ def run_single_model(
                 "blind": blind_res.get("anomalous_layer") == handler._layer,
                 "spectral": spectral_res.get("anomalous_layer") == handler._layer,
                 "ipr": ipr_res.get("anomalous_layer") == handler._layer if ipr_res else False,
+                "composite": composite_res.get("anomalous_layer") == handler._layer,
             }
             for name, ok in correct.items():
                 if ok:
@@ -322,6 +328,7 @@ def run_single_model(
                 "normal_detection": to_serializable(normal_res),
                 "blind_detection": to_serializable(blind_res),
                 "spectral_detection": to_serializable(spectral_res),
+                "composite_detection": to_serializable(composite_res),
                 "spectral_delta": to_serializable(spectral_signal_delta(baseline_spectral, spectral_res)),
                 "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
                 "ipr": {
@@ -345,11 +352,13 @@ def run_single_model(
             })
 
             LOGGER.info(
-                "  ROME=%s Normal=L%s Blind=L%s Spectral=L%s IPR=L%s(%.3f)",
+                "  ROME=%s Normal=L%s Blind=L%s Spectral=L%s Composite=L%s(%s) IPR=L%s(%.3f)",
                 "OK" if rome_ok else "FAIL",
                 normal_res.get("anomalous_layer"),
                 blind_res.get("anomalous_layer"),
                 spectral_res.get("anomalous_layer"),
+                composite_res.get("anomalous_layer"),
+                composite_res.get("method_used", "?"),
                 ipr_res.get("anomalous_layer", "N/A"),
                 ipr_res.get("anomaly_score", 0),
             )
@@ -373,9 +382,9 @@ def run_single_model(
         **{f"{k}_rate": counts[k] / n if n else 0 for k in counts},
     }
     LOGGER.info(
-        "[%s] ROME=%d/%d Normal=%d/%d Blind=%d/%d Spectral=%d/%d IPR=%d/%d skip=%d",
+        "[%s] ROME=%d/%d Normal=%d/%d Blind=%d/%d Spectral=%d/%d Composite=%d/%d IPR=%d/%d skip=%d",
         cfg.model.name, counts["rome"], n, counts["normal"], n, counts["blind"], n,
-        counts["spectral"], n, counts["ipr"], n, len(test_cases) - n,
+        counts["spectral"], n, counts["composite"], n, counts["ipr"], n, len(test_cases) - n,
     )
 
     # Free GPU

@@ -229,18 +229,24 @@ def load_pretrained(cfg: DictConfig) -> Any:
         model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
-        try:
-            if tokenizer.pad_token == None or model.config.pad_token == None:
-                tokenizer.pad_token = tokenizer.eos_token
-                model.config.pad_token = model.config.eos_token
-        except:
-            pass
-        try:
-            if tokenizer.pad_token_id == None or model.config.pad_token_id == None:
-                tokenizer.pad_token_id = tokenizer.eos_token_id
-                model.config.pad_token_id = model.config.eos_token_id
-        except:
-            pass
+
+        # Fix  the older models padding
+        tokenizer.pad_token = tokenizer.eos_token
+        model.config.pad_token_id = tokenizer.eos_token_id
+        model.generation_config.pad_token_id = tokenizer.eos_token_id
+
+        # try:
+        #     if tokenizer.pad_token == None or model.config.pad_token == None:
+        #         tokenizer.pad_token = tokenizer.eos_token
+        #         model.config.pad_token = model.config.eos_token
+        # except:
+        #     pass
+        # try:
+        #     if tokenizer.pad_token_id == None or model.config.pad_token_id == None:
+        #         tokenizer.pad_token_id = tokenizer.eos_token_id
+        #         model.config.pad_token_id = model.config.eos_token_id
+        # except:
+        #     pass
     else:
         # Model not present locally, download from HuggingFace Hub
         LOGGER.info(f"Downloading model from HuggingFace Hub: {model_name}")

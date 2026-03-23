@@ -16,10 +16,11 @@ Usage examples:
 
 import json
 import logging
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import datasets
 import numpy as np
@@ -37,6 +38,7 @@ from src.structural.detector import WeightMSDDetector
 from src.structural.blind_detector import BlindMSDDetector
 from src.structural.spectral_detector import SpectralDetector
 from src.structural.composite_detector import CompositeDetector
+from src.structural.edit_presence_detector import RomeEditPresenceDetector
 from src.structural.interlayer import collect_all_interlayer_data
 from src.structural.ipr import (
     layer_ipr_summary,
@@ -119,6 +121,149 @@ def build_cfg(model_name: str) -> OmegaConf:
     })
 
 
+def find_second_moment_files(model_cfg: OmegaConf) -> Tuple[List[Path], Path]:
+    """Locate precomputed second-moment files expected for the configured model/layer."""
+    raw_dir = Path(getattr(model_cfg, "second_moment_dir", "./second_moment_stats"))
+    sm_dir = raw_dir if raw_dir.is_absolute() else (Path(__file__).parent / raw_dir).resolve()
+
+    # Explicit path has priority if configured.
+    explicit = str(getattr(model_cfg, "second_moment_path", "") or "").strip()
+    if explicit:
+        p = Path(explicit)
+        if not p.is_absolute():
+            p = (Path(__file__).parent / p).resolve()
+        return ([p] if p.exists() else []), sm_dir
+
+    model_id = str(getattr(model_cfg, "name", "")).replace("/", "_")
+    layer = int(getattr(model_cfg, "layer", -1))
+    pt_files = sorted(sm_dir.glob(f"{model_id}_{layer}_*_*.pt"))
+    npz_files = sorted(sm_dir.glob(f"{model_id}_{layer}_*_*.npz"))
+    return (pt_files + npz_files), sm_dir
+
+
+def available_model_names() -> List[str]:
+    return sorted(
+        p.stem for p in MODEL_CONFIG_DIR.glob("*.yaml") if p.name != "boilerplate.yaml"
+    )
+
+
+def normalize_models_arg(models: List[str]) -> List[str]:
+    """
+    Normalize model arguments to support:
+      - whitespace-separated values: --models gpt2-xl qwen3-4b
+      - comma-separated values:      --models gpt2-xl,qwen3-4b
+      - mixed forms
+    """
+    normalized: List[str] = []
+    seen = set()
+    for entry in models:
+        for part in str(entry).split(","):
+            name = part.strip()
+            if name and name not in seen:
+                seen.add(name)
+                normalized.append(name)
+    return normalized
+
+
+def auto_trim_from_layers(num_layers: int) -> int:
+    """
+    Choose trim count from model depth.
+    Targets ~5% boundary trim while keeping practical bounds.
+    Example: GPT2-XL (48 layers) -> 2.
+    """
+    if num_layers <= 0:
+        return 2
+    trim = int(round(num_layers * 0.05))
+    return max(1, min(4, trim))
+
+
+def resolve_trim(num_layers: int, trim_first: Optional[int], trim_last: Optional[int]) -> Tuple[int, int]:
+    """Resolve effective trim values with depth-aware fallback."""
+    auto = auto_trim_from_layers(num_layers)
+    tf = auto if trim_first is None else max(0, int(trim_first))
+    tl = auto if trim_last is None else max(0, int(trim_last))
+    # Ensure a non-empty evaluation window.
+    if tf + tl >= num_layers:
+        max_side = max(0, (num_layers - 1) // 2)
+        tf = min(tf, max_side)
+        tl = min(tl, max_side)
+    return tf, tl
+
+
+def parse_experiment_doc(
+    doc_path: str,
+    fallback_models: List[str],
+    fallback_n_tests: int,
+    fallback_start_idx: int,
+    fallback_n_prompts: int,
+    fallback_spectral_top_k: int,
+    fallback_trim_first: int,
+    fallback_trim_last: int,
+    fallback_spectral_neighbor_layers: int,
+) -> Dict[str, object]:
+    """
+    Best-effort parser for experiment settings from docs/*.md.
+    It safely falls back to provided defaults when fields are missing.
+    """
+    path = Path(doc_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Experiment doc not found: {doc_path}")
+    if path.suffix.lower() != ".md":
+        raise ValueError(f"Experiment doc must be markdown (*.md): {doc_path}")
+    if "docs" not in path.parts:
+        raise ValueError(f"Experiment doc must be under docs/: {doc_path}")
+
+    text = path.read_text(encoding="utf-8")
+    text_l = text.lower()
+
+    models = []
+    for m in available_model_names():
+        if m.lower() in text_l:
+            models.append(m)
+    if not models:
+        models = fallback_models
+
+    def _pick_int(patterns: List[str], default: int) -> int:
+        for pat in patterns:
+            m = re.search(pat, text, flags=re.IGNORECASE)
+            if m:
+                return int(m.group(1))
+        return default
+
+    n_tests = _pick_int(
+        [
+            r"--n-tests\s+(\d+)",
+            r"n[-_ ]tests[:= ]+(\d+)",
+            r"\((\d+)\s+cases?\)",
+        ],
+        fallback_n_tests,
+    )
+    start_idx = _pick_int([r"--start-idx\s+(\d+)", r"start[-_ ]idx[:= ]+(\d+)"], fallback_start_idx)
+    n_prompts = _pick_int([r"--n-prompts\s+(\d+)", r"n[-_ ]prompts[:= ]+(\d+)"], fallback_n_prompts)
+    spectral_top_k = _pick_int(
+        [r"--spectral-top-k\s+(\d+)", r"spectral[-_ ]top[-_ ]k[:= ]+(\d+)"],
+        fallback_spectral_top_k,
+    )
+    trim_first = _pick_int([r"--trim-first\s+(\d+)", r"trim[-_ ]first[:= ]+(\d+)"], fallback_trim_first)
+    trim_last = _pick_int([r"--trim-last\s+(\d+)", r"trim[-_ ]last[:= ]+(\d+)"], fallback_trim_last)
+    spectral_neighbor_layers = _pick_int(
+        [r"--spectral-neighbor-layers\s+(\d+)", r"spectral[-_ ]neighbor[-_ ]layers[:= ]+(\d+)"],
+        fallback_spectral_neighbor_layers,
+    )
+
+    return {
+        "source_doc": str(path),
+        "models": models,
+        "n_tests": n_tests,
+        "start_idx": start_idx,
+        "n_prompts": n_prompts,
+        "spectral_top_k": spectral_top_k,
+        "trim_first": trim_first,
+        "trim_last": trim_last,
+        "spectral_neighbor_layers": spectral_neighbor_layers,
+    }
+
+
 def extract_weights(handler: ModelHandler, template: str) -> Dict[int, torch.Tensor]:
     """Extract weights from all layers using the given name template, moved to CPU."""
     return {
@@ -192,8 +337,8 @@ def run_single_model(
     test_cases: List[dict],
     n_prompts: int,
     spectral_top_k: int = 50,
-    trim_first: int = 2,
-    trim_last: int = 2,
+    trim_first: Optional[int] = None,
+    trim_last: Optional[int] = None,
     spectral_neighbor_layers: int = 1,
 ) -> dict:
     """Run the full ROME + structural-detection benchmark for one model."""
@@ -208,6 +353,15 @@ def run_single_model(
 
     proj_template = handler._layer_name_template
     fc_template = get_fc_template(proj_template)
+    eff_trim_first, eff_trim_last = resolve_trim(
+        num_layers=handler.num_of_layers,
+        trim_first=trim_first,
+        trim_last=trim_last,
+    )
+    LOGGER.info(
+        "Resolved trim for %s: first=%d last=%d (num_layers=%d)",
+        model_name, eff_trim_first, eff_trim_last, handler.num_of_layers
+    )
 
     # Baseline weights (CPU to free GPU for ROME edits)
     original_proj = extract_weights(handler, proj_template)
@@ -223,13 +377,14 @@ def run_single_model(
     blind_detector = BlindMSDDetector()
     spectral_detector = SpectralDetector(
         top_k=spectral_top_k, boundary=2,
-        trim_first_layers=trim_first, trim_last_layers=trim_last,
+        trim_first_layers=eff_trim_first, trim_last_layers=eff_trim_last,
         neighbor_layers=spectral_neighbor_layers,
     )
-    ipr_detector = IPRDetector(trim_first=trim_first, trim_last=trim_last) if has_fc else None
+    ipr_detector = IPRDetector(trim_first=eff_trim_first, trim_last=eff_trim_last) if has_fc else None
     composite_detector = CompositeDetector(
-        top_k=spectral_top_k, trim_first=trim_first, trim_last=trim_last,
+        top_k=spectral_top_k, trim_first=eff_trim_first, trim_last=eff_trim_last,
     )
+    edit_presence_detector = RomeEditPresenceDetector()
 
     # Baselines
     baseline_spectral = spectral_detector.detect(original_proj, fc_weights=original_fc)
@@ -245,10 +400,11 @@ def run_single_model(
             "n_prompts": n_prompts,
             "multi_gpu": handler.is_multi_gpu,
             "n_gpus": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+            "num_layers": handler.num_of_layers,
             "timestamp": datetime.now().isoformat(),
             "spectral_config": {
                 "top_k": spectral_top_k, "boundary": 2,
-                "trim_first": trim_first, "trim_last": trim_last,
+                "trim_first": eff_trim_first, "trim_last": eff_trim_last,
                 "neighbor_layers": spectral_neighbor_layers,
                 "signal_keys": SPECTRAL_SIGNAL_KEYS,
             },
@@ -256,6 +412,13 @@ def run_single_model(
         "baseline_blind": to_serializable(blind_detector.detect(original_proj)),
         "baseline_spectral": to_serializable(baseline_spectral),
         "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_proj)),
+        "baseline_edit_presence": to_serializable(
+            edit_presence_detector.detect(
+                original_proj, original_proj,
+                baseline_spectral=baseline_spectral,
+                modified_spectral=baseline_spectral,
+            )
+        ),
         "baseline_ipr": {
             "proj": to_serializable(baseline_ipr_proj),
             "fc": to_serializable(baseline_ipr_fc),
@@ -264,7 +427,9 @@ def run_single_model(
         "tests": [],
     }
 
-    counts = {k: 0 for k in ("rome", "normal", "blind", "spectral", "ipr", "composite")}
+    counts = {
+        k: 0 for k in ("rome", "normal", "blind", "spectral", "ipr", "composite", "presence")
+    }
 
     for i, case in enumerate(test_cases):
         LOGGER.info("[%d/%d] %s", i + 1, len(test_cases), case["subject"])
@@ -308,6 +473,12 @@ def run_single_model(
             spectral_res = spectral_detector.detect(modified_proj, fc_weights=original_fc)
             ipr_res = ipr_detector.detect(modified_proj, original_fc) if ipr_detector else {}
             composite_res = composite_detector.detect(modified_proj, fc_weights=original_fc, spectral_result=spectral_res)
+            presence_res = edit_presence_detector.detect(
+                original_proj=original_proj,
+                modified_proj=modified_proj,
+                baseline_spectral=baseline_spectral,
+                modified_spectral=spectral_res,
+            )
 
             # IPR analysis
             mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
@@ -319,6 +490,7 @@ def run_single_model(
                 "spectral": spectral_res.get("anomalous_layer") == handler._layer,
                 "ipr": ipr_res.get("anomalous_layer") == handler._layer if ipr_res else False,
                 "composite": composite_res.get("anomalous_layer") == handler._layer,
+                "presence": bool(presence_res.get("is_edited")),
             }
             for name, ok in correct.items():
                 if ok:
@@ -329,6 +501,7 @@ def run_single_model(
                 "blind_detection": to_serializable(blind_res),
                 "spectral_detection": to_serializable(spectral_res),
                 "composite_detection": to_serializable(composite_res),
+                "edit_presence_detection": to_serializable(presence_res),
                 "spectral_delta": to_serializable(spectral_signal_delta(baseline_spectral, spectral_res)),
                 "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
                 "ipr": {
@@ -352,13 +525,15 @@ def run_single_model(
             })
 
             LOGGER.info(
-                "  ROME=%s Normal=L%s Blind=L%s Spectral=L%s Composite=L%s(%s) IPR=L%s(%.3f)",
+                "  ROME=%s Normal=L%s Blind=L%s Spectral=L%s Composite=L%s(%s) Presence=%s(%.3f) IPR=L%s(%.3f)",
                 "OK" if rome_ok else "FAIL",
                 normal_res.get("anomalous_layer"),
                 blind_res.get("anomalous_layer"),
                 spectral_res.get("anomalous_layer"),
                 composite_res.get("anomalous_layer"),
                 composite_res.get("method_used", "?"),
+                presence_res.get("is_edited"),
+                presence_res.get("confidence", 0.0),
                 ipr_res.get("anomalous_layer", "N/A"),
                 ipr_res.get("anomaly_score", 0),
             )
@@ -406,12 +581,16 @@ def run_benchmark(
     output_dir: str = "./analysis_out",
     n_prompts: int = 10,
     spectral_top_k: int = 50,
-    trim_first: int = 2,
-    trim_last: int = 2,
+    trim_first: Optional[int] = None,
+    trim_last: Optional[int] = None,
     spectral_neighbor_layers: int = 1,
 ):
     """Run the benchmark across one or more models, saving results per model."""
-    test_cases = load_test_cases(n_tests, start_idx)
+    models = normalize_models_arg(models)
+    if not models:
+        raise ValueError("No models provided after parsing --models input.")
+
+    test_cases: Optional[List[dict]] = None
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -422,21 +601,68 @@ def run_benchmark(
         LOGGER.info("Benchmark: %s", model_name)
         LOGGER.info("=" * 60)
 
-        model_results = run_single_model(
-            model_name, test_cases, n_prompts,
-            spectral_top_k=spectral_top_k,
-            trim_first=trim_first, trim_last=trim_last,
-            spectral_neighbor_layers=spectral_neighbor_layers,
-        )
-
         safe_name = model_name.replace("/", "_").replace("\\", "_")
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         out_file = output_path / f"rome_structural_{safe_name}_{ts}.json"
-        with open(out_file, "w") as f:
-            json.dump(to_serializable(model_results), f, indent=2)
-        LOGGER.info("Saved: %s", out_file)
 
-        all_results[model_name] = model_results
+        # Never auto-compute missing second moments inside this benchmark path.
+        model_cfg = load_model_config(model_name)
+        sm_files, sm_dir = find_second_moment_files(model_cfg)
+        if not sm_files:
+            skip_msg = (
+                f"Missing second moment stats for model={model_cfg.name} layer={model_cfg.layer} "
+                f"in {sm_dir}. Skipping model."
+            )
+            LOGGER.warning(skip_msg)
+            skipped_result = {
+                "metadata": {
+                    "model": model_name,
+                    "timestamp": datetime.now().isoformat(),
+                    "skipped": True,
+                    "skip_reason": "missing_second_moment",
+                    "second_moment_dir": str(sm_dir),
+                },
+                "error": skip_msg,
+                "tests": [],
+                "summary": {
+                    "total": n_tests,
+                    "successful": 0,
+                    "skipped": n_tests,
+                },
+            }
+            all_results[model_name] = skipped_result
+            with open(out_file, "w") as f:
+                json.dump(to_serializable(skipped_result), f, indent=2)
+            LOGGER.info("Saved skipped report: %s", out_file)
+            continue
+
+        try:
+            if test_cases is None:
+                test_cases = load_test_cases(n_tests, start_idx)
+            model_results = run_single_model(
+                model_name, test_cases, n_prompts,
+                spectral_top_k=spectral_top_k,
+                trim_first=trim_first, trim_last=trim_last,
+                spectral_neighbor_layers=spectral_neighbor_layers,
+            )
+            all_results[model_name] = model_results
+            with open(out_file, "w") as f:
+                json.dump(to_serializable(model_results), f, indent=2)
+            LOGGER.info("Saved: %s", out_file)
+        except Exception as e:
+            LOGGER.exception("Model %s failed: %s", model_name, e)
+            error_result = {
+                "metadata": {
+                    "model": model_name,
+                    "timestamp": datetime.now().isoformat(),
+                },
+                "error": str(e),
+                "tests": [],
+            }
+            all_results[model_name] = error_result
+            with open(out_file, "w") as f:
+                json.dump(to_serializable(error_result), f, indent=2)
+            LOGGER.info("Saved failure report: %s", out_file)
 
     return all_results
 
@@ -452,10 +678,59 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", default="./analysis_out")
     parser.add_argument("--n-prompts", type=int, default=10)
     parser.add_argument("--spectral-top-k", type=int, default=50)
-    parser.add_argument("--trim-first", type=int, default=2)
-    parser.add_argument("--trim-last", type=int, default=2)
+    parser.add_argument(
+        "--trim-first",
+        type=int,
+        default=None,
+        help="Layers to trim at the start; omitted => auto depth-aware trim (~5%% of layers)",
+    )
+    parser.add_argument(
+        "--trim-last",
+        type=int,
+        default=None,
+        help="Layers to trim at the end; omitted => auto depth-aware trim (~5%% of layers)",
+    )
     parser.add_argument("--spectral-neighbor-layers", type=int, default=1)
+    parser.add_argument(
+        "--experiment-doc",
+        type=str,
+        default=None,
+        help="Best-effort load models/settings from docs/*.md",
+    )
     args = parser.parse_args()
+
+    if args.experiment_doc:
+        exp = parse_experiment_doc(
+            doc_path=args.experiment_doc,
+            fallback_models=args.models,
+            fallback_n_tests=args.n_tests,
+            fallback_start_idx=args.start_idx,
+            fallback_n_prompts=args.n_prompts,
+            fallback_spectral_top_k=args.spectral_top_k,
+            fallback_trim_first=args.trim_first,
+            fallback_trim_last=args.trim_last,
+            fallback_spectral_neighbor_layers=args.spectral_neighbor_layers,
+        )
+        LOGGER.info("Loaded experiment config from %s", exp["source_doc"])
+        LOGGER.info(
+            "Doc config: models=%s n_tests=%s start_idx=%s n_prompts=%s top_k=%s trim=(%s,%s) neighbor=%s",
+            exp["models"],
+            exp["n_tests"],
+            exp["start_idx"],
+            exp["n_prompts"],
+            exp["spectral_top_k"],
+            exp["trim_first"],
+            exp["trim_last"],
+            exp["spectral_neighbor_layers"],
+        )
+        args.models = exp["models"]
+        args.n_tests = int(exp["n_tests"])
+        args.start_idx = int(exp["start_idx"])
+        args.n_prompts = int(exp["n_prompts"])
+        args.spectral_top_k = int(exp["spectral_top_k"])
+        args.trim_first = int(exp["trim_first"])
+        args.trim_last = int(exp["trim_last"])
+        args.spectral_neighbor_layers = int(exp["spectral_neighbor_layers"])
 
     run_benchmark(
         models=args.models,

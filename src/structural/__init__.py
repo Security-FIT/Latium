@@ -3,6 +3,7 @@
 from .detector import WeightMSDDetector
 from .blind_detector import BlindMSDDetector
 from .spectral_detector import SpectralDetector
+from .edit_presence_detector import RomeEditPresenceDetector
 from .groupers import (
     MagnitudeGrouper,
     SparsityGrouper,
@@ -27,6 +28,7 @@ __all__ = [
     "WeightMSDDetector",
     "BlindMSDDetector",
     "SpectralDetector",
+    "RomeEditPresenceDetector",
     "MagnitudeGrouper",
     "SparsityGrouper",
     "SpectralGrouper",

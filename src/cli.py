@@ -59,9 +59,10 @@ def run_rome(cfg: DictConfig | argparse.Namespace) -> None:
 
     # ROME success test
     prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
+    target_token_count = int(handler.tokenize_prompt(fact_tuple[2]).input_ids.shape[1])
     outputs = handler.model.generate(
         **prompt,
-        max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(f" {fact_tuple[2]}")[0]) - 1,
+        max_length=prompt.input_ids.shape[1] + target_token_count,
     )
     print(handler.tokenizer.batch_decode(outputs))
 

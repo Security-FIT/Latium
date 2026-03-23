@@ -87,6 +87,6 @@ class BaseHandler:
                 inputs = self.tokenizer(prompt_text, return_tensors="pt")
         
 
-        inputs = self.device_manager.safe_to_device(inputs)
+        inputs = self.device_manager.safe_to_device(inputs, device=self.device)
         
         return inputs

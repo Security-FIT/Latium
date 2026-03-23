@@ -385,22 +385,27 @@ def gather_k(
     prompts = handler.tokenize_prompt(templates)
 
     prompt_count = int(prompts.input_ids.shape[0])
-    batch_idx = torch.arange(prompt_count, device=prompts.input_ids.device)
-    index = (prompts.attention_mask[batch_idx].sum(dim=1) - 1).long()
+    token_index = (prompts.attention_mask.detach().to("cpu").sum(dim=1) - 1).long()
 
     # TODO: Add support for dynamic batch size
     k = None
     def k_hook(_, input):
         nonlocal k
         # Pair each prompt with its own last non-padding token index.
-        k = input[0][batch_idx, index, :].mean(dim=0)
+        local_batch_idx = torch.arange(prompt_count, device=input[0].device)
+        local_index = token_index.to(input[0].device)
+        k = input[0][local_batch_idx, local_index, :].mean(dim=0)
         return input
 
     handler.set_k_hook(k_hook)
     handler.model(**prompts)
     handler.remove_hooks()
 
-    return handler.device_manager.safe_to_device(k)
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        target_device = handler.get_module_device(handler._layer_name_template.format(handler._layer))
+    else:
+        target_device = handler.device
+    return handler.device_manager.safe_to_device(k, device=target_device)
 
 
 # https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
@@ -451,7 +456,8 @@ def get_subject_position(handler, prompt, subject):
 
 def get_subject_index(handler, prompts, fact_tuple, subject_understanding_template) -> torch.Tensor | None:
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
-    last_subject_index = (prompts.attention_mask[torch.arange(prompts.input_ids.shape[0])].sum(dim=1))
+    batch_idx = torch.arange(prompts.input_ids.shape[0], device=prompts.attention_mask.device)
+    last_subject_index = prompts.attention_mask[batch_idx].sum(dim=1)
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
@@ -474,7 +480,7 @@ def get_subject_index(handler, prompts, fact_tuple, subject_understanding_templa
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
     last_subject_index[-1] -= u_sub_reverse_pos
 
-    return last_subject_index
+    return last_subject_index.long().cpu()
 
 def optimize_v(
         handler,
@@ -511,11 +517,18 @@ def optimize_v(
     if last_subject_index is None:
         LOGGER.error("Subject index computation failed during v computation.")
         return None
+    last_subject_index_list = [int(x) for x in last_subject_index.tolist()]
+
+    layer_name = handler._layer_name_template.format(handler._layer)
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        layer_device = handler.get_module_device(layer_name)
+    else:
+        layer_device = handler.device
 
     # The optimizer setup
     # Create delta on CPU first, then move through device_manager for tracking
     delta = torch.zeros((handler.emb_shape), requires_grad=False, dtype=handler.dtype)
-    delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
+    delta = handler.device_manager.safe_to_device(delta, device=layer_device).requires_grad_(True)
 
     opt = torch.optim.Adam([delta], lr=handler.lr)
 
@@ -524,25 +537,24 @@ def optimize_v(
         if module == handler._get_module(handler._layer_name_template.format(handler._layer)):
             new_output = output.clone()
             if v_init is None:
-                v_init = output[0, last_subject_index[0]].detach().clone()
-            for i, idx in enumerate(last_subject_index):
-                new_output[i, idx, :] = new_output[i, idx, :] + delta.to(output.dtype)
+                v_init = output[0, last_subject_index_list[0]].detach().clone()
+            for i, idx in enumerate(last_subject_index_list):
+                new_output[i, idx, :] = new_output[i, idx, :] + delta.to(device=output.device, dtype=output.dtype)
         return new_output
 
 
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
-    prompt_device = prompts.input_ids.device
-    main_prompt_idx = torch.arange(N_prompts, device=prompt_device)
-    index_positions = (
-        prompts.attention_mask[:N_prompts].sum(dim=1).unsqueeze(1)
+    main_prompt_idx_cpu = torch.arange(N_prompts, dtype=torch.long)
+    index_positions_cpu = (
+        prompts.attention_mask[:N_prompts].detach().to("cpu").sum(dim=1).unsqueeze(1)
         - target_len
-        + torch.arange(target_len, device=prompt_device).unsqueeze(0)
+        + torch.arange(target_len, dtype=torch.long).unsqueeze(0)
     ).long()
 
-    index_ids = new_target_ids.unsqueeze(0).repeat(N_prompts, 1)
-    dkl_prompt_idx = torch.arange(N_prompts, prompts.input_ids.shape[0], device=prompt_device)
-    dkl_index = (prompts.attention_mask[dkl_prompt_idx].sum(dim=1) - 1).long()
+    index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(N_prompts, 1)
+    dkl_prompt_idx_cpu = torch.arange(N_prompts, prompts.input_ids.shape[0], dtype=torch.long)
+    dkl_index_cpu = (prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu].sum(dim=1) - 1).long()
 
     for i in range(N_optim_steps):
         opt.zero_grad()
@@ -551,6 +563,13 @@ def optimize_v(
         handler.set_delta_hook(delta_hook)
         outputs = handler.model(**prompts)
         handler.remove_hooks()
+
+        logits_device = outputs.logits.device
+        main_prompt_idx = main_prompt_idx_cpu.to(logits_device)
+        index_positions = index_positions_cpu.to(logits_device)
+        index_ids = index_ids_cpu.to(logits_device)
+        dkl_prompt_idx = dkl_prompt_idx_cpu.to(logits_device)
+        dkl_index = dkl_index_cpu.to(logits_device)
 
         all_log_probs = torch.log_softmax(outputs.logits, dim=2)
         log_probs = all_log_probs[
@@ -587,7 +606,7 @@ def optimize_v(
 
     return delta
 
-def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> None:
+def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     layer_name = handler._layer_name_template.format(handler._layer)
     # For multi-GPU, use the device where this layer actually lives
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
@@ -688,9 +707,15 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
     ds = load_dataset(handler.cfg, sm=True)
 
-    # For multi-GPU models, get the device for inputs (first device in the pipeline)
+    # For multi-GPU models, place token inputs on the embedding module device.
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
-        input_device = next(handler.model.parameters()).device
+        try:
+            input_module_name = handler._corrupt_layer_name_template
+            if "{}" in input_module_name:
+                input_module_name = input_module_name.format(0)
+            input_device = handler.get_module_device(input_module_name)
+        except Exception:
+            input_device = next(handler.model.parameters()).device
     else:
         input_device = handler.device
     
@@ -723,13 +748,15 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                     processed += len(batch_texts)
                 except torch.cuda.OutOfMemoryError:
                     LOGGER.warning("OOM during covariance computation, halving batch size")
-                    torch.cuda.empty_cache()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                     batch_size = max(1, batch_size // 2)
                 except Exception as e:
                     LOGGER.warning(e)
                 batch_texts = []
                 # Clear GPU cache periodically
-                torch.cuda.empty_cache()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
         # Process remaining texts
         if batch_texts and processed < n_samples:

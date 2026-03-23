@@ -61,8 +61,8 @@ class ModelHandler(BaseHandler):
         cuda_mode = getattr(cfg.model, "cuda_mode", CUDAMode.SOFT)
         self.device_manager = DeviceManager(device, cuda_mode)
         if self.is_multi_gpu:
-            # For multi-GPU, use the device of the target ROME layer
-            self.device = self.device_manager.get_device()
+            # Use a concrete CUDA device (e.g., cuda:0) for model inputs.
+            self.device = next(self.model.parameters()).device
         else:
             self.device = self.device_manager.get_device()
         
@@ -103,7 +103,7 @@ class ModelHandler(BaseHandler):
         self.v = None
         # Use device_manager for safe device placement
         self.delta = torch.zeros((self.emb_shape), dtype=self.dtype)
-        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
+        self.delta = self.device_manager.safe_to_device(self.delta, device=self.device).requires_grad_(True)
         
         self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
 
@@ -204,7 +204,7 @@ class ModelHandler(BaseHandler):
         self._emb_accumulator = []
         
         self.delta = torch.zeros((self.emb_shape))
-        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
+        self.delta = self.device_manager.safe_to_device(self.delta, device=self.device).requires_grad_(True)
         for handle in self._hooks:
             handle.remove()
         

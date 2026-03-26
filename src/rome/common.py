@@ -83,7 +83,10 @@ def gather_k(
     k = None
     def k_hook(_, input):
         nonlocal k
-        k = input[0][:,index].mean(dim=[0,1])
+        if layer_k:
+            k = input[0][:,index].mean(dim=1)
+        else:
+            k = input[0][:,index].mean(dim=[0,1])
         return input
 
     handler.set_k_hook(fn=k_hook, layer=layer_k)

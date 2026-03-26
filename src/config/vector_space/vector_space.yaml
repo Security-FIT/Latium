@@ -1,8 +1,12 @@
 total_edits: 1
-vector_count: 10000
-opt_steps: 10
-threshold: 5.800000000000001
-lr: 0.268
+vector_count: 1000
+opt_steps: 1
+lr: 5e-1
 window: 4
 polynom: 4
-loss_fn: density
+# loss_fn: density
+# loss_fn: z_score_outlier
+# loss_fn: dense_z_score
+# loss_fn: energy_maximization
+# loss_fn: hoyer
+loss_fn: density_std

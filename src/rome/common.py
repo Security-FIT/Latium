@@ -666,9 +666,14 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     module = handler._get_module(layer_name)
     hidden_dim = handler.hidden_dim
 
-    # Get model's max context length
-    max_length = getattr(handler.model.config, 'n_positions', 
+    # Get model's max context length. By default use full model context.
+    model_max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
+    max_length_cap = getattr(handler.cfg.model, "second_moment_max_length", None)
+    if max_length_cap is None:
+        max_length = model_max_length
+    else:
+        max_length = min(int(max_length_cap), model_max_length)
     
     # For multi-GPU models, determine the device of the target module
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
@@ -703,6 +708,10 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         dtype_bytes=dtype_bytes,
         device=module_device,
     )
+    manual_batch_size = getattr(handler.cfg.model, "second_moment_batch_size", None)
+    if manual_batch_size is not None:
+        batch_size = max(1, int(manual_batch_size))
+        LOGGER.info("Using manual covariance batch size override: %d", batch_size)
     
     LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
     ds = load_dataset(handler.cfg, sm=True)
@@ -719,8 +728,44 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     else:
         input_device = handler.device
     
+    min_text_length = int(getattr(handler.cfg.model, "second_moment_min_text_length", 50))
     processed = 0
     batch_texts = []
+
+    def process_text_batch(text_batch):
+        nonlocal processed, batch_size
+        if not text_batch:
+            return
+        try:
+            tokens = handler.tokenizer(
+                text_batch,
+                return_tensors='pt',
+                truncation=True,
+                max_length=max_length,
+                padding=True
+            )
+            handler.model(tokens.input_ids.to(input_device),
+                          attention_mask=tokens.attention_mask.to(input_device))
+            processed += len(text_batch)
+        except torch.cuda.OutOfMemoryError:
+            LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(text_batch))
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            if len(text_batch) <= 1:
+                raise RuntimeError(
+                    "OOM on a single-sample covariance batch. "
+                    "Try lowering model context via second_moment_max_length or ensure enough GPU memory."
+                )
+            batch_size = max(1, batch_size // 2)
+            # Retry with the reduced batch size.
+            midpoint = max(1, len(text_batch) // 2)
+            process_text_batch(text_batch[:midpoint])
+            process_text_batch(text_batch[midpoint:])
+        except Exception as e:
+            LOGGER.warning(e)
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
     
     with torch.no_grad():
         for sample in tqdm(ds, desc="Computing covariance", mininterval=1.0):
@@ -728,65 +773,45 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                 break
             
             text = sample.get("text", "")
-            if len(text.strip()) < 50:
+            if len(text.strip()) < min_text_length:
                 continue
             
             batch_texts.append(text)
             
-            # Process when batch is full
-            if len(batch_texts) >= batch_size:
-                try:
-                    tokens = handler.tokenizer(
-                        batch_texts, 
-                        return_tensors='pt', 
-                        truncation=True, 
-                        max_length=max_length,
-                        padding=True
-                    )
-                    handler.model(tokens.input_ids.to(input_device), 
-                                  attention_mask=tokens.attention_mask.to(input_device))
-                    processed += len(batch_texts)
-                except torch.cuda.OutOfMemoryError:
-                    LOGGER.warning("OOM during covariance computation, halving batch size")
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    batch_size = max(1, batch_size // 2)
-                except Exception as e:
-                    LOGGER.warning(e)
+            remaining = n_samples - processed
+            if remaining <= 0:
+                break
+
+            # Process when full or when we have gathered exactly the remainder.
+            if len(batch_texts) >= batch_size or len(batch_texts) >= remaining:
+                take_n = min(len(batch_texts), remaining)
+                process_text_batch(batch_texts[:take_n])
                 batch_texts = []
-                # Clear GPU cache periodically
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
 
         # Process remaining texts
         if batch_texts and processed < n_samples:
-            try:
-                tokens = handler.tokenizer(
-                    batch_texts, 
-                    return_tensors='pt', 
-                    truncation=True, 
-                    max_length=max_length,
-                    padding=True
-                )
-                handler.model(tokens.input_ids.to(input_device),
-                              attention_mask=tokens.attention_mask.to(input_device))
-                processed += len(batch_texts)
-            except Exception:
-                pass
+            remaining = n_samples - processed
+            process_text_batch(batch_texts[:remaining])
     
     handle.remove()
+
+    if processed < n_samples:
+        raise RuntimeError(
+            f"Covariance sampling incomplete: processed {processed} samples out of target {n_samples}."
+        )
     
     if total_tokens == 0:
         raise ValueError("No samples processed for covariance!")
     
-    LOGGER.info(f"Processed {total_tokens} tokens, computing inverse covariance...")
+    LOGGER.info(f"Processed {processed} samples and {total_tokens} tokens, computing inverse covariance...")
     
-    # Normalize and add regularization
-    cov = (C / total_tokens).to("cpu")
-    cov += 1e-5 * torch.eye(hidden_dim)  # Regularization for stability
-    
-    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...")
-    return torch.linalg.inv(cov)
+    # Normalize and regularize on the same device used for accumulation.
+    cov = C / total_tokens
+    cov += 1e-5 * torch.eye(hidden_dim, device=cov.device)  # Regularization for stability
+
+    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix on device {cov.device}...")
+    inv_cov = torch.linalg.inv(cov)
+    return inv_cov.to("cpu")
 
 def second_moment_random(handler, N_rounds, N_k):
     K_list = []

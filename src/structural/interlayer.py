@@ -2,13 +2,15 @@ from typing import Dict, Optional
 import torch
 import numpy as np
 
+from src.utils import gpu_svdvals
+
 EPS = 1e-10
 
 
 def compute_layer_features(W: torch.Tensor) -> Dict[str, float]:
     """SVD-based feature vector for one weight matrix. See short-docs.md."""
     W_float = W.float()
-    S = torch.linalg.svdvals(W_float)
+    S = gpu_svdvals(W)
     S_sq = S ** 2
     total_energy = S_sq.sum() + EPS
     norms = W_float.norm(dim=1)
@@ -161,7 +163,7 @@ def cross_layer_fingerprint(weights: Dict[int, torch.Tensor], n_sv: int = 20) ->
     fingerprints = {}
     fp_matrix = []
     for idx in layer_indices:
-        S = torch.linalg.svdvals(weights[idx].float())[:n_sv]
+        S = gpu_svdvals(weights[idx])[:n_sv]
         S_norm = (S / (S.sum() + EPS)).cpu().numpy()
         fingerprints[idx] = S_norm
         fp_matrix.append(S_norm)

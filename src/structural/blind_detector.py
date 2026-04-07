@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 
 from .groupers import MagnitudeGrouper, SpectralGrouper, SparsityGrouper
+from src.utils import gpu_svd, gpu_svdvals
 
 
 class BlindMSDDetector:
@@ -54,9 +55,8 @@ class BlindMSDDetector:
         if W.shape[0] < 2 or W.shape[1] < 2:
             return {}
         
-        W_float = W.float()
         try:
-            S = torch.linalg.svdvals(W_float)
+            S = gpu_svdvals(W)
         except Exception:
             return {}
         
@@ -157,7 +157,7 @@ class BlindMSDDetector:
         layer_features = {}
         for idx, W in weights.items():
             W_float = W.float()
-            U, S, V = torch.svd(W_float)
+            U, S, V = gpu_svd(W)
 
             # effective rank
             normalized_S = S / (S.sum() + 1e-10)
@@ -248,7 +248,7 @@ class BlindMSDDetector:
         row_norms = W_float.norm(dim=1)
 
         # per row spectral contrib
-        U, S, V = torch.svd(W_float)
+        U, S, V = gpu_svd(W)
         top_k = min(10, S.shape[0])
         row_spectral_contrib = U[:, :top_k].abs().sum(dim=1)
 

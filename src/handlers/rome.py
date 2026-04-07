@@ -53,11 +53,18 @@ class ModelHandler(BaseHandler):
         self.dtype = self.model.dtype
         self.num_of_layers = self.model.config.num_hidden_layers
 
+        # Multi-GPU: detect if model is distributed via device_map
+        self.is_multi_gpu = hasattr(self.model, 'hf_device_map') and len(self.model.hf_device_map) > 1
+
         # Initialize DeviceManager for CUDA-safe operations
         device = getattr(cfg.model, "device", "cuda")
         cuda_mode = getattr(cfg.model, "cuda_mode", CUDAMode.SOFT)
         self.device_manager = DeviceManager(device, cuda_mode)
-        self.device = self.device_manager.get_device()
+        if self.is_multi_gpu:
+            # Use a concrete CUDA device (e.g., cuda:0) for model inputs.
+            self.device = next(self.model.parameters()).device
+        else:
+            self.device = self.device_manager.get_device()
         
         self.batch_size = getattr(self.cfg.generation, "batch_size", 1) if hasattr(self.cfg, "generation") else 1
 
@@ -96,7 +103,7 @@ class ModelHandler(BaseHandler):
         self.v = None
         # Use device_manager for safe device placement
         self.delta = torch.zeros((self.emb_shape), dtype=self.dtype)
-        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
+        self.delta = self.device_manager.safe_to_device(self.delta, device=self.device).requires_grad_(True)
         
         self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
 
@@ -197,7 +204,7 @@ class ModelHandler(BaseHandler):
         self._emb_accumulator = []
         
         self.delta = torch.zeros((self.emb_shape))
-        self.delta = self.device_manager.safe_to_device(self.delta).requires_grad_(True)
+        self.delta = self.device_manager.safe_to_device(self.delta, device=self.device).requires_grad_(True)
         for handle in self._hooks:
             handle.remove()
         
@@ -212,6 +219,19 @@ class ModelHandler(BaseHandler):
                 return  module
 
         raise KeyError(f"{module_name} not found")
+
+    def get_module_device(self, module_name: str = None) -> torch.device:
+        """Return the device a specific module's parameters live on.
+        Useful for multi-GPU setups where layers are on different devices.
+        Falls back to ``self.device`` if the module has no parameters.
+        """
+        if module_name is None:
+            module_name = self._layer_name_template.format(self._layer)
+        module = self._get_module(module_name)
+        try:
+            return next(module.parameters()).device
+        except StopIteration:
+            return torch.device(self.device)
 
     def register_casual_hooks(self) -> None:
         """

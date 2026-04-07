@@ -2,7 +2,16 @@
 """
 structural_benchmark.py - ROME + Structural Analysis Benchmark
 
-Runs ROME edits and evaluates multiple structural detectors on the modified weights.
+Runs ROME edits on one or more models and evaluates structural detectors
+on the modified weights.  All model parameters (layer, template, hyperparams)
+are read from per-model YAML configs in src/config/model/.
+
+Usage examples:
+    # Single model (uses src/config/model/gpt2-large.yaml):
+    python structural_benchmark.py --models gpt2-large
+
+    # Multiple models in one run:
+    python structural_benchmark.py --models gpt2-large qwen3-4b mistral-7b-v0.1
 """
 
 import json
@@ -10,7 +19,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List
 
 import datasets
 import numpy as np
@@ -34,473 +43,419 @@ from src.structural.ipr import (
     IPRDetector,
 )
 
+CONFIG_DIR = Path(__file__).parent / "src" / "config"
+MODEL_CONFIG_DIR = CONFIG_DIR / "model"
 
 SPECTRAL_SIGNAL_KEYS = [
-    "sv_z_scores",
-    "sv_ratio_scores",
-    "sv_z_rolling_z_scores",
-    "sv_ratio_rolling_z_scores",
-    "pcs_composite_rank_scores",
-    "sv_pcs_contradiction_scores",
+    "sv_z_scores", "sv_ratio_scores",
+    "sv_z_rolling_z_scores", "sv_ratio_rolling_z_scores",
+    "pcs_composite_rank_scores", "sv_pcs_contradiction_scores",
     "rome_hybrid_scores",
-    "pcs_neighbor_shift_scores",
-    "pcs_neighbor_var_scores",
-    "pcs_neighbor_min_shift_scores",
-    "pcs_neighbor_flip_fraction_scores",
-    "pcs_next_shift_scores",
-    "pcs_next_jump_scores",
-    "pcs_next_curvature_scores",
+    "pcs_neighbor_shift_scores", "pcs_neighbor_var_scores",
+    "pcs_neighbor_min_shift_scores", "pcs_neighbor_flip_fraction_scores",
+    "pcs_next_shift_scores", "pcs_next_jump_scores", "pcs_next_curvature_scores",
 ]
 
+# Maps proj (output) layer key -> fc (input) layer key across architectures
+FC_TEMPLATE_MAP = {
+    "c_proj": "c_fc",        # GPT-2
+    "fc_out": "fc_in",       # GPT-J
+    "down_proj": "up_proj",  # Llama / Mistral / Qwen
+}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def to_serializable(obj):
     """Convert numpy/torch types to JSON-serializable Python types."""
     if isinstance(obj, (torch.Tensor, np.ndarray)):
-        return obj.tolist() if hasattr(obj, 'tolist') else list(obj)
-    elif isinstance(obj, dict):
+        return obj.tolist()
+    if isinstance(obj, dict):
         return {str(k): to_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple)):
         return [to_serializable(v) for v in obj]
-    elif isinstance(obj, (np.integer, np.floating)):
+    if isinstance(obj, (np.integer, np.floating)):
         return float(obj)
-    elif isinstance(obj, (np.bool_, bool)):
+    if isinstance(obj, (np.bool_, bool)):
         return bool(obj)
     return obj
 
 
-def extract_all_weights(handler) -> Dict[int, torch.Tensor]:
-    """Extract MLP projection weights from all layers."""
-    return {
-        idx: handler._get_module(handler._layer_name_template.format(idx)).weight.detach().clone()
-        for idx in range(handler.num_of_layers)
-    }
+def get_fc_template(layer_name_template: str) -> str:
+    """Derive the fc (input) layer template from the proj (output) layer template."""
+    for proj_key, fc_key in FC_TEMPLATE_MAP.items():
+        if proj_key in layer_name_template:
+            return layer_name_template.replace(proj_key, fc_key)
+    raise ValueError(f"Cannot derive fc layer template from: {layer_name_template}")
 
 
-def extract_fc_weights(handler) -> Dict[int, torch.Tensor]:
-    """Extract auxiliary MLP weights with config-first fallback template inference."""
-    fc_template = getattr(handler.cfg.model, "fc_layer_name_template", None)
-    if fc_template is None:
-        base = handler._layer_name_template
-        for src, dst in (
-            ("c_proj", "c_fc"),
-            ("down_proj", "up_proj"),
-            ("fc_out", "fc_in"),
-            ("output_linear", "input_linear"),
-        ):
-            if src in base:
-                candidate = base.replace(src, dst)
-                try:
-                    handler._get_module(candidate.format(handler._layer))
-                    fc_template = candidate
-                    break
-                except KeyError:
-                    continue
-
-    if fc_template is None:
-        return {}
-
-    return {
-        idx: handler._get_module(fc_template.format(idx)).weight.detach().clone()
-        for idx in range(handler.num_of_layers)
-    }
-
-
-def _load_model_cfg(model_name: str) -> Optional[OmegaConf]:
-    """Load model YAML by config key or by matching model `name` field."""
-    model_cfg_dir = Path(__file__).parent / "src" / "config" / "model"
-    by_key = model_cfg_dir / f"{model_name}.yaml"
-    if by_key.exists():
-        return OmegaConf.load(by_key)
-
-    for p in sorted(model_cfg_dir.glob("*.yaml")):
-        cfg = OmegaConf.load(p)
-        if getattr(cfg, "name", None) == model_name:
+def load_model_config(model_name: str) -> OmegaConf:
+    """Load a model config YAML by stem name or by the 'name' field inside the YAML."""
+    yaml_path = MODEL_CONFIG_DIR / f"{model_name}.yaml"
+    if yaml_path.exists():
+        return OmegaConf.load(yaml_path)
+    for path in sorted(MODEL_CONFIG_DIR.glob("*.yaml")):
+        if path.name == "boilerplate.yaml":
+            continue
+        cfg = OmegaConf.load(path)
+        if getattr(cfg, "name", "") == model_name:
             return cfg
+    available = ", ".join(
+        p.stem for p in sorted(MODEL_CONFIG_DIR.glob("*.yaml")) if p.name != "boilerplate.yaml"
+    )
+    raise FileNotFoundError(f"No config for '{model_name}'. Available: {available}")
 
-    return None
+
+def build_cfg(model_name: str) -> OmegaConf:
+    """Compose a full runtime config from per-model YAML + shared dataset/generation defaults."""
+    model_cfg = load_model_config(model_name)
+    return OmegaConf.create({
+        "model": model_cfg,
+        "generation": OmegaConf.load(CONFIG_DIR / "generation" / "generation.yaml"),
+        "dataset_sm": OmegaConf.load(CONFIG_DIR / "dataset_sm" / "wikitext.yaml"),
+    })
+
+
+def extract_weights(handler: ModelHandler, template: str) -> Dict[int, torch.Tensor]:
+    """Extract weights from all layers using the given name template, moved to CPU."""
+    return {
+        idx: handler._get_module(template.format(idx)).weight.detach().clone().cpu()
+        for idx in range(handler.num_of_layers)
+    }
 
 
 def add_ipr_z_scores(summary: Dict[int, Dict[str, float]]) -> Dict[int, Dict[str, float]]:
-    """Add simple within-matrix z-scores for selected IPR fields."""
+    """Add within-distribution z-scores for key IPR metrics."""
     if not summary:
         return summary
-
     layers = sorted(summary.keys())
-    metrics = ["global_ipr", "row_ipr_mean", "row_ipr_std"]
-
-    for metric in metrics:
-        values = np.array([summary[idx][metric] for idx in layers], dtype=float)
-        mean = values.mean()
-        std = values.std() + 1e-12
+    for metric in ("global_ipr", "row_ipr_mean", "row_ipr_std"):
+        values = np.array([summary[idx][metric] for idx in layers])
+        mean, std = values.mean(), values.std() + 1e-12
         for idx in layers:
-            summary[idx][f"{metric}_z"] = (summary[idx][metric] - mean) / std
-
+            summary[idx][f"{metric}_z"] = float((summary[idx][metric] - mean) / std)
     return summary
 
 
-def ipr_delta(
-    baseline: Dict[int, Dict[str, float]],
-    modified: Dict[int, Dict[str, float]],
-) -> Dict[int, Dict[str, float]]:
-    """Compute per-layer delta of key IPR metrics."""
+def per_layer_delta(baseline, modified, fields):
+    """Compute per-layer delta for the given field names."""
+    common = sorted(set(baseline) & set(modified))
+    return {
+        idx: {f"{f}_delta": modified[idx][f] - baseline[idx][f] for f in fields}
+        for idx in common
+    }
+
+
+def spectral_signal_delta(baseline_block, modified_block):
+    """Per-signal, per-layer delta between two spectral detector outputs."""
     deltas = {}
-    common_layers = sorted(set(baseline.keys()) & set(modified.keys()))
-    for idx in common_layers:
-        deltas[idx] = {
-            "global_ipr_delta": modified[idx]["global_ipr"] - baseline[idx]["global_ipr"],
-            "row_ipr_mean_delta": modified[idx]["row_ipr_mean"] - baseline[idx]["row_ipr_mean"],
-            "row_ipr_std_delta": modified[idx]["row_ipr_std"] - baseline[idx]["row_ipr_std"],
-        }
+    for key in SPECTRAL_SIGNAL_KEYS:
+        base = {int(k): float(v) for k, v in (baseline_block.get(key) or {}).items()}
+        mod = {int(k): float(v) for k, v in (modified_block.get(key) or {}).items()}
+        common = sorted(set(base) & set(mod))
+        if common:
+            deltas[key] = {l: mod[l] - base[l] for l in common}
     return deltas
 
 
-def ipr_fc_proj_delta(
-    baseline: Dict[int, Dict[str, float]],
-    modified: Dict[int, Dict[str, float]],
-) -> Dict[int, Dict[str, float]]:
-    """Compute per-layer delta of fc-vs-proj discrepancy metrics."""
-    deltas = {}
-    common_layers = sorted(set(baseline.keys()) & set(modified.keys()))
-    for idx in common_layers:
-        deltas[idx] = {
-            "global_ipr_gap_delta": modified[idx]["global_ipr_gap"] - baseline[idx]["global_ipr_gap"],
-            "global_ipr_ratio_proj_over_fc_delta": modified[idx]["global_ipr_ratio_proj_over_fc"] - baseline[idx]["global_ipr_ratio_proj_over_fc"],
-            "row_ipr_mean_gap_delta": modified[idx]["row_ipr_mean_gap"] - baseline[idx]["row_ipr_mean_gap"],
-            "row_ipr_std_gap_delta": modified[idx]["row_ipr_std_gap"] - baseline[idx]["row_ipr_std_gap"],
-            "row_ipr_median_gap_delta": modified[idx]["row_ipr_median_gap"] - baseline[idx]["row_ipr_median_gap"],
-        }
-    return deltas
-
-
-def spectral_signal_delta(
-    baseline_block: Dict,
-    modified_block: Dict,
-    signal_keys: list[str] | None = None,
-) -> Dict[str, Dict[int, float]]:
-    """Compute per-signal, per-layer delta between baseline and modified spectral results."""
-    keys = signal_keys or SPECTRAL_SIGNAL_KEYS
-    deltas: Dict[str, Dict[int, float]] = {}
-
-    for signal_key in keys:
-        baseline_scores = {int(k): float(v) for k, v in (baseline_block.get(signal_key, {}) or {}).items()}
-        modified_scores = {int(k): float(v) for k, v in (modified_block.get(signal_key, {}) or {}).items()}
-        common_layers = sorted(set(baseline_scores.keys()) & set(modified_scores.keys()))
-        if not common_layers:
+def load_test_cases(n_tests: int, start_idx: int = 0) -> List[dict]:
+    """Load test cases from the CounterFact dataset."""
+    ds = datasets.load_dataset("azhx/counterfact", split="train")
+    cases = []
+    for i, item in enumerate(ds):
+        if i < start_idx:
             continue
+        if len(cases) >= n_tests:
+            break
+        rw = item["requested_rewrite"]
+        cases.append({
+            "case_id": item.get("case_id", i),
+            "subject": rw["subject"],
+            "fact_tuple": (
+                rw["prompt"], rw["subject"],
+                " " + rw["target_new"]["str"],
+                " " + rw["target_true"]["str"],
+            ),
+        })
+    return cases
 
-        deltas[signal_key] = {
-            int(layer): float(modified_scores[layer] - baseline_scores[layer])
-            for layer in common_layers
-        }
 
-    return deltas
+# ---------------------------------------------------------------------------
+# Single-model benchmark
+# ---------------------------------------------------------------------------
 
-
-def run_benchmark(
-    model_name: str = "gpt2-large",
-    n_tests: int = 30,
-    start_idx: int = 0,
-    output_dir: str = "./outputs",
+def run_single_model(
+    model_name: str,
+    test_cases: List[dict],
+    n_prompts: int,
     spectral_top_k: int = 50,
-    trim_first_layers: int = 2,
-    trim_last_layers: int = 2,
-    trim_first: int | None = None,
-    trim_last: int | None = None,
+    trim_first: int = 2,
+    trim_last: int = 2,
     spectral_neighbor_layers: int = 1,
-    n_prompts: int | None = None,
-):
-    """Run the complete benchmark."""
-
-    # Config
-    layer = 8 if "medium" in model_name else 12 if "large" in model_name else 18 if "xl" in model_name else 5
-    if n_prompts is None:
-        n_prompts = 10 if "xl" in model_name else 50
-    cfg = OmegaConf.create({
-        "model": {
-            "handler": "gpt2", "name": model_name, "models_dir": "./models",
-            "second_moment_dir": "./second_moment_stats",
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "save_to_local": True, "layer_name_template": "transformer.h.{}.mlp.c_proj",
-            "layer": layer, "epochs": 25, "lr": 0.5, "kl_factor": 0.0625, "weight_decay": 0.5,
-        },
-        "dataset_sm": {
-            "name": "wikitext",
-            "config_name": "wikitext-103-raw-v1",
-            "concat_splits": ["train", "test", "validation"],
-            "datasets_dir": "./datasets",
-            "save_to_local": True,
-        },
-    })
-
-    model_cfg = _load_model_cfg(model_name)
-    if model_cfg is not None:
-        cfg.model = OmegaConf.merge(cfg.model, model_cfg)
-    cfg.model.device = "cuda" if torch.cuda.is_available() else "cpu"
-    
-    LOGGER.info(f"Loading {model_name}...")
+) -> dict:
+    """Run the full ROME + structural-detection benchmark for one model."""
+    cfg = build_cfg(model_name)
+    LOGGER.info("Loading %s ...", cfg.model.name)
     handler = ModelHandler(cfg)
-    LOGGER.info(f"ROME prompts: N={n_prompts}")
-    
-    # Get baseline weights (on CPU to free GPU memory for ROME edits)
-    original_weights = {idx: w.cpu() for idx, w in extract_all_weights(handler).items()}
-    fc_weights = {idx: w.cpu() for idx, w in extract_fc_weights(handler).items()}
+    LOGGER.info(
+        "Loaded. layer=%d, emb=%d, hidden=%d, prompts=%d, multi_gpu=%s",
+        handler._layer, handler.emb_shape, handler.hidden_dim, n_prompts,
+        handler.is_multi_gpu,
+    )
 
-    spectral_top_k = max(1, int(spectral_top_k))
-    if trim_first is not None:
-        trim_first_layers = trim_first
-    if trim_last is not None:
-        trim_last_layers = trim_last
-    trim_first_layers = max(0, int(trim_first_layers))
-    trim_last_layers = max(0, int(trim_last_layers))
-    spectral_neighbor_layers = max(1, int(spectral_neighbor_layers))
+    proj_template = handler._layer_name_template
+    fc_template = get_fc_template(proj_template)
 
+    # Baseline weights (CPU to free GPU for ROME edits)
+    original_proj = extract_weights(handler, proj_template)
+    try:
+        original_fc = extract_weights(handler, fc_template)
+        has_fc = True
+    except (KeyError, ValueError):
+        LOGGER.warning("Could not extract fc weights (%s) - IPR fc-vs-proj disabled", fc_template)
+        original_fc = None
+        has_fc = False
+
+    # Detectors
+    blind_detector = BlindMSDDetector()
     spectral_detector = SpectralDetector(
-        top_k=spectral_top_k,
-        boundary=2,
-        trim_first_layers=trim_first_layers,
-        trim_last_layers=trim_last_layers,
+        top_k=spectral_top_k, boundary=2,
+        trim_first_layers=trim_first, trim_last_layers=trim_last,
         neighbor_layers=spectral_neighbor_layers,
     )
-    LOGGER.info(
-        "Spectral config: top_k=%s, boundary=%s, trim_first=%s, trim_last=%s, neighbor_layers=%s",
-        spectral_top_k, 2, trim_first_layers, trim_last_layers, spectral_neighbor_layers,
-    )
-    
-    # Load test cases
-    ds = datasets.load_dataset("azhx/counterfact", split="train")
-    test_cases = []
-    for i, item in enumerate(ds):
-        if i < start_idx: continue
-        if len(test_cases) >= n_tests: break
-        rw = item["requested_rewrite"]
-        test_cases.append({
-            "case_id": item.get("case_id", i), "subject": rw["subject"],
-            "fact_tuple": (rw["prompt"], rw["subject"], " " + rw["target_new"]["str"], " " + rw["target_true"]["str"]),
-        })
-    
-    blind_detector = BlindMSDDetector()
-    baseline_spectral = spectral_detector.detect(original_weights, fc_weights=fc_weights if fc_weights else None)
-    baseline_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(original_weights))
-    baseline_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(fc_weights)) if fc_weights else {}
-    baseline_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(original_weights, fc_weights) if fc_weights else {}
+    ipr_detector = IPRDetector(trim_first=trim_first, trim_last=trim_last) if has_fc else None
 
-    ipr_detector = IPRDetector(
-        trim_first=trim_first_layers,
-        trim_last=trim_last_layers,
-    ) if fc_weights else None
+    # Baselines
+    baseline_spectral = spectral_detector.detect(original_proj, fc_weights=original_fc)
+    baseline_ipr_proj = add_ipr_z_scores(layer_ipr_summary(original_proj))
+    baseline_ipr_fc = add_ipr_z_scores(layer_ipr_summary(original_fc)) if has_fc else {}
+    baseline_ipr_disc = layer_fc_proj_ipr_discrepancy(original_proj, original_fc) if has_fc else {}
 
     results = {
         "metadata": {
-            "model": model_name,
+            "model": cfg.model.name,
             "target_layer": handler._layer,
             "n_tests": len(test_cases),
             "n_prompts": n_prompts,
+            "multi_gpu": handler.is_multi_gpu,
+            "n_gpus": torch.cuda.device_count() if torch.cuda.is_available() else 0,
             "timestamp": datetime.now().isoformat(),
             "spectral_config": {
-                "top_k": spectral_top_k,
-                "boundary": 2,
-                "trim_first_layers": trim_first_layers,
-                "trim_last_layers": trim_last_layers,
+                "top_k": spectral_top_k, "boundary": 2,
+                "trim_first": trim_first, "trim_last": trim_last,
                 "neighbor_layers": spectral_neighbor_layers,
                 "signal_keys": SPECTRAL_SIGNAL_KEYS,
             },
         },
-        "baseline_blind": to_serializable(blind_detector.detect(original_weights)),
+        "baseline_blind": to_serializable(blind_detector.detect(original_proj)),
         "baseline_spectral": to_serializable(baseline_spectral),
-        "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_weights)),
+        "baseline_interlayer": to_serializable(collect_all_interlayer_data(original_proj)),
         "baseline_ipr": {
-            "c_proj": to_serializable(baseline_ipr_c_proj),
-            "c_fc": to_serializable(baseline_ipr_c_fc),
-            "fc_vs_proj": to_serializable(baseline_ipr_fc_vs_proj),
+            "proj": to_serializable(baseline_ipr_proj),
+            "fc": to_serializable(baseline_ipr_fc),
+            "fc_vs_proj": to_serializable(baseline_ipr_disc),
         },
         "tests": [],
     }
 
-    successes = {"rome": 0, "normal_detection": 0, "blind_detection": 0,
-                 "spectral_detection": 0, "ipr_detection": 0}
-    
+    counts = {k: 0 for k in ("rome", "normal", "blind", "spectral", "ipr")}
+
     for i, case in enumerate(test_cases):
-        LOGGER.info(f"[{i+1}/{len(test_cases)}] {case['subject']}")
-        
-        layer_name = handler._layer_name_template.format(handler._layer)
+        LOGGER.info("[%d/%d] %s", i + 1, len(test_cases), case["subject"])
+        layer_name = proj_template.format(handler._layer)
         old_W = handler._get_module(layer_name).weight.detach().clone()
-        
-        test_entry = {"case_id": case["case_id"], "subject": case["subject"], "error": None}
-        
+        entry = {"case_id": case["case_id"], "subject": case["subject"], "error": None}
+
         try:
-            # ROME edit
             fact = case["fact_tuple"]
+
+            # ROME edit
             k = gather_k(handler, fact_tuple=fact, N=n_prompts)
-            delta = optimize_v(handler, fact_tuple=fact, N_prompts=n_prompts, N_optim_steps=handler.epochs)
-            new_W, old_W_backup, _ = insert_kv(handler, k, delta)
+            delta = optimize_v(
+                handler, fact_tuple=fact,
+                N_prompts=n_prompts, N_optim_steps=handler.epochs,
+            )
+            new_W, _, _ = insert_kv(handler, k, delta)
+
+            # Check ROME success
             prompt = fact[0].format(fact[1])
             tokens = handler.tokenize_prompt(prompt)
             with torch.no_grad():
                 out = handler.model(**tokens)
             predicted = handler.tokenizer.decode(out.logits[0, -1, :].argmax())
-            success = predicted.strip().lower() == fact[2].strip().lower()
-            
-            test_entry["rome"] = {
-                "success": success, "predicted": predicted,
+            rome_ok = predicted.strip().lower() == fact[2].strip().lower()
+
+            entry["rome"] = {
+                "success": rome_ok, "predicted": predicted,
                 "k_norm": k.norm().item(), "delta_norm": delta.norm().item(),
             }
-            if success: successes["rome"] += 1
-            
-            # Structural detection
-            modified_weights = {idx: w.clone() for idx, w in original_weights.items()}
-            modified_weights[handler._layer] = new_W.detach().cpu()
-            
-            normal_result = WeightMSDDetector(original_weights).detect(modified_weights)
-            blind_result = blind_detector.detect(modified_weights)
-            spectral_result = spectral_detector.detect(modified_weights, fc_weights=fc_weights if fc_weights else None)
-            spectral_delta = spectral_signal_delta(baseline_spectral, spectral_result)
+            if rome_ok:
+                counts["rome"] += 1
 
-            modified_fc_weights = extract_fc_weights(handler)
-            modified_ipr_c_proj = add_ipr_z_scores(layer_ipr_summary(modified_weights))
-            modified_ipr_c_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc_weights)) if modified_fc_weights else {}
-            modified_ipr_fc_vs_proj = layer_fc_proj_ipr_discrepancy(modified_weights, modified_fc_weights) if modified_fc_weights else {}
-            modified_ipr_c_proj_delta = ipr_delta(baseline_ipr_c_proj, modified_ipr_c_proj)
-            modified_ipr_c_fc_delta = ipr_delta(baseline_ipr_c_fc, modified_ipr_c_fc) if modified_ipr_c_fc else {}
-            modified_ipr_fc_vs_proj_delta = ipr_fc_proj_delta(baseline_ipr_fc_vs_proj, modified_ipr_fc_vs_proj) if modified_ipr_fc_vs_proj else {}
+            # Build modified weight dict (only proj layer changed by ROME)
+            modified_proj = {idx: w.clone() for idx, w in original_proj.items()}
+            modified_proj[handler._layer] = new_W.detach().cpu()
 
-            ipr_detection = (
-                ipr_detector.detect(modified_weights, fc_weights)
-                if ipr_detector is not None else
-                {"anomalous_layer": None, "anomaly_score": 0.0, "reason": "No FC template available."}
-            )
-            
-            normal_correct = normal_result.get("anomalous_layer") == handler._layer
-            blind_correct = blind_result.get("anomalous_layer") == handler._layer
-            spectral_correct = spectral_result.get("anomalous_layer") == handler._layer
-            ipr_correct = ipr_detection.get("anomalous_layer") == handler._layer if ipr_detector is not None else False
-            if normal_correct: successes["normal_detection"] += 1
-            if blind_correct: successes["blind_detection"] += 1
-            if spectral_correct: successes["spectral_detection"] += 1
-            if ipr_correct: successes["ipr_detection"] += 1
-            
-            test_entry.update({
-                "normal_detection": to_serializable(normal_result),
-                "blind_detection": to_serializable(blind_result),
-                "spectral_detection": to_serializable(spectral_result),
-                "spectral_delta_from_baseline": to_serializable(spectral_delta),
-                "interlayer": to_serializable(collect_all_interlayer_data(modified_weights)),
+            # Run detectors
+            normal_res = WeightMSDDetector(original_proj).detect(modified_proj)
+            blind_res = blind_detector.detect(modified_proj)
+            spectral_res = spectral_detector.detect(modified_proj, fc_weights=original_fc)
+            ipr_res = ipr_detector.detect(modified_proj, original_fc) if ipr_detector else {}
+
+            # IPR analysis
+            mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
+            mod_ipr_disc = layer_fc_proj_ipr_discrepancy(modified_proj, original_fc) if has_fc else {}
+
+            correct = {
+                "normal": normal_res.get("anomalous_layer") == handler._layer,
+                "blind": blind_res.get("anomalous_layer") == handler._layer,
+                "spectral": spectral_res.get("anomalous_layer") == handler._layer,
+                "ipr": ipr_res.get("anomalous_layer") == handler._layer if ipr_res else False,
+            }
+            for name, ok in correct.items():
+                if ok:
+                    counts[name] += 1
+
+            entry.update({
+                "normal_detection": to_serializable(normal_res),
+                "blind_detection": to_serializable(blind_res),
+                "spectral_detection": to_serializable(spectral_res),
+                "spectral_delta": to_serializable(spectral_signal_delta(baseline_spectral, spectral_res)),
+                "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
                 "ipr": {
-                    "c_proj": to_serializable(modified_ipr_c_proj),
-                    "c_proj_delta_from_baseline": to_serializable(modified_ipr_c_proj_delta),
-                    "c_fc": to_serializable(modified_ipr_c_fc),
-                    "c_fc_delta_from_baseline": to_serializable(modified_ipr_c_fc_delta),
-                    "fc_vs_proj": to_serializable(modified_ipr_fc_vs_proj),
-                    "fc_vs_proj_delta_from_baseline": to_serializable(modified_ipr_fc_vs_proj_delta),
-                    "ipr_detection": to_serializable(ipr_detection),
+                    "proj": to_serializable(mod_ipr_proj),
+                    "proj_delta": to_serializable(per_layer_delta(
+                        baseline_ipr_proj, mod_ipr_proj,
+                        ["global_ipr", "row_ipr_mean", "row_ipr_std"],
+                    )),
+                    "fc_vs_proj": to_serializable(mod_ipr_disc),
+                    "fc_vs_proj_delta": to_serializable(per_layer_delta(
+                        baseline_ipr_disc, mod_ipr_disc,
+                        ["global_ipr_gap", "global_ipr_ratio_proj_over_fc",
+                         "row_ipr_mean_gap", "row_ipr_std_gap", "row_ipr_median_gap"],
+                    )) if has_fc else {},
+                    "detection": to_serializable(ipr_res),
                 },
                 "accuracy": {
-                    "rome_success": success,
-                    "normal_correct": normal_correct,
-                    "blind_correct": blind_correct,
-                    "spectral_correct": spectral_correct,
-                    "ipr_correct": ipr_correct,
+                    "rome_success": rome_ok,
+                    **{f"{name}_correct": v for name, v in correct.items()},
                 },
             })
 
-            if modified_ipr_c_proj_delta:
-                strongest_ipr_layer = max(
-                    modified_ipr_c_proj_delta,
-                    key=lambda l: abs(modified_ipr_c_proj_delta[l]["global_ipr_delta"]),
-                )
-                strongest_ipr_delta = modified_ipr_c_proj_delta[strongest_ipr_layer]["global_ipr_delta"]
-            else:
-                strongest_ipr_layer = None
-                strongest_ipr_delta = 0.0
-
             LOGGER.info(
-                f"  ROME: {'OK' if success else 'FAIL'}, "
-                f"Normal: layer {normal_result.get('anomalous_layer')}, "
-                f"Blind: layer {blind_result.get('anomalous_layer')}, "
-                f"Spectral: layer {spectral_result.get('anomalous_layer')}, "
-                f"IPR-detect: layer {ipr_detection.get('anomalous_layer')} "
-                f"(score={ipr_detection.get('anomaly_score', 0):.3f}), "
-                f"IPR strongest delta layer: {strongest_ipr_layer} ({strongest_ipr_delta:.4e})"
+                "  ROME=%s Normal=L%s Blind=L%s Spectral=L%s IPR=L%s(%.3f)",
+                "OK" if rome_ok else "FAIL",
+                normal_res.get("anomalous_layer"),
+                blind_res.get("anomalous_layer"),
+                spectral_res.get("anomalous_layer"),
+                ipr_res.get("anomalous_layer", "N/A"),
+                ipr_res.get("anomaly_score", 0),
             )
-            
+
         except Exception as e:
-            test_entry["error"] = str(e)
-            test_entry["skipped"] = True
-            LOGGER.warning(f"  SKIPPED - Edit failed: {e}")
+            entry["error"] = str(e)
+            entry["skipped"] = True
+            LOGGER.warning("  SKIPPED: %s", e)
         finally:
             handler.remove_hooks()
             handler._get_module(layer_name).weight = torch.nn.Parameter(old_W)
-            results["tests"].append(test_entry)
+            results["tests"].append(entry)
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-    
+
     # Summary
-    successful_tests = [t for t in results["tests"] if not t.get("skipped", False)]
-    n = len(successful_tests)
+    ok_tests = [t for t in results["tests"] if not t.get("skipped")]
+    n = len(ok_tests)
     results["summary"] = {
-        "total_tests": len(test_cases),
-        "successful_tests": n,
-        "skipped_tests": len(test_cases) - n,
-        "rome_success_rate": successes["rome"] / n if n else 0,
-        "normal_detection_accuracy": successes["normal_detection"] / n if n else 0,
-        "blind_detection_accuracy": successes["blind_detection"] / n if n else 0,
-        "spectral_detection_accuracy": successes["spectral_detection"] / n if n else 0,
-        "ipr_detection_accuracy": successes["ipr_detection"] / n if n else 0,
+        "total": len(test_cases), "successful": n, "skipped": len(test_cases) - n,
+        **{f"{k}_rate": counts[k] / n if n else 0 for k in counts},
     }
-    
     LOGGER.info(
-        f"Summary: ROME {successes['rome']}/{n}, "
-        f"Normal {successes['normal_detection']}/{n}, "
-        f"Blind {successes['blind_detection']}/{n}, "
-        f"Spectral {successes['spectral_detection']}/{n}, "
-        f"IPR {successes['ipr_detection']}/{n} "
-        f"(skipped {len(test_cases) - n})"
-    )
-    LOGGER.info(
-        "Success rates: "
-        f"ROME={results['summary']['rome_success_rate']:.1%}, "
-        f"Normal={results['summary']['normal_detection_accuracy']:.1%}, "
-        f"Blind={results['summary']['blind_detection_accuracy']:.1%}, "
-        f"Spectral={results['summary']['spectral_detection_accuracy']:.1%}, "
-        f"IPR={results['summary']['ipr_detection_accuracy']:.1%}"
+        "[%s] ROME=%d/%d Normal=%d/%d Blind=%d/%d Spectral=%d/%d IPR=%d/%d skip=%d",
+        cfg.model.name, counts["rome"], n, counts["normal"], n, counts["blind"], n,
+        counts["spectral"], n, counts["ipr"], n, len(test_cases) - n,
     )
 
-    
+    # Free GPU
+    del handler
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Multi-model entry point
+# ---------------------------------------------------------------------------
+
+def run_benchmark(
+    models: List[str],
+    n_tests: int = 30,
+    start_idx: int = 0,
+    output_dir: str = "./analysis_out",
+    n_prompts: int = 10,
+    spectral_top_k: int = 50,
+    trim_first: int = 2,
+    trim_last: int = 2,
+    spectral_neighbor_layers: int = 1,
+):
+    """Run the benchmark across one or more models, saving results per model."""
+    test_cases = load_test_cases(n_tests, start_idx)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    safe_model_name = cfg.model.name.replace("/", "-")
-    output_file = output_path / f"rome_structural_{safe_model_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
-    
-    with open(output_file, "w") as f:
-        json.dump(to_serializable(results), f, indent=2)
-    
-    LOGGER.info(f"Saved to: {output_file}")
-    return results
+
+    all_results = {}
+
+    for model_name in models:
+        LOGGER.info("=" * 60)
+        LOGGER.info("Benchmark: %s", model_name)
+        LOGGER.info("=" * 60)
+
+        model_results = run_single_model(
+            model_name, test_cases, n_prompts,
+            spectral_top_k=spectral_top_k,
+            trim_first=trim_first, trim_last=trim_last,
+            spectral_neighbor_layers=spectral_neighbor_layers,
+        )
+
+        safe_name = model_name.replace("/", "_").replace("\\", "_")
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        out_file = output_path / f"rome_structural_{safe_name}_{ts}.json"
+        with open(out_file, "w") as f:
+            json.dump(to_serializable(model_results), f, indent=2)
+        LOGGER.info("Saved: %s", out_file)
+
+        all_results[model_name] = model_results
+
+    return all_results
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="gpt2-large")
+    parser = argparse.ArgumentParser(description="ROME + Structural Analysis Benchmark")
+    parser.add_argument("--models", "--model", nargs="+", default=["gpt2-large"],
+                        help="Model config names (YAML stems or HF model names)")
     parser.add_argument("--n-tests", type=int, default=30)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--output-dir", default="./analysis_out")
+    parser.add_argument("--n-prompts", type=int, default=10)
     parser.add_argument("--spectral-top-k", type=int, default=50)
-    parser.add_argument("--trim-first-layers", "--trim-first", dest="trim_first_layers", type=int, default=2)
-    parser.add_argument("--trim-last-layers", "--trim-last", dest="trim_last_layers", type=int, default=2)
+    parser.add_argument("--trim-first", type=int, default=2)
+    parser.add_argument("--trim-last", type=int, default=2)
     parser.add_argument("--spectral-neighbor-layers", type=int, default=1)
-    parser.add_argument("--n-prompts", type=int, default=None,
-                        help="Number of prefixes for ROME (auto-scales by model size if omitted)")
     args = parser.parse_args()
 
     run_benchmark(
-        args.model,
-        args.n_tests,
-        args.start_idx,
-        args.output_dir,
-        args.spectral_top_k,
-        args.trim_first_layers,
-        args.trim_last_layers,
-        spectral_neighbor_layers=args.spectral_neighbor_layers,
+        models=args.models,
+        n_tests=args.n_tests,
+        start_idx=args.start_idx,
+        output_dir=args.output_dir,
         n_prompts=args.n_prompts,
+        spectral_top_k=args.spectral_top_k,
+        trim_first=args.trim_first,
+        trim_last=args.trim_last,
+        spectral_neighbor_layers=args.spectral_neighbor_layers,
     )

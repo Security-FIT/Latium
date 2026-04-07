@@ -46,7 +46,8 @@ def print_compute_multiplier(cfg: DictConfig | argparse.Namespace) -> None:
 
 def run_second_moment(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
-    inv_cov, count, method = compute_second_moment(handler, 100000 // handler.batch_size, handler.batch_size)
+    target_samples = 100_000
+    inv_cov, count, method = compute_second_moment(handler, N_rounds=1, N_k=target_samples)
     out_path = Path(handler.second_moment_dir) / f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
     torch.save(inv_cov, out_path)
     LOGGER.info("Saved second moment to %s", out_path)
@@ -59,9 +60,10 @@ def run_rome(cfg: DictConfig | argparse.Namespace) -> None:
 
     # ROME success test
     prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
+    target_token_count = int(handler.tokenize_prompt(fact_tuple[2]).input_ids.shape[1])
     outputs = handler.model.generate(
         **prompt,
-        max_length=prompt.input_ids.shape[1] + len(handler.tokenize_prompt(f" {fact_tuple[2]}")[0]) - 1,
+        max_length=prompt.input_ids.shape[1] + target_token_count,
     )
     print(handler.tokenizer.batch_decode(outputs))
 

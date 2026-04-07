@@ -152,7 +152,7 @@ def batch_evaluation(cfg: DictConfig) -> None:
 def single_intervention(handler: ModelHandler, fact_tuple: Tuple[str,str,str,str]) -> None:
     k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(handler.cfg.generation, 'k_N', 50))
     delta = optimize_v(handler, fact_tuple, N_prompts=getattr(handler.cfg.generation, 'v_N', 50), N_optim_steps=handler.epochs)
-    new_W, old_W = insert_kv(handler, k, delta)
+    new_W, old_W, _ = insert_kv(handler, k, delta)
 
     if handler.save_new_weights:
         out_path = Path(handler.new_weights_dir) / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"
@@ -189,7 +189,7 @@ if __name__ == "__main__":
             delta = optimize_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
             LOGGER.info(f"delta computed, shape: {delta.shape}")
 
-            new_W, old_W = insert_kv(handler, k, delta)
+            new_W, old_W, _ = insert_kv(handler, k, delta)
             LOGGER.info(f"New weights computed")
 
             if handler.save_new_weights:

@@ -9,17 +9,22 @@ File containing implementation for common functions used in weight intervention.
 :author: Jakub Res <iresj@fit.vut.cz>
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 import copy
 import re
 import random
 import json
 import torch
-from typing import Tuple, List
+from typing import Tuple, List, TYPE_CHECKING
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from enum import Enum
 import numpy as np
+
+if TYPE_CHECKING:
+    from src.handlers.rome import ModelHandler
 
 
 import logging
@@ -96,7 +101,7 @@ def _normalize_generated_template(raw_text: str) -> str:
     """Normalize generated text into a stable `...{}` template."""
     cleaned = raw_text.replace("{", " ").replace("}", " ")
     cleaned = " ".join(cleaned.split()).strip().rstrip(" .,:;!?")
-    return "{}" if not cleaned else f"{cleaned}.{{}}"
+    return "{}" if not cleaned else f"{cleaned}. {{}}"
 
 
 def _load_rome_model_names() -> dict[str, str]:
@@ -367,6 +372,29 @@ def generate_prefixes(
         ph = PrefixGenerationHandler(mode=PrefixMode.SELF)
     return ph.generate(handler, main_count, prefix_range) + additional
 
+
+def _reshape_hidden_states(hidden_states: torch.Tensor, batch_size: int, seq_len: int) -> tuple[torch.Tensor, bool]:
+    """Normalize activations to [batch, seq, hidden].
+
+    Some model blocks expose flattened [batch*seq, hidden] activations to hooks
+    (notably certain OPT layers). This helper reshapes those tensors back to a
+    3D view so token indexing logic remains model-agnostic.
+    """
+    if hidden_states.dim() == 3:
+        return hidden_states, False
+
+    if hidden_states.dim() == 2:
+        expected_rows = batch_size * seq_len
+        if int(hidden_states.size(0)) != int(expected_rows):
+            raise RuntimeError(
+                "Unexpected flattened activation shape: "
+                f"got rows={hidden_states.size(0)}, expected {expected_rows} "
+                f"for batch_size={batch_size}, seq_len={seq_len}"
+            )
+        return hidden_states.view(batch_size, seq_len, hidden_states.size(-1)), True
+
+    raise RuntimeError(f"Unsupported activation rank for hooks: {hidden_states.dim()}")
+
 def gather_k(
         handler,
         fact_tuple: Tuple[str, str, str], 
@@ -380,22 +408,31 @@ def gather_k(
     prompts = handler.tokenize_prompt(templates)
 
     prompt_count = int(prompts.input_ids.shape[0])
-    batch_idx = torch.arange(prompt_count, device=prompts.input_ids.device)
-    index = (prompts.attention_mask[batch_idx].sum(dim=1) - 1).long()
+    seq_len = int(prompts.input_ids.shape[1])
+    token_index = (prompts.attention_mask.detach().to("cpu").sum(dim=1) - 1).long()
 
     # TODO: Add support for dynamic batch size
     k = None
     def k_hook(_, input):
         nonlocal k
+        hidden_states = input[0]
+        hidden_states, _ = _reshape_hidden_states(hidden_states, prompt_count, seq_len)
+
         # Pair each prompt with its own last non-padding token index.
-        k = input[0][batch_idx, index, :].mean(dim=0)
+        local_batch_idx = torch.arange(prompt_count, device=hidden_states.device)
+        local_index = token_index.to(hidden_states.device)
+        k = hidden_states[local_batch_idx, local_index, :].mean(dim=0)
         return input
 
     handler.set_k_hook(k_hook)
     handler.model(**prompts)
     handler.remove_hooks()
 
-    return handler.device_manager.safe_to_device(k)
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        target_device = handler.get_module_device(handler._layer_name_template.format(handler._layer))
+    else:
+        target_device = handler.device
+    return handler.device_manager.safe_to_device(k, device=target_device)
 
 
 # https://medium.com/biased-algorithms/all-pairs-cosine-similarity-in-pytorch-064f9875d531
@@ -437,6 +474,33 @@ def get_subject_position(handler, prompt, subject):
         subject_position = list(set(matches.nonzero(as_tuple=True)[1].tolist()))
 
     if len(subject_position) == 0:
+        # Fallback: find the subject character span and map it to token offsets.
+        # This handles cases where punctuation (e.g. commas) is merged into token pieces.
+        char_start = prompt.find(subject)
+        if char_start == -1:
+            char_start = prompt.find(f" {subject}")
+            if char_start != -1:
+                char_start += 1
+
+        if char_start != -1:
+            char_end = char_start + len(subject)
+            try:
+                raw_tok = handler.tokenizer(prompt, return_offsets_mapping=True, return_tensors="pt")
+                offsets = raw_tok.get("offset_mapping")
+                if offsets is not None:
+                    token_positions = []
+                    for idx, (start, end) in enumerate(offsets[0].tolist()):
+                        if end <= start:
+                            continue
+                        if end > char_start and start < char_end:
+                            token_positions.append(idx)
+
+                    if token_positions:
+                        return int(token_positions[-1])
+            except Exception:
+                pass
+
+    if len(subject_position) == 0:
         LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
         return -1
         # raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
@@ -446,7 +510,8 @@ def get_subject_position(handler, prompt, subject):
 
 def get_subject_index(handler, prompts, fact_tuple, subject_understanding_template) -> torch.Tensor | None:
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
-    last_subject_index = (prompts.attention_mask[torch.arange(prompts.input_ids.shape[0])].sum(dim=1))
+    batch_idx = torch.arange(prompts.input_ids.shape[0], device=prompts.attention_mask.device)
+    last_subject_index = prompts.attention_mask[batch_idx].sum(dim=1)
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
@@ -469,7 +534,7 @@ def get_subject_index(handler, prompts, fact_tuple, subject_understanding_templa
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
     last_subject_index[-1] -= u_sub_reverse_pos
 
-    return last_subject_index
+    return last_subject_index.long().cpu()
 
 def optimize_v(
         handler,
@@ -501,51 +566,81 @@ def optimize_v(
         templates = [template + handler.tokenizer.decode(new_target_ids[:-1]) for template in templates]
     
     prompts = handler.tokenize_prompt(templates)
+    prompt_count = int(prompts.input_ids.shape[0])
+    prompt_seq_len = int(prompts.input_ids.shape[1])
 
     last_subject_index = get_subject_index(handler, prompts, fact_tuple, subject_understanding_template)
     if last_subject_index is None:
         LOGGER.error("Subject index computation failed during v computation.")
         return None
+    last_subject_index_list = [int(x) for x in last_subject_index.tolist()]
+
+    layer_name = handler._layer_name_template.format(handler._layer)
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        layer_device = handler.get_module_device(layer_name)
+    else:
+        layer_device = handler.device
 
     # The optimizer setup
     # Create delta on CPU first, then move through device_manager for tracking
     delta = torch.zeros((handler.emb_shape), requires_grad=False, dtype=handler.dtype)
-    delta = handler.device_manager.safe_to_device(delta).requires_grad_(True)
+    delta = handler.device_manager.safe_to_device(delta, device=layer_device).requires_grad_(True)
 
     opt = torch.optim.Adam([delta], lr=handler.lr)
 
     def delta_hook(module, _, output):
         nonlocal v_init
         if module == handler._get_module(handler._layer_name_template.format(handler._layer)):
-            new_output = output.clone()
+            tuple_output = isinstance(output, tuple)
+            raw_hidden = output[0] if tuple_output else output
+            hidden, was_flat = _reshape_hidden_states(raw_hidden, prompt_count, prompt_seq_len)
+
+            new_output = hidden.clone()
             if v_init is None:
-                v_init = output[0, last_subject_index[0]].detach().clone()
-            for i, idx in enumerate(last_subject_index):
-                new_output[i, idx, :] = new_output[i, idx, :] + delta.to(output.dtype)
-        return new_output
+                v_init = hidden[0, last_subject_index_list[0]].detach().clone()
+            for i, idx in enumerate(last_subject_index_list):
+                new_output[i, idx, :] = new_output[i, idx, :] + delta.to(device=raw_hidden.device, dtype=raw_hidden.dtype)
+
+            restored = new_output.reshape_as(raw_hidden) if was_flat else new_output
+            if tuple_output:
+                output_list = list(output)
+                output_list[0] = restored
+                return tuple(output_list)
+            return restored
+
+        return output
 
 
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
-    prompt_device = prompts.input_ids.device
-    main_prompt_idx = torch.arange(N_prompts, device=prompt_device)
-    index_positions = (
-        prompts.attention_mask[:N_prompts].sum(dim=1).unsqueeze(1)
+    main_prompt_idx_cpu = torch.arange(N_prompts, dtype=torch.long)
+    index_positions_cpu = (
+        prompts.attention_mask[:N_prompts].detach().to("cpu").sum(dim=1).unsqueeze(1)
         - target_len
-        + torch.arange(target_len, device=prompt_device).unsqueeze(0)
+        + torch.arange(target_len, dtype=torch.long).unsqueeze(0)
     ).long()
 
-    index_ids = new_target_ids.unsqueeze(0).repeat(N_prompts, 1)
-    dkl_prompt_idx = torch.arange(N_prompts, prompts.input_ids.shape[0], device=prompt_device)
-    dkl_index = (prompts.attention_mask[dkl_prompt_idx].sum(dim=1) - 1).long()
+    index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(N_prompts, 1)
+    dkl_prompt_idx_cpu = torch.arange(N_prompts, prompts.input_ids.shape[0], dtype=torch.long)
+    dkl_index_cpu = (prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu].sum(dim=1) - 1).long()
+
+    cache_every = int(getattr(handler.cfg.model, "optimize_v_clear_cache_every", 0) or 0)
 
     for i in range(N_optim_steps):
         opt.zero_grad()
-        handler.device_manager.clear_cache()
+        if cache_every > 0 and (i % cache_every == 0):
+            handler.device_manager.clear_cache()
 
         handler.set_delta_hook(delta_hook)
         outputs = handler.model(**prompts)
         handler.remove_hooks()
+
+        logits_device = outputs.logits.device
+        main_prompt_idx = main_prompt_idx_cpu.to(logits_device)
+        index_positions = index_positions_cpu.to(logits_device)
+        index_ids = index_ids_cpu.to(logits_device)
+        dkl_prompt_idx = dkl_prompt_idx_cpu.to(logits_device)
+        dkl_index = dkl_index_cpu.to(logits_device)
 
         all_log_probs = torch.log_softmax(outputs.logits, dim=2)
         log_probs = all_log_probs[
@@ -582,8 +677,15 @@ def optimize_v(
 
     return delta
 
-def insert_kv(handler, k: torch.Tensor, delta: torch.Tensor) -> None:
-    old_W = handler._get_module(handler._layer_name_template.format(handler._layer)).weight.clone() # extract from the model
+def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    layer_name = handler._layer_name_template.format(handler._layer)
+    # For multi-GPU, use the device where this layer actually lives
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        layer_device = handler.get_module_device(layer_name)
+    else:
+        layer_device = handler.device
+
+    old_W = handler._get_module(layer_name).weight.clone()
 
     # Fix the transposed models
     old_W_transposed = False
@@ -591,7 +693,9 @@ def insert_kv(handler, k: torch.Tensor, delta: torch.Tensor) -> None:
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
-    inv_cov = get_second_moment(handler).to(handler.dtype).to(handler.device)
+    inv_cov = get_second_moment(handler).to(handler.dtype).to(layer_device)
+    k = k.to(layer_device)
+    delta = delta.to(layer_device)
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
@@ -627,25 +731,38 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         Returns C^-1 (needed for ROME weight update formula)
     
     """
-    from src.utils import load_dataset
+    from src.utils import load_dataset, estimate_covariance_batch_size
 
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
     hidden_dim = handler.hidden_dim
 
-    # Get model's max context length
-    max_length = getattr(handler.model.config, 'n_positions', 
+    # Get model's max context length. By default use full model context.
+    model_max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
+    max_length_cap = getattr(handler.cfg.model, "second_moment_max_length", None)
+    if max_length_cap is None:
+        max_length = model_max_length
+    else:
+        max_length = min(int(max_length_cap), model_max_length)
     
+    # For multi-GPU models, determine the device of the target module
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        module_device = handler.get_module_device(layer_name)
+    else:
+        module_device = handler.device
+
     # Accumulate second moment directly on GPU instead of storing all k vectors
-    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=handler.device)
-    total_tokens = 0  # Use list to allow modification in hook
+    C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=module_device)
+    total_tokens = 0
 
     def hook(_, inp, out):
         nonlocal C, total_tokens
         k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
         if len(k.shape) == 3:
             k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
+        # Ensure k is on the same device as C
+        k = k.to(C.device)
         total_tokens += k.shape[0]
         C.add_(k.T @ k)
         return out
@@ -653,13 +770,92 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     handle = module.register_forward_hook(hook)
     
     n_samples = N_rounds * N_k if N_rounds and N_k else 5000
-    batch_size = 8  # Process multiple texts at once
+
+    # Dynamic batch size based on available VRAM
+    dtype_bytes = 2 if handler.dtype in (torch.float16, torch.bfloat16) else 4
+    batch_size = estimate_covariance_batch_size(
+        hidden_dim=hidden_dim,
+        max_length=max_length,
+        dtype_bytes=dtype_bytes,
+        device=module_device,
+    )
+    batch_mode_raw = getattr(handler.cfg.model, "second_moment_batch_size_mode", "auto")
+    batch_mode = str(batch_mode_raw).strip().lower()
+    manual_batch_size = getattr(handler.cfg.model, "second_moment_batch_size", None)
+    if batch_mode in ("manual", "fixed", "static"):
+        if manual_batch_size is None:
+            raise ValueError(
+                "second_moment_batch_size must be set when second_moment_batch_size_mode is 'manual'"
+            )
+        batch_size = max(1, int(manual_batch_size))
+        LOGGER.info("Using manual covariance batch size override: %d", batch_size)
+    elif batch_mode in ("dynamic", "auto"):
+        if batch_mode == "auto" and manual_batch_size is not None:
+            batch_size = max(1, int(manual_batch_size))
+            LOGGER.info("Using manual covariance batch size override: %d (mode=auto)", batch_size)
+        else:
+            LOGGER.info("Using dynamic covariance batch size estimate: %d", batch_size)
+    else:
+        raise ValueError(
+            "Invalid second_moment_batch_size_mode: "
+            f"{batch_mode_raw!r}. Expected one of: auto, dynamic, manual."
+        )
     
     LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
     ds = load_dataset(handler.cfg, sm=True)
+
+    # For multi-GPU models, place token inputs on the embedding module device.
+    if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
+        try:
+            input_module_name = handler._corrupt_layer_name_template
+            if "{}" in input_module_name:
+                input_module_name = input_module_name.format(0)
+            input_device = handler.get_module_device(input_module_name)
+        except Exception:
+            input_device = next(handler.model.parameters()).device
+    else:
+        input_device = handler.device
     
+    min_text_length = int(getattr(handler.cfg.model, "second_moment_min_text_length", 50))
     processed = 0
+    processed_batches = 0
+    clear_cache_every = int(getattr(handler.cfg.model, "second_moment_clear_cache_every", 0) or 0)
     batch_texts = []
+
+    def process_text_batch(text_batch):
+        nonlocal processed, batch_size, processed_batches
+        if not text_batch:
+            return
+        try:
+            tokens = handler.tokenizer(
+                text_batch,
+                return_tensors='pt',
+                truncation=True,
+                max_length=max_length,
+                padding=True
+            )
+            handler.model(tokens.input_ids.to(input_device),
+                          attention_mask=tokens.attention_mask.to(input_device))
+            processed += len(text_batch)
+            processed_batches += 1
+            if clear_cache_every > 0 and processed_batches % clear_cache_every == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except torch.cuda.OutOfMemoryError:
+            LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(text_batch))
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            if len(text_batch) <= 1:
+                raise RuntimeError(
+                    "OOM on a single-sample covariance batch. "
+                    "Try lowering model context via second_moment_max_length or ensure enough GPU memory."
+                )
+            batch_size = max(1, batch_size // 2)
+            # Retry with the reduced batch size.
+            midpoint = max(1, len(text_batch) // 2)
+            process_text_batch(text_batch[:midpoint])
+            process_text_batch(text_batch[midpoint:])
+        except Exception as e:
+            LOGGER.warning(e)
     
     with torch.no_grad():
         for sample in tqdm(ds, desc="Computing covariance", mininterval=1.0):
@@ -667,60 +863,45 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                 break
             
             text = sample.get("text", "")
-            if len(text.strip()) < 50:
+            if len(text.strip()) < min_text_length:
                 continue
             
             batch_texts.append(text)
             
-            # Process when batch is full
-            if len(batch_texts) >= batch_size:
-                try:
-                    tokens = handler.tokenizer(
-                        batch_texts, 
-                        return_tensors='pt', 
-                        truncation=True, 
-                        max_length=max_length,
-                        padding=True
-                    )
-                    handler.model(tokens.input_ids.to(handler.device), 
-                                  attention_mask=tokens.attention_mask.to(handler.device))
-                    processed += len(batch_texts)
-                except Exception as e:
-                    LOGGER.warning(e)
-                    pass  # Skip failed batches
+            remaining = n_samples - processed
+            if remaining <= 0:
+                break
+
+            # Process when full or when we have gathered exactly the remainder.
+            if len(batch_texts) >= batch_size or len(batch_texts) >= remaining:
+                take_n = min(len(batch_texts), remaining)
+                process_text_batch(batch_texts[:take_n])
                 batch_texts = []
-                # Clear GPU cache periodically
-                torch.cuda.empty_cache()
 
         # Process remaining texts
         if batch_texts and processed < n_samples:
-            try:
-                tokens = handler.tokenizer(
-                    batch_texts, 
-                    return_tensors='pt', 
-                    truncation=True, 
-                    max_length=max_length,
-                    padding=True
-                )
-                handler.model(tokens.input_ids.to(handler.device),
-                              attention_mask=tokens.attention_mask.to(handler.device))
-                processed += len(batch_texts)
-            except:
-                pass
+            remaining = n_samples - processed
+            process_text_batch(batch_texts[:remaining])
     
     handle.remove()
+
+    if processed < n_samples:
+        raise RuntimeError(
+            f"Covariance sampling incomplete: processed {processed} samples out of target {n_samples}."
+        )
     
     if total_tokens == 0:
         raise ValueError("No samples processed for covariance!")
     
-    LOGGER.info(f"Processed {total_tokens} tokens, computing inverse covariance...")
+    LOGGER.info(f"Processed {processed} samples and {total_tokens} tokens, computing inverse covariance...")
     
-    # Normalize and add regularization
-    cov = (C / total_tokens).to("cpu")
-    cov += 1e-5 * torch.eye(hidden_dim)  # Regularization for stability
-    
-    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...")
-    return torch.linalg.inv(cov)
+    # Normalize and regularize on the same device used for accumulation.
+    cov = C / total_tokens
+    cov += 1e-5 * torch.eye(hidden_dim, device=cov.device)  # Regularization for stability
+
+    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix on device {cov.device}...")
+    inv_cov = torch.linalg.inv(cov)
+    return inv_cov.to("cpu")
 
 def second_moment_random(handler, N_rounds, N_k):
     K_list = []
@@ -780,7 +961,20 @@ def get_second_moment(handler) -> torch.Tensor:
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
-        inv_cov, count, method = compute_second_moment(handler, method=SM_Method.WIKIPEDIA)
+        target_samples = getattr(handler.cfg.model, "second_moment_target_samples", None)
+        if target_samples is not None:
+            target_samples = int(target_samples)
+            if target_samples <= 0:
+                raise ValueError("second_moment_target_samples must be a positive integer")
+            LOGGER.info("Using custom covariance target samples: %d", target_samples)
+            inv_cov, count, method = compute_second_moment(
+                handler,
+                N_rounds=1,
+                N_k=target_samples,
+                method=SM_Method.WIKIPEDIA,
+            )
+        else:
+            inv_cov, count, method = compute_second_moment(handler, method=SM_Method.WIKIPEDIA)
         
         # Ensure directory exists
         save_dir = Path(handler.second_moment_dir)

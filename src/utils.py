@@ -165,6 +165,113 @@ class DeviceManager:
             raise SystemExit("Unknown CUDA mode. Cannot continue.") from error
 
 
+# ---------------------------------------------------------------------------
+# GPU / VRAM utilities
+# ---------------------------------------------------------------------------
+
+def gpu_count() -> int:
+    """Return the number of available CUDA GPUs."""
+    return torch.cuda.device_count() if torch.cuda.is_available() else 0
+
+
+def get_free_vram(device: int | str = 0) -> int:
+    """Return free VRAM in bytes for the given CUDA device. Returns 0 if CUDA unavailable."""
+    if not torch.cuda.is_available():
+        return 0
+    if isinstance(device, str):
+        if device == "cpu":
+            return 0
+        device = int(device.replace("cuda:", "").replace("cuda", "0") or "0")
+    free, _ = torch.cuda.mem_get_info(device)
+    return free
+
+
+def get_total_vram(device: int | str = 0) -> int:
+    """Return total VRAM in bytes for the given CUDA device."""
+    if not torch.cuda.is_available():
+        return 0
+    if isinstance(device, str):
+        if device == "cpu":
+            return 0
+        device = int(device.replace("cuda:", "").replace("cuda", "0") or "0")
+    _, total = torch.cuda.mem_get_info(device)
+    return total
+
+
+def estimate_covariance_batch_size(
+    hidden_dim: int,
+    max_length: int,
+    dtype_bytes: int = 2,
+    device: int | str = 0,
+    vram_fraction: float = 0.4,
+    min_batch: int = 1,
+    max_batch: int = 64,
+) -> int:
+    """Estimate a safe batch size for covariance computation based on free VRAM.
+
+    Heuristic: each sample needs roughly ``max_length * hidden_dim * dtype_bytes``
+    bytes for activations, plus the outer-product accumulator.
+    We target using at most *vram_fraction* of currently free VRAM.
+    """
+    free = get_free_vram(device)
+    if free == 0:
+        return min_batch
+
+    per_sample = max_length * hidden_dim * dtype_bytes * 3  # fwd activations ~3x
+    available = int(free * vram_fraction)
+    bs = max(min_batch, min(max_batch, available // max(per_sample, 1)))
+    LOGGER.info(
+        "Dynamic covariance batch size: %d  (free_vram=%.1fGB, per_sample≈%.1fMB)",
+        bs, free / 1e9, per_sample / 1e6,
+    )
+    return bs
+
+
+def gpu_svd(W: torch.Tensor, full_matrices: bool = False, device: int | str = 0,
+            vram_fraction: float = 0.5) -> tuple:
+    """Try to run SVD on GPU if enough VRAM is available, else fall back to CPU.
+
+    Returns (U, S, Vh) from ``torch.linalg.svd``.
+    """
+    matrix_bytes = W.numel() * W.element_size()
+    # SVD workspace ≈ 3-4x the matrix size
+    required = int(matrix_bytes * 5)
+    free = get_free_vram(device)
+
+    if free > 0 and free * vram_fraction > required:
+        try:
+            if isinstance(device, int):
+                device = f"cuda:{device}"
+            W_gpu = W.to(device).float()
+            U, S, Vh = torch.linalg.svd(W_gpu, full_matrices=full_matrices)
+            return U.cpu(), S.cpu(), Vh.cpu()
+        except torch.cuda.OutOfMemoryError:
+            LOGGER.debug("GPU SVD OOM, falling back to CPU")
+            torch.cuda.empty_cache()
+
+    return torch.linalg.svd(W.float().cpu(), full_matrices=full_matrices)
+
+
+def gpu_svdvals(W: torch.Tensor, device: int | str = 0,
+                vram_fraction: float = 0.5) -> torch.Tensor:
+    """Try to compute singular values on GPU, fall back to CPU."""
+    matrix_bytes = W.numel() * W.element_size()
+    required = int(matrix_bytes * 4)
+    free = get_free_vram(device)
+
+    if free > 0 and free * vram_fraction > required:
+        try:
+            if isinstance(device, int):
+                device = f"cuda:{device}"
+            S = torch.linalg.svdvals(W.to(device).float())
+            return S.cpu()
+        except torch.cuda.OutOfMemoryError:
+            LOGGER.debug("GPU svdvals OOM, falling back to CPU")
+            torch.cuda.empty_cache()
+
+    return torch.linalg.svdvals(W.float().cpu())
+
+
 def check_device(device: str) -> str:
     """
     Check if the device is valid and return the appropriate device.
@@ -217,6 +324,17 @@ def load_pretrained(cfg: DictConfig) -> Any:
     device = check_device(device)
     device_manager = DeviceManager(device, cuda_mode)
 
+    # Multi-GPU: use device_map="auto" when >1 GPU available and not disabled
+    multi_gpu = getattr(cfg.model, "multi_gpu", "auto")
+    n_gpus = gpu_count()
+    use_device_map = (
+        multi_gpu == "auto" and n_gpus > 1 and device != "cpu"
+    ) or (
+        multi_gpu is True or str(multi_gpu).lower() == "true"
+    )
+    if use_device_map:
+        LOGGER.info(f"Multi-GPU enabled: distributing model across {n_gpus} GPUs")
+
     models_dir = getattr(
         cfg.model, "models_dir", os.path.join(os.path.dirname(__file__), "./models")
     )
@@ -225,8 +343,13 @@ def load_pretrained(cfg: DictConfig) -> Any:
 
     if os.path.exists(local_model_path):
         LOGGER.info(f"Loading model from local cache: {local_model_path}")
-        model = AutoModelForCausalLM.from_pretrained(local_model_path, dtype=dtype)
-        model = device_manager.safe_to_device(model)
+        if use_device_map:
+            model = AutoModelForCausalLM.from_pretrained(
+                local_model_path, torch_dtype=dtype, device_map="auto",
+            )
+        else:
+            model = AutoModelForCausalLM.from_pretrained(local_model_path, dtype=dtype)
+            model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
         if tokenizer.pad_token == None:
@@ -242,8 +365,13 @@ def load_pretrained(cfg: DictConfig) -> Any:
     else:
         # Model not present locally, download from HuggingFace Hub
         LOGGER.info(f"Downloading model from HuggingFace Hub: {model_name}")
-        model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
-        model = device_manager.safe_to_device(model)
+        if use_device_map:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name, torch_dtype=dtype, device_map="auto",
+            )
+        else:
+            model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
+            model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         if tokenizer.pad_token == None:

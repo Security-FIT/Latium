@@ -1,18 +1,21 @@
-name: "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"
+name: "deepseek-ai/deepseek-llm-7b-base"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
 new_weights_dir: "./new_weights"
 device: "cuda"
-save_to_local: True # Keep this True until you specifically do not want the model cached locally
+save_to_local: True
 layer_name_template: "model.layers.{}.mlp.down_proj"
+fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 0
-corruption_noise_multiplier: 0.021881103515625
-lr: 0.05
+layer: 6
+corruption_noise_multiplier: 0.1
+lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5
-epochs: 20
+epochs: 25
 epsilon: 0.0
-
+dtype: "bf16"
 prefix_mode: "self"
+prefix_enforce_latin: True
+prefix_min_words: 2

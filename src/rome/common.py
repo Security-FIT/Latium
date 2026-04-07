@@ -101,7 +101,7 @@ def _normalize_generated_template(raw_text: str) -> str:
     """Normalize generated text into a stable `...{}` template."""
     cleaned = raw_text.replace("{", " ").replace("}", " ")
     cleaned = " ".join(cleaned.split()).strip().rstrip(" .,:;!?")
-    return "{}" if not cleaned else f"{cleaned}.{{}}"
+    return "{}" if not cleaned else f"{cleaned}. {{}}"
 
 
 def _load_rome_model_names() -> dict[str, str]:
@@ -372,6 +372,29 @@ def generate_prefixes(
         ph = PrefixGenerationHandler(mode=PrefixMode.SELF)
     return ph.generate(handler, main_count, prefix_range) + additional
 
+
+def _reshape_hidden_states(hidden_states: torch.Tensor, batch_size: int, seq_len: int) -> tuple[torch.Tensor, bool]:
+    """Normalize activations to [batch, seq, hidden].
+
+    Some model blocks expose flattened [batch*seq, hidden] activations to hooks
+    (notably certain OPT layers). This helper reshapes those tensors back to a
+    3D view so token indexing logic remains model-agnostic.
+    """
+    if hidden_states.dim() == 3:
+        return hidden_states, False
+
+    if hidden_states.dim() == 2:
+        expected_rows = batch_size * seq_len
+        if int(hidden_states.size(0)) != int(expected_rows):
+            raise RuntimeError(
+                "Unexpected flattened activation shape: "
+                f"got rows={hidden_states.size(0)}, expected {expected_rows} "
+                f"for batch_size={batch_size}, seq_len={seq_len}"
+            )
+        return hidden_states.view(batch_size, seq_len, hidden_states.size(-1)), True
+
+    raise RuntimeError(f"Unsupported activation rank for hooks: {hidden_states.dim()}")
+
 def gather_k(
         handler,
         fact_tuple: Tuple[str, str, str], 
@@ -385,16 +408,20 @@ def gather_k(
     prompts = handler.tokenize_prompt(templates)
 
     prompt_count = int(prompts.input_ids.shape[0])
+    seq_len = int(prompts.input_ids.shape[1])
     token_index = (prompts.attention_mask.detach().to("cpu").sum(dim=1) - 1).long()
 
     # TODO: Add support for dynamic batch size
     k = None
     def k_hook(_, input):
         nonlocal k
+        hidden_states = input[0]
+        hidden_states, _ = _reshape_hidden_states(hidden_states, prompt_count, seq_len)
+
         # Pair each prompt with its own last non-padding token index.
-        local_batch_idx = torch.arange(prompt_count, device=input[0].device)
-        local_index = token_index.to(input[0].device)
-        k = input[0][local_batch_idx, local_index, :].mean(dim=0)
+        local_batch_idx = torch.arange(prompt_count, device=hidden_states.device)
+        local_index = token_index.to(hidden_states.device)
+        k = hidden_states[local_batch_idx, local_index, :].mean(dim=0)
         return input
 
     handler.set_k_hook(k_hook)
@@ -445,6 +472,33 @@ def get_subject_position(handler, prompt, subject):
         windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
         matches = (windows == input_ids_subject).all(dim=2)
         subject_position = list(set(matches.nonzero(as_tuple=True)[1].tolist()))
+
+    if len(subject_position) == 0:
+        # Fallback: find the subject character span and map it to token offsets.
+        # This handles cases where punctuation (e.g. commas) is merged into token pieces.
+        char_start = prompt.find(subject)
+        if char_start == -1:
+            char_start = prompt.find(f" {subject}")
+            if char_start != -1:
+                char_start += 1
+
+        if char_start != -1:
+            char_end = char_start + len(subject)
+            try:
+                raw_tok = handler.tokenizer(prompt, return_offsets_mapping=True, return_tensors="pt")
+                offsets = raw_tok.get("offset_mapping")
+                if offsets is not None:
+                    token_positions = []
+                    for idx, (start, end) in enumerate(offsets[0].tolist()):
+                        if end <= start:
+                            continue
+                        if end > char_start and start < char_end:
+                            token_positions.append(idx)
+
+                    if token_positions:
+                        return int(token_positions[-1])
+            except Exception:
+                pass
 
     if len(subject_position) == 0:
         LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
@@ -512,6 +566,8 @@ def optimize_v(
         templates = [template + handler.tokenizer.decode(new_target_ids[:-1]) for template in templates]
     
     prompts = handler.tokenize_prompt(templates)
+    prompt_count = int(prompts.input_ids.shape[0])
+    prompt_seq_len = int(prompts.input_ids.shape[1])
 
     last_subject_index = get_subject_index(handler, prompts, fact_tuple, subject_understanding_template)
     if last_subject_index is None:
@@ -535,12 +591,24 @@ def optimize_v(
     def delta_hook(module, _, output):
         nonlocal v_init
         if module == handler._get_module(handler._layer_name_template.format(handler._layer)):
-            new_output = output.clone()
+            tuple_output = isinstance(output, tuple)
+            raw_hidden = output[0] if tuple_output else output
+            hidden, was_flat = _reshape_hidden_states(raw_hidden, prompt_count, prompt_seq_len)
+
+            new_output = hidden.clone()
             if v_init is None:
-                v_init = output[0, last_subject_index_list[0]].detach().clone()
+                v_init = hidden[0, last_subject_index_list[0]].detach().clone()
             for i, idx in enumerate(last_subject_index_list):
-                new_output[i, idx, :] = new_output[i, idx, :] + delta.to(device=output.device, dtype=output.dtype)
-        return new_output
+                new_output[i, idx, :] = new_output[i, idx, :] + delta.to(device=raw_hidden.device, dtype=raw_hidden.dtype)
+
+            restored = new_output.reshape_as(raw_hidden) if was_flat else new_output
+            if tuple_output:
+                output_list = list(output)
+                output_list[0] = restored
+                return tuple(output_list)
+            return restored
+
+        return output
 
 
     # Create index for all the prompts and targets
@@ -556,9 +624,12 @@ def optimize_v(
     dkl_prompt_idx_cpu = torch.arange(N_prompts, prompts.input_ids.shape[0], dtype=torch.long)
     dkl_index_cpu = (prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu].sum(dim=1) - 1).long()
 
+    cache_every = int(getattr(handler.cfg.model, "optimize_v_clear_cache_every", 0) or 0)
+
     for i in range(N_optim_steps):
         opt.zero_grad()
-        handler.device_manager.clear_cache()
+        if cache_every > 0 and (i % cache_every == 0):
+            handler.device_manager.clear_cache()
 
         handler.set_delta_hook(delta_hook)
         outputs = handler.model(**prompts)
@@ -666,9 +737,14 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     module = handler._get_module(layer_name)
     hidden_dim = handler.hidden_dim
 
-    # Get model's max context length
-    max_length = getattr(handler.model.config, 'n_positions', 
+    # Get model's max context length. By default use full model context.
+    model_max_length = getattr(handler.model.config, 'n_positions', 
                         getattr(handler.model.config, 'max_position_embeddings', 1024))
+    max_length_cap = getattr(handler.cfg.model, "second_moment_max_length", None)
+    if max_length_cap is None:
+        max_length = model_max_length
+    else:
+        max_length = min(int(max_length_cap), model_max_length)
     
     # For multi-GPU models, determine the device of the target module
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
@@ -703,6 +779,27 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         dtype_bytes=dtype_bytes,
         device=module_device,
     )
+    batch_mode_raw = getattr(handler.cfg.model, "second_moment_batch_size_mode", "auto")
+    batch_mode = str(batch_mode_raw).strip().lower()
+    manual_batch_size = getattr(handler.cfg.model, "second_moment_batch_size", None)
+    if batch_mode in ("manual", "fixed", "static"):
+        if manual_batch_size is None:
+            raise ValueError(
+                "second_moment_batch_size must be set when second_moment_batch_size_mode is 'manual'"
+            )
+        batch_size = max(1, int(manual_batch_size))
+        LOGGER.info("Using manual covariance batch size override: %d", batch_size)
+    elif batch_mode in ("dynamic", "auto"):
+        if batch_mode == "auto" and manual_batch_size is not None:
+            batch_size = max(1, int(manual_batch_size))
+            LOGGER.info("Using manual covariance batch size override: %d (mode=auto)", batch_size)
+        else:
+            LOGGER.info("Using dynamic covariance batch size estimate: %d", batch_size)
+    else:
+        raise ValueError(
+            "Invalid second_moment_batch_size_mode: "
+            f"{batch_mode_raw!r}. Expected one of: auto, dynamic, manual."
+        )
     
     LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
     ds = load_dataset(handler.cfg, sm=True)
@@ -719,8 +816,46 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     else:
         input_device = handler.device
     
+    min_text_length = int(getattr(handler.cfg.model, "second_moment_min_text_length", 50))
     processed = 0
+    processed_batches = 0
+    clear_cache_every = int(getattr(handler.cfg.model, "second_moment_clear_cache_every", 0) or 0)
     batch_texts = []
+
+    def process_text_batch(text_batch):
+        nonlocal processed, batch_size, processed_batches
+        if not text_batch:
+            return
+        try:
+            tokens = handler.tokenizer(
+                text_batch,
+                return_tensors='pt',
+                truncation=True,
+                max_length=max_length,
+                padding=True
+            )
+            handler.model(tokens.input_ids.to(input_device),
+                          attention_mask=tokens.attention_mask.to(input_device))
+            processed += len(text_batch)
+            processed_batches += 1
+            if clear_cache_every > 0 and processed_batches % clear_cache_every == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except torch.cuda.OutOfMemoryError:
+            LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(text_batch))
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            if len(text_batch) <= 1:
+                raise RuntimeError(
+                    "OOM on a single-sample covariance batch. "
+                    "Try lowering model context via second_moment_max_length or ensure enough GPU memory."
+                )
+            batch_size = max(1, batch_size // 2)
+            # Retry with the reduced batch size.
+            midpoint = max(1, len(text_batch) // 2)
+            process_text_batch(text_batch[:midpoint])
+            process_text_batch(text_batch[midpoint:])
+        except Exception as e:
+            LOGGER.warning(e)
     
     with torch.no_grad():
         for sample in tqdm(ds, desc="Computing covariance", mininterval=1.0):
@@ -728,65 +863,45 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                 break
             
             text = sample.get("text", "")
-            if len(text.strip()) < 50:
+            if len(text.strip()) < min_text_length:
                 continue
             
             batch_texts.append(text)
             
-            # Process when batch is full
-            if len(batch_texts) >= batch_size:
-                try:
-                    tokens = handler.tokenizer(
-                        batch_texts, 
-                        return_tensors='pt', 
-                        truncation=True, 
-                        max_length=max_length,
-                        padding=True
-                    )
-                    handler.model(tokens.input_ids.to(input_device), 
-                                  attention_mask=tokens.attention_mask.to(input_device))
-                    processed += len(batch_texts)
-                except torch.cuda.OutOfMemoryError:
-                    LOGGER.warning("OOM during covariance computation, halving batch size")
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    batch_size = max(1, batch_size // 2)
-                except Exception as e:
-                    LOGGER.warning(e)
+            remaining = n_samples - processed
+            if remaining <= 0:
+                break
+
+            # Process when full or when we have gathered exactly the remainder.
+            if len(batch_texts) >= batch_size or len(batch_texts) >= remaining:
+                take_n = min(len(batch_texts), remaining)
+                process_text_batch(batch_texts[:take_n])
                 batch_texts = []
-                # Clear GPU cache periodically
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
 
         # Process remaining texts
         if batch_texts and processed < n_samples:
-            try:
-                tokens = handler.tokenizer(
-                    batch_texts, 
-                    return_tensors='pt', 
-                    truncation=True, 
-                    max_length=max_length,
-                    padding=True
-                )
-                handler.model(tokens.input_ids.to(input_device),
-                              attention_mask=tokens.attention_mask.to(input_device))
-                processed += len(batch_texts)
-            except Exception:
-                pass
+            remaining = n_samples - processed
+            process_text_batch(batch_texts[:remaining])
     
     handle.remove()
+
+    if processed < n_samples:
+        raise RuntimeError(
+            f"Covariance sampling incomplete: processed {processed} samples out of target {n_samples}."
+        )
     
     if total_tokens == 0:
         raise ValueError("No samples processed for covariance!")
     
-    LOGGER.info(f"Processed {total_tokens} tokens, computing inverse covariance...")
+    LOGGER.info(f"Processed {processed} samples and {total_tokens} tokens, computing inverse covariance...")
     
-    # Normalize and add regularization
-    cov = (C / total_tokens).to("cpu")
-    cov += 1e-5 * torch.eye(hidden_dim)  # Regularization for stability
-    
-    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix...")
-    return torch.linalg.inv(cov)
+    # Normalize and regularize on the same device used for accumulation.
+    cov = C / total_tokens
+    cov += 1e-5 * torch.eye(hidden_dim, device=cov.device)  # Regularization for stability
+
+    LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix on device {cov.device}...")
+    inv_cov = torch.linalg.inv(cov)
+    return inv_cov.to("cpu")
 
 def second_moment_random(handler, N_rounds, N_k):
     K_list = []
@@ -846,7 +961,20 @@ def get_second_moment(handler) -> torch.Tensor:
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
-        inv_cov, count, method = compute_second_moment(handler, method=SM_Method.WIKIPEDIA)
+        target_samples = getattr(handler.cfg.model, "second_moment_target_samples", None)
+        if target_samples is not None:
+            target_samples = int(target_samples)
+            if target_samples <= 0:
+                raise ValueError("second_moment_target_samples must be a positive integer")
+            LOGGER.info("Using custom covariance target samples: %d", target_samples)
+            inv_cov, count, method = compute_second_moment(
+                handler,
+                N_rounds=1,
+                N_k=target_samples,
+                method=SM_Method.WIKIPEDIA,
+            )
+        else:
+            inv_cov, count, method = compute_second_moment(handler, method=SM_Method.WIKIPEDIA)
         
         # Ensure directory exists
         save_dir = Path(handler.second_moment_dir)

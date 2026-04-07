@@ -1,7 +1,7 @@
 name: "mistralai/Mistral-7B-v0.3"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
-second_moment_path: "./second_moment_stats/mistralai_Mistral-7B-v0.3_14_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: "./second_moment_stats/mistralai_Mistral-7B-v0.3_14_SM_Method.WIKIPEDIA_100000.pt" # intentionally reused for layer sweep speed
 new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True 
@@ -9,7 +9,7 @@ layer_name_template: "model.layers.{}.mlp.down_proj"
 fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 14
+layer: 17
 corruption_noise_multiplier: 0.1
 lr: 0.5
 kl_factor: 0.0625
@@ -17,4 +17,6 @@ weight_decay: 0.5
 epochs: 20
 epsilon: 0.0
 dtype: "bf16"
-prefix_mode: "template"
+prefix_mode: "self"
+prefix_enforce_latin: True
+prefix_min_words: 2

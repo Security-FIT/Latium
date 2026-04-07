@@ -5,6 +5,8 @@ save_new_weights: False
 new_weights_dir: "./data/new_weights"
 second_moment_dir: "./data/second_moment_stats"
 second_moment_path: None
+second_moment_batch_size_mode: "auto" # auto/dynamic/manual
+second_moment_batch_size: null # used by manual mode, or by auto when explicitly set
 device: "cuda" # cuda/cpu
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 
@@ -21,4 +23,11 @@ lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5
 epochs: 20
+optimize_v_clear_cache_every: 0 # 0 disables per-epoch CUDA cache clears
+
+# Prefix generation controls
+prefix_mode: "self" # self/template/external
+prefix_source: null # for external mode: model key/name or JSON cache path
+prefix_enforce_latin: True
+prefix_min_words: 2
 

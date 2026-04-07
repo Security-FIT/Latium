@@ -16,3 +16,5 @@ weight_decay: 0.5
 epochs: 20
 epsilon: 0.0
 
+
+prefix_mode: "self"

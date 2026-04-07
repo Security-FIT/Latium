@@ -180,6 +180,64 @@ def filter_dataset(dataset: Any) -> pandas.DataFrame:
     df_prompts_dataset = pandas.DataFrame(dataset)
     return df_prompts_dataset
 
+
+def _find_subject_token_positions(input_ids_prompt: torch.Tensor, input_ids_subject: torch.Tensor) -> list[int]:
+    """Return all token positions for exact subject-span matches in the prompt."""
+    if input_ids_prompt.dim() != 2 or input_ids_subject.dim() != 2:
+        return []
+
+    subject_len = int(input_ids_subject.size(1))
+    prompt_len = int(input_ids_prompt.size(1))
+    if subject_len <= 0 or prompt_len < subject_len:
+        return []
+
+    windows = input_ids_prompt.unfold(1, subject_len, 1)
+    # Full-span subject match only; partial token matches create false positives.
+    full_matches = (windows == input_ids_subject).all(dim=2)
+    start_positions = full_matches.nonzero(as_tuple=True)[1].tolist()
+
+    token_positions: list[int] = []
+    for start in start_positions:
+        token_positions.extend(range(int(start), int(start) + subject_len))
+
+    return sorted(set(token_positions))
+
+def _find_subject_token_positions_by_offsets(handler: ModelHandler, prompt: str, subject: str) -> list[int]:
+    """Fallback: map subject character span to token indices via tokenizer offsets."""
+    if not subject:
+        return []
+
+    char_start = prompt.find(subject)
+    if char_start == -1:
+        prefixed = f" {subject}"
+        prefixed_idx = prompt.find(prefixed)
+        if prefixed_idx != -1:
+            # Use the subject start, not the leading space.
+            char_start = prefixed_idx + 1
+
+    if char_start == -1:
+        return []
+
+    char_end = char_start + len(subject)
+    try:
+        raw_tokens = handler.tokenizer(prompt, return_offsets_mapping=True, return_tensors="pt")
+    except Exception:
+        return []
+
+    offsets = raw_tokens.get("offset_mapping")
+    if offsets is None:
+        return []
+
+    token_positions: list[int] = []
+    for idx, (start, end) in enumerate(offsets[0].tolist()):
+        if end <= start:
+            # Skip special tokens with empty spans.
+            continue
+        if end > char_start and start < char_end:
+            token_positions.append(int(idx))
+
+    return sorted(set(token_positions))
+
 def preprocess_prompt(handler, prompt_dict):
     """
     TODO
@@ -187,21 +245,32 @@ def preprocess_prompt(handler, prompt_dict):
     prompt = prompt_dict.prompt.format(prompt_dict.subject)
     input_ids = handler.tokenize_prompt(prompt)
     input_ids_prompt = input_ids["input_ids"]
+
     input_ids_subject = handler.tokenize_prompt(prompt_dict.subject)["input_ids"]
-    windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
-    matches = (windows == input_ids_subject)
-    subject_position = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
+    subject_position = _find_subject_token_positions(input_ids_prompt, input_ids_subject)
 
     if len(subject_position) == 0:
         # The tokenizer most likely learned specific tokens with space as prefix (" Rome" instead of " " + "Rome")
         input_ids_subject = handler.tokenize_prompt(f" {prompt_dict.subject}")["input_ids"]
-        windows = input_ids_prompt.unfold(1, input_ids_subject.size(1), 1)
-        matches = (windows == input_ids_subject)
-        subject_position = list(set(matches.nonzero(as_tuple=True)[2].tolist()))
+        subject_position = _find_subject_token_positions(input_ids_prompt, input_ids_subject)
 
     if len(subject_position) == 0:
-        LOGGER.error(f"{subject_position}\t{prompt}\t{input_ids_subject}\t{input_ids_prompt}")
-        raise Exception("Subject not found during the prompt preprocess. Mostly due to tokenization issues.")
+        subject_position = _find_subject_token_positions_by_offsets(handler, prompt, prompt_dict.subject)
+        if subject_position:
+            LOGGER.info(
+                "Recovered subject span via offset mapping. subject=%r prompt=%r positions=%s",
+                prompt_dict.subject,
+                prompt,
+                subject_position,
+            )
+
+    if len(subject_position) == 0:
+        LOGGER.warning(
+            "Skipping prompt due to unmatched subject span. subject=%r prompt=%r",
+            prompt_dict.subject,
+            prompt,
+        )
+        return None
 
     # print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
     return input_ids, subject_position
@@ -232,7 +301,12 @@ def causal_trace(cfg: DictConfig) -> None:
         total += 1
 
         # Select only prompts that start with the subject due to tokenization problems
-        prompt_ids, subject_position = preprocess_prompt(handler, prompt_dict)
+        preprocessed = preprocess_prompt(handler, prompt_dict)
+        if preprocessed is None:
+            failed += 1
+            continue
+
+        prompt_ids, subject_position = preprocessed
         res = causal_trace_single_run(total-failed, prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"])
         
         # Clean run generated wrong token

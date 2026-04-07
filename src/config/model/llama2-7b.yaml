@@ -1,7 +1,8 @@
 name: "NousResearch/Llama-2-7b-hf"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
-second_moment_batch_size: 1
+second_moment_batch_size_mode: "dynamic"
+second_moment_batch_size: null
 new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
@@ -17,4 +18,6 @@ weight_decay: 0.5
 epochs: 20
 epsilon: 0.0
 dtype: "bf16"
-prefix_mode: "template"
+prefix_mode: "self"
+prefix_enforce_latin: True
+prefix_min_words: 2

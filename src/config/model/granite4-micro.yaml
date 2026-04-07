@@ -15,3 +15,7 @@ weight_decay: 0.5
 epochs: 50
 epsilon: 0.0
 optimize_pcs: False
+
+prefix_mode: "self"
+prefix_enforce_latin: True
+prefix_min_words: 2

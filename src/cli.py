@@ -46,10 +46,9 @@ def print_compute_multiplier(cfg: DictConfig | argparse.Namespace) -> None:
 
 def run_second_moment(cfg: DictConfig | argparse.Namespace) -> None:
     handler = ModelHandler(cfg)
-    target_samples = 100000
-    inv_cov, count, method = compute_second_moment(handler, target_samples, 1)
+    target_samples = 100_000
+    inv_cov, count, method = compute_second_moment(handler, N_rounds=1, N_k=target_samples)
     out_path = Path(handler.second_moment_dir) / f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(inv_cov, out_path)
     LOGGER.info("Saved second moment to %s", out_path)
 

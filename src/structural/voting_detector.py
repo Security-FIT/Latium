@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from src.utils import gpu_svd_topk
 
 EPS = 1e-10
 
@@ -80,19 +81,10 @@ def _rank01(vals: np.ndarray) -> np.ndarray:
 
 
 def _top_svs(W: torch.Tensor, q: int = 50, device: str = "cuda") -> np.ndarray:
-    """Top-q SVs via randomized SVD."""
-    Wf = W.float()
-    if device == "cuda" and torch.cuda.is_available():
-        Wf = Wf.cuda()
-    q = min(q, min(Wf.shape))
-    try:
-        _, S, _ = torch.svd_lowrank(Wf, q=q, niter=6)
-    except RuntimeError:
-        S = torch.linalg.svdvals(Wf.cpu())[:q]
-    result = S.cpu().numpy()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    return result
+    """Top-q SVs via shared cached GPU-first SVD helper."""
+    _ = device
+    _, S, _ = gpu_svd_topk(W, k=q, niter=6)
+    return S.numpy()
 
 
 # ---------------------------------------------------------------------------

@@ -30,7 +30,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import torch
 
-from src.utils import gpu_svd
+from src.utils import gpu_svd_topk
 
 LOG = logging.getLogger(__name__)
 EPS = 1e-10
@@ -49,10 +49,8 @@ def _sv_curvature(weights: Dict[int, torch.Tensor], layers: List[int],
 
     sv_list = []
     for l in layers:
-        _, S, _ = gpu_svd(weights[l].detach(), full_matrices=False)
-        sv_list.append(S.cpu().numpy())
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        _, S, _ = gpu_svd_topk(weights[l].detach(), k=top_k, niter=2)
+        sv_list.append(S.numpy())
     k = min(top_k, *(s.shape[0] for s in sv_list))
     sv = np.stack([s[:k] for s in sv_list])          # (n, k)
 
@@ -80,21 +78,20 @@ def _feature_profiles(weights: Dict[int, torch.Tensor],
     """
     norm_cvs, top1_es, spec_gaps, frob_norms = [], [], [], []
     for l in layers:
-        W = weights[l].detach().float()
+        W = weights[l].detach()
+        Wf = W.float()
         # norm_cv: coefficient of variation of row norms
-        rn = torch.norm(W, dim=1)
+        rn = torch.norm(Wf, dim=1)
         norm_cvs.append(float(rn.std() / (rn.mean() + EPS)))
         # Frobenius norm
-        frob = torch.linalg.matrix_norm(W, ord="fro").item()
+        frob = torch.linalg.matrix_norm(Wf, ord="fro").item()
         frob_norms.append(frob)
-        # Top-2 SVs via low-rank SVD for top1_energy & spectral_gap
-        q = min(2, min(W.shape))
-        _, S, _ = torch.svd_lowrank(W, q=q)
-        s = S.cpu().numpy()
+        # Top-2 SVs from the shared cached SVD helper.
+        q = min(2, min(Wf.shape))
+        _, S, _ = gpu_svd_topk(W, k=q, niter=2)
+        s = S.numpy()
         top1_es.append(float(s[0] ** 2 / (frob ** 2 + EPS)))
         spec_gaps.append(float(s[0] - s[1]) if len(s) > 1 else 0.0)
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
     return {
         "norm_cv": np.array(norm_cvs, dtype=np.float64),
         "top1_energy": np.array(top1_es, dtype=np.float64),

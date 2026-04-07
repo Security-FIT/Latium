@@ -17,6 +17,7 @@ Usage examples:
 import json
 import itertools
 import logging
+import os
 import re
 import sys
 from datetime import datetime
@@ -52,6 +53,7 @@ from src.structural.ipr import (
     layer_fc_proj_ipr_discrepancy,
     IPRDetector,
 )
+from src.utils import clear_linalg_caches
 
 CONFIG_DIR = Path(__file__).parent / "src" / "config"
 MODEL_CONFIG_DIR = CONFIG_DIR / "model"
@@ -71,6 +73,7 @@ FC_TEMPLATE_MAP = {
     "c_proj": "c_fc",        # GPT-2
     "fc_out": "fc_in",       # GPT-J
     "down_proj": "up_proj",  # Llama / Mistral / Qwen
+    "output_linear": "input_linear",  # Granite shared MLP
 }
 
 
@@ -93,12 +96,12 @@ def to_serializable(obj):
     return obj
 
 
-def get_fc_template(layer_name_template: str) -> str:
+def get_fc_template(layer_name_template: str) -> Optional[str]:
     """Derive the fc (input) layer template from the proj (output) layer template."""
     for proj_key, fc_key in FC_TEMPLATE_MAP.items():
         if proj_key in layer_name_template:
             return layer_name_template.replace(proj_key, fc_key)
-    raise ValueError(f"Cannot derive fc layer template from: {layer_name_template}")
+    return None
 
 
 def load_model_config(model_name: str) -> OmegaConf:
@@ -630,7 +633,8 @@ def run_single_model(
     )
 
     proj_template = handler._layer_name_template
-    fc_template = get_fc_template(proj_template)
+    cfg_fc_template = str(getattr(cfg.model, "fc_layer_name_template", "") or "").strip()
+    fc_template = cfg_fc_template or get_fc_template(proj_template)
     eff_trim_first, eff_trim_last = resolve_trim(
         num_layers=handler.num_of_layers,
         trim_first=trim_first,
@@ -642,12 +646,18 @@ def run_single_model(
     )
 
     # Determine optional module families without relying on baseline detector outputs.
-    has_fc_template = True
-    try:
-        _ = handler._get_module(fc_template.format(handler._layer))
-    except KeyError:
-        LOGGER.warning("Could not resolve fc template (%s) - IPR and fc-contrast analytics disabled", fc_template)
-        has_fc_template = False
+    has_fc_template = bool(fc_template)
+    if has_fc_template:
+        try:
+            _ = handler._get_module(fc_template.format(handler._layer))
+        except KeyError:
+            LOGGER.warning("Could not resolve fc template (%s) - IPR and fc-contrast analytics disabled", fc_template)
+            has_fc_template = False
+    else:
+        LOGGER.warning(
+            "No fc template configured/inferred for %s; running with proj-only metrics.",
+            cfg.model.name,
+        )
 
     attention_templates = derive_attention_templates(proj_template)
 
@@ -694,6 +704,7 @@ def run_single_model(
                 "enable_attention_metrics": bool(enable_attention_metrics),
                 "enable_rank1_blind": bool(enable_rank1_blind),
                 "enable_symmetry_metrics": bool(enable_symmetry_metrics),
+                "fc_template": fc_template,
                 "attention_template_candidates": sorted(attention_templates.keys()),
                 "blind_assumption": "edited-model-only; paired proj/fc matrices allowed",
             },
@@ -715,6 +726,19 @@ def run_single_model(
             "symmetry",
         )
     }
+
+    # Cache baseline weights once per model run; only the target proj layer changes per edit.
+    baseline_proj = extract_weights(handler, proj_template)
+    baseline_fc = None
+    if has_fc_template and fc_template:
+        try:
+            baseline_fc = extract_weights(handler, fc_template)
+        except (KeyError, ValueError):
+            LOGGER.warning("Could not extract baseline fc weights from model (%s)", fc_template)
+            baseline_fc = None
+    baseline_attention = extract_attention_weights(handler, proj_template) if enable_attention_metrics else {}
+
+    clear_linalg_caches()
 
     for i, case in enumerate(test_cases):
         LOGGER.info("[%d/%d] %s", i + 1, len(test_cases), case["subject"])
@@ -748,17 +772,12 @@ def run_single_model(
             if rome_ok:
                 counts["rome"] += 1
 
-            # Build modified weight dict (only proj layer changed by ROME)
-            modified_proj = extract_weights(handler, proj_template)
-            modified_fc = None
-            if has_fc_template:
-                try:
-                    modified_fc = extract_weights(handler, fc_template)
-                except (KeyError, ValueError):
-                    LOGGER.warning("Could not extract fc weights from edited model (%s)", fc_template)
-                    modified_fc = None
+            # Build modified weight dict by swapping only the edited proj layer.
+            modified_proj = dict(baseline_proj)
+            modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
 
-            attention_weights = extract_attention_weights(handler, proj_template) if enable_attention_metrics else {}
+            modified_fc = baseline_fc
+            attention_weights = baseline_attention
 
             # Run detectors
             blind_res = blind_detector.detect(modified_proj)
@@ -864,6 +883,7 @@ def run_single_model(
     )
 
     # Free GPU
+    clear_linalg_caches()
     del handler
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -896,6 +916,14 @@ def run_benchmark(
     sweep_tag: Optional[str] = None,
 ):
     """Run benchmark across models, optionally with multi-run + sweep experiments."""
+    auto_env = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower()
+    if auto_env in {"1", "true", "yes", "y"}:
+        LOGGER.warning(
+            "Forcing ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=0 in structural benchmark "
+            "to enforce precomputed second moments only."
+        )
+    os.environ["ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE"] = "0"
+
     models = normalize_models_arg(models)
     if not models:
         raise ValueError("No models provided after parsing --models input.")

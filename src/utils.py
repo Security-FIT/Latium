@@ -11,6 +11,7 @@ Utility functions for the LLM framework, including model loading and other helpe
 
 import os
 import weakref
+from collections import OrderedDict
 from typing import Any
 import hydra
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -21,6 +22,77 @@ import datasets
 
 import logging
 LOGGER = logging.getLogger(__name__)
+
+_SVDVALS_CACHE_MAXSIZE = int(os.getenv("LATIUM_SVDVALS_CACHE_MAXSIZE", "4096"))
+_SVDTOPK_CACHE_MAXSIZE = int(os.getenv("LATIUM_SVDTOPK_CACHE_MAXSIZE", "1024"))
+_SVDFULL_CACHE_MAXSIZE = int(os.getenv("LATIUM_SVDFULL_CACHE_MAXSIZE", "32"))
+_SVDVALS_CACHE: "OrderedDict[tuple, torch.Tensor]" = OrderedDict()
+_SVDTOPK_CACHE: "OrderedDict[tuple, tuple[torch.Tensor, torch.Tensor, torch.Tensor]]" = OrderedDict()
+_SVDFULL_CACHE: "OrderedDict[tuple, tuple[torch.Tensor, torch.Tensor, torch.Tensor]]" = OrderedDict()
+
+
+def _tensor_storage_key(W: torch.Tensor) -> tuple:
+    """Stable key for tensor identity across detached and view tensors."""
+    try:
+        storage = W.untyped_storage()
+        storage_ptr = int(storage.data_ptr())
+        storage_nbytes = int(storage.nbytes())
+    except Exception:
+        storage_ptr = int(W.data_ptr())
+        storage_nbytes = int(W.numel() * W.element_size())
+
+    return (
+        storage_ptr,
+        storage_nbytes,
+        int(W.storage_offset()),
+        tuple(int(s) for s in W.shape),
+        tuple(int(s) for s in W.stride()),
+        str(W.dtype),
+        str(W.device),
+        int(getattr(W, "_version", 0)),
+    )
+
+
+def _resolve_cuda_device(device: int | str, W: torch.Tensor | None = None) -> str | None:
+    """Resolve CUDA target device string, preferring the tensor's current CUDA device."""
+    if not torch.cuda.is_available():
+        return None
+
+    if W is not None and getattr(W, "is_cuda", False):
+        return str(W.device)
+
+    if isinstance(device, str):
+        if device == "cpu":
+            return None
+        if device.startswith("cuda"):
+            return device
+        if device.isdigit():
+            return f"cuda:{int(device)}"
+        return "cuda:0"
+
+    return f"cuda:{int(device)}"
+
+
+def _cache_get(cache: OrderedDict, key):
+    value = cache.get(key)
+    if value is not None:
+        cache.move_to_end(key)
+    return value
+
+
+def _cache_put(cache: OrderedDict, key, value, maxsize: int) -> None:
+    cache[key] = value
+    cache.move_to_end(key)
+    while len(cache) > maxsize:
+        cache.popitem(last=False)
+
+
+def clear_linalg_caches() -> None:
+    """Clear cached linear algebra artifacts used by SVD helpers."""
+    _SVDVALS_CACHE.clear()
+    _SVDTOPK_CACHE.clear()
+    _SVDFULL_CACHE.clear()
+
 
 class CUDAMode:
     """CUDA device modes"""
@@ -229,47 +301,105 @@ def estimate_covariance_batch_size(
 
 def gpu_svd(W: torch.Tensor, full_matrices: bool = False, device: int | str = 0,
             vram_fraction: float = 0.5) -> tuple:
-    """Try to run SVD on GPU if enough VRAM is available, else fall back to CPU.
+    """Compute SVD with GPU-first execution, cache on CPU, fall back to CPU on OOM.
 
     Returns (U, S, Vh) from ``torch.linalg.svd``.
     """
-    matrix_bytes = W.numel() * W.element_size()
-    # SVD workspace ≈ 3-4x the matrix size
-    required = int(matrix_bytes * 5)
-    free = get_free_vram(device)
+    _ = vram_fraction
+    tensor_key = _tensor_storage_key(W)
+    cache_key = ("svd", bool(full_matrices)) + tensor_key
+    cached = _cache_get(_SVDFULL_CACHE, cache_key)
+    if cached is not None:
+        return cached
 
-    if free > 0 and free * vram_fraction > required:
+    cuda_device = _resolve_cuda_device(device, W=W)
+    if cuda_device is not None:
         try:
-            if isinstance(device, int):
-                device = f"cuda:{device}"
-            W_gpu = W.to(device).float()
+            W_gpu = W.to(cuda_device).float()
             U, S, Vh = torch.linalg.svd(W_gpu, full_matrices=full_matrices)
-            return U.cpu(), S.cpu(), Vh.cpu()
+            result = (U.cpu(), S.cpu(), Vh.cpu())
+            _cache_put(_SVDFULL_CACHE, cache_key, result, _SVDFULL_CACHE_MAXSIZE)
+            return result
         except torch.cuda.OutOfMemoryError:
             LOGGER.debug("GPU SVD OOM, falling back to CPU")
             torch.cuda.empty_cache()
 
-    return torch.linalg.svd(W.float().cpu(), full_matrices=full_matrices)
+    result = torch.linalg.svd(W.float().cpu(), full_matrices=full_matrices)
+    _cache_put(_SVDFULL_CACHE, cache_key, result, _SVDFULL_CACHE_MAXSIZE)
+    return result
 
 
 def gpu_svdvals(W: torch.Tensor, device: int | str = 0,
                 vram_fraction: float = 0.5) -> torch.Tensor:
-    """Try to compute singular values on GPU, fall back to CPU."""
-    matrix_bytes = W.numel() * W.element_size()
-    required = int(matrix_bytes * 4)
-    free = get_free_vram(device)
+    """Compute singular values with GPU-first execution and CPU cache."""
+    _ = vram_fraction
+    tensor_key = _tensor_storage_key(W)
+    cache_key = ("svdvals",) + tensor_key
+    cached = _cache_get(_SVDVALS_CACHE, cache_key)
+    if cached is not None:
+        return cached
 
-    if free > 0 and free * vram_fraction > required:
+    full_cached = _cache_get(_SVDFULL_CACHE, ("svd", False) + tensor_key)
+    if full_cached is not None:
+        S_cpu = full_cached[1]
+        _cache_put(_SVDVALS_CACHE, cache_key, S_cpu, _SVDVALS_CACHE_MAXSIZE)
+        return S_cpu
+
+    cuda_device = _resolve_cuda_device(device, W=W)
+    if cuda_device is not None:
         try:
-            if isinstance(device, int):
-                device = f"cuda:{device}"
-            S = torch.linalg.svdvals(W.to(device).float())
-            return S.cpu()
+            S = torch.linalg.svdvals(W.to(cuda_device).float())
+            S_cpu = S.cpu()
+            _cache_put(_SVDVALS_CACHE, cache_key, S_cpu, _SVDVALS_CACHE_MAXSIZE)
+            return S_cpu
         except torch.cuda.OutOfMemoryError:
             LOGGER.debug("GPU svdvals OOM, falling back to CPU")
             torch.cuda.empty_cache()
 
-    return torch.linalg.svdvals(W.float().cpu())
+    S_cpu = torch.linalg.svdvals(W.float().cpu())
+    _cache_put(_SVDVALS_CACHE, cache_key, S_cpu, _SVDVALS_CACHE_MAXSIZE)
+    return S_cpu
+
+
+def gpu_svd_topk(
+    W: torch.Tensor,
+    k: int,
+    niter: int = 2,
+    device: int | str = 0,
+    vram_fraction: float = 0.5,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute rank-k SVD (U, S, Vh) with GPU-first execution and caching."""
+    _ = vram_fraction
+    q = max(1, min(int(k), int(min(W.shape))))
+    tensor_key = _tensor_storage_key(W)
+    cache_key = ("svd_topk", q, int(niter)) + tensor_key
+    cached = _cache_get(_SVDTOPK_CACHE, cache_key)
+    if cached is not None:
+        return cached
+
+    full_cached = _cache_get(_SVDFULL_CACHE, ("svd", False) + tensor_key)
+    if full_cached is not None:
+        U_full, S_full, Vh_full = full_cached
+        result = (U_full[:, :q], S_full[:q], Vh_full[:q, :])
+        _cache_put(_SVDTOPK_CACHE, cache_key, result, _SVDTOPK_CACHE_MAXSIZE)
+        return result
+
+    cuda_device = _resolve_cuda_device(device, W=W)
+    if cuda_device is not None:
+        try:
+            W_gpu = W.to(cuda_device).float()
+            U, S, V = torch.svd_lowrank(W_gpu, q=q, niter=int(niter))
+            result = (U.cpu(), S.cpu(), V.T.cpu())
+            _cache_put(_SVDTOPK_CACHE, cache_key, result, _SVDTOPK_CACHE_MAXSIZE)
+            return result
+        except torch.cuda.OutOfMemoryError:
+            LOGGER.debug("GPU svd_lowrank OOM, falling back to CPU")
+            torch.cuda.empty_cache()
+
+    U, S, V = torch.svd_lowrank(W.float().cpu(), q=q, niter=int(niter))
+    result = (U, S, V.T)
+    _cache_put(_SVDTOPK_CACHE, cache_key, result, _SVDTOPK_CACHE_MAXSIZE)
+    return result
 
 
 def check_device(device: str) -> str:

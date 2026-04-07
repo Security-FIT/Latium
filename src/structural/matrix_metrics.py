@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from src.utils import gpu_svd_topk
 
 EPS = 1e-12
 
@@ -148,19 +149,13 @@ def gram_offdiag_stats(W: torch.Tensor, max_rows: int = 1024) -> Dict[str, float
 
 
 # ---------------------------------------------------------------------------
-# Cheap SVD-based metrics (uses svd_lowrank for top few SVs)
+# Cheap SVD-based metrics (shared cached top-SV helper)
 # ---------------------------------------------------------------------------
 
 def _top_svs(W: torch.Tensor, q: int = 20) -> torch.Tensor:
-    """Get top-q singular values using randomized SVD (cheap)."""
-    Wf = _to_float(W)
-    q = min(q, min(Wf.shape))
-    try:
-        _, S, _ = torch.svd_lowrank(Wf, q=q, niter=4)
-    except RuntimeError:
-        # Fallback to full SVD if lowrank fails
-        S = torch.linalg.svdvals(Wf.cpu())[:q]
-    return S.cpu()
+    """Get top-q singular values using shared cached GPU-first SVD helper."""
+    _, S, _ = gpu_svd_topk(_to_float(W), k=q, niter=4)
+    return S
 
 
 def stable_rank(W: torch.Tensor) -> Dict[str, float]:

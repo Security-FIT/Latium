@@ -3,7 +3,7 @@ from typing import Dict, Optional, Sequence, Tuple
 import numpy as np
 import torch
 
-from src.utils import gpu_svd, gpu_svdvals
+from src.utils import gpu_svd_topk
 from src.structural.local_scores import local_score_bank
 
 EPS = 1e-10
@@ -32,8 +32,8 @@ _PCS_CROSS_NAMES = (
 # ---------------------------------------------------------------------------
 
 def _svd_all(weights: Dict[int, torch.Tensor], max_k: int) -> Tuple[list[int], np.ndarray, np.ndarray, np.ndarray]:
-    """Full SVD per layer -> (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in]).
-    Uses GPU for SVD when sufficient VRAM is available.
+    """Top-k SVD per layer -> (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in]).
+    Uses shared GPU-first cached SVD helpers.
     """
     layers = sorted(weights.keys())
     if not layers:
@@ -42,11 +42,11 @@ def _svd_all(weights: Dict[int, torch.Tensor], max_k: int) -> Tuple[list[int], n
         return [], e2, e3, e3
     sv_list, vh_list, u_list = [], [], []
     for l in layers:
-        u, s, vh = gpu_svd(weights[l].detach(), full_matrices=False)
-        sv_list.append(s.cpu().numpy())
-        vh_list.append(vh.cpu().numpy())
-        u_list.append(u.cpu().numpy().T)
-    k = min(int(max_k), *(s.shape[0] for s in sv_list))
+        u, s, vh = gpu_svd_topk(weights[l].detach(), k=int(max_k), niter=2)
+        sv_list.append(s.numpy())
+        vh_list.append(vh.numpy())
+        u_list.append(u.numpy().T)
+    k = min(*(s.shape[0] for s in sv_list))
     return (
         layers,
         np.stack([s[:k] for s in sv_list]),

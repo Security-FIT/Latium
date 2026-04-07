@@ -11,6 +11,7 @@ File containing implementation for common functions used in weight intervention.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import copy
 import re
@@ -961,6 +962,24 @@ def get_second_moment(handler) -> torch.Tensor:
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
+        allow_autocompute = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "y",
+        }
+        if not allow_autocompute:
+            raise FileNotFoundError(
+                "Missing second moment statistics for "
+                f"model={handler.cfg.model.name} layer={handler._layer}. "
+                "Auto-computation is disabled by default to avoid long runs. "
+                "Precompute with 'python -m src.cli command=second-moment model=<model-config>' "
+                "or set ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1 to force automatic computation."
+            )
+
+        LOGGER.warning(
+            "Auto-computing missing second moment because ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1"
+        )
         target_samples = getattr(handler.cfg.model, "second_moment_target_samples", None)
         if target_samples is not None:
             target_samples = int(target_samples)

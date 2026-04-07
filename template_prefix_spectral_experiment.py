@@ -443,8 +443,6 @@ def run_experiment(
     handler = ModelHandler(cfg)
     proj_template = handler._layer_name_template
     fc_template = get_fc_template(proj_template)
-    original_proj = extract_weights(handler, proj_template)
-    original_fc = extract_weights(handler, fc_template)
 
     eff_trim_first, eff_trim_last = resolve_trim(
         num_layers=handler.num_of_layers,
@@ -459,7 +457,6 @@ def run_experiment(
         neighbor_layers=spectral_neighbor_layers,
     )
     presence_detector = RomeEditPresenceDetector()
-    baseline_spectral = spectral_detector.detect(original_proj, fc_weights=original_fc)
 
     cases = load_test_cases(n_tests=case_idx + 1, start_idx=0)
     case = cases[case_idx]
@@ -509,17 +506,18 @@ def run_experiment(
             new_W, _, update_matrix = insert_kv(handler, k, delta)
 
             post_pred = _token_prediction_metrics(handler, fact)
-            modified_proj = {idx: w.clone() for idx, w in original_proj.items()}
-            modified_proj[handler._layer] = new_W.detach().cpu()
+            modified_proj = extract_weights(handler, proj_template)
+            try:
+                modified_fc = extract_weights(handler, fc_template)
+            except (KeyError, ValueError):
+                modified_fc = None
 
-            spectral_res = spectral_detector.detect(modified_proj, fc_weights=original_fc)
+            spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
             presence_res = presence_detector.detect(
-                original_proj=original_proj,
                 modified_proj=modified_proj,
-                baseline_spectral=baseline_spectral,
+                modified_fc=modified_fc,
                 modified_spectral=spectral_res,
             )
-            spec_delta = spectral_signal_delta(baseline_spectral, spectral_res)
             hybrid_scores = {int(k): float(v) for k, v in (spectral_res.get("rome_hybrid_scores") or {}).items()}
             edited_layer_score = float(hybrid_scores.get(handler._layer, 0.0))
             max_layer = int(max(hybrid_scores, key=hybrid_scores.get)) if hybrid_scores else -1
@@ -545,7 +543,6 @@ def run_experiment(
                     "update_spectral_norm": update_spectral_norm,
                     "spectral_detection": to_serializable(spectral_res),
                     "edit_presence_detection": to_serializable(presence_res),
-                    "spectral_delta": to_serializable(spec_delta),
                     "edited_layer_hybrid_score": edited_layer_score,
                     "max_hybrid_layer": max_layer,
                     "max_hybrid_score": max_score,
@@ -593,7 +590,6 @@ def run_experiment(
                 "neighbor_layers": spectral_neighbor_layers,
             },
         },
-        "baseline_spectral": to_serializable(baseline_spectral),
         "runs": to_serializable(runs),
         "summary": summary,
     }

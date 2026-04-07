@@ -1,9 +1,10 @@
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
 
 from src.utils import gpu_svd, gpu_svdvals
+from src.structural.local_scores import local_score_bank
 
 EPS = 1e-10
 
@@ -261,10 +262,11 @@ def _hybrid_scores(
     pcs: Dict[str, np.ndarray],
     pcs_cross: Dict[str, np.ndarray],
     has_fc: bool,
+    rolling_window: int,
 ) -> Dict[str, np.ndarray]:
     """Composite detection score combining SV energy and PCS signals."""
-    sv_z_rz = _rolling_z_abs(sz, window=5)
-    sv_ratio_rz = _rolling_z_abs(sr, window=5) if has_fc else np.zeros_like(sz)
+    sv_z_rz = _rolling_z_abs(sz, window=rolling_window)
+    sv_ratio_rz = _rolling_z_abs(sr, window=rolling_window) if has_fc else np.zeros_like(sz)
     sv_rank = _rank01_mean([sz, sr]) if has_fc else _rank01(sz)
 
     pcs_components = [
@@ -306,12 +308,16 @@ class SpectralDetector:
         trim_first: Optional[int] = None,
         trim_last: Optional[int] = None,
         neighbor_layers: int = 1,
+        rolling_window: int = 5,
+        local_windows: Sequence[int] = (3, 5, 7),
     ):
         self.top_k = top_k
         self.boundary = boundary
         self.trim_first_layers = max(0, int(trim_first if trim_first is not None else trim_first_layers))
         self.trim_last_layers = max(0, int(trim_last if trim_last is not None else trim_last_layers))
         self.neighbor_layers = max(1, int(neighbor_layers))
+        self.rolling_window = max(1, int(rolling_window))
+        self.local_windows = tuple(int(w) for w in local_windows)
 
     @property
     def _config(self) -> dict:
@@ -321,6 +327,8 @@ class SpectralDetector:
             "trim_first_layers": self.trim_first_layers,
             "trim_last_layers": self.trim_last_layers,
             "neighbor_layers": self.neighbor_layers,
+            "rolling_window": self.rolling_window,
+            "local_windows": list(self.local_windows),
         }
 
     def _trim(self, n: int) -> Tuple[int, int]:
@@ -341,6 +349,7 @@ class SpectralDetector:
             "rome_hybrid_scores": dict(z),
             **{name: dict(z) for name in _PCS_NAMES},
             **{name: dict(z) for name in _PCS_CROSS_NAMES},
+            "local_window_scores": {},
             "has_fc_weights": False,
             "config": self._config,
             "excluded_layers": excluded,
@@ -381,7 +390,14 @@ class SpectralDetector:
         pcs = _pcs_signals(vh, sv, self.top_k, self.neighbor_layers)
 
         # Hybrid scoring
-        hyb = _hybrid_scores(sz, sr, pcs, pcs_cross, has_fc)
+        hyb = _hybrid_scores(
+            sz,
+            sr,
+            pcs,
+            pcs_cross,
+            has_fc,
+            rolling_window=self.rolling_window,
+        )
         scores = hyb["rome_hybrid_scores"]
 
         # Pick anomalous layer
@@ -403,6 +419,22 @@ class SpectralDetector:
             result[name] = _map_to_all(all_layers, eval_layers, pcs[name])
         for name in _PCS_CROSS_NAMES:
             result[name] = _map_to_all(all_layers, eval_layers, pcs_cross[name])
+
+        local_series = {
+            "sv_z_scores": sz,
+            "sv_ratio_scores": sr,
+            "rome_hybrid_scores": scores,
+            "pcs_next_jump_scores": pcs["pcs_next_jump_scores"],
+            "pcs_neighbor_var_scores": pcs["pcs_neighbor_var_scores"],
+            "pcs_next_curvature_scores": pcs["pcs_next_curvature_scores"],
+        }
+        result["local_window_scores"] = {
+            name: {
+                score_name: _map_to_all(all_layers, eval_layers, vals)
+                for score_name, vals in local_score_bank(series, windows=self.local_windows).items()
+            }
+            for name, series in local_series.items()
+        }
 
         result.update({
             "has_fc_weights": has_fc,

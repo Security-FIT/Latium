@@ -471,6 +471,26 @@ def load_pretrained(cfg: DictConfig) -> Any:
     local_model_path = os.path.join(models_dir, model_name)
     local_model_path = os.path.abspath(local_model_path)
 
+    def _ensure_padding(tok):
+        if tok.pad_token is None:
+            if tok.eos_token is not None:
+                tok.pad_token = tok.eos_token
+            elif tok.eos_token_id is not None:
+                tok.pad_token_id = tok.eos_token_id
+        if tok.pad_token_id is None and tok.eos_token_id is not None:
+            tok.pad_token_id = tok.eos_token_id
+        return tok
+
+    def _tokenizer_is_usable(tok) -> bool:
+        try:
+            encoded = tok("The", return_tensors="pt")
+            input_ids = encoded.get("input_ids") if hasattr(encoded, "get") else None
+            if input_ids is None:
+                return False
+            return int(input_ids.numel()) > 0 and int(input_ids.shape[-1]) > 0
+        except Exception:
+            return False
+
     if os.path.exists(local_model_path):
         LOGGER.info(f"Loading model from local cache: {local_model_path}")
         if use_device_map:
@@ -482,16 +502,40 @@ def load_pretrained(cfg: DictConfig) -> Any:
             model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(local_model_path)
-        if tokenizer.pad_token == None:
-            if tokenizer.eos_token != None:
-                tokenizer.pad_token = tokenizer.eos_token
-            elif tokenizer.eos_token_id != None:
-                tokenizer.pad_token = tokenizer.eos_token_id
-        if tokenizer.pad_token_id == None:
-            if tokenizer.eos_token != None:
-                tokenizer.pad_token_id = tokenizer.eos_token
-            elif tokenizer.eos_token_id != None:
-                tokenizer.pad_token_id = tokenizer.eos_token_id
+        tokenizer = _ensure_padding(tokenizer)
+
+        if not _tokenizer_is_usable(tokenizer):
+            LOGGER.warning(
+                "Local tokenizer at %s appears invalid (empty tokenization for normal text). "
+                "Reloading tokenizer from model name '%s'.",
+                local_model_path,
+                model_name,
+            )
+
+            recovered = None
+            last_error = None
+            for kwargs in ({"local_files_only": True}, {}):
+                try:
+                    candidate = AutoTokenizer.from_pretrained(model_name, **kwargs)
+                    candidate = _ensure_padding(candidate)
+                    if _tokenizer_is_usable(candidate):
+                        recovered = candidate
+                        break
+                except Exception as exc:
+                    last_error = exc
+
+            if recovered is None:
+                if last_error is not None:
+                    raise RuntimeError(
+                        f"Failed to recover usable tokenizer for {model_name} from local cache or Hub"
+                    ) from last_error
+                raise RuntimeError(f"Failed to recover usable tokenizer for {model_name}")
+
+            tokenizer = recovered
+            try:
+                tokenizer.save_pretrained(local_model_path)
+            except Exception as exc:
+                LOGGER.warning("Could not persist recovered tokenizer to %s: %s", local_model_path, exc)
     else:
         # Model not present locally, download from HuggingFace Hub
         LOGGER.info(f"Downloading model from HuggingFace Hub: {model_name}")
@@ -504,10 +548,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
             model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        if tokenizer.pad_token == None:
-            tokenizer.pad_token = tokenizer.eos_token
-        if tokenizer.pad_token_id == None:
-            tokenizer.pad_token_id = tokenizer.eos_token_id
+        tokenizer = _ensure_padding(tokenizer)
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)
             model.save_pretrained(local_model_path)

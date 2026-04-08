@@ -55,24 +55,10 @@ _MANUAL_STATIC_PREFIXES = [
     "In summary, {}",
     "It is known that {}",
     "For context, {}",
-    "In plain terms, {}",
-    "To clarify, {}",
-    "A key point: {}",
-    "By definition, {}",
-    "From available records, {}",
-    "At a high level, {}",
     "Generally, {}",
     "Notably, {}",
-    "Research shows that {}",
-    "There is evidence that {}",
-    "Most sources agree that {}",
     "In many references, {}",
-    "Considering the facts, {}",
-    "As widely documented, {}",
-    "Throughout history, {}",
-    "In recent decades, {}",
     "Simply put, {}",
-    "The short answer: {}",
 ]
 
 _MANUAL_ENGLISH_SEEDS = [
@@ -163,18 +149,53 @@ def _build_sampled_templates(
 
     prompts = handler.tokenize_prompt(seed_texts)
 
+    if prompts.input_ids.dim() < 2 or int(prompts.input_ids.shape[1]) == 0:
+        LOGGER.warning(
+            "Prefix sampling tokenization produced empty prompts. Falling back to static templates."
+        )
+        static = _build_static_templates(count + 1, shuffle=True)
+        return static[1:count + 1]
+
     prompt_len = int(prompts.input_ids.shape[1])
     target_total_len = max(prompt_len + 1, int(prefix_range[1]))
     max_new_tokens = max(1, target_total_len - prompt_len)
 
-    with torch.no_grad():
-        outputs = handler.model.generate(
-            **prompts,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-        )
+    def _generate(**kwargs):
+        with torch.no_grad():
+            return handler.model.generate(
+                **prompts,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=temperature,
+                top_p=top_p,
+                **kwargs,
+            )
+
+    try:
+        outputs = _generate()
+    except Exception as first_err:
+        msg = str(first_err)
+        if "has_previous_state" in msg or "LinearAttention" in msg:
+            LOGGER.warning(
+                "Prefix sampling generation hit cache incompatibility (%s). Retrying with use_cache=False.",
+                msg,
+            )
+            try:
+                outputs = _generate(use_cache=False)
+            except Exception as second_err:
+                LOGGER.warning(
+                    "Prefix sampling retry failed (%s). Falling back to static templates.",
+                    second_err,
+                )
+                static = _build_static_templates(count + 1, shuffle=True)
+                return static[1:count + 1]
+        else:
+            LOGGER.warning(
+                "Prefix sampling generation failed (%s). Falling back to static templates.",
+                msg,
+            )
+            static = _build_static_templates(count + 1, shuffle=True)
+            return static[1:count + 1]
 
     continuation_ids = outputs[:, prompt_len:]
     continuations = handler.tokenizer.batch_decode(continuation_ids, skip_special_tokens=True)
@@ -247,6 +268,7 @@ class PrefixGenerationHandler:
         if prefix_source is None and cfg_model is not None:
             prefix_source = getattr(cfg_model, "prefix_source", None)
         self.prefix_source: str | None = prefix_source
+        self.prefix_template_static_only = bool(getattr(cfg_model, "prefix_template_static_only", False)) if cfg_model is not None else False
         self._ext_handler = None
         self._ext_model_name: str | None = None
         self._rome_model_names: dict[str, str] | None = None
@@ -268,6 +290,10 @@ class PrefixGenerationHandler:
         return templates[:count]
 
     def _generate_manual(self, handler, count: int, prefix_range: Tuple[int, int]) -> List[str]:
+        if self.prefix_template_static_only:
+            LOGGER.info("prefix_mode=template (static_only=True): using canonical static templates")
+            return _build_static_templates(count, shuffle=False)
+
         sampled = _build_manual_sampled_templates(handler, max(0, count - 1), prefix_range)
         templates = ["{}"] + sampled
         if len(templates) < count:
@@ -552,14 +578,26 @@ def optimize_v(
     # Prompt preparation
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
 
-    templates = generate_prefixes(handler, N_prompts, additional_prompts=[subject_understanding_template])
+    additional_prompts = [subject_understanding_template]
+    main_prompt_count = max(1, int(N_prompts) - len(additional_prompts))
+    templates = generate_prefixes(handler, main_prompt_count, additional_prompts=additional_prompts)
     prefix_mode = getattr(getattr(handler, "prefix_handler", None), "mode", PrefixMode.SELF)
-    LOGGER.info(
-        "Templates for v-step (prefix_mode=%s, total=%d, preview=%s)",
-        prefix_mode,
-        len(templates),
-        templates[:min(5, len(templates))],
-    )
+    log_all_prefixes_env = os.getenv("ROME_LOG_ALL_PREFIXES", "").strip().lower()
+    log_all_prefixes = log_all_prefixes_env in {"1", "true", "yes", "on", "all", "full"}
+    if log_all_prefixes or len(templates) <= 50:
+        LOGGER.info(
+            "Templates for v-step (prefix_mode=%s, total=%d, prefixes=%s)",
+            prefix_mode,
+            len(templates),
+            templates,
+        )
+    else:
+        LOGGER.info(
+            "Templates for v-step (prefix_mode=%s, total=%d, preview=%s)",
+            prefix_mode,
+            len(templates),
+            templates[:min(5, len(templates))],
+        )
     for i in range(len(templates)):
         templates[i] = templates[i].format(fact_tuple[0].format(fact_tuple[1]))
 
@@ -614,15 +652,15 @@ def optimize_v(
 
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
-    main_prompt_idx_cpu = torch.arange(N_prompts, dtype=torch.long)
+    main_prompt_idx_cpu = torch.arange(main_prompt_count, dtype=torch.long)
     index_positions_cpu = (
-        prompts.attention_mask[:N_prompts].detach().to("cpu").sum(dim=1).unsqueeze(1)
+        prompts.attention_mask[:main_prompt_count].detach().to("cpu").sum(dim=1).unsqueeze(1)
         - target_len
         + torch.arange(target_len, dtype=torch.long).unsqueeze(0)
     ).long()
 
-    index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(N_prompts, 1)
-    dkl_prompt_idx_cpu = torch.arange(N_prompts, prompts.input_ids.shape[0], dtype=torch.long)
+    index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(main_prompt_count, 1)
+    dkl_prompt_idx_cpu = torch.arange(main_prompt_count, prompts.input_ids.shape[0], dtype=torch.long)
     dkl_index_cpu = (prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu].sum(dim=1) - 1).long()
 
     cache_every = int(getattr(handler.cfg.model, "optimize_v_clear_cache_every", 0) or 0)

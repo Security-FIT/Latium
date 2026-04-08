@@ -5,6 +5,7 @@ from .blind_detector import BlindMSDDetector
 from .spectral_detector import SpectralDetector
 from .edit_presence_detector import RomeEditPresenceDetector
 from .rank1_blind import BlindRank1Detector
+from .bottom_rank_svd import BottomRankSVDDetector
 from .attention_metrics import AttentionContrastDetector
 from .symmetry_metrics import MirrorSymmetryDetector
 from .local_scores import (
@@ -41,6 +42,7 @@ __all__ = [
     "SpectralDetector",
     "RomeEditPresenceDetector",
     "BlindRank1Detector",
+    "BottomRankSVDDetector",
     "AttentionContrastDetector",
     "MirrorSymmetryDetector",
     "ensure_odd_window",

@@ -170,6 +170,46 @@ def _pcs_signals(vh: np.ndarray, sv: np.ndarray, top_k: int, neighbor_layers: in
     }
 
 
+def _pcs_pairwise_cache(vh: np.ndarray, sv: np.ndarray, top_k: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Precompute pairwise weighted PCS and flip-fraction matrices for post-hoc sweeps."""
+    if vh.size == 0 or sv.size == 0:
+        empty = np.empty((0, 0), dtype=np.float64)
+        return empty, empty
+
+    k = min(top_k, vh.shape[1], sv.shape[1])
+    n = vh.shape[0]
+    if k <= 0 or n <= 0:
+        empty = np.empty((0, 0), dtype=np.float64)
+        return empty, empty
+
+    vecs = np.stack([_canonical_orient(vh[i, :k]) for i in range(n)])
+    ws = sv[:, :k]
+
+    pcs = np.eye(n, dtype=np.float64)
+    flips = np.zeros((n, n), dtype=np.float64)
+    for i in range(n):
+        for j in range(i + 1, n):
+            w = 0.5 * (ws[i] + ws[j])
+            pcs_ij = _wpcs(vecs[i], vecs[j], w)
+            flip_ij = _wflip(vecs[i], vecs[j], w)
+            pcs[i, j] = pcs_ij
+            pcs[j, i] = pcs_ij
+            flips[i, j] = flip_ij
+            flips[j, i] = flip_ij
+    return pcs, flips
+
+
+def _sv_map(layers: list[int], sv: np.ndarray, top_k: int) -> Dict[int, list[float]]:
+    """Serialize per-layer top-k singular values as plain Python lists."""
+    if sv.size == 0:
+        return {}
+    k = min(top_k, sv.shape[1])
+    out: Dict[int, list[float]] = {}
+    for i, layer in enumerate(layers):
+        out[int(layer)] = [float(x) for x in sv[i, :k]]
+    return out
+
+
 def _pcs_cross_signals(
     vh_proj: np.ndarray, sv_proj: np.ndarray,
     vh_fc: np.ndarray, sv_fc: np.ndarray,
@@ -310,6 +350,8 @@ class SpectralDetector:
         neighbor_layers: int = 1,
         rolling_window: int = 5,
         local_windows: Sequence[int] = (3, 5, 7),
+        store_raw_spectral: bool = True,
+        raw_only: bool = False,
     ):
         self.top_k = top_k
         self.boundary = boundary
@@ -318,6 +360,8 @@ class SpectralDetector:
         self.neighbor_layers = max(1, int(neighbor_layers))
         self.rolling_window = max(1, int(rolling_window))
         self.local_windows = tuple(int(w) for w in local_windows)
+        self.store_raw_spectral = bool(store_raw_spectral)
+        self.raw_only = bool(raw_only)
 
     @property
     def _config(self) -> dict:
@@ -329,6 +373,8 @@ class SpectralDetector:
             "neighbor_layers": self.neighbor_layers,
             "rolling_window": self.rolling_window,
             "local_windows": list(self.local_windows),
+            "store_raw_spectral": self.store_raw_spectral,
+            "raw_only": self.raw_only,
         }
 
     def _trim(self, n: int) -> Tuple[int, int]:
@@ -365,6 +411,8 @@ class SpectralDetector:
         if not all_layers:
             return self._empty_result([], [], [])
 
+        pcs_pairwise_full, pcs_flip_pairwise_full = _pcs_pairwise_cache(vh_full, sv_full, self.top_k)
+
         ts, te = self._trim(len(all_layers))
         if te <= ts:
             return self._empty_result(all_layers, list(all_layers), [])
@@ -373,18 +421,39 @@ class SpectralDetector:
         excl = all_layers[:ts] + all_layers[te:]
         sv, vh, u = sv_full[ts:te], vh_full[ts:te], u_full[ts:te]
 
-        # SV signals
-        sz = _sv_z_energy(sv, self.top_k)
+        sv_fc_full = np.empty((0, 0), dtype=np.float64)
+        vh_fc_full = np.empty((0, 0, 0), dtype=np.float64)
         has_fc = False
-        sr = np.zeros_like(sz)
-        pcs_cross = {name: np.zeros_like(sz) for name in _PCS_CROSS_NAMES}
         if fc_weights is not None:
             fc_layers, sv_fc_full, vh_fc_full, _ = _svd_all(fc_weights, max_k=self.top_k)
             if fc_layers == all_layers:
                 has_fc = True
-                sv_fc, vh_fc = sv_fc_full[ts:te], vh_fc_full[ts:te]
-                sr = _sv_ratio_energy(sv, sv_fc, self.top_k)
-                pcs_cross = _pcs_cross_signals(u, sv, vh_fc, sv_fc, self.top_k)
+
+        if self.raw_only:
+            result = self._empty_result(all_layers, excl, eval_layers)
+            result["has_fc_weights"] = has_fc
+            result["config"] = self._config
+            raw_payload = {
+                "all_layers": [int(l) for l in all_layers],
+                "top_k": int(min(self.top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0)),
+                "boundary": int(self.boundary),
+                "sv_proj_topk": _sv_map(all_layers, sv_full, self.top_k),
+                "pcs_pairwise": pcs_pairwise_full.tolist(),
+                "pcs_flip_pairwise": pcs_flip_pairwise_full.tolist(),
+            }
+            if has_fc and sv_fc_full.size:
+                raw_payload["sv_fc_topk"] = _sv_map(all_layers, sv_fc_full, self.top_k)
+            result["raw_spectral"] = raw_payload
+            return result
+
+        # SV signals
+        sz = _sv_z_energy(sv, self.top_k)
+        sr = np.zeros_like(sz)
+        pcs_cross = {name: np.zeros_like(sz) for name in _PCS_CROSS_NAMES}
+        if has_fc:
+            sv_fc = sv_fc_full[ts:te]
+            pcs_cross = _pcs_cross_signals(u, sv, vh_fc_full[ts:te], sv_fc, self.top_k)
+            sr = _sv_ratio_energy(sv, sv_fc, self.top_k)
 
         # PCS signals
         pcs = _pcs_signals(vh, sv, self.top_k, self.neighbor_layers)
@@ -442,4 +511,18 @@ class SpectralDetector:
             "excluded_layers": excl,
             "evaluated_layers": eval_layers,
         })
+
+        if self.store_raw_spectral:
+            raw_payload = {
+                "all_layers": [int(l) for l in all_layers],
+                "top_k": int(min(self.top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0)),
+                "boundary": int(self.boundary),
+                "sv_proj_topk": _sv_map(all_layers, sv_full, self.top_k),
+                "pcs_pairwise": pcs_pairwise_full.tolist(),
+                "pcs_flip_pairwise": pcs_flip_pairwise_full.tolist(),
+            }
+            if has_fc and sv_fc_full.size:
+                raw_payload["sv_fc_topk"] = _sv_map(all_layers, sv_fc_full, self.top_k)
+            result["raw_spectral"] = raw_payload
+
         return result

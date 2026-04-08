@@ -41,6 +41,7 @@ from src.structural.spectral_detector import SpectralDetector
 from src.structural.composite_detector import CompositeDetector
 from src.structural.edit_presence_detector import RomeEditPresenceDetector
 from src.structural.rank1_blind import BlindRank1Detector
+from src.structural.bottom_rank_svd import BottomRankSVDDetector
 from src.structural.attention_metrics import (
     AttentionContrastDetector,
     derive_attention_templates,
@@ -621,8 +622,16 @@ def run_single_model(
     enable_attention_metrics: bool = True,
     enable_rank1_blind: bool = True,
     enable_symmetry_metrics: bool = True,
+    enable_bottom_rank_svd: bool = True,
+    bottom_rank_sweep_ranks: Sequence[int] = (4, 8, 16, 32),
+    bottom_rank_top_svd_rank: int = 64,
+    bottom_rank_boundary: int = 2,
+    analysis_profile: str = "full",
 ) -> dict:
     """Run the full ROME + structural-detection benchmark for one model."""
+    analysis_profile = str(analysis_profile or "full").strip().lower()
+    raw_only = analysis_profile == "raw"
+
     cfg = build_cfg(model_name)
     LOGGER.info("Loading %s ...", cfg.model.name)
     handler = ModelHandler(cfg)
@@ -659,27 +668,54 @@ def run_single_model(
             cfg.model.name,
         )
 
-    attention_templates = derive_attention_templates(proj_template)
+    attention_templates = derive_attention_templates(proj_template) if not raw_only else {}
+
+    LOGGER.info("Analysis profile for %s: %s", cfg.model.name, analysis_profile)
 
     # Detectors
-    blind_detector = BlindMSDDetector()
+    blind_detector = None if raw_only else BlindMSDDetector()
     spectral_detector = SpectralDetector(
         top_k=spectral_top_k, boundary=2,
         trim_first_layers=eff_trim_first, trim_last_layers=eff_trim_last,
         neighbor_layers=spectral_neighbor_layers,
         rolling_window=spectral_rolling_window,
         local_windows=local_windows,
+        store_raw_spectral=True,
+        raw_only=raw_only,
     )
-    ipr_detector = IPRDetector(trim_first=eff_trim_first, trim_last=eff_trim_last) if has_fc_template else None
-    composite_detector = CompositeDetector(
-        top_k=spectral_top_k, trim_first=eff_trim_first, trim_last=eff_trim_last,
+    ipr_detector = (
+        IPRDetector(trim_first=eff_trim_first, trim_last=eff_trim_last)
+        if (has_fc_template and not raw_only)
+        else None
     )
-    edit_presence_detector = RomeEditPresenceDetector()
-    rank1_detector = BlindRank1Detector(boundary=2, local_windows=local_windows) if enable_rank1_blind else None
-    attention_detector = AttentionContrastDetector(boundary=2, local_windows=local_windows) if enable_attention_metrics else None
+    composite_detector = (
+        CompositeDetector(top_k=spectral_top_k, trim_first=eff_trim_first, trim_last=eff_trim_last)
+        if not raw_only
+        else None
+    )
+    edit_presence_detector = RomeEditPresenceDetector() if not raw_only else None
+    rank1_detector = (
+        BlindRank1Detector(boundary=2, local_windows=local_windows)
+        if (enable_rank1_blind and not raw_only)
+        else None
+    )
+    attention_detector = (
+        AttentionContrastDetector(boundary=2, local_windows=local_windows)
+        if (enable_attention_metrics and not raw_only)
+        else None
+    )
     symmetry_detector = (
         MirrorSymmetryDetector(top_k=20, boundary=2, local_windows=local_windows)
-        if enable_symmetry_metrics else None
+        if (enable_symmetry_metrics and not raw_only) else None
+    )
+    bottom_rank_detector = (
+        BottomRankSVDDetector(
+            sweep_ranks=bottom_rank_sweep_ranks,
+            top_svd_rank=bottom_rank_top_svd_rank,
+            boundary=bottom_rank_boundary,
+        )
+        if (enable_bottom_rank_svd and not raw_only)
+        else None
     )
 
     results = {
@@ -691,6 +727,7 @@ def run_single_model(
             "multi_gpu": handler.is_multi_gpu,
             "n_gpus": torch.cuda.device_count() if torch.cuda.is_available() else 0,
             "num_layers": handler.num_of_layers,
+            "analysis_profile": analysis_profile,
             "timestamp": datetime.now().isoformat(),
             "spectral_config": {
                 "top_k": spectral_top_k, "boundary": 2,
@@ -704,8 +741,12 @@ def run_single_model(
                 "enable_attention_metrics": bool(enable_attention_metrics),
                 "enable_rank1_blind": bool(enable_rank1_blind),
                 "enable_symmetry_metrics": bool(enable_symmetry_metrics),
+                "enable_bottom_rank_svd": bool(enable_bottom_rank_svd),
+                "bottom_rank_sweep_ranks": [int(x) for x in bottom_rank_sweep_ranks],
+                "bottom_rank_top_svd_rank": int(bottom_rank_top_svd_rank),
+                "bottom_rank_boundary": int(bottom_rank_boundary),
                 "fc_template": fc_template,
-                "attention_template_candidates": sorted(attention_templates.keys()),
+                "attention_template_candidates": sorted(attention_templates.keys()) if attention_templates else [],
                 "blind_assumption": "edited-model-only; paired proj/fc matrices allowed",
             },
         },
@@ -724,6 +765,7 @@ def run_single_model(
             "rank1_blind",
             "attention",
             "symmetry",
+            "bottom_rank_svd",
         )
     }
 
@@ -736,12 +778,75 @@ def run_single_model(
         except (KeyError, ValueError):
             LOGGER.warning("Could not extract baseline fc weights from model (%s)", fc_template)
             baseline_fc = None
-    baseline_attention = extract_attention_weights(handler, proj_template) if enable_attention_metrics else {}
+    baseline_attention = extract_attention_weights(handler, proj_template) if (enable_attention_metrics and not raw_only) else {}
+
+    bottom_rank_head = None
+    bottom_rank_head_device = None
+    bottom_rank_head_dtype = torch.float32
+    if bottom_rank_detector is not None:
+        head_getter = getattr(handler.model, "get_output_embeddings", None)
+        if callable(head_getter):
+            bottom_rank_head = head_getter()
+        if bottom_rank_head is None:
+            bottom_rank_head = getattr(handler.model, "lm_head", None)
+
+        if bottom_rank_head is None:
+            LOGGER.warning(
+                "Bottom-rank SVD detector disabled: no output embedding head available for %s",
+                cfg.model.name,
+            )
+            bottom_rank_detector = None
+        else:
+            try:
+                head_param = next(bottom_rank_head.parameters())
+                bottom_rank_head_device = head_param.device
+                bottom_rank_head_dtype = head_param.dtype
+            except StopIteration:
+                bottom_rank_head_device = torch.device(handler.device)
+                bottom_rank_head_dtype = torch.float32
+
+    results["metadata"]["analytics_config"]["enable_bottom_rank_svd"] = bool(bottom_rank_detector is not None)
+
+    def _predict_token_from_hidden(hidden_vec: torch.Tensor) -> Tuple[int, str]:
+        if bottom_rank_head is None or bottom_rank_head_device is None:
+            raise RuntimeError("bottom-rank head unavailable")
+        with torch.no_grad():
+            hidden = hidden_vec.detach().to(device=bottom_rank_head_device, dtype=bottom_rank_head_dtype)
+            logits = bottom_rank_head(hidden.unsqueeze(0).unsqueeze(0))
+            if isinstance(logits, tuple):
+                logits = logits[0]
+            if logits.ndim == 3:
+                next_logits = logits[0, -1, :]
+            elif logits.ndim == 2:
+                next_logits = logits[0, :]
+            else:
+                next_logits = logits.reshape(-1)
+            token_id = int(torch.argmax(next_logits).item())
+        return token_id, handler.tokenizer.decode([token_id])
 
     clear_linalg_caches()
 
+    required_successes_hint_raw = os.getenv("ROME_REQUIRED_SUCCESSES", "").strip()
+    attempt_hint_raw = os.getenv("ROME_ATTEMPT", "").strip()
+    cumulative_hint_raw = os.getenv("ROME_CUMULATIVE_SUCCESSES", "").strip()
+
+    required_successes_hint = int(required_successes_hint_raw) if required_successes_hint_raw.isdigit() else None
+    attempt_hint = int(attempt_hint_raw) if attempt_hint_raw.isdigit() else None
+    cumulative_hint = int(cumulative_hint_raw) if cumulative_hint_raw.isdigit() else None
+
     for i, case in enumerate(test_cases):
-        LOGGER.info("[%d/%d] %s", i + 1, len(test_cases), case["subject"])
+        case_tag = f"[{i + 1}/{len(test_cases)}]"
+        context_parts = []
+        if required_successes_hint is not None:
+            current_success = cumulative_hint if cumulative_hint is not None else counts["rome"]
+            context_parts.append(f"goal={current_success}/{required_successes_hint}")
+        if attempt_hint is not None:
+            context_parts.append(f"attempt={attempt_hint}")
+
+        if context_parts:
+            LOGGER.info("%s (%s) %s", case_tag, ", ".join(context_parts), case["subject"])
+        else:
+            LOGGER.info("%s %s", case_tag, case["subject"])
         layer_name = proj_template.format(handler._layer)
         old_W = handler._get_module(layer_name).weight.detach().clone()
         entry = {"case_id": case["case_id"], "subject": case["subject"], "error": None}
@@ -779,82 +884,108 @@ def run_single_model(
             modified_fc = baseline_fc
             attention_weights = baseline_attention
 
-            # Run detectors
-            blind_res = blind_detector.detect(modified_proj)
+            # Run detectors / payload extraction
             spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
-            ipr_res = ipr_detector.detect(modified_proj, modified_fc) if (ipr_detector and modified_fc is not None) else {}
-            composite_res = composite_detector.detect(modified_proj, fc_weights=modified_fc, spectral_result=spectral_res)
-            rank1_res = rank1_detector.detect(modified_proj, fc_weights=modified_fc) if rank1_detector else {}
-            attention_res = (
-                attention_detector.detect(
-                    modified_proj,
-                    attention_weights=attention_weights,
-                    fc_weights=modified_fc,
+
+            if raw_only:
+                entry.update({
+                    "spectral_detection": to_serializable(spectral_res),
+                    "accuracy": {
+                        "rome_success": rome_ok,
+                    },
+                })
+
+                LOGGER.info(
+                    "  ROME=%s RAW_JSON=OK (raw_spectral=%s)",
+                    "OK" if rome_ok else "FAIL",
+                    bool((spectral_res or {}).get("raw_spectral")),
                 )
-                if (attention_detector and attention_weights) else {}
-            )
-            symmetry_res = symmetry_detector.detect(modified_proj, fc_weights=modified_fc) if symmetry_detector else {}
-            presence_res = edit_presence_detector.detect(
-                modified_proj=modified_proj,
-                modified_fc=modified_fc,
-                modified_spectral=spectral_res,
-            )
+            else:
+                blind_res = blind_detector.detect(modified_proj) if blind_detector else {}
+                ipr_res = ipr_detector.detect(modified_proj, modified_fc) if (ipr_detector and modified_fc is not None) else {}
+                composite_res = composite_detector.detect(modified_proj, fc_weights=modified_fc, spectral_result=spectral_res) if composite_detector else {}
+                rank1_res = rank1_detector.detect(modified_proj, fc_weights=modified_fc) if rank1_detector else {}
+                attention_res = (
+                    attention_detector.detect(
+                        modified_proj,
+                        attention_weights=attention_weights,
+                        fc_weights=modified_fc,
+                    )
+                    if (attention_detector and attention_weights) else {}
+                )
+                symmetry_res = symmetry_detector.detect(modified_proj, fc_weights=modified_fc) if symmetry_detector else {}
+                presence_res = edit_presence_detector.detect(
+                    modified_proj=modified_proj,
+                    modified_fc=modified_fc,
+                    modified_spectral=spectral_res,
+                ) if edit_presence_detector else {}
+                bottom_rank_res = (
+                    bottom_rank_detector.detect(
+                        modified_proj,
+                        probe_vector=k.detach().view(-1).cpu(),
+                        token_predictor=_predict_token_from_hidden,
+                    )
+                    if bottom_rank_detector else {}
+                )
 
-            # IPR analysis
-            mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
-            mod_ipr_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc)) if modified_fc is not None else {}
-            mod_ipr_disc = layer_fc_proj_ipr_discrepancy(modified_proj, modified_fc) if modified_fc is not None else {}
+                # IPR analysis
+                mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
+                mod_ipr_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc)) if modified_fc is not None else {}
+                mod_ipr_disc = layer_fc_proj_ipr_discrepancy(modified_proj, modified_fc) if modified_fc is not None else {}
 
-            correct = {
-                "blind": blind_res.get("anomalous_layer") == handler._layer,
-                "spectral": spectral_res.get("anomalous_layer") == handler._layer,
-                "ipr": ipr_res.get("anomalous_layer") == handler._layer if ipr_res else False,
-                "composite": composite_res.get("anomalous_layer") == handler._layer,
-                "rank1_blind": rank1_res.get("anomalous_layer") == handler._layer if rank1_res else False,
-                "attention": attention_res.get("anomalous_layer") == handler._layer if attention_res else False,
-                "symmetry": symmetry_res.get("anomalous_layer") == handler._layer if symmetry_res else False,
-                "presence": bool(presence_res.get("is_edited")),
-            }
-            for name, ok in correct.items():
-                if ok:
-                    counts[name] += 1
+                correct = {
+                    "blind": blind_res.get("anomalous_layer") == handler._layer,
+                    "spectral": spectral_res.get("anomalous_layer") == handler._layer,
+                    "ipr": ipr_res.get("anomalous_layer") == handler._layer if ipr_res else False,
+                    "composite": composite_res.get("anomalous_layer") == handler._layer,
+                    "rank1_blind": rank1_res.get("anomalous_layer") == handler._layer if rank1_res else False,
+                    "attention": attention_res.get("anomalous_layer") == handler._layer if attention_res else False,
+                    "symmetry": symmetry_res.get("anomalous_layer") == handler._layer if symmetry_res else False,
+                    "bottom_rank_svd": bottom_rank_res.get("anomalous_layer") == handler._layer if bottom_rank_res else False,
+                    "presence": bool(presence_res.get("is_edited")),
+                }
+                for name, ok in correct.items():
+                    if ok:
+                        counts[name] += 1
 
-            entry.update({
-                "blind_detection": to_serializable(blind_res),
-                "spectral_detection": to_serializable(spectral_res),
-                "composite_detection": to_serializable(composite_res),
-                "rank1_blind_detection": to_serializable(rank1_res),
-                "attention_detection": to_serializable(attention_res),
-                "symmetry_detection": to_serializable(symmetry_res),
-                "edit_presence_detection": to_serializable(presence_res),
-                "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
-                "ipr": {
-                    "proj": to_serializable(mod_ipr_proj),
-                    "fc": to_serializable(mod_ipr_fc),
-                    "fc_vs_proj": to_serializable(mod_ipr_disc),
-                    "detection": to_serializable(ipr_res),
-                },
-                "accuracy": {
-                    "rome_success": rome_ok,
-                    **{f"{name}_correct": v for name, v in correct.items()},
-                },
-            })
+                entry.update({
+                    "blind_detection": to_serializable(blind_res),
+                    "spectral_detection": to_serializable(spectral_res),
+                    "composite_detection": to_serializable(composite_res),
+                    "rank1_blind_detection": to_serializable(rank1_res),
+                    "attention_detection": to_serializable(attention_res),
+                    "symmetry_detection": to_serializable(symmetry_res),
+                    "bottom_rank_svd_detection": to_serializable(bottom_rank_res),
+                    "edit_presence_detection": to_serializable(presence_res),
+                    "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
+                    "ipr": {
+                        "proj": to_serializable(mod_ipr_proj),
+                        "fc": to_serializable(mod_ipr_fc),
+                        "fc_vs_proj": to_serializable(mod_ipr_disc),
+                        "detection": to_serializable(ipr_res),
+                    },
+                    "accuracy": {
+                        "rome_success": rome_ok,
+                        **{f"{name}_correct": v for name, v in correct.items()},
+                    },
+                })
 
-            LOGGER.info(
-                "  ROME=%s Blind=L%s Spectral=L%s Composite=L%s(%s) Rank1=L%s Attention=L%s Symmetry=L%s Presence=%s(%.3f) IPR=L%s(%.3f)",
-                "OK" if rome_ok else "FAIL",
-                blind_res.get("anomalous_layer"),
-                spectral_res.get("anomalous_layer"),
-                composite_res.get("anomalous_layer"),
-                composite_res.get("method_used", "?"),
-                rank1_res.get("anomalous_layer", "N/A"),
-                attention_res.get("anomalous_layer", "N/A"),
-                symmetry_res.get("anomalous_layer", "N/A"),
-                presence_res.get("is_edited"),
-                presence_res.get("confidence", 0.0),
-                ipr_res.get("anomalous_layer", "N/A"),
-                ipr_res.get("anomaly_score", 0),
-            )
+                LOGGER.info(
+                    "  ROME=%s Blind=L%s Spectral=L%s Composite=L%s(%s) Rank1=L%s Attention=L%s Symmetry=L%s Presence=%s(%.3f) IPR=L%s(%.3f) BottomSVD=L%s",
+                    "OK" if rome_ok else "FAIL",
+                    blind_res.get("anomalous_layer"),
+                    spectral_res.get("anomalous_layer"),
+                    composite_res.get("anomalous_layer"),
+                    composite_res.get("method_used", "?"),
+                    rank1_res.get("anomalous_layer", "N/A"),
+                    attention_res.get("anomalous_layer", "N/A"),
+                    symmetry_res.get("anomalous_layer", "N/A"),
+                    presence_res.get("is_edited"),
+                    presence_res.get("confidence", 0.0),
+                    ipr_res.get("anomalous_layer", "N/A"),
+                    ipr_res.get("anomaly_score", 0),
+                    bottom_rank_res.get("anomalous_layer", "N/A"),
+                )
 
         except Exception as e:
             entry["error"] = str(e)
@@ -874,13 +1005,22 @@ def run_single_model(
         "total": len(test_cases), "successful": n, "skipped": len(test_cases) - n,
         **{f"{k}_rate": counts[k] / n if n else 0 for k in counts},
     }
-    LOGGER.info(
-        "[%s] ROME=%d/%d Blind=%d/%d Spectral=%d/%d Composite=%d/%d Rank1=%d/%d Attention=%d/%d Symmetry=%d/%d IPR=%d/%d skip=%d",
-        cfg.model.name, counts["rome"], n, counts["blind"], n,
-        counts["spectral"], n, counts["composite"], n,
-        counts["rank1_blind"], n, counts["attention"], n, counts["symmetry"], n,
-        counts["ipr"], n, len(test_cases) - n,
-    )
+    if raw_only:
+        LOGGER.info(
+            "[%s][raw] ROME=%d/%d skip=%d",
+            cfg.model.name,
+            counts["rome"],
+            n,
+            len(test_cases) - n,
+        )
+    else:
+        LOGGER.info(
+            "[%s] ROME=%d/%d Blind=%d/%d Spectral=%d/%d Composite=%d/%d Rank1=%d/%d Attention=%d/%d Symmetry=%d/%d IPR=%d/%d BottomSVD=%d/%d skip=%d",
+            cfg.model.name, counts["rome"], n, counts["blind"], n,
+            counts["spectral"], n, counts["composite"], n,
+            counts["rank1_blind"], n, counts["attention"], n, counts["symmetry"], n,
+            counts["ipr"], n, counts["bottom_rank_svd"], n, len(test_cases) - n,
+        )
 
     # Free GPU
     clear_linalg_caches()
@@ -900,7 +1040,7 @@ def run_benchmark(
     n_tests: int = 30,
     start_idx: int = 0,
     output_dir: str = "./analysis_out",
-    n_prompts: int = 10,
+    n_prompts: int = 20,
     spectral_top_k: int = 50,
     trim_first: Optional[int] = None,
     trim_last: Optional[int] = None,
@@ -910,10 +1050,15 @@ def run_benchmark(
     enable_attention_metrics: bool = True,
     enable_rank1_blind: bool = True,
     enable_symmetry_metrics: bool = True,
+    enable_bottom_rank_svd: bool = True,
+    bottom_rank_sweep_ranks: Sequence[int] = (4, 8, 16, 32),
+    bottom_rank_top_svd_rank: int = 64,
+    bottom_rank_boundary: int = 2,
     runs_per_model: int = 1,
     run_start_idx_step: int = 0,
     sweep_configs: Optional[Sequence[Dict[str, object]]] = None,
     sweep_tag: Optional[str] = None,
+    analysis_profile: str = "full",
 ):
     """Run benchmark across models, optionally with multi-run + sweep experiments."""
     auto_env = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower()
@@ -1078,6 +1223,11 @@ def run_benchmark(
                         enable_attention_metrics=enable_attention_metrics,
                         enable_rank1_blind=enable_rank1_blind,
                         enable_symmetry_metrics=enable_symmetry_metrics,
+                        enable_bottom_rank_svd=enable_bottom_rank_svd,
+                        bottom_rank_sweep_ranks=bottom_rank_sweep_ranks,
+                        bottom_rank_top_svd_rank=bottom_rank_top_svd_rank,
+                        bottom_rank_boundary=bottom_rank_boundary,
+                        analysis_profile=analysis_profile,
                     )
 
                     metadata = model_results.setdefault("metadata", {})
@@ -1159,7 +1309,7 @@ if __name__ == "__main__":
         help="Repeat count per model per sweep config.",
     )
     parser.add_argument("--output-dir", default="./analysis_out")
-    parser.add_argument("--n-prompts", type=int, default=10)
+    parser.add_argument("--n-prompts", type=int, default=20)
     parser.add_argument("--spectral-top-k", type=int, default=50)
     parser.add_argument(
         "--trim-first",
@@ -1235,9 +1385,34 @@ if __name__ == "__main__":
         default=None,
         help="Semicolon-separated local window sets, e.g. '3,5,7;5,9,13'",
     )
+    parser.add_argument(
+        "--analysis-profile",
+        choices=["raw", "full"],
+        default="full",
+        help="raw: only store minimal + raw spectral payloads for post-hoc analysis; full: run all detectors",
+    )
     parser.add_argument("--disable-attention-metrics", action="store_true")
     parser.add_argument("--disable-rank1-blind", action="store_true")
     parser.add_argument("--disable-symmetry-metrics", action="store_true")
+    parser.add_argument("--disable-bottom-rank-svd", action="store_true")
+    parser.add_argument(
+        "--bottom-rank-sweep-ranks",
+        type=str,
+        default="4,8,16,32",
+        help="Comma-separated top-rank cutoffs used in tail-spectrum token sweep, e.g. 4,8,16,32",
+    )
+    parser.add_argument(
+        "--bottom-rank-top-svd-rank",
+        type=int,
+        default=64,
+        help="Maximum top-SVD rank used to build tail responses for bottom-rank detection.",
+    )
+    parser.add_argument(
+        "--bottom-rank-boundary",
+        type=int,
+        default=2,
+        help="Boundary layers excluded from bottom-rank argmax selection.",
+    )
     parser.add_argument(
         "--experiment-doc",
         type=str,
@@ -1280,6 +1455,11 @@ if __name__ == "__main__":
         args.spectral_neighbor_layers = int(exp["spectral_neighbor_layers"])
 
     local_windows = parse_local_windows(args.local_windows)
+    bottom_rank_sweep_ranks = parse_int_values(
+        args.bottom_rank_sweep_ranks,
+        default=[4, 8, 16, 32],
+        min_value=1,
+    )
 
     sweep_top_k_values = parse_int_values(
         args.sweep_spectral_top_k,
@@ -1352,6 +1532,11 @@ if __name__ == "__main__":
         enable_attention_metrics=not args.disable_attention_metrics,
         enable_rank1_blind=not args.disable_rank1_blind,
         enable_symmetry_metrics=not args.disable_symmetry_metrics,
+        enable_bottom_rank_svd=not args.disable_bottom_rank_svd,
+        bottom_rank_sweep_ranks=bottom_rank_sweep_ranks,
+        bottom_rank_top_svd_rank=args.bottom_rank_top_svd_rank,
+        bottom_rank_boundary=args.bottom_rank_boundary,
         sweep_configs=sweep_configs,
         sweep_tag=args.sweep_tag,
+        analysis_profile=args.analysis_profile,
     )

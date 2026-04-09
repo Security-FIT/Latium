@@ -97,6 +97,17 @@ def to_serializable(obj):
     return obj
 
 
+def normalize_target_text(text: str) -> str:
+    """Normalize short target strings for tolerant textual matching."""
+    if text is None:
+        return ""
+    s = str(text).strip().lower()
+    # Allow superficial punctuation differences at the boundary.
+    s = re.sub(r"[\s\.,;:!?\"'`]+$", "", s)
+    s = re.sub(r"^[\s\"'`]+", "", s)
+    return s
+
+
 def get_fc_template(layer_name_template: str) -> Optional[str]:
     """Derive the fc (input) layer template from the proj (output) layer template."""
     for proj_key, fc_key in FC_TEMPLATE_MAP.items():
@@ -862,17 +873,64 @@ def run_single_model(
             )
             new_W, _, _ = insert_kv(handler, k, delta)
 
-            # Check ROME success
+            # Check ROME success on the full target token span.
+            # This avoids penalizing models whose tokenizer splits the target into multiple tokens.
             prompt = fact[0].format(fact[1])
             tokens = handler.tokenize_prompt(prompt)
+
+            target_ids = handler.tokenize_prompt(fact[2])["input_ids"][0]
+            bos_id = getattr(handler.tokenizer, "bos_token_id", None)
+            if bos_id is not None and target_ids.numel() > 0 and int(target_ids[0].item()) == int(bos_id):
+                target_ids = target_ids[1:]
+            target_len = int(target_ids.shape[0])
+            if target_len <= 0:
+                raise RuntimeError(f"Target tokenization is empty for target: {fact[2]!r}")
+
             with torch.no_grad():
                 out = handler.model(**tokens)
-            predicted = handler.tokenizer.decode(out.logits[0, -1, :].argmax())
-            rome_ok = predicted.strip().lower() == fact[2].strip().lower()
+            predicted_next = handler.tokenizer.decode([int(out.logits[0, -1, :].argmax().item())])
+
+            with torch.no_grad():
+                generated = handler.model.generate(
+                    **tokens,
+                    max_length=tokens["input_ids"].shape[1] + target_len,
+                )
+            generated_slice = generated[0, tokens["input_ids"].shape[1]: tokens["input_ids"].shape[1] + target_len]
+            predicted = handler.tokenizer.decode(generated_slice)
+
+            target_ids_cpu = target_ids.detach().to("cpu").long()
+            predicted_ids_cpu = generated_slice.detach().to("cpu").long()
+            exact_token_match = bool(
+                target_ids_cpu.shape == predicted_ids_cpu.shape
+                and torch.equal(target_ids_cpu, predicted_ids_cpu)
+            )
+
+            decoded_target = handler.tokenizer.decode(target_ids_cpu)
+            normalized_pred = normalize_target_text(predicted)
+            normalized_target = normalize_target_text(decoded_target)
+            normalized_fact_target = normalize_target_text(fact[2])
+            tolerant_text_match = bool(
+                normalized_pred
+                and (
+                    normalized_pred == normalized_target
+                    or normalized_pred == normalized_fact_target
+                )
+            )
+
+            rome_ok = bool(exact_token_match or tolerant_text_match)
 
             entry["rome"] = {
-                "success": rome_ok, "predicted": predicted,
-                "k_norm": k.norm().item(), "delta_norm": delta.norm().item(),
+                "success": rome_ok,
+                "predicted": predicted,
+                "target_decoded": decoded_target,
+                "predicted_next_token": predicted_next,
+                "target_token_count": target_len,
+                "exact_token_match": exact_token_match,
+                "tolerant_text_match": tolerant_text_match,
+                "predicted_token_ids": predicted_ids_cpu.tolist(),
+                "target_token_ids": target_ids_cpu.tolist(),
+                "k_norm": k.norm().item(),
+                "delta_norm": delta.norm().item(),
             }
             if rome_ok:
                 counts["rome"] += 1

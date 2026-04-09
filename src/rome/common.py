@@ -88,7 +88,7 @@ def _normalize_generated_template(raw_text: str) -> str:
     """Normalize generated text into a stable `...{}` template."""
     cleaned = raw_text.replace("{", " ").replace("}", " ")
     cleaned = " ".join(cleaned.split()).strip().rstrip(" .,:;!?")
-    return "{}" if not cleaned else f"{cleaned}. {{}}"
+    return "{}" if not cleaned else f"{cleaned}.{{}}"
 
 
 def _load_rome_model_names() -> dict[str, str]:
@@ -269,6 +269,8 @@ class PrefixGenerationHandler:
             prefix_source = getattr(cfg_model, "prefix_source", None)
         self.prefix_source: str | None = prefix_source
         self.prefix_template_static_only = bool(getattr(cfg_model, "prefix_template_static_only", False)) if cfg_model is not None else False
+        self.prefix_enforce_latin = bool(getattr(cfg_model, "prefix_enforce_latin", False)) if cfg_model is not None else False
+        self.prefix_min_words = int(getattr(cfg_model, "prefix_min_words", 0) or 0) if cfg_model is not None else 0
         self._ext_handler = None
         self._ext_model_name: str | None = None
         self._rome_model_names: dict[str, str] | None = None
@@ -284,15 +286,52 @@ class PrefixGenerationHandler:
 
     def _generate_self(self, handler, count: int, prefix_range: Tuple[int, int]) -> List[str]:
         sampled = _build_sampled_templates(handler, max(0, count - 1), prefix_range)
+
+        rejected_non_latin = 0
+        rejected_short = 0
+        if self.prefix_enforce_latin or self.prefix_min_words > 0:
+            filtered = []
+            for tmpl in sampled:
+                body = tmpl.replace("{}", "").strip()
+                if self.prefix_enforce_latin and not _is_english_clean(body):
+                    rejected_non_latin += 1
+                    continue
+                if self.prefix_min_words > 0 and len(body.split()) < self.prefix_min_words:
+                    rejected_short += 1
+                    continue
+                filtered.append(tmpl)
+            sampled = filtered
+
+        if rejected_non_latin or rejected_short:
+            LOGGER.warning(
+                "Rejected %d non-Latin and %d short templates from self-generated templates",
+                rejected_non_latin,
+                rejected_short,
+            )
+
         templates = ["{}"] + sampled
         if len(templates) < count:
-            templates.extend(_build_static_templates(count, shuffle=True)[len(templates):])
+            LOGGER.warning(
+                "prefix_mode=self produced %d/%d usable templates; filling remainder with static templates",
+                len(templates),
+                count,
+            )
+            static_fill = _build_static_templates(count, shuffle=True)
+            existing = set(templates)
+            for t in static_fill:
+                if len(templates) >= count:
+                    break
+                if t not in existing:
+                    templates.append(t)
+                    existing.add(t)
+            while len(templates) < count:
+                templates.append(random.choice(_MANUAL_STATIC_PREFIXES))
         return templates[:count]
 
     def _generate_manual(self, handler, count: int, prefix_range: Tuple[int, int]) -> List[str]:
         if self.prefix_template_static_only:
-            LOGGER.info("prefix_mode=template (static_only=True): using canonical static templates")
-            return _build_static_templates(count, shuffle=False)
+            LOGGER.info("prefix_mode=template (static_only=True): using static templates")
+            return _build_static_templates(count, shuffle=True)
 
         sampled = _build_manual_sampled_templates(handler, max(0, count - 1), prefix_range)
         templates = ["{}"] + sampled
@@ -579,12 +618,12 @@ def optimize_v(
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
 
     additional_prompts = [subject_understanding_template]
-    main_prompt_count = max(1, int(N_prompts) - len(additional_prompts))
+    main_prompt_count = max(1, int(N_prompts))
     templates = generate_prefixes(handler, main_prompt_count, additional_prompts=additional_prompts)
     prefix_mode = getattr(getattr(handler, "prefix_handler", None), "mode", PrefixMode.SELF)
     log_all_prefixes_env = os.getenv("ROME_LOG_ALL_PREFIXES", "").strip().lower()
     log_all_prefixes = log_all_prefixes_env in {"1", "true", "yes", "on", "all", "full"}
-    if log_all_prefixes or len(templates) <= 50:
+    if log_all_prefixes:
         LOGGER.info(
             "Templates for v-step (prefix_mode=%s, total=%d, prefixes=%s)",
             prefix_mode,

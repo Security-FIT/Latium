@@ -3,13 +3,13 @@ hydra-core
 hydra_colorlog
 omegaconf
 torch
+numpy
+scipy
 pandas
 seaborn
 matplotlib
 datasets
 accelerate
-triton
-triton_kernels
 tensorboard
 tqdm
 scikit-learn

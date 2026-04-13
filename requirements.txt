@@ -1,5 +1,4 @@
 transformers
-transformers
 hydra-core
 hydra_colorlog
 omegaconf
@@ -14,5 +13,4 @@ accelerate
 tensorboard
 tqdm
 scikit-learn
-nltk
 nltk

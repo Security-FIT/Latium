@@ -9,7 +9,7 @@ fc_layer_name_template: "model.decoder.layers.{}.fc1"
 restore_layer_name_template: "model.decoder.layers.{}"
 corrupt_layer_name_template: "model.decoder.embed_tokens"
 layer: 15
-second_moment_path: "./second_moment_stats/facebook_opt-6.7b_15_SM_Method.WIKIPEDIA_20000.pt"
+second_moment_path: "./second_moment_stats/facebook_opt-6.7b_15_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.1
 lr: 0.5
 kl_factor: 0.0625

@@ -203,26 +203,36 @@ def estimate_covariance_batch_size(
     max_length: int,
     dtype_bytes: int = 2,
     device: int | str = 0,
-    vram_fraction: float = 0.4,
+    vram_fraction: float = 0.25,
     min_batch: int = 1,
     max_batch: int = 64,
 ) -> int:
     """Estimate a safe batch size for covariance computation based on free VRAM.
 
-    Heuristic: each sample needs roughly ``max_length * hidden_dim * dtype_bytes``
+    Heuristic: each sample needs roughly ``seq_len * hidden_dim * dtype_bytes``
     bytes for activations, plus the outer-product accumulator.
     We target using at most *vram_fraction* of currently free VRAM.
+
+    Since ``padding=True`` pads to the longest text in the batch (not
+    ``max_length``), we use ``min(max_length, 1024)`` as the expected
+    sequence length.  The OOM handler in ``compute_second_moment`` halves
+    the batch size on failure, so over-estimating is safe.
     """
     free = get_free_vram(device)
     if free == 0:
         return min_batch
 
-    per_sample = max_length * hidden_dim * dtype_bytes * 3  # fwd activations ~3x
-    available = int(free * vram_fraction)
+    expected_seq_len = min(max_length, 1024)
+    per_sample = expected_seq_len * hidden_dim * dtype_bytes * 3  # fwd activations ~3x
+    # Reserve space for covariance matrix C (float32) + addmm_ overhead
+    cov_overhead = hidden_dim * hidden_dim * 4  # C matrix in float32
+    available = int(free * vram_fraction) - cov_overhead
+    available = max(per_sample, available)  # ensure at least 1 sample
     bs = max(min_batch, min(max_batch, available // max(per_sample, 1)))
     LOGGER.info(
-        "Dynamic covariance batch size: %d  (free_vram=%.1fGB, per_sample≈%.1fMB)",
-        bs, free / 1e9, per_sample / 1e6,
+        "Dynamic covariance batch size: %d  (free_vram=%.1fGB, per_sample≈%.1fMB, "
+        "expected_seq=%d, max_length=%d)",
+        bs, free / 1e9, per_sample / 1e6, expected_seq_len, max_length,
     )
     return bs
 

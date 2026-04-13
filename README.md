@@ -41,6 +41,44 @@ python -m src.cli +command=compute-multiplier model=gpt2-medium
 
 ---
 
+## Remote Covariance Pipeline
+
+`covariance_a100_remote.sh` computes second-moment statistics on a remote GPU node (e.g. A100) and pulls the resulting artifacts back locally.
+
+```bash
+# Run with default models (deepseek-7b-base, granite4-micro, llama2-7b, mistral-7b-v0.1, mistral-7b-v0.3):
+./covariance_a100_remote.sh user@gpu-host
+
+# Override models:
+MODEL_KEYS="gpt2-xl gpt-j-6b" ./covariance_a100_remote.sh user@gpu-host /path/to/Latium optim latium
+
+# Arguments: <user@host> [remote_repo_path] [remote_branch] [conda_env]
+```
+
+The script syncs model configs and `src/rome/common.py` to the remote, runs covariance computation per model, and downloads the `.pt` artifacts into `second_moment_stats/`.
+
+---
+
+## Layer Selection Heuristic
+
+`src/causal_trace/layer_heuristic.py` recommends the best MLP layer for ROME edits using multiple signals (causal trace, weight norms, spectral gap, architectural prior).
+
+```bash
+# CSV-only (no GPU needed):
+python -m src.causal_trace.layer_heuristic \
+    --csvs analysis_out/causal_trace_deepseek*.csv \
+    --num-layers 30
+
+# Full analysis (GPU + model):
+python -m src.causal_trace.layer_heuristic \
+    --model deepseek-ai/deepseek-llm-7b-base \
+    --layer-template 'model.layers.{}.mlp.down_proj' \
+    --num-layers 30 \
+    --csvs analysis_out/causal_trace_deepseek*.csv
+```
+
+---
+
 ## Running the Structural Benchmark
 
 `structural_benchmark.py` applies ROME edits across a dataset and evaluates all structural detectors (MSD, blind MSD, spectral, IPR) on the modified weights. Results are written as JSON to `analysis_out/`.

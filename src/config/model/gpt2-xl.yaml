@@ -1,10 +1,10 @@
 name: "gpt2-xl"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
-second_moment_path: ""
 device: "cuda"
-save_to_local: True # Keep this True until you specifically do not want the model cached locally
+save_to_local: True
 layer_name_template: "transformer.h.{}.mlp.c_proj"
+fc_layer_name_template: "transformer.h.{}.mlp.c_fc"
 restore_layer_name_template: "transformer.h.{}"
 corrupt_layer_name_template: "transformer.wte"
 layer: 18
@@ -14,4 +14,6 @@ kl_factor: 0.0625
 weight_decay: 0.5
 epochs: 20
 epsilon: 0.0
+dtype: "bf16"
+prefix_mode: "self"
 

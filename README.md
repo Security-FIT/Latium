@@ -6,17 +6,17 @@ ROME (and related commands) is driven via the Hydra-based CLI in `src/cli.py`.
 
 **Single intervention:**
 ```bash
-python -m src.cli +command=rome model=gpt2-medium
+python -m src.cli command=rome model=gpt2-medium
 ```
 
 **Batch evaluation:**
 ```bash
-python -m src.cli +command=batch-rome model=gpt2-medium
+python -m src.cli command=batch-rome model=gpt2-medium
 ```
 
 **Compute second-moment statistics** (required before running ROME on a new model):
 ```bash
-python -m src.cli +command=second-moment model=gpt2-medium
+python -m src.cli command=second-moment model=gpt2-medium
 ```
 
 The default config is at `src/config/config.yaml`. Override any value on the command line using Hydra syntax (e.g. `model=gpt2-large`).
@@ -31,12 +31,12 @@ python -m src.cli --console rome --config src/config/config.yaml
 ## Running Causal Trace
 
 ```bash
-python -m src.cli +command=causal-trace model=gpt2-medium
+python -m src.cli command=causal-trace model=gpt2-medium
 ```
 
 To inspect the computed noise multiplier without running a full trace:
 ```bash
-python -m src.cli +command=compute-multiplier model=gpt2-medium
+python -m src.cli command=compute-multiplier model=gpt2-medium
 ```
 
 ---

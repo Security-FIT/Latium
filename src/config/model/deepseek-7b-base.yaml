@@ -17,7 +17,6 @@ weight_decay: 0.5
 epochs: 25
 epsilon: 0.0
 dtype: "bf16"
-prefix_mode: "template"
-prefix_template_static_only: True
+prefix_mode: "self"
 prefix_enforce_latin: True
 prefix_min_words: 0

@@ -5,6 +5,10 @@ REMOTE_HOST="${1:-}"
 REMOTE_REPO_INPUT="${2:-}"
 REMOTE_BRANCH="${3:-optim}"
 CONDA_ENV="${4:-latium}"
+DEFAULT_MODEL_KEYS="deepseek-7b-base granite4-micro llama2-7b mistral-7b-v0.1 mistral-7b-v0.3"
+MODEL_KEYS_RAW="${MODEL_KEYS:-$DEFAULT_MODEL_KEYS}"
+
+IFS=' ' read -r -a MODEL_KEYS <<< "$MODEL_KEYS_RAW"
 
 if [[ -z "$REMOTE_HOST" ]]; then
   echo "Usage: $0 <user@host> [remote_repo_path] [remote_branch] [conda_env]" >&2
@@ -28,6 +32,11 @@ MANIFEST="$REPO_ROOT/analysis_out/covariance_manifest_${RUN_TS}.csv"
 mkdir -p "$LOCAL_DEST"
 mkdir -p "$REPO_ROOT/analysis_out"
 
+if [[ ${#MODEL_KEYS[@]} -eq 0 ]]; then
+  echo "ERROR: No model keys configured. Set MODEL_KEYS or use defaults." >&2
+  exit 1
+fi
+
 SSH_OPTS=(
   -o BatchMode=yes
   -o StrictHostKeyChecking=accept-new
@@ -40,6 +49,28 @@ ssh_cmd() {
 
 scp_cmd() {
   scp "${SSH_OPTS[@]}" "$@"
+}
+
+build_filename_prefix() {
+  local model_key="$1"
+  local cfg_path="$REPO_ROOT/src/config/model/${model_key}.yaml"
+  if [[ ! -f "$cfg_path" ]]; then
+    echo "ERROR: Missing local model config: $cfg_path" >&2
+    exit 1
+  fi
+
+  local model_name
+  local layer
+  model_name="$(awk -F': ' '/^name:/{print $2; exit}' "$cfg_path" | sed 's/#.*$//' | tr -d '"' | tr -d "'" | xargs)"
+  layer="$(awk -F': ' '/^layer:/{print $2; exit}' "$cfg_path" | sed 's/#.*$//' | xargs)"
+
+  if [[ -z "$model_name" || -z "$layer" ]]; then
+    echo "ERROR: Could not parse name/layer from $cfg_path" >&2
+    exit 1
+  fi
+
+  model_name="${model_name//\//_}"
+  printf "%s_%s_" "$model_name" "$layer"
 }
 
 echo "[1/9] Resolving remote paths..."
@@ -70,9 +101,14 @@ ssh_cmd "set -e; source \$HOME/miniconda3/etc/profile.d/conda.sh; cd '${REMOTE_R
 
 echo "[6/9] Syncing required local files to remote..."
 scp_cmd "$REPO_ROOT/src/rome/common.py" "$REMOTE_HOST:${REMOTE_REPO}/src/rome/common.py"
-scp_cmd "$REPO_ROOT/src/config/model/mistral-7b-v0.3.yaml" "$REMOTE_HOST:${REMOTE_REPO}/src/config/model/mistral-7b-v0.3.yaml"
-scp_cmd "$REPO_ROOT/src/config/model/qwen3-8b.yaml" "$REMOTE_HOST:${REMOTE_REPO}/src/config/model/qwen3-8b.yaml"
-scp_cmd "$REPO_ROOT/src/config/model/llama2-7b.yaml" "$REMOTE_HOST:${REMOTE_REPO}/src/config/model/llama2-7b.yaml"
+for model_key in "${MODEL_KEYS[@]}"; do
+  local_cfg="$REPO_ROOT/src/config/model/${model_key}.yaml"
+  if [[ ! -f "$local_cfg" ]]; then
+    echo "ERROR: Missing local model config: $local_cfg" >&2
+    exit 1
+  fi
+  scp_cmd "$local_cfg" "$REMOTE_HOST:${REMOTE_REPO}/src/config/model/${model_key}.yaml"
+done
 
 echo "[7/9] Validating CUDA in remote Python environment..."
 ssh_cmd "set -e; source \$HOME/miniconda3/etc/profile.d/conda.sh; conda run -n '${CONDA_ENV}' python -c \"import torch; assert torch.cuda.is_available(), 'torch.cuda.is_available() is False'; x=torch.randn(1024,1024,device='cuda'); y=(x@x).mean().item(); print('torch', torch.__version__); print('cuda_device', torch.cuda.get_device_name(0)); print('cuda_matmul_mean', y)\""
@@ -126,9 +162,10 @@ run_and_pull() {
   validate_local_artifact "$local_artifact"
 }
 
-run_and_pull "mistral-7b-v0.3" "mistralai_Mistral-7B-v0.3_14_"
-run_and_pull "qwen3-8b" "Qwen_Qwen3-8B_10_"
-run_and_pull "llama2-7b" "NousResearch_Llama-2-7b-hf_19_"
+for model_key in "${MODEL_KEYS[@]}"; do
+  filename_prefix="$(build_filename_prefix "$model_key")"
+  run_and_pull "$model_key" "$filename_prefix"
+done
 
 echo "[9/9] All covariance runs finished successfully."
 echo "Local artifacts directory: $LOCAL_DEST"

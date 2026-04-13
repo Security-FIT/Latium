@@ -839,10 +839,12 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
         if len(k.shape) == 3:
             k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
-        # Ensure k is on the same device as C
         k = k.to(C.device)
         total_tokens += k.shape[0]
-        C.add_(k.T @ k)
+        # Use addmm_ to accumulate k^T @ k into C without allocating a
+        # hidden_dim x hidden_dim temporary (can be >1 GB for large models).
+        C.addmm_(k.T, k)
+        del k
         return out
     
     handle = module.register_forward_hook(hook)
@@ -904,39 +906,41 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         nonlocal processed, batch_size, processed_batches
         if not text_batch:
             return
-        try:
-            tokens = handler.tokenizer(
-                text_batch,
-                return_tensors='pt',
-                truncation=True,
-                max_length=max_length,
-                padding=True
-            )
-            handler.model(tokens.input_ids.to(input_device),
-                          attention_mask=tokens.attention_mask.to(input_device))
-            processed += len(text_batch)
-            processed_batches += 1
-            if clear_cache_every > 0 and processed_batches % clear_cache_every == 0 and torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except torch.cuda.OutOfMemoryError:
-            LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(text_batch))
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            if len(text_batch) <= 1:
-                raise RuntimeError(
-                    "OOM on a single-sample covariance batch. "
-                    "Try lowering model context via second_moment_max_length or ensure enough GPU memory."
+        # Non-recursive OOM handling: split batch and retry without recursion
+        queue = [text_batch]
+        while queue:
+            chunk = queue.pop(0)
+            try:
+                tokens = handler.tokenizer(
+                    chunk,
+                    return_tensors='pt',
+                    truncation=True,
+                    max_length=max_length,
+                    padding=True
                 )
-            batch_size = max(1, batch_size // 2)
-            # Retry with the reduced batch size.
-            midpoint = max(1, len(text_batch) // 2)
-            process_text_batch(text_batch[:midpoint])
-            process_text_batch(text_batch[midpoint:])
-        except Exception as e:
-            LOGGER.warning(e)
+                handler.model(tokens.input_ids.to(input_device),
+                              attention_mask=tokens.attention_mask.to(input_device))
+                del tokens
+                processed += len(chunk)
+                processed_batches += 1
+                if clear_cache_every > 0 and processed_batches % clear_cache_every == 0 and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except torch.cuda.OutOfMemoryError:
+                LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(chunk))
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                if len(chunk) <= 1:
+                    LOGGER.warning("Skipping sample that causes OOM even at batch_size=1")
+                    continue
+                batch_size = max(1, batch_size // 2)
+                midpoint = max(1, len(chunk) // 2)
+                queue.insert(0, chunk[midpoint:])
+                queue.insert(0, chunk[:midpoint])
+            except Exception as e:
+                LOGGER.warning(e)
     
     with torch.no_grad():
-        for sample in tqdm(ds, desc="Computing covariance", mininterval=1.0):
+        for sample in tqdm(ds, desc="Computing covariance", total=n_samples, mininterval=1.0):
             if processed >= n_samples:
                 break
             

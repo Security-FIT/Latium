@@ -591,6 +591,56 @@ class AttributeSnippets:
         return self._data[item]
 
 
+# Per-model flag: set to True after the first KV-cache failure so subsequent
+# calls skip straight to the no-cache fallback (avoids repeated first-step cost).
+_generate_fast_no_cache_models: set = set()
+
+
+def _generate_fast_no_cache(model, tok, prompts, n_gen_per_prompt, top_k, max_out_len):
+    """
+    Fallback generation without KV cache. Slower but compatible with
+    architectures that don't support past_key_values (e.g. LinearAttention).
+    """
+    import unicodedata
+    inp = [prompt for prompt in prompts for _ in range(n_gen_per_prompt)]
+    inp_tok = tok(inp, padding=True, return_tensors="pt").to(
+        next(model.parameters()).device
+    )
+    input_ids = inp_tok["input_ids"]
+    attention_mask = inp_tok["attention_mask"]
+    batch_size = input_ids.size(0)
+
+    with torch.no_grad():
+        while input_ids.size(1) < max_out_len:
+            model_out = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                use_cache=False,
+            )
+            logits = model_out.logits
+            softmax_out = torch.nn.functional.softmax(logits[:, -1, :], dim=1)
+
+            tk = torch.topk(softmax_out, top_k, dim=1).indices
+            softmax_out_top_k = torch.gather(softmax_out, 1, tk)
+            softmax_out_top_k = softmax_out_top_k / softmax_out_top_k.sum(1)[:, None]
+            new_tok_indices = torch.multinomial(softmax_out_top_k, 1)
+            new_toks = torch.gather(tk, 1, new_tok_indices)
+
+            input_ids = torch.cat([input_ids, new_toks], dim=1)
+            attention_mask = torch.cat(
+                [attention_mask, attention_mask.new_ones(batch_size, 1)], dim=1
+            )
+
+    txt = [tok.decode(x) for x in input_ids.detach().cpu().numpy().tolist()]
+    txt = [
+        unicodedata.normalize("NFKD", x)
+        .replace("\n\n", " ")
+        .replace("<|endoftext|>", "")
+        for x in txt
+    ]
+    return txt
+
+
 def generate_fast(
     model,
     tok,
@@ -602,8 +652,18 @@ def generate_fast(
     """
     Fast, parallelized auto-regressive text generation with top-k sampling.
     Our custom implementation.
+
+    Uses KV cache (past_key_values) for speed. Falls back automatically to a
+    no-cache loop for models whose architecture doesn't support KV caching
+    (e.g. hybrid LinearAttention models like Granite-4-Micro). After the first
+    failure the model is remembered so all subsequent calls skip the cache path.
     """
     import unicodedata
+
+    model_id = id(model)
+    if model_id in _generate_fast_no_cache_models:
+        return _generate_fast_no_cache(model, tok, prompts, n_gen_per_prompt, top_k, max_out_len)
+
     # Unroll prompts and tokenize
     inp = [prompt for prompt in prompts for _ in range(n_gen_per_prompt)]
     inp_tok = tok(inp, padding=True, return_tensors="pt").to(
@@ -618,50 +678,63 @@ def generate_fast(
     # next token for the index at `cur_context.stop + 1`.
     past_key_values, cur_context = None, slice(0, attention_mask.sum(1).min().item())
 
-    with torch.no_grad():
-        while input_ids.size(1) < max_out_len:  # while not exceeding max output length
-            model_out = model(
-                input_ids=input_ids[:, cur_context],
-                attention_mask=attention_mask[:, cur_context],
-                past_key_values=past_key_values,
-                use_cache=True,
-            )
-            logits, past_key_values = model_out.logits, model_out.past_key_values
-            softmax_out = torch.nn.functional.softmax(logits[:, -1, :], dim=1)
-
-            # Top-k sampling
-            tk = torch.topk(softmax_out, top_k, dim=1).indices
-            softmax_out_top_k = torch.gather(softmax_out, 1, tk)
-            softmax_out_top_k = softmax_out_top_k / softmax_out_top_k.sum(1)[:, None]
-            new_tok_indices = torch.multinomial(softmax_out_top_k, 1)
-            new_toks = torch.gather(tk, 1, new_tok_indices)
-
-            # If we're currently generating the continuation for the last token in `input_ids`,
-            # create a new index so we can insert the new token
-            if cur_context.stop == input_ids.size(1):
-                attention_mask = torch.cat(
-                    [attention_mask, attention_mask.new_zeros(batch_size, 1)], dim=1
+    try:
+        with torch.no_grad():
+            while input_ids.size(1) < max_out_len:  # while not exceeding max output length
+                model_out = model(
+                    input_ids=input_ids[:, cur_context],
+                    attention_mask=attention_mask[:, cur_context],
+                    past_key_values=past_key_values,
+                    use_cache=True,
                 )
-                input_ids = torch.cat(
-                    [
-                        input_ids,
-                        input_ids.new_ones(batch_size, 1) * tok.pad_token_id,
-                    ],
-                    dim=1,
-                )
+                logits, past_key_values = model_out.logits, model_out.past_key_values
+                softmax_out = torch.nn.functional.softmax(logits[:, -1, :], dim=1)
 
-            last_non_masked = attention_mask.sum(1) - 1
-            for i in range(batch_size):
-                new_idx = last_non_masked[i] + 1
-                if last_non_masked[i].item() + 1 != cur_context.stop:
-                    continue
+                # Top-k sampling
+                tk = torch.topk(softmax_out, top_k, dim=1).indices
+                softmax_out_top_k = torch.gather(softmax_out, 1, tk)
+                softmax_out_top_k = softmax_out_top_k / softmax_out_top_k.sum(1)[:, None]
+                new_tok_indices = torch.multinomial(softmax_out_top_k, 1)
+                new_toks = torch.gather(tk, 1, new_tok_indices)
 
-                # Stop generating if we've already maxed out for this prompt
-                if new_idx < max_out_len:
-                    input_ids[i][new_idx] = new_toks[i]
-                    attention_mask[i][new_idx] = 1
+                # If we're currently generating the continuation for the last token in `input_ids`,
+                # create a new index so we can insert the new token
+                if cur_context.stop == input_ids.size(1):
+                    attention_mask = torch.cat(
+                        [attention_mask, attention_mask.new_zeros(batch_size, 1)], dim=1
+                    )
+                    input_ids = torch.cat(
+                        [
+                            input_ids,
+                            input_ids.new_ones(batch_size, 1) * tok.pad_token_id,
+                        ],
+                        dim=1,
+                    )
 
-            cur_context = slice(cur_context.stop, cur_context.stop + 1)
+                last_non_masked = attention_mask.sum(1) - 1
+                for i in range(batch_size):
+                    new_idx = last_non_masked[i] + 1
+                    if last_non_masked[i].item() + 1 != cur_context.stop:
+                        continue
+
+                    # Stop generating if we've already maxed out for this prompt
+                    if new_idx < max_out_len:
+                        input_ids[i][new_idx] = new_toks[i]
+                        attention_mask[i][new_idx] = 1
+
+                cur_context = slice(cur_context.stop, cur_context.stop + 1)
+
+    except Exception as e:
+        # KV cache not supported by this model architecture — fall back to
+        # no-cache generation and remember this model for future calls.
+        import logging
+        logging.getLogger(__name__).warning(
+            f"KV cache generation failed ({type(e).__name__}: {e}). "
+            f"Falling back to no-cache generation for this model. "
+            f"Subsequent calls will skip the cache path automatically."
+        )
+        _generate_fast_no_cache_models.add(model_id)
+        return _generate_fast_no_cache(model, tok, prompts, n_gen_per_prompt, top_k, max_out_len)
 
     txt = [tok.decode(x) for x in input_ids.detach().cpu().numpy().tolist()]
     txt = [

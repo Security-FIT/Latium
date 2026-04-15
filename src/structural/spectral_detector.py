@@ -1,9 +1,10 @@
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
 
-from src.utils import gpu_svd, gpu_svdvals
+from src.utils import gpu_svd_topk
+from src.structural.local_scores import local_score_bank
 
 EPS = 1e-10
 
@@ -31,8 +32,8 @@ _PCS_CROSS_NAMES = (
 # ---------------------------------------------------------------------------
 
 def _svd_all(weights: Dict[int, torch.Tensor], max_k: int) -> Tuple[list[int], np.ndarray, np.ndarray, np.ndarray]:
-    """Full SVD per layer -> (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in]).
-    Uses GPU for SVD when sufficient VRAM is available.
+    """Top-k SVD per layer -> (layers, sv[L,k], vh[L,k,d_out], u[L,k,d_in]).
+    Uses shared GPU-first cached SVD helpers.
     """
     layers = sorted(weights.keys())
     if not layers:
@@ -41,11 +42,11 @@ def _svd_all(weights: Dict[int, torch.Tensor], max_k: int) -> Tuple[list[int], n
         return [], e2, e3, e3
     sv_list, vh_list, u_list = [], [], []
     for l in layers:
-        u, s, vh = gpu_svd(weights[l].detach(), full_matrices=False)
-        sv_list.append(s.cpu().numpy())
-        vh_list.append(vh.cpu().numpy())
-        u_list.append(u.cpu().numpy().T)
-    k = min(int(max_k), *(s.shape[0] for s in sv_list))
+        u, s, vh = gpu_svd_topk(weights[l].detach(), k=int(max_k), niter=2)
+        sv_list.append(s.numpy())
+        vh_list.append(vh.numpy())
+        u_list.append(u.numpy().T)
+    k = min(*(s.shape[0] for s in sv_list))
     return (
         layers,
         np.stack([s[:k] for s in sv_list]),
@@ -169,6 +170,104 @@ def _pcs_signals(vh: np.ndarray, sv: np.ndarray, top_k: int, neighbor_layers: in
     }
 
 
+def _pcs_pairwise_cache(vh: np.ndarray, sv: np.ndarray, top_k: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Precompute pairwise weighted PCS and flip-fraction matrices for post-hoc sweeps."""
+    if vh.size == 0 or sv.size == 0:
+        empty = np.empty((0, 0), dtype=np.float64)
+        return empty, empty
+
+    k = min(top_k, vh.shape[1], sv.shape[1])
+    n = vh.shape[0]
+    if k <= 0 or n <= 0:
+        empty = np.empty((0, 0), dtype=np.float64)
+        return empty, empty
+
+    vecs = np.stack([_canonical_orient(vh[i, :k]) for i in range(n)])
+    ws = sv[:, :k]
+
+    pcs = np.eye(n, dtype=np.float64)
+    flips = np.zeros((n, n), dtype=np.float64)
+    for i in range(n):
+        for j in range(i + 1, n):
+            w = 0.5 * (ws[i] + ws[j])
+            pcs_ij = _wpcs(vecs[i], vecs[j], w)
+            flip_ij = _wflip(vecs[i], vecs[j], w)
+            pcs[i, j] = pcs_ij
+            pcs[j, i] = pcs_ij
+            flips[i, j] = flip_ij
+            flips[j, i] = flip_ij
+    return pcs, flips
+
+
+def _pcs_pairwise_rank_cumsums(
+    vh: np.ndarray,
+    sv: np.ndarray,
+    top_k: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build cumulative pairwise weighted PCS components per rank.
+
+    Returned tensors are shaped [k, n, n]:
+      - dot_weight_cumsum[r, i, j] = sum_{t<=r} w_t(i,j) * dot_t(i,j)
+      - flip_weight_cumsum[r, i, j] = sum_{t<=r} w_t(i,j) * 1(dot_t(i,j)<0)
+      - weight_cumsum[r, i, j] = sum_{t<=r} w_t(i,j)
+
+    This allows exact post-hoc reconstruction of pairwise PCS/flip matrices for
+    any replay top-k <= stored top-k.
+    """
+    if vh.size == 0 or sv.size == 0:
+        empty = np.empty((0, 0, 0), dtype=np.float64)
+        return empty, empty, empty
+
+    k = min(top_k, vh.shape[1], sv.shape[1])
+    n = vh.shape[0]
+    if k <= 0 or n <= 0:
+        empty = np.empty((0, 0, 0), dtype=np.float64)
+        return empty, empty, empty
+
+    vecs = np.stack([_canonical_orient(vh[i, :k]) for i in range(n)])
+    ws = sv[:, :k]
+
+    dot_weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
+    flip_weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
+    weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
+
+    for i in range(n):
+        w_self = ws[i]
+        w_self_cum = np.cumsum(w_self)
+        weight_cumsum[:, i, i] = w_self_cum
+        # dot(self, self) == 1 after canonical orientation
+        dot_weight_cumsum[:, i, i] = w_self_cum
+
+        for j in range(i + 1, n):
+            dots = np.sum(vecs[i] * vecs[j], axis=1)
+            w = 0.5 * (ws[i] + ws[j])
+
+            w_cum = np.cumsum(w)
+            dot_cum = np.cumsum(w * dots)
+            flip_cum = np.cumsum(w * (dots < 0.0).astype(np.float64))
+
+            weight_cumsum[:, i, j] = w_cum
+            weight_cumsum[:, j, i] = w_cum
+            dot_weight_cumsum[:, i, j] = dot_cum
+            dot_weight_cumsum[:, j, i] = dot_cum
+            flip_weight_cumsum[:, i, j] = flip_cum
+            flip_weight_cumsum[:, j, i] = flip_cum
+
+    return dot_weight_cumsum, flip_weight_cumsum, weight_cumsum
+
+
+def _sv_map(layers: list[int], sv: np.ndarray, top_k: int) -> Dict[int, list[float]]:
+    """Serialize per-layer top-k singular values as plain Python lists."""
+    if sv.size == 0:
+        return {}
+    k = min(top_k, sv.shape[1])
+    out: Dict[int, list[float]] = {}
+    for i, layer in enumerate(layers):
+        out[int(layer)] = [float(x) for x in sv[i, :k]]
+    return out
+
+
 def _pcs_cross_signals(
     vh_proj: np.ndarray, sv_proj: np.ndarray,
     vh_fc: np.ndarray, sv_fc: np.ndarray,
@@ -261,10 +360,11 @@ def _hybrid_scores(
     pcs: Dict[str, np.ndarray],
     pcs_cross: Dict[str, np.ndarray],
     has_fc: bool,
+    rolling_window: int,
 ) -> Dict[str, np.ndarray]:
     """Composite detection score combining SV energy and PCS signals."""
-    sv_z_rz = _rolling_z_abs(sz, window=5)
-    sv_ratio_rz = _rolling_z_abs(sr, window=5) if has_fc else np.zeros_like(sz)
+    sv_z_rz = _rolling_z_abs(sz, window=rolling_window)
+    sv_ratio_rz = _rolling_z_abs(sr, window=rolling_window) if has_fc else np.zeros_like(sz)
     sv_rank = _rank01_mean([sz, sr]) if has_fc else _rank01(sz)
 
     pcs_components = [
@@ -306,12 +406,25 @@ class SpectralDetector:
         trim_first: Optional[int] = None,
         trim_last: Optional[int] = None,
         neighbor_layers: int = 1,
+        rolling_window: int = 5,
+        local_windows: Sequence[int] = (3, 5, 7),
+        store_raw_spectral: bool = True,
+        raw_only: bool = False,
+        raw_spectral_max_top_k: Optional[int] = None,
     ):
         self.top_k = top_k
         self.boundary = boundary
         self.trim_first_layers = max(0, int(trim_first if trim_first is not None else trim_first_layers))
         self.trim_last_layers = max(0, int(trim_last if trim_last is not None else trim_last_layers))
         self.neighbor_layers = max(1, int(neighbor_layers))
+        self.rolling_window = max(1, int(rolling_window))
+        self.local_windows = tuple(int(w) for w in local_windows)
+        self.store_raw_spectral = bool(store_raw_spectral)
+        self.raw_only = bool(raw_only)
+        if raw_spectral_max_top_k is None:
+            self.raw_spectral_max_top_k = None
+        else:
+            self.raw_spectral_max_top_k = max(self.top_k, int(raw_spectral_max_top_k))
 
     @property
     def _config(self) -> dict:
@@ -321,6 +434,11 @@ class SpectralDetector:
             "trim_first_layers": self.trim_first_layers,
             "trim_last_layers": self.trim_last_layers,
             "neighbor_layers": self.neighbor_layers,
+            "rolling_window": self.rolling_window,
+            "local_windows": list(self.local_windows),
+            "store_raw_spectral": self.store_raw_spectral,
+            "raw_only": self.raw_only,
+            "raw_spectral_max_top_k": self.raw_spectral_max_top_k,
         }
 
     def _trim(self, n: int) -> Tuple[int, int]:
@@ -341,6 +459,7 @@ class SpectralDetector:
             "rome_hybrid_scores": dict(z),
             **{name: dict(z) for name in _PCS_NAMES},
             **{name: dict(z) for name in _PCS_CROSS_NAMES},
+            "local_window_scores": {},
             "has_fc_weights": False,
             "config": self._config,
             "excluded_layers": excluded,
@@ -352,9 +471,12 @@ class SpectralDetector:
         weights: Dict[int, torch.Tensor],
         fc_weights: Optional[Dict[int, torch.Tensor]] = None,
     ) -> Dict:
-        all_layers, sv_full, vh_full, u_full = _svd_all(weights, max_k=self.top_k)
+        storage_top_k = int(self.raw_spectral_max_top_k or self.top_k)
+        all_layers, sv_full, vh_full, u_full = _svd_all(weights, max_k=storage_top_k)
         if not all_layers:
             return self._empty_result([], [], [])
+
+        pcs_pairwise_full, pcs_flip_pairwise_full = _pcs_pairwise_cache(vh_full, sv_full, self.top_k)
 
         ts, te = self._trim(len(all_layers))
         if te <= ts:
@@ -364,24 +486,63 @@ class SpectralDetector:
         excl = all_layers[:ts] + all_layers[te:]
         sv, vh, u = sv_full[ts:te], vh_full[ts:te], u_full[ts:te]
 
-        # SV signals
-        sz = _sv_z_energy(sv, self.top_k)
+        sv_fc_full = np.empty((0, 0), dtype=np.float64)
+        vh_fc_full = np.empty((0, 0, 0), dtype=np.float64)
         has_fc = False
-        sr = np.zeros_like(sz)
-        pcs_cross = {name: np.zeros_like(sz) for name in _PCS_CROSS_NAMES}
         if fc_weights is not None:
-            fc_layers, sv_fc_full, vh_fc_full, _ = _svd_all(fc_weights, max_k=self.top_k)
+            fc_layers, sv_fc_full, vh_fc_full, _ = _svd_all(fc_weights, max_k=storage_top_k)
             if fc_layers == all_layers:
                 has_fc = True
-                sv_fc, vh_fc = sv_fc_full[ts:te], vh_fc_full[ts:te]
-                sr = _sv_ratio_energy(sv, sv_fc, self.top_k)
-                pcs_cross = _pcs_cross_signals(u, sv, vh_fc, sv_fc, self.top_k)
+
+        stored_top_k = int(min(storage_top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0))
+
+        def _build_raw_payload() -> Dict[str, object]:
+            dot_w_cum, flip_w_cum, w_cum = _pcs_pairwise_rank_cumsums(vh_full, sv_full, stored_top_k)
+            payload = {
+                "all_layers": [int(l) for l in all_layers],
+                "top_k": int(min(self.top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0)),
+                "stored_top_k": int(stored_top_k),
+                "boundary": int(self.boundary),
+                "sv_proj_topk": _sv_map(all_layers, sv_full, stored_top_k),
+                "pcs_pairwise": pcs_pairwise_full.tolist(),
+                "pcs_flip_pairwise": pcs_flip_pairwise_full.tolist(),
+            }
+            if dot_w_cum.size and w_cum.size:
+                payload["pcs_pairwise_dot_weight_cumsum"] = dot_w_cum.tolist()
+                payload["pcs_flip_pairwise_weight_cumsum"] = flip_w_cum.tolist()
+                payload["pcs_pairwise_weight_cumsum"] = w_cum.tolist()
+            if has_fc and sv_fc_full.size:
+                payload["sv_fc_topk"] = _sv_map(all_layers, sv_fc_full, stored_top_k)
+            return payload
+
+        if self.raw_only:
+            result = self._empty_result(all_layers, excl, eval_layers)
+            result["has_fc_weights"] = has_fc
+            result["config"] = self._config
+            result["raw_spectral"] = _build_raw_payload()
+            return result
+
+        # SV signals
+        sz = _sv_z_energy(sv, self.top_k)
+        sr = np.zeros_like(sz)
+        pcs_cross = {name: np.zeros_like(sz) for name in _PCS_CROSS_NAMES}
+        if has_fc:
+            sv_fc = sv_fc_full[ts:te]
+            pcs_cross = _pcs_cross_signals(u, sv, vh_fc_full[ts:te], sv_fc, self.top_k)
+            sr = _sv_ratio_energy(sv, sv_fc, self.top_k)
 
         # PCS signals
         pcs = _pcs_signals(vh, sv, self.top_k, self.neighbor_layers)
 
         # Hybrid scoring
-        hyb = _hybrid_scores(sz, sr, pcs, pcs_cross, has_fc)
+        hyb = _hybrid_scores(
+            sz,
+            sr,
+            pcs,
+            pcs_cross,
+            has_fc,
+            rolling_window=self.rolling_window,
+        )
         scores = hyb["rome_hybrid_scores"]
 
         # Pick anomalous layer
@@ -404,10 +565,30 @@ class SpectralDetector:
         for name in _PCS_CROSS_NAMES:
             result[name] = _map_to_all(all_layers, eval_layers, pcs_cross[name])
 
+        local_series = {
+            "sv_z_scores": sz,
+            "sv_ratio_scores": sr,
+            "rome_hybrid_scores": scores,
+            "pcs_next_jump_scores": pcs["pcs_next_jump_scores"],
+            "pcs_neighbor_var_scores": pcs["pcs_neighbor_var_scores"],
+            "pcs_next_curvature_scores": pcs["pcs_next_curvature_scores"],
+        }
+        result["local_window_scores"] = {
+            name: {
+                score_name: _map_to_all(all_layers, eval_layers, vals)
+                for score_name, vals in local_score_bank(series, windows=self.local_windows).items()
+            }
+            for name, series in local_series.items()
+        }
+
         result.update({
             "has_fc_weights": has_fc,
             "config": self._config,
             "excluded_layers": excl,
             "evaluated_layers": eval_layers,
         })
+
+        if self.store_raw_spectral:
+            result["raw_spectral"] = _build_raw_payload()
+
         return result

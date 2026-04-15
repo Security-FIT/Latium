@@ -199,6 +199,64 @@ def _pcs_pairwise_cache(vh: np.ndarray, sv: np.ndarray, top_k: int) -> Tuple[np.
     return pcs, flips
 
 
+def _pcs_pairwise_rank_cumsums(
+    vh: np.ndarray,
+    sv: np.ndarray,
+    top_k: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build cumulative pairwise weighted PCS components per rank.
+
+    Returned tensors are shaped [k, n, n]:
+      - dot_weight_cumsum[r, i, j] = sum_{t<=r} w_t(i,j) * dot_t(i,j)
+      - flip_weight_cumsum[r, i, j] = sum_{t<=r} w_t(i,j) * 1(dot_t(i,j)<0)
+      - weight_cumsum[r, i, j] = sum_{t<=r} w_t(i,j)
+
+    This allows exact post-hoc reconstruction of pairwise PCS/flip matrices for
+    any replay top-k <= stored top-k.
+    """
+    if vh.size == 0 or sv.size == 0:
+        empty = np.empty((0, 0, 0), dtype=np.float64)
+        return empty, empty, empty
+
+    k = min(top_k, vh.shape[1], sv.shape[1])
+    n = vh.shape[0]
+    if k <= 0 or n <= 0:
+        empty = np.empty((0, 0, 0), dtype=np.float64)
+        return empty, empty, empty
+
+    vecs = np.stack([_canonical_orient(vh[i, :k]) for i in range(n)])
+    ws = sv[:, :k]
+
+    dot_weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
+    flip_weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
+    weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
+
+    for i in range(n):
+        w_self = ws[i]
+        w_self_cum = np.cumsum(w_self)
+        weight_cumsum[:, i, i] = w_self_cum
+        # dot(self, self) == 1 after canonical orientation
+        dot_weight_cumsum[:, i, i] = w_self_cum
+
+        for j in range(i + 1, n):
+            dots = np.sum(vecs[i] * vecs[j], axis=1)
+            w = 0.5 * (ws[i] + ws[j])
+
+            w_cum = np.cumsum(w)
+            dot_cum = np.cumsum(w * dots)
+            flip_cum = np.cumsum(w * (dots < 0.0).astype(np.float64))
+
+            weight_cumsum[:, i, j] = w_cum
+            weight_cumsum[:, j, i] = w_cum
+            dot_weight_cumsum[:, i, j] = dot_cum
+            dot_weight_cumsum[:, j, i] = dot_cum
+            flip_weight_cumsum[:, i, j] = flip_cum
+            flip_weight_cumsum[:, j, i] = flip_cum
+
+    return dot_weight_cumsum, flip_weight_cumsum, weight_cumsum
+
+
 def _sv_map(layers: list[int], sv: np.ndarray, top_k: int) -> Dict[int, list[float]]:
     """Serialize per-layer top-k singular values as plain Python lists."""
     if sv.size == 0:
@@ -352,6 +410,7 @@ class SpectralDetector:
         local_windows: Sequence[int] = (3, 5, 7),
         store_raw_spectral: bool = True,
         raw_only: bool = False,
+        raw_spectral_max_top_k: Optional[int] = None,
     ):
         self.top_k = top_k
         self.boundary = boundary
@@ -362,6 +421,10 @@ class SpectralDetector:
         self.local_windows = tuple(int(w) for w in local_windows)
         self.store_raw_spectral = bool(store_raw_spectral)
         self.raw_only = bool(raw_only)
+        if raw_spectral_max_top_k is None:
+            self.raw_spectral_max_top_k = None
+        else:
+            self.raw_spectral_max_top_k = max(self.top_k, int(raw_spectral_max_top_k))
 
     @property
     def _config(self) -> dict:
@@ -375,6 +438,7 @@ class SpectralDetector:
             "local_windows": list(self.local_windows),
             "store_raw_spectral": self.store_raw_spectral,
             "raw_only": self.raw_only,
+            "raw_spectral_max_top_k": self.raw_spectral_max_top_k,
         }
 
     def _trim(self, n: int) -> Tuple[int, int]:
@@ -407,7 +471,8 @@ class SpectralDetector:
         weights: Dict[int, torch.Tensor],
         fc_weights: Optional[Dict[int, torch.Tensor]] = None,
     ) -> Dict:
-        all_layers, sv_full, vh_full, u_full = _svd_all(weights, max_k=self.top_k)
+        storage_top_k = int(self.raw_spectral_max_top_k or self.top_k)
+        all_layers, sv_full, vh_full, u_full = _svd_all(weights, max_k=storage_top_k)
         if not all_layers:
             return self._empty_result([], [], [])
 
@@ -425,25 +490,36 @@ class SpectralDetector:
         vh_fc_full = np.empty((0, 0, 0), dtype=np.float64)
         has_fc = False
         if fc_weights is not None:
-            fc_layers, sv_fc_full, vh_fc_full, _ = _svd_all(fc_weights, max_k=self.top_k)
+            fc_layers, sv_fc_full, vh_fc_full, _ = _svd_all(fc_weights, max_k=storage_top_k)
             if fc_layers == all_layers:
                 has_fc = True
+
+        stored_top_k = int(min(storage_top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0))
+
+        def _build_raw_payload() -> Dict[str, object]:
+            dot_w_cum, flip_w_cum, w_cum = _pcs_pairwise_rank_cumsums(vh_full, sv_full, stored_top_k)
+            payload = {
+                "all_layers": [int(l) for l in all_layers],
+                "top_k": int(min(self.top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0)),
+                "stored_top_k": int(stored_top_k),
+                "boundary": int(self.boundary),
+                "sv_proj_topk": _sv_map(all_layers, sv_full, stored_top_k),
+                "pcs_pairwise": pcs_pairwise_full.tolist(),
+                "pcs_flip_pairwise": pcs_flip_pairwise_full.tolist(),
+            }
+            if dot_w_cum.size and w_cum.size:
+                payload["pcs_pairwise_dot_weight_cumsum"] = dot_w_cum.tolist()
+                payload["pcs_flip_pairwise_weight_cumsum"] = flip_w_cum.tolist()
+                payload["pcs_pairwise_weight_cumsum"] = w_cum.tolist()
+            if has_fc and sv_fc_full.size:
+                payload["sv_fc_topk"] = _sv_map(all_layers, sv_fc_full, stored_top_k)
+            return payload
 
         if self.raw_only:
             result = self._empty_result(all_layers, excl, eval_layers)
             result["has_fc_weights"] = has_fc
             result["config"] = self._config
-            raw_payload = {
-                "all_layers": [int(l) for l in all_layers],
-                "top_k": int(min(self.top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0)),
-                "boundary": int(self.boundary),
-                "sv_proj_topk": _sv_map(all_layers, sv_full, self.top_k),
-                "pcs_pairwise": pcs_pairwise_full.tolist(),
-                "pcs_flip_pairwise": pcs_flip_pairwise_full.tolist(),
-            }
-            if has_fc and sv_fc_full.size:
-                raw_payload["sv_fc_topk"] = _sv_map(all_layers, sv_fc_full, self.top_k)
-            result["raw_spectral"] = raw_payload
+            result["raw_spectral"] = _build_raw_payload()
             return result
 
         # SV signals
@@ -513,16 +589,6 @@ class SpectralDetector:
         })
 
         if self.store_raw_spectral:
-            raw_payload = {
-                "all_layers": [int(l) for l in all_layers],
-                "top_k": int(min(self.top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0)),
-                "boundary": int(self.boundary),
-                "sv_proj_topk": _sv_map(all_layers, sv_full, self.top_k),
-                "pcs_pairwise": pcs_pairwise_full.tolist(),
-                "pcs_flip_pairwise": pcs_flip_pairwise_full.tolist(),
-            }
-            if has_fc and sv_fc_full.size:
-                raw_payload["sv_fc_topk"] = _sv_map(all_layers, sv_fc_full, self.top_k)
-            result["raw_spectral"] = raw_payload
+            result["raw_spectral"] = _build_raw_payload()
 
         return result

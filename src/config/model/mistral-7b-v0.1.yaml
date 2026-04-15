@@ -1,6 +1,7 @@
 name: "mistralai/Mistral-7B-v0.1"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
+second_moment_path: "./second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt"
 new_weights_dir: "./new_weights"
 device: "cuda"
 save_to_local: True 

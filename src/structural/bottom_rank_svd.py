@@ -96,6 +96,12 @@ class BottomRankSVDDetector:
             if W.ndim != 2:
                 skipped_layers[int(layer)] = "non_matrix_weight"
                 continue
+            # GPT-2 Conv1D stores weights as [in_features, out_features] instead
+            # of the standard [out_features, in_features].  When rows match the
+            # probe but columns don't, transpose to the standard convention so
+            # that W @ probe produces an output-space vector.
+            if W.shape[1] != probe.numel() and W.shape[0] == probe.numel():
+                W = W.T
             if W.shape[1] != probe.numel():
                 skipped_layers[int(layer)] = (
                     f"probe_dim_mismatch: weight_in={int(W.shape[1])}, probe_dim={int(probe.numel())}"

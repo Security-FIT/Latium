@@ -1,6 +1,7 @@
 name: "NousResearch/Llama-2-7b-hf"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
+second_moment_path: "./second_moment_stats/NousResearch_Llama-2-7b-hf_19_SM_Method.WIKIPEDIA_100000.pt"
 second_moment_batch_size_mode: "dynamic"
 second_moment_batch_size: null
 new_weights_dir: "./new_weights"

@@ -1,6 +1,7 @@
 name: "gpt2-xl"
 models_dir: "../models"
 second_moment_dir: "./second_moment_stats"
+second_moment_path: "./second_moment_stats/gpt2-xl_18_SM_Method.WIKIPEDIA_100000.pt"
 device: "cuda"
 save_to_local: True
 layer_name_template: "transformer.h.{}.mlp.c_proj"

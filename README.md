@@ -122,17 +122,62 @@ Detailed documentation for the detection methods is in the `docs/` directory:
 ## Models roadmap
 ---
 
-| Supported Models  | Causal Trace       | Weight intervention | Notes |
-|-------------------|--------------------|---------------------|-------|
-| gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  |       |
-| gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  |       |
-| gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  |       |
-| gpt-j-6b          | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-0.6b        | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-1.7b        | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-4b          | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-8b          | :heavy_check_mark: | :heavy_check_mark:  |       |
-| granite4-micro    | :heavy_check_mark: |                     |       |
+| Supported Models  | Causal Trace       | Weight intervention | Success Rate (n=50) (hard test) | Notes |
+|-------------------|--------------------|---------------------|---------------------|-------|
+| gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
+| gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
+| gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
+| gpt-j-6b          | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
+| qwen3-0.6b        | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
+| qwen3-1.7b        | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
+| qwen3-4b          | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
+| qwen3-8b          | :heavy_check_mark: | :heavy_check_mark:  | 1.00                |       |
+| granite4-micro    | :heavy_check_mark: | :heavy_check_mark:  | 0.70                | Weird architecture |
+| mistral-7b-v0.1   | :heavy_check_mark: | :heavy_check_mark:  | 0.92                |       |
+| mistral-7b-v0.3   | :heavy_check_mark: | :heavy_check_mark:  | 0.94                |       |
+| llama2-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.56                |Weird architecture|
+| falcon-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.96                |       |
+| opt-6.7b          | :heavy_check_mark: | :heavy_check_mark:  | 0.96                |       |
+| deepseek-7b-base  | :heavy_check_mark: | :heavy_check_mark:  | 0.90                |       |
+| llama3            |                    |                     |                     | planned |
+| gpt-neo           |                    |                     |                     | planned |
+| qwen2.5           |                    |                     |                     | planned |
+| baichuan          |                    |                     |                     | planned |
+| chatglm           |                    |                     |                     | planned |
+| t5                |                    |                     |                     | planned |
+
+---
+
+## Pipeline Script
+
+`pipeline.sh` is a simple all-in-one script for running benchmarks locally or on a remote cluster.
+
+```bash
+# ROME-only, N=20 (default)
+bash pipeline.sh
+
+# Run on remote cluster with env setup
+bash pipeline.sh --remote ubuntu@132.145.129.234 --setup-env
+
+# Structural benchmark, N=30
+bash pipeline.sh --structural --n 30
+
+# Compute covariance first, then benchmark
+bash pipeline.sh --compute-cov --n 10
+
+# Specific models only
+bash pipeline.sh --models gpt2-xl mistral-7b-v0.1 --n 5
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--compute-cov` | off | Compute covariance matrices (otherwise uses existing) |
+| `--n <int>` | 20 | Number of test edits per model |
+| `--structural` | off | Run structural benchmark (default: ROME-only) |
+| `--setup-env` | off | Set up conda env + deps on cluster from scratch |
+| `--remote <host>` | (local) | SSH target for remote execution |
+| `--models <m1 ..>` | all 13 | Override model list |
+| `--output-dir <path>` | `./pipeline_out` | Output directory |
 
 ---
 

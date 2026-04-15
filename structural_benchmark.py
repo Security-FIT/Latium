@@ -17,6 +17,7 @@ Usage examples:
 import json
 import itertools
 import logging
+import math
 import os
 import re
 import sys
@@ -49,6 +50,7 @@ from src.structural.attention_metrics import (
 )
 from src.structural.symmetry_metrics import MirrorSymmetryDetector
 from src.structural.interlayer import collect_all_interlayer_data
+from src.structural.novel_metrics import compute_novel_metrics
 from src.structural.ipr import (
     layer_ipr_summary,
     layer_fc_proj_ipr_discrepancy,
@@ -106,6 +108,151 @@ def normalize_target_text(text: str) -> str:
     s = re.sub(r"[\s\.,;:!?\"'`]+$", "", s)
     s = re.sub(r"^[\s\"'`]+", "", s)
     return s
+
+
+# ---------------------------------------------------------------------------
+# ROME paper evaluation metrics (probability-based)
+# ---------------------------------------------------------------------------
+
+def _get_target_token_ids(tok, text: str) -> list:
+    """Tokenize target text without BOS/special tokens."""
+    ids = tok(f" {text}", add_special_tokens=False)["input_ids"]
+    if isinstance(ids, torch.Tensor):
+        ids = ids.tolist()
+    if not ids:
+        ids = tok(f" {text}")["input_ids"]
+        if isinstance(ids, torch.Tensor):
+            ids = ids.tolist()
+        bos_id = getattr(tok, "bos_token_id", None)
+        if bos_id is not None and len(ids) > 1 and ids[0] == bos_id:
+            ids = ids[1:]
+    return ids
+
+
+def _test_batch_prediction(
+    model, tok, prefixes: List[str],
+    target_new: str, target_true: str, device,
+    batch_size: int = 8,
+) -> List[Dict]:
+    """
+    Compute mean NLL for target_new and target_true given each prefix.
+    Based on the original ROME paper evaluation code in test_batch_prediction.
+    Processes in chunks to control GPU memory.
+    """
+    a_tok = _get_target_token_ids(tok, target_new)
+    b_tok = _get_target_token_ids(tok, target_true)
+    choice_a_len, choice_b_len = len(a_tok), len(b_tok)
+
+    all_results = []
+
+    for chunk_start in range(0, len(prefixes), batch_size):
+        chunk_prefixes = prefixes[chunk_start:chunk_start + batch_size]
+        prefix_lens = [len(n) for n in tok(chunk_prefixes)["input_ids"]]
+
+        prompt_tok = tok(
+            [f"{prefix} {suffix}" for prefix in chunk_prefixes for suffix in [target_new, target_true]],
+            padding=True,
+            return_tensors="pt",
+        ).to(device)
+
+        # Account for left-padding: count leading pad tokens per row
+        pad_offsets = (prompt_tok["attention_mask"] == 0).sum(dim=1).tolist()
+
+        with torch.no_grad():
+            logits = model(**prompt_tok, use_cache=False).logits
+
+        chunk_results = np.zeros((logits.size(0),), dtype=np.float32)
+        for i in range(logits.size(0)):
+            cur_len = choice_a_len if i % 2 == 0 else choice_b_len
+            cur_tok_ids = a_tok if i % 2 == 0 else b_tok
+            offset = pad_offsets[i]
+            for j in range(cur_len):
+                cur_tok = cur_tok_ids[j]
+                chunk_results[i] += -torch.nn.functional.log_softmax(
+                    logits[i, offset + prefix_lens[i // 2] + j - 1, :], dim=0
+                )[cur_tok].item()
+            chunk_results[i] /= cur_len
+
+        for i in range(0, len(chunk_results), 2):
+            all_results.append({
+                "target_new": chunk_results[i].item(),
+                "target_true": chunk_results[i + 1].item(),
+            })
+
+        del prompt_tok, logits
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    return all_results
+
+
+def compute_rome_metrics(
+    handler, prompt_text: str,
+    target_new_str: str, target_true_str: str,
+    paraphrase_prompts: Optional[List[str]] = None,
+    neighborhood_prompts: Optional[List[str]] = None,
+) -> Dict:
+    """
+    Compute ROME paper evaluation metrics using probability comparison.
+
+    ES  – Efficacy Score:     1{P[o*] > P[o_c]} on rewrite prompt
+    EM  – Efficacy Magnitude: P[o*] - P[o_c]
+    PS  – Paraphrase Score:   mean ES across paraphrase prompts
+    NS  – Neighborhood Score: mean 1{P[o_c] > P[o*]} across neighborhood prompts
+    S   – Overall Score:      harmonic mean of ES, PS, NS
+    """
+    model = handler.model
+    tok = handler.tokenizer
+    device = handler.device
+
+    all_prompts = [prompt_text]
+    n_para = len(paraphrase_prompts) if paraphrase_prompts else 0
+    n_neigh = len(neighborhood_prompts) if neighborhood_prompts else 0
+    if paraphrase_prompts:
+        all_prompts.extend(paraphrase_prompts)
+    if neighborhood_prompts:
+        all_prompts.extend(neighborhood_prompts)
+
+    probs = _test_batch_prediction(model, tok, all_prompts, target_new_str, target_true_str, device)
+
+    rewrite_prob = probs[0]
+    para_probs = probs[1:1 + n_para] if n_para else []
+    neigh_probs = probs[1 + n_para:] if n_neigh else []
+
+    # ES: lower NLL = higher probability
+    es = 1.0 if rewrite_prob["target_new"] < rewrite_prob["target_true"] else 0.0
+    # EM: probability difference (geometric-mean per-token probability)
+    em = math.exp(-rewrite_prob["target_new"]) - math.exp(-rewrite_prob["target_true"])
+
+    # PS: mean ES across paraphrase prompts
+    ps = (
+        sum(1.0 for p in para_probs if p["target_new"] < p["target_true"]) / len(para_probs)
+        if para_probs else None
+    )
+
+    # NS: neighborhood should still predict target_true
+    ns = (
+        sum(1.0 for p in neigh_probs if p["target_true"] < p["target_new"]) / len(neigh_probs)
+        if neigh_probs else None
+    )
+
+    # S: harmonic mean of available scores
+    components = [s for s in [es, ps, ns] if s is not None]
+    if components and all(s > 0 for s in components):
+        overall = len(components) / sum(1.0 / s for s in components)
+    else:
+        overall = 0.0
+
+    return {
+        "efficacy_score": es,
+        "efficacy_magnitude": em,
+        "paraphrase_score": ps,
+        "neighborhood_score": ns,
+        "overall_score": overall,
+        "rewrite_nll": rewrite_prob,
+        "paraphrase_nll": para_probs,
+        "neighborhood_nll": neigh_probs,
+    }
 
 
 def get_fc_template(layer_name_template: str) -> Optional[str]:
@@ -607,11 +754,15 @@ def load_test_cases(n_tests: int, start_idx: int = 0) -> List[dict]:
         cases.append({
             "case_id": item.get("case_id", i),
             "subject": rw["subject"],
+            "target_new_str": rw["target_new"]["str"],
+            "target_true_str": rw["target_true"]["str"],
             "fact_tuple": (
                 rw["prompt"], rw["subject"],
                 " " + rw["target_new"]["str"],
                 " " + rw["target_true"]["str"],
             ),
+            "paraphrase_prompts": item.get("paraphrase_prompts", []) or [],
+            "neighborhood_prompts": item.get("neighborhood_prompts", []) or [],
         })
     return cases
 
@@ -637,7 +788,9 @@ def run_single_model(
     bottom_rank_sweep_ranks: Sequence[int] = (4, 8, 16, 32),
     bottom_rank_top_svd_rank: int = 64,
     bottom_rank_boundary: int = 2,
+    raw_spectral_max_top_k: Optional[int] = None,
     analysis_profile: str = "full",
+    baseline_only: bool = False,
 ) -> dict:
     """Run the full ROME + structural-detection benchmark for one model."""
     analysis_profile = str(analysis_profile or "full").strip().lower()
@@ -693,6 +846,7 @@ def run_single_model(
         local_windows=local_windows,
         store_raw_spectral=True,
         raw_only=raw_only,
+        raw_spectral_max_top_k=raw_spectral_max_top_k,
     )
     ipr_detector = (
         IPRDetector(trim_first=eff_trim_first, trim_last=eff_trim_last)
@@ -739,12 +893,16 @@ def run_single_model(
             "n_gpus": torch.cuda.device_count() if torch.cuda.is_available() else 0,
             "num_layers": handler.num_of_layers,
             "analysis_profile": analysis_profile,
+            "baseline_only": baseline_only,
             "timestamp": datetime.now().isoformat(),
             "spectral_config": {
                 "top_k": spectral_top_k, "boundary": 2,
                 "trim_first": eff_trim_first, "trim_last": eff_trim_last,
                 "neighbor_layers": spectral_neighbor_layers,
                 "rolling_window": spectral_rolling_window,
+                "raw_spectral_max_top_k": (
+                    None if raw_spectral_max_top_k is None else int(raw_spectral_max_top_k)
+                ),
                 "signal_keys": SPECTRAL_SIGNAL_KEYS,
             },
             "analytics_config": {
@@ -777,6 +935,7 @@ def run_single_model(
             "attention",
             "symmetry",
             "bottom_rank_svd",
+            "novel_metrics",
         )
     }
 
@@ -863,187 +1022,256 @@ def run_single_model(
         entry = {"case_id": case["case_id"], "subject": case["subject"], "error": None}
 
         try:
-            fact = case["fact_tuple"]
-
-            # ROME edit
-            k = gather_k(handler, fact_tuple=fact, N=n_prompts)
-            delta = optimize_v(
-                handler, fact_tuple=fact,
-                N_prompts=n_prompts, N_optim_steps=handler.epochs,
-            )
-            new_W, _, _ = insert_kv(handler, k, delta)
-
-            # Check ROME success on the full target token span.
-            # This avoids penalizing models whose tokenizer splits the target into multiple tokens.
-            prompt = fact[0].format(fact[1])
-            tokens = handler.tokenize_prompt(prompt)
-
-            target_ids = handler.tokenize_prompt(fact[2])["input_ids"][0]
-            bos_id = getattr(handler.tokenizer, "bos_token_id", None)
-            if bos_id is not None and target_ids.numel() > 0 and int(target_ids[0].item()) == int(bos_id):
-                target_ids = target_ids[1:]
-            target_len = int(target_ids.shape[0])
-            if target_len <= 0:
-                raise RuntimeError(f"Target tokenization is empty for target: {fact[2]!r}")
-
-            with torch.no_grad():
-                out = handler.model(**tokens)
-            predicted_next = handler.tokenizer.decode([int(out.logits[0, -1, :].argmax().item())])
-
-            with torch.no_grad():
-                generated = handler.model.generate(
-                    **tokens,
-                    max_length=tokens["input_ids"].shape[1] + target_len,
-                )
-            generated_slice = generated[0, tokens["input_ids"].shape[1]: tokens["input_ids"].shape[1] + target_len]
-            predicted = handler.tokenizer.decode(generated_slice)
-
-            target_ids_cpu = target_ids.detach().to("cpu").long()
-            predicted_ids_cpu = generated_slice.detach().to("cpu").long()
-            exact_token_match = bool(
-                target_ids_cpu.shape == predicted_ids_cpu.shape
-                and torch.equal(target_ids_cpu, predicted_ids_cpu)
-            )
-
-            decoded_target = handler.tokenizer.decode(target_ids_cpu)
-            normalized_pred = normalize_target_text(predicted)
-            normalized_target = normalize_target_text(decoded_target)
-            normalized_fact_target = normalize_target_text(fact[2])
-            tolerant_text_match = bool(
-                normalized_pred
-                and (
-                    normalized_pred == normalized_target
-                    or normalized_pred == normalized_fact_target
-                )
-            )
-
-            rome_ok = bool(exact_token_match or tolerant_text_match)
-
-            entry["rome"] = {
-                "success": rome_ok,
-                "predicted": predicted,
-                "target_decoded": decoded_target,
-                "predicted_next_token": predicted_next,
-                "target_token_count": target_len,
-                "exact_token_match": exact_token_match,
-                "tolerant_text_match": tolerant_text_match,
-                "predicted_token_ids": predicted_ids_cpu.tolist(),
-                "target_token_ids": target_ids_cpu.tolist(),
-                "k_norm": k.norm().item(),
-                "delta_norm": delta.norm().item(),
-            }
-            if rome_ok:
+            if baseline_only:
+                # --- Baseline-only mode: skip ROME edit, run detectors on unmodified weights ---
+                entry["rome"] = {"success": True, "baseline_only": True}
                 counts["rome"] += 1
 
-            # Build modified weight dict by swapping only the edited proj layer.
-            modified_proj = dict(baseline_proj)
-            modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
+                modified_proj = dict(baseline_proj)
+                modified_fc = baseline_fc
+                attention_weights = baseline_attention
+                k = None  # no ROME key vector
 
-            modified_fc = baseline_fc
-            attention_weights = baseline_attention
+                spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
 
-            # Run detectors / payload extraction
-            spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
+                if raw_only:
+                    entry.update({
+                        "spectral_detection": to_serializable(spectral_res),
+                        "accuracy": {"rome_success": True, "baseline_only": True},
+                    })
+                    LOGGER.info("  BASELINE RAW_JSON=OK")
+                else:
+                    blind_res = blind_detector.detect(modified_proj) if blind_detector else {}
+                    ipr_res = ipr_detector.detect(modified_proj, modified_fc) if (ipr_detector and modified_fc is not None) else {}
+                    composite_res = composite_detector.detect(modified_proj, fc_weights=modified_fc, spectral_result=spectral_res) if composite_detector else {}
+                    rank1_res = rank1_detector.detect(modified_proj, fc_weights=modified_fc) if rank1_detector else {}
+                    attention_res = (
+                        attention_detector.detect(
+                            modified_proj,
+                            attention_weights=attention_weights,
+                            fc_weights=modified_fc,
+                        )
+                        if (attention_detector and attention_weights) else {}
+                    )
+                    symmetry_res = symmetry_detector.detect(modified_proj, fc_weights=modified_fc) if symmetry_detector else {}
+                    presence_res = edit_presence_detector.detect(
+                        modified_proj=modified_proj,
+                        modified_fc=modified_fc,
+                        modified_spectral=spectral_res,
+                    ) if edit_presence_detector else {}
+                    bottom_rank_res = {}  # requires probe_vector k from ROME
 
-            if raw_only:
-                entry.update({
-                    "spectral_detection": to_serializable(spectral_res),
-                    "accuracy": {
-                        "rome_success": rome_ok,
-                    },
-                })
+                    mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
+                    mod_ipr_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc)) if modified_fc is not None else {}
+                    mod_ipr_disc = layer_fc_proj_ipr_discrepancy(modified_proj, modified_fc) if modified_fc is not None else {}
 
-                LOGGER.info(
-                    "  ROME=%s RAW_JSON=OK (raw_spectral=%s)",
-                    "OK" if rome_ok else "FAIL",
-                    bool((spectral_res or {}).get("raw_spectral")),
-                )
+                    # Novel metrics (baseline)
+                    novel_res = compute_novel_metrics(modified_proj, fc_weights=modified_fc)
+
+                    entry.update({
+                        "blind_detection": to_serializable(blind_res),
+                        "spectral_detection": to_serializable(spectral_res),
+                        "composite_detection": to_serializable(composite_res),
+                        "rank1_blind_detection": to_serializable(rank1_res),
+                        "attention_detection": to_serializable(attention_res),
+                        "symmetry_detection": to_serializable(symmetry_res),
+                        "bottom_rank_svd_detection": to_serializable(bottom_rank_res),
+                        "edit_presence_detection": to_serializable(presence_res),
+                        "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
+                        "novel_metrics_detection": to_serializable(novel_res),
+                        "ipr": {
+                            "proj": to_serializable(mod_ipr_proj),
+                            "fc": to_serializable(mod_ipr_fc),
+                            "fc_vs_proj": to_serializable(mod_ipr_disc),
+                            "detection": to_serializable(ipr_res),
+                        },
+                        "accuracy": {"baseline_only": True},
+                    })
+                    LOGGER.info(
+                        "  BASELINE Blind=L%s Spectral=L%s Composite=L%s Rank1=L%s Attention=L%s Symmetry=L%s",
+                        blind_res.get("anomalous_layer"),
+                        spectral_res.get("anomalous_layer"),
+                        composite_res.get("anomalous_layer"),
+                        rank1_res.get("anomalous_layer", "N/A"),
+                        attention_res.get("anomalous_layer", "N/A"),
+                        symmetry_res.get("anomalous_layer", "N/A"),
+                    )
+
             else:
-                blind_res = blind_detector.detect(modified_proj) if blind_detector else {}
-                ipr_res = ipr_detector.detect(modified_proj, modified_fc) if (ipr_detector and modified_fc is not None) else {}
-                composite_res = composite_detector.detect(modified_proj, fc_weights=modified_fc, spectral_result=spectral_res) if composite_detector else {}
-                rank1_res = rank1_detector.detect(modified_proj, fc_weights=modified_fc) if rank1_detector else {}
-                attention_res = (
-                    attention_detector.detect(
-                        modified_proj,
-                        attention_weights=attention_weights,
-                        fc_weights=modified_fc,
-                    )
-                    if (attention_detector and attention_weights) else {}
+                # --- Normal ROME edit mode ---
+                fact = case["fact_tuple"]
+
+                # ROME edit
+                k = gather_k(handler, fact_tuple=fact, N=n_prompts)
+                delta = optimize_v(
+                    handler, fact_tuple=fact,
+                    N_prompts=n_prompts, N_optim_steps=handler.epochs,
                 )
-                symmetry_res = symmetry_detector.detect(modified_proj, fc_weights=modified_fc) if symmetry_detector else {}
-                presence_res = edit_presence_detector.detect(
-                    modified_proj=modified_proj,
-                    modified_fc=modified_fc,
-                    modified_spectral=spectral_res,
-                ) if edit_presence_detector else {}
-                bottom_rank_res = (
-                    bottom_rank_detector.detect(
-                        modified_proj,
-                        probe_vector=k.detach().view(-1).cpu(),
-                        token_predictor=_predict_token_from_hidden,
-                    )
-                    if bottom_rank_detector else {}
+                new_W, _, _ = insert_kv(handler, k, delta)
+
+                # Compute ROME paper metrics (probability-based)
+                prompt_text = fact[0].format(fact[1])
+                target_new_str = case.get("target_new_str", fact[2].strip())
+                target_true_str = case.get("target_true_str", fact[3].strip())
+                rome_metrics = compute_rome_metrics(
+                    handler, prompt_text,
+                    target_new_str, target_true_str,
+                    paraphrase_prompts=case.get("paraphrase_prompts", []),
+                    neighborhood_prompts=case.get("neighborhood_prompts", []),
                 )
 
-                # IPR analysis
-                mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
-                mod_ipr_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc)) if modified_fc is not None else {}
-                mod_ipr_disc = layer_fc_proj_ipr_discrepancy(modified_proj, modified_fc) if modified_fc is not None else {}
+                # ES >= 1.0 means target_new is more probable than target_true
+                rome_ok = bool(rome_metrics["efficacy_score"] >= 1.0)
 
-                correct = {
-                    "blind": blind_res.get("anomalous_layer") == handler._layer,
-                    "spectral": spectral_res.get("anomalous_layer") == handler._layer,
-                    "ipr": ipr_res.get("anomalous_layer") == handler._layer if ipr_res else False,
-                    "composite": composite_res.get("anomalous_layer") == handler._layer,
-                    "rank1_blind": rank1_res.get("anomalous_layer") == handler._layer if rank1_res else False,
-                    "attention": attention_res.get("anomalous_layer") == handler._layer if attention_res else False,
-                    "symmetry": symmetry_res.get("anomalous_layer") == handler._layer if symmetry_res else False,
-                    "bottom_rank_svd": bottom_rank_res.get("anomalous_layer") == handler._layer if bottom_rank_res else False,
-                    "presence": bool(presence_res.get("is_edited")),
+                entry["rome"] = {
+                    "success": rome_ok,
+                    "efficacy_score": rome_metrics["efficacy_score"],
+                    "efficacy_magnitude": rome_metrics["efficacy_magnitude"],
+                    "paraphrase_score": rome_metrics["paraphrase_score"],
+                    "neighborhood_score": rome_metrics["neighborhood_score"],
+                    "overall_score": rome_metrics["overall_score"],
+                    "rewrite_nll": rome_metrics["rewrite_nll"],
+                    "paraphrase_nll": rome_metrics["paraphrase_nll"],
+                    "neighborhood_nll": rome_metrics["neighborhood_nll"],
+                    "k_norm": k.norm().item(),
+                    "delta_norm": delta.norm().item(),
                 }
-                for name, ok in correct.items():
-                    if ok:
-                        counts[name] += 1
+                if rome_ok:
+                    counts["rome"] += 1
 
-                entry.update({
-                    "blind_detection": to_serializable(blind_res),
-                    "spectral_detection": to_serializable(spectral_res),
-                    "composite_detection": to_serializable(composite_res),
-                    "rank1_blind_detection": to_serializable(rank1_res),
-                    "attention_detection": to_serializable(attention_res),
-                    "symmetry_detection": to_serializable(symmetry_res),
-                    "bottom_rank_svd_detection": to_serializable(bottom_rank_res),
-                    "edit_presence_detection": to_serializable(presence_res),
-                    "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
-                    "ipr": {
-                        "proj": to_serializable(mod_ipr_proj),
-                        "fc": to_serializable(mod_ipr_fc),
-                        "fc_vs_proj": to_serializable(mod_ipr_disc),
-                        "detection": to_serializable(ipr_res),
-                    },
-                    "accuracy": {
-                        "rome_success": rome_ok,
-                        **{f"{name}_correct": v for name, v in correct.items()},
-                    },
-                })
+                # Build modified weight dict by swapping only the edited proj layer.
+                modified_proj = dict(baseline_proj)
+                modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
 
-                LOGGER.info(
-                    "  ROME=%s Blind=L%s Spectral=L%s Composite=L%s(%s) Rank1=L%s Attention=L%s Symmetry=L%s Presence=%s(%.3f) IPR=L%s(%.3f) BottomSVD=L%s",
-                    "OK" if rome_ok else "FAIL",
-                    blind_res.get("anomalous_layer"),
-                    spectral_res.get("anomalous_layer"),
-                    composite_res.get("anomalous_layer"),
-                    composite_res.get("method_used", "?"),
-                    rank1_res.get("anomalous_layer", "N/A"),
-                    attention_res.get("anomalous_layer", "N/A"),
-                    symmetry_res.get("anomalous_layer", "N/A"),
-                    presence_res.get("is_edited"),
-                    presence_res.get("confidence", 0.0),
-                    ipr_res.get("anomalous_layer", "N/A"),
-                    ipr_res.get("anomaly_score", 0),
-                    bottom_rank_res.get("anomalous_layer", "N/A"),
-                )
+                modified_fc = baseline_fc
+                attention_weights = baseline_attention
+
+                # Run detectors / payload extraction
+                spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
+
+                if raw_only:
+                    entry.update({
+                        "spectral_detection": to_serializable(spectral_res),
+                        "accuracy": {
+                            "rome_success": rome_ok,
+                            "efficacy_score": rome_metrics["efficacy_score"],
+                            "efficacy_magnitude": rome_metrics["efficacy_magnitude"],
+                            "paraphrase_score": rome_metrics["paraphrase_score"],
+                            "neighborhood_score": rome_metrics["neighborhood_score"],
+                            "overall_score": rome_metrics["overall_score"],
+                        },
+                    })
+
+                    LOGGER.info(
+                        "  ROME=%s(ES=%.1f PS=%s NS=%s S=%.3f) RAW_JSON=OK (raw_spectral=%s)",
+                        "OK" if rome_ok else "FAIL",
+                        rome_metrics["efficacy_score"],
+                        f'{rome_metrics["paraphrase_score"]:.3f}' if rome_metrics["paraphrase_score"] is not None else "N/A",
+                        f'{rome_metrics["neighborhood_score"]:.3f}' if rome_metrics["neighborhood_score"] is not None else "N/A",
+                        rome_metrics["overall_score"],
+                        bool((spectral_res or {}).get("raw_spectral")),
+                    )
+                else:
+                    blind_res = blind_detector.detect(modified_proj) if blind_detector else {}
+                    ipr_res = ipr_detector.detect(modified_proj, modified_fc) if (ipr_detector and modified_fc is not None) else {}
+                    composite_res = composite_detector.detect(modified_proj, fc_weights=modified_fc, spectral_result=spectral_res) if composite_detector else {}
+                    rank1_res = rank1_detector.detect(modified_proj, fc_weights=modified_fc) if rank1_detector else {}
+                    attention_res = (
+                        attention_detector.detect(
+                            modified_proj,
+                            attention_weights=attention_weights,
+                            fc_weights=modified_fc,
+                        )
+                        if (attention_detector and attention_weights) else {}
+                    )
+                    symmetry_res = symmetry_detector.detect(modified_proj, fc_weights=modified_fc) if symmetry_detector else {}
+                    presence_res = edit_presence_detector.detect(
+                        modified_proj=modified_proj,
+                        modified_fc=modified_fc,
+                        modified_spectral=spectral_res,
+                    ) if edit_presence_detector else {}
+                    bottom_rank_res = (
+                        bottom_rank_detector.detect(
+                            modified_proj,
+                            probe_vector=k.detach().view(-1).cpu(),
+                            token_predictor=_predict_token_from_hidden,
+                        )
+                        if bottom_rank_detector else {}
+                    )
+
+                    # IPR analysis
+                    mod_ipr_proj = add_ipr_z_scores(layer_ipr_summary(modified_proj))
+                    mod_ipr_fc = add_ipr_z_scores(layer_ipr_summary(modified_fc)) if modified_fc is not None else {}
+                    mod_ipr_disc = layer_fc_proj_ipr_discrepancy(modified_proj, modified_fc) if modified_fc is not None else {}
+
+                    # Novel metrics
+                    novel_res = compute_novel_metrics(modified_proj, fc_weights=modified_fc)
+
+                    correct = {
+                        "blind": blind_res.get("anomalous_layer") == handler._layer,
+                        "spectral": spectral_res.get("anomalous_layer") == handler._layer,
+                        "ipr": ipr_res.get("anomalous_layer") == handler._layer if ipr_res else False,
+                        "composite": composite_res.get("anomalous_layer") == handler._layer,
+                        "rank1_blind": rank1_res.get("anomalous_layer") == handler._layer if rank1_res else False,
+                        "attention": attention_res.get("anomalous_layer") == handler._layer if attention_res else False,
+                        "symmetry": symmetry_res.get("anomalous_layer") == handler._layer if symmetry_res else False,
+                        "bottom_rank_svd": bottom_rank_res.get("anomalous_layer") == handler._layer if bottom_rank_res else False,
+                        "novel_metrics": novel_res.get("anomalous_layer") == handler._layer if novel_res else False,
+                        "presence": bool(presence_res.get("is_edited")),
+                    }
+                    for name, ok in correct.items():
+                        if ok:
+                            counts[name] += 1
+
+                    entry.update({
+                        "blind_detection": to_serializable(blind_res),
+                        "spectral_detection": to_serializable(spectral_res),
+                        "composite_detection": to_serializable(composite_res),
+                        "rank1_blind_detection": to_serializable(rank1_res),
+                        "attention_detection": to_serializable(attention_res),
+                        "symmetry_detection": to_serializable(symmetry_res),
+                        "bottom_rank_svd_detection": to_serializable(bottom_rank_res),
+                        "edit_presence_detection": to_serializable(presence_res),
+                        "interlayer": to_serializable(collect_all_interlayer_data(modified_proj)),
+                        "novel_metrics_detection": to_serializable(novel_res),
+                        "ipr": {
+                            "proj": to_serializable(mod_ipr_proj),
+                            "fc": to_serializable(mod_ipr_fc),
+                            "fc_vs_proj": to_serializable(mod_ipr_disc),
+                            "detection": to_serializable(ipr_res),
+                        },
+                        "accuracy": {
+                            "rome_success": rome_ok,
+                            "efficacy_score": rome_metrics["efficacy_score"],
+                            "efficacy_magnitude": rome_metrics["efficacy_magnitude"],
+                            "paraphrase_score": rome_metrics["paraphrase_score"],
+                            "neighborhood_score": rome_metrics["neighborhood_score"],
+                            "overall_score": rome_metrics["overall_score"],
+                            **{f"{name}_correct": v for name, v in correct.items()},
+                        },
+                    })
+
+                    LOGGER.info(
+                        "  ROME=%s(ES=%.1f PS=%s NS=%s S=%.3f) Blind=L%s Spectral=L%s Composite=L%s(%s) Rank1=L%s Attention=L%s Symmetry=L%s Presence=%s(%.3f) IPR=L%s(%.3f) BottomSVD=L%s Novel=L%s",
+                        "OK" if rome_ok else "FAIL",
+                        rome_metrics["efficacy_score"],
+                        f'{rome_metrics["paraphrase_score"]:.3f}' if rome_metrics["paraphrase_score"] is not None else "N/A",
+                        f'{rome_metrics["neighborhood_score"]:.3f}' if rome_metrics["neighborhood_score"] is not None else "N/A",
+                        rome_metrics["overall_score"],
+                        blind_res.get("anomalous_layer"),
+                        spectral_res.get("anomalous_layer"),
+                        composite_res.get("anomalous_layer"),
+                        composite_res.get("method_used", "?"),
+                        rank1_res.get("anomalous_layer", "N/A"),
+                        attention_res.get("anomalous_layer", "N/A"),
+                        symmetry_res.get("anomalous_layer", "N/A"),
+                        presence_res.get("is_edited"),
+                        presence_res.get("confidence", 0.0),
+                        ipr_res.get("anomalous_layer", "N/A"),
+                        ipr_res.get("anomaly_score", 0),
+                        bottom_rank_res.get("anomalous_layer", "N/A"),
+                        novel_res.get("anomalous_layer", "N/A"),
+                    )
 
         except Exception as e:
             entry["error"] = str(e)
@@ -1059,25 +1287,48 @@ def run_single_model(
     # Summary
     ok_tests = [t for t in results["tests"] if not t.get("skipped")]
     n = len(ok_tests)
+
+    # Aggregate ROME paper metrics from non-skipped tests
+    _es = [t["rome"]["efficacy_score"] for t in ok_tests if "rome" in t and "efficacy_score" in t.get("rome", {})]
+    _em = [t["rome"]["efficacy_magnitude"] for t in ok_tests if "rome" in t and "efficacy_magnitude" in t.get("rome", {})]
+    _ps = [t["rome"]["paraphrase_score"] for t in ok_tests if "rome" in t and t.get("rome", {}).get("paraphrase_score") is not None]
+    _ns = [t["rome"]["neighborhood_score"] for t in ok_tests if "rome" in t and t.get("rome", {}).get("neighborhood_score") is not None]
+    _os = [t["rome"]["overall_score"] for t in ok_tests if "rome" in t and "overall_score" in t.get("rome", {})]
+
     results["summary"] = {
         "total": len(test_cases), "successful": n, "skipped": len(test_cases) - n,
         **{f"{k}_rate": counts[k] / n if n else 0 for k in counts},
+        "mean_efficacy_score": float(np.mean(_es)) if _es else 0.0,
+        "mean_efficacy_magnitude": float(np.mean(_em)) if _em else 0.0,
+        "mean_paraphrase_score": float(np.mean(_ps)) if _ps else 0.0,
+        "mean_neighborhood_score": float(np.mean(_ns)) if _ns else 0.0,
+        "mean_overall_score": float(np.mean(_os)) if _os else 0.0,
     }
     if raw_only:
         LOGGER.info(
-            "[%s][raw] ROME=%d/%d skip=%d",
+            "[%s][raw] ROME=%d/%d ES=%.3f PS=%.3f NS=%.3f S=%.3f skip=%d",
             cfg.model.name,
             counts["rome"],
             n,
+            results["summary"]["mean_efficacy_score"],
+            results["summary"]["mean_paraphrase_score"],
+            results["summary"]["mean_neighborhood_score"],
+            results["summary"]["mean_overall_score"],
             len(test_cases) - n,
         )
     else:
         LOGGER.info(
-            "[%s] ROME=%d/%d Blind=%d/%d Spectral=%d/%d Composite=%d/%d Rank1=%d/%d Attention=%d/%d Symmetry=%d/%d IPR=%d/%d BottomSVD=%d/%d skip=%d",
-            cfg.model.name, counts["rome"], n, counts["blind"], n,
+            "[%s] ROME=%d/%d ES=%.3f PS=%.3f NS=%.3f S=%.3f Blind=%d/%d Spectral=%d/%d Composite=%d/%d Rank1=%d/%d Attention=%d/%d Symmetry=%d/%d IPR=%d/%d BottomSVD=%d/%d Novel=%d/%d skip=%d",
+            cfg.model.name, counts["rome"], n,
+            results["summary"]["mean_efficacy_score"],
+            results["summary"]["mean_paraphrase_score"],
+            results["summary"]["mean_neighborhood_score"],
+            results["summary"]["mean_overall_score"],
+            counts["blind"], n,
             counts["spectral"], n, counts["composite"], n,
             counts["rank1_blind"], n, counts["attention"], n, counts["symmetry"], n,
-            counts["ipr"], n, counts["bottom_rank_svd"], n, len(test_cases) - n,
+            counts["ipr"], n, counts["bottom_rank_svd"], n,
+            counts["novel_metrics"], n, len(test_cases) - n,
         )
 
     # Free GPU
@@ -1112,11 +1363,13 @@ def run_benchmark(
     bottom_rank_sweep_ranks: Sequence[int] = (4, 8, 16, 32),
     bottom_rank_top_svd_rank: int = 64,
     bottom_rank_boundary: int = 2,
+    raw_spectral_max_top_k: Optional[int] = None,
     runs_per_model: int = 1,
     run_start_idx_step: int = 0,
     sweep_configs: Optional[Sequence[Dict[str, object]]] = None,
     sweep_tag: Optional[str] = None,
     analysis_profile: str = "full",
+    baseline_only: bool = False,
 ):
     """Run benchmark across models, optionally with multi-run + sweep experiments."""
     auto_env = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower()
@@ -1179,6 +1432,7 @@ def run_benchmark(
         LOGGER.info("=" * 60)
 
         safe_name = model_name.replace("/", "_").replace("\\", "_")
+        file_prefix = "baseline_structural" if baseline_only else "rome_structural"
 
         # Never auto-compute missing second moments inside this benchmark path.
         model_cfg = load_model_config(model_name)
@@ -1196,7 +1450,7 @@ def run_benchmark(
                     start_idx_used = start_idx + run_start_idx_step * (run_ordinal - 1)
                     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                     out_file = output_path / (
-                        f"rome_structural_{safe_name}_{cfg_slug}"
+                        f"{file_prefix}_{safe_name}_{cfg_slug}"
                         f"_s{sweep_idx:02d}_r{run_idx:02d}_{ts}.json"
                     )
 
@@ -1263,7 +1517,7 @@ def run_benchmark(
 
                 ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 out_file = output_path / (
-                    f"rome_structural_{safe_name}_{cfg_slug}"
+                    f"{file_prefix}_{safe_name}_{cfg_slug}"
                     f"_s{sweep_idx:02d}_r{run_idx:02d}_{ts}.json"
                 )
 
@@ -1285,7 +1539,9 @@ def run_benchmark(
                         bottom_rank_sweep_ranks=bottom_rank_sweep_ranks,
                         bottom_rank_top_svd_rank=bottom_rank_top_svd_rank,
                         bottom_rank_boundary=bottom_rank_boundary,
+                        raw_spectral_max_top_k=raw_spectral_max_top_k,
                         analysis_profile=analysis_profile,
+                        baseline_only=baseline_only,
                     )
 
                     metadata = model_results.setdefault("metadata", {})
@@ -1370,6 +1626,15 @@ if __name__ == "__main__":
     parser.add_argument("--n-prompts", type=int, default=20)
     parser.add_argument("--spectral-top-k", type=int, default=50)
     parser.add_argument(
+        "--raw-spectral-max-top-k",
+        type=int,
+        default=None,
+        help=(
+            "Optional max rank to store in spectral_detection.raw_spectral payloads. "
+            "Use this to enable broader post-hoc top-k sweeps from one saved JSON."
+        ),
+    )
+    parser.add_argument(
         "--trim-first",
         type=int,
         default=None,
@@ -1453,6 +1718,12 @@ if __name__ == "__main__":
     parser.add_argument("--disable-rank1-blind", action="store_true")
     parser.add_argument("--disable-symmetry-metrics", action="store_true")
     parser.add_argument("--disable-bottom-rank-svd", action="store_true")
+    parser.add_argument(
+        "--baseline-only",
+        action="store_true",
+        help="Skip ROME edits and run all detectors on the original (unedited) model weights. "
+             "Output files use 'baseline_structural_' prefix instead of 'rome_structural_'.",
+    )
     parser.add_argument(
         "--bottom-rank-sweep-ranks",
         type=str,
@@ -1594,7 +1865,9 @@ if __name__ == "__main__":
         bottom_rank_sweep_ranks=bottom_rank_sweep_ranks,
         bottom_rank_top_svd_rank=args.bottom_rank_top_svd_rank,
         bottom_rank_boundary=args.bottom_rank_boundary,
+        raw_spectral_max_top_k=args.raw_spectral_max_top_k,
         sweep_configs=sweep_configs,
         sweep_tag=args.sweep_tag,
         analysis_profile=args.analysis_profile,
+        baseline_only=args.baseline_only,
     )

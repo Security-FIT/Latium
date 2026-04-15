@@ -105,7 +105,7 @@ def causal_trace_single_run(
     target_length = len(tokenized_target["input_ids"]) # Add support for multitoken targets
 
     # Clean run: no corruption
-    outputs_clean = handler.model(**input_ids, output_hidden_states=True)
+    outputs_clean = handler.model(**input_ids, output_hidden_states=True, use_cache=False)
     next_token_id_clean = sample(outputs_clean["logits"][:,-1,:])
 
 
@@ -116,7 +116,7 @@ def causal_trace_single_run(
     # Corrupted run: inject noise at specified layer/token
     handler.set_corrupt_idx(input_ids_subject)
     handler.set_corrupt_hook()
-    outputs_corupt = handler.model(**input_ids)
+    outputs_corupt = handler.model(**input_ids, use_cache=False)
     next_token_id_corupt = sample(outputs_corupt["logits"][:,-1,:])
     handler.remove_hooks()
 
@@ -136,7 +136,7 @@ def causal_trace_single_run(
             handler.set_restore_point(outputs_clean["hidden_states"][restore_layer+1][0][restore_token_idx,:])
             handler.set_restore_hook()
 
-            outputs_restore = handler.model(**input_ids)
+            outputs_restore = handler.model(**input_ids, use_cache=False)
             next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
 
             results_restoration[restore_token_idx].append(

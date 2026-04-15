@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 
 from .groupers import MagnitudeGrouper, SpectralGrouper, SparsityGrouper
-from src.utils import gpu_svd, gpu_svdvals
+from src.utils import gpu_svd, gpu_svd_topk, gpu_svdvals
 
 
 class BlindMSDDetector:
@@ -21,19 +21,10 @@ class BlindMSDDetector:
 
     def detect(self, weights: Dict[int, torch.Tensor]):
         """Run blind detection pipeline"""
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
         anomalous_layer, layer_z_score, layer_features, isolation_scores, feature_z_scores = self.blind_layer_msd(weights)
-        
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         W_suspicious = weights[anomalous_layer]
         neuron_analysis = self.blind_neuron_group_msd(W_suspicious)
-        
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         grouper_result = self.blind_grouper_detection(weights)
 
@@ -157,7 +148,7 @@ class BlindMSDDetector:
         layer_features = {}
         for idx, W in weights.items():
             W_float = W.float()
-            U, S, V = gpu_svd(W)
+            U, S, _ = gpu_svd(W, full_matrices=False)
 
             # effective rank
             normalized_S = S / (S.sum() + 1e-10)
@@ -165,7 +156,7 @@ class BlindMSDDetector:
             effective_rank = torch.exp(entropy).item()
 
             # spectral gap
-            spectral_gap = (S[0] / (S[1] + 1e-10)).item()
+            spectral_gap = (S[0] / (S[1] + 1e-10)).item() if len(S) > 1 else 0.0
 
             # top1 energy concentration
             total_energy = (S**2).sum()
@@ -186,7 +177,10 @@ class BlindMSDDetector:
             row_alignment = (U_top.max() / (U_top.mean() + 1e-10)).item()
             
             S_prob = (S ** 2) / ((S ** 2).sum() + 1e-10)
-            spectral_entropy = (-(S_prob * torch.log(S_prob + 1e-10)).sum() / np.log(len(S))).item()
+            if len(S) > 1:
+                spectral_entropy = (-(S_prob * torch.log(S_prob + 1e-10)).sum() / np.log(len(S))).item()
+            else:
+                spectral_entropy = 0.0
 
             layer_features[idx] = {
                 "effective_rank": effective_rank,
@@ -245,16 +239,17 @@ class BlindMSDDetector:
         plus simple median split) and averages discrepancy across all of them.
         """
         W_float = W.float()
-        row_norms = W_float.norm(dim=1)
+        row_norms = W_float.norm(dim=1).cpu()
 
         # per row spectral contrib
-        U, S, V = gpu_svd(W)
+        top_k = min(10, min(W.shape))
+        U, S, _ = gpu_svd_topk(W_float, k=top_k, niter=2)
         top_k = min(10, S.shape[0])
         row_spectral_contrib = U[:, :top_k].abs().sum(dim=1)
 
         # per row sparsity
         threshold = W_float.abs().mean() * 0.1
-        row_sparsity = (W_float.abs() < threshold).float().mean(dim=1)
+        row_sparsity = (W_float.abs() < threshold).float().mean(dim=1).cpu()
 
         # Collect discrepancies across all grouping strategies
         all_spectral_disc = []
@@ -278,7 +273,7 @@ class BlindMSDDetector:
             for group_name, indices in groups.items():
                 if len(indices) < 2:
                     continue
-                idx = torch.tensor(indices, device=W.device) if not isinstance(indices, torch.Tensor) else indices
+                idx = torch.as_tensor(indices, device=row_spectral_contrib.device)
                 group_spectral_means.append(row_spectral_contrib[idx].mean().item())
                 group_sparsity_means.append(row_sparsity[idx].mean().item())
                 group_norm_means.append(row_norms[idx].mean().item())

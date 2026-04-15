@@ -7,15 +7,17 @@ save_to_local: True # Keep this True until you specifically do not want the mode
 layer_name_template: "model.layers.{}.shared_mlp.output_linear"
 corrupt_layer_name_template: "model.embed_tokens"
 restore_layer_name_template: "model.layers.{}"
-layer: 17
-corruption_noise_multiplier: 2.19580078125
-lr: 0.05
+layer: 9
+corruption_noise_multiplier: 1.0
+lr: 0.10
 kl_factor: 0.0625
 weight_decay: 0.5
-epochs: 50
+epochs: 25
 epsilon: 0.0
 optimize_pcs: False
+second_moment_path: "second_moment_stats/ibm-granite_granite-4.0-micro_9_SM_Method.WIKIPEDIA_100000.pt"
 
 prefix_mode: "self"
 prefix_enforce_latin: True
 prefix_min_words: 2
+delta_scale: 1.0

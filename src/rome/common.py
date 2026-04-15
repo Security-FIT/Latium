@@ -425,7 +425,7 @@ def gather_k(
         return input
 
     handler.set_k_hook(k_hook)
-    handler.model(**prompts)
+    handler.model(**prompts, use_cache=False)
     handler.remove_hooks()
 
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
@@ -588,6 +588,17 @@ def optimize_v(
 
     opt = torch.optim.Adam([delta], lr=handler.lr)
 
+    # Detect residual_multiplier to amplify delta in the hook so the optimizer
+    # sees the full effect.  insert_kv must apply the same amplification.
+    _residual_mult = float(getattr(handler.model.config, "residual_multiplier", 1.0))
+    _delta_scale_cfg = float(getattr(handler.cfg.model, "delta_scale", 0.0))
+    if _delta_scale_cfg > 0:
+        _delta_scale = _delta_scale_cfg
+    elif 0 < _residual_mult < 1.0:
+        _delta_scale = 1.0 / _residual_mult
+    else:
+        _delta_scale = 1.0
+
     def delta_hook(module, _, output):
         nonlocal v_init
         if module == handler._get_module(handler._layer_name_template.format(handler._layer)):
@@ -598,8 +609,9 @@ def optimize_v(
             new_output = hidden.clone()
             if v_init is None:
                 v_init = hidden[0, last_subject_index_list[0]].detach().clone()
+            scaled_delta = delta * _delta_scale
             for i, idx in enumerate(last_subject_index_list):
-                new_output[i, idx, :] = new_output[i, idx, :] + delta.to(device=raw_hidden.device, dtype=raw_hidden.dtype)
+                new_output[i, idx, :] = new_output[i, idx, :] + scaled_delta.to(device=raw_hidden.device, dtype=raw_hidden.dtype)
 
             restored = new_output.reshape_as(raw_hidden) if was_flat else new_output
             if tuple_output:
@@ -632,7 +644,7 @@ def optimize_v(
             handler.device_manager.clear_cache()
 
         handler.set_delta_hook(delta_hook)
-        outputs = handler.model(**prompts)
+        outputs = handler.model(**prompts, use_cache=False)
         handler.remove_hooks()
 
         logits_device = outputs.logits.device
@@ -670,7 +682,14 @@ def optimize_v(
         loss.backward()
         opt.step()
 
-        max_norm = 4 * v_init.norm()
+        # Allow per-model max_norm_multiplier; auto-compensate for residual_multiplier
+        base_multiplier = float(getattr(handler.cfg.model, "max_norm_multiplier", 4))
+        residual_mult = float(getattr(handler.model.config, "residual_multiplier", 1.0))
+        if residual_mult > 0 and residual_mult < 1.0:
+            effective_multiplier = base_multiplier / residual_mult
+        else:
+            effective_multiplier = base_multiplier
+        max_norm = effective_multiplier * v_init.norm()
         if delta.norm() > max_norm:
             with torch.no_grad():
                 delta[...] = delta * max_norm / delta.norm()
@@ -693,16 +712,26 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> Tu
         old_W = torch.transpose(old_W,0,1)
         old_W_transposed = True
 
+    # Compensate for residual_multiplier: during optimize_v the delta hook
+    # amplified delta by 1/residual_multiplier so the optimizer worked in
+    # "full-effect" space.  The weight update must produce the same amplified
+    # delta at the MLP output so that after residual_mult scaling the actual
+    # effect matches what was optimized.
+    _residual_mult = float(getattr(handler.model.config, "residual_multiplier", 1.0))
+    _delta_scale = (1.0 / _residual_mult) if (0 < _residual_mult < 1.0) else 1.0
+    scaled_delta = delta * _delta_scale
+
     inv_cov = get_second_moment(handler).to(handler.dtype).to(layer_device)
     k = k.to(layer_device)
-    delta = delta.to(layer_device)
+    scaled_delta = scaled_delta.to(layer_device)
     left = inv_cov @ k.unsqueeze(1)
     left = left.squeeze()
     left = left / left.norm()
-    right = delta / torch.dot(k, left)
+    right = scaled_delta / torch.dot(k, left)
 
 
     LOGGER.info(f"Delta norm: {delta.norm().item()}")
+    LOGGER.info(f"Delta scale (1/residual_mult): {_delta_scale}")
     LOGGER.info(f"Division Factor: {torch.dot(k, left).item()}")
     LOGGER.info(f"Right vector norm: {right.norm()}")
 
@@ -841,7 +870,8 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                     padding=True
                 )
                 handler.model(tokens.input_ids.to(input_device),
-                              attention_mask=tokens.attention_mask.to(input_device))
+                              attention_mask=tokens.attention_mask.to(input_device),
+                              use_cache=False)
                 del tokens
                 processed += len(chunk)
                 processed_batches += 1

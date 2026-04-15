@@ -11,9 +11,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
+import re
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas
 import torch
 from omegaconf import OmegaConf
@@ -28,6 +31,161 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 CONFIG_DIR = Path(__file__).parent / "src" / "config"
 MODEL_CONFIG_DIR = CONFIG_DIR / "model"
+
+
+def normalize_target_text(text: str) -> str:
+    """Normalize short targets for tolerant textual comparison."""
+    if text is None:
+        return ""
+    s = str(text).strip().lower()
+    s = re.sub(r"[\s\.,;:!?\"'`]+$", "", s)
+    s = re.sub(r"^[\s\"'`]+", "", s)
+    return s
+
+
+# ---------------------------------------------------------------------------
+# ROME paper evaluation metrics (probability-based)
+# ---------------------------------------------------------------------------
+
+def _get_target_token_ids(tok, text: str) -> list[int]:
+    """Tokenize target text without BOS/special tokens."""
+    ids = tok(f" {text}", add_special_tokens=False)["input_ids"]
+    if isinstance(ids, torch.Tensor):
+        ids = ids.tolist()
+    if not ids:
+        ids = tok(f" {text}")["input_ids"]
+        if isinstance(ids, torch.Tensor):
+            ids = ids.tolist()
+        bos_id = getattr(tok, "bos_token_id", None)
+        if bos_id is not None and len(ids) > 1 and ids[0] == bos_id:
+            ids = ids[1:]
+    return ids
+
+
+def _test_batch_prediction(
+    model, tok, prefixes: list[str],
+    target_new: str, target_true: str, device,
+    batch_size: int = 8,
+) -> list[dict]:
+    """
+    Compute mean NLL for target_new and target_true given each prefix.
+    Based on the original ROME paper evaluation code in test_batch_prediction.
+    Processes in chunks to control GPU memory.
+    """
+    a_tok = _get_target_token_ids(tok, target_new)
+    b_tok = _get_target_token_ids(tok, target_true)
+    choice_a_len, choice_b_len = len(a_tok), len(b_tok)
+
+    all_results = []
+
+    for chunk_start in range(0, len(prefixes), batch_size):
+        chunk_prefixes = prefixes[chunk_start:chunk_start + batch_size]
+        prefix_lens = [len(n) for n in tok(chunk_prefixes)["input_ids"]]
+
+        prompt_tok = tok(
+            [f"{prefix} {suffix}" for prefix in chunk_prefixes for suffix in [target_new, target_true]],
+            padding=True,
+            return_tensors="pt",
+        ).to(device)
+
+        # Account for left-padding: count leading pad tokens per row
+        pad_offsets = (prompt_tok["attention_mask"] == 0).sum(dim=1).tolist()
+
+        with torch.no_grad():
+            logits = model(**prompt_tok, use_cache=False).logits
+
+        chunk_results = np.zeros((logits.size(0),), dtype=np.float32)
+        for i in range(logits.size(0)):
+            cur_len = choice_a_len if i % 2 == 0 else choice_b_len
+            cur_tok_ids = a_tok if i % 2 == 0 else b_tok
+            offset = pad_offsets[i]
+            for j in range(cur_len):
+                cur_tok = cur_tok_ids[j]
+                chunk_results[i] += -torch.nn.functional.log_softmax(
+                    logits[i, offset + prefix_lens[i // 2] + j - 1, :], dim=0
+                )[cur_tok].item()
+            chunk_results[i] /= cur_len
+
+        for i in range(0, len(chunk_results), 2):
+            all_results.append({
+                "target_new": chunk_results[i].item(),
+                "target_true": chunk_results[i + 1].item(),
+            })
+
+        del prompt_tok, logits
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    return all_results
+
+
+def compute_rome_metrics(
+    handler, prompt_text: str,
+    target_new_str: str, target_true_str: str,
+    paraphrase_prompts: list[str] | None = None,
+    neighborhood_prompts: list[str] | None = None,
+) -> dict:
+    """
+    Compute ROME paper evaluation metrics using probability comparison.
+
+    ES  – Efficacy Score:     1{P[o*] > P[o_c]} on rewrite prompt
+    EM  – Efficacy Magnitude: P[o*] - P[o_c]
+    PS  – Paraphrase Score:   mean ES across paraphrase prompts
+    NS  – Neighborhood Score: mean 1{P[o_c] > P[o*]} across neighborhood prompts
+    S   – Overall Score:      harmonic mean of ES, PS, NS
+    """
+    model = handler.model
+    tok = handler.tokenizer
+    device = handler.device
+
+    all_prompts = [prompt_text]
+    n_para = len(paraphrase_prompts) if paraphrase_prompts else 0
+    n_neigh = len(neighborhood_prompts) if neighborhood_prompts else 0
+    if paraphrase_prompts:
+        all_prompts.extend(paraphrase_prompts)
+    if neighborhood_prompts:
+        all_prompts.extend(neighborhood_prompts)
+
+    probs = _test_batch_prediction(model, tok, all_prompts, target_new_str, target_true_str, device)
+
+    rewrite_prob = probs[0]
+    para_probs = probs[1:1 + n_para] if n_para else []
+    neigh_probs = probs[1 + n_para:] if n_neigh else []
+
+    # ES: lower NLL = higher probability
+    es = 1.0 if rewrite_prob["target_new"] < rewrite_prob["target_true"] else 0.0
+    # EM: probability difference (geometric-mean per-token probability)
+    em = math.exp(-rewrite_prob["target_new"]) - math.exp(-rewrite_prob["target_true"])
+
+    # PS: mean ES across paraphrase prompts
+    ps = (
+        sum(1.0 for p in para_probs if p["target_new"] < p["target_true"]) / len(para_probs)
+        if para_probs else None
+    )
+
+    # NS: neighborhood should still predict target_true
+    ns = (
+        sum(1.0 for p in neigh_probs if p["target_true"] < p["target_new"]) / len(neigh_probs)
+        if neigh_probs else None
+    )
+
+    # S: harmonic mean of available scores
+    components = [s for s in [es, ps, ns] if s is not None]
+    if components and all(s > 0 for s in components):
+        overall = len(components) / sum(1.0 / s for s in components)
+    else:
+        overall = 0.0
+
+    return {
+        "efficacy_score": es,
+        "efficacy_magnitude": em,
+        "paraphrase_score": ps,
+        "neighborhood_score": ns,
+        "overall_score": overall,
+        "rewrite_nll": rewrite_prob,
+        "paraphrase_nll": para_probs,
+        "neighborhood_nll": neigh_probs,
+    }
 
 
 def load_model_config(model_name: str):
@@ -71,8 +229,8 @@ def apply_overrides(cfg, overrides: list[str]):
 def run_single_model(model_name: str, n_tests: int, start_idx: int = 0, overrides: list[str] | None = None) -> dict:
     cfg = build_cfg(model_name)
     cfg = apply_overrides(cfg, overrides or [])
-    cfg.model.device = "cuda"
-    cfg.model.cuda_mode = "strict"
+    if not hasattr(cfg.model, "device"):
+        cfg.model.device = "cuda"
 
     handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
@@ -80,9 +238,14 @@ def run_single_model(model_name: str, n_tests: int, start_idx: int = 0, override
 
     layer_name = handler._layer_name_template.format(handler._layer)
     tested = 0
-    successes = 0
     skipped = 0
     results = []
+    # Accumulators for aggregate ROME paper metrics
+    es_scores = []
+    em_scores = []
+    ps_scores = []
+    ns_scores = []
+    s_scores = []
 
     LOGGER.info("Model=%s layer=%s n_tests=%d", cfg.model.name, handler._layer, n_tests)
 
@@ -104,10 +267,18 @@ def run_single_model(model_name: str, n_tests: int, start_idx: int = 0, override
             " " + rewrite["target_new"]["str"],
             " " + rewrite["target_true"]["str"],
         )
+        target_new_str = rewrite["target_new"]["str"]
+        target_true_str = rewrite["target_true"]["str"]
+        prompt_text = rewrite["prompt"].format(rewrite["subject"])
 
-        success = False
-        predicted = None
-        expected = None
+        paraphrase_prompts = getattr(prompt_dict, "paraphrase_prompts", None)
+        neighborhood_prompts = getattr(prompt_dict, "neighborhood_prompts", None)
+        if isinstance(paraphrase_prompts, float):
+            paraphrase_prompts = None
+        if isinstance(neighborhood_prompts, float):
+            neighborhood_prompts = None
+
+        metrics = None
         error = None
 
         try:
@@ -124,23 +295,21 @@ def run_single_model(model_name: str, n_tests: int, start_idx: int = 0, override
 
             insert_kv(handler, k, delta)
 
-            prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
-            target_ids = handler.tokenize_prompt(f"{fact_tuple[2]}").input_ids[0]
-            bos_id = getattr(handler.tokenizer, "bos_token_id", None)
-            if bos_id is not None and target_ids.numel() > 1 and int(target_ids[0].item()) == int(bos_id):
-                target_ids = target_ids[1:]
-
-            target_len = int(target_ids.shape[0])
-            outputs = handler.model.generate(
-                **prompt,
-                max_length=prompt.input_ids.shape[1] + target_len,
+            # Compute ROME paper metrics (probability-based)
+            metrics = compute_rome_metrics(
+                handler, prompt_text,
+                target_new_str, target_true_str,
+                paraphrase_prompts=paraphrase_prompts or [],
+                neighborhood_prompts=neighborhood_prompts or [],
             )
-            generated_ids = outputs[0, prompt.input_ids.shape[1] : prompt.input_ids.shape[1] + target_len]
-            predicted = handler.tokenizer.decode(generated_ids, skip_special_tokens=True)
-            expected = handler.tokenizer.decode(target_ids, skip_special_tokens=True)
-            success = predicted.strip() == expected.strip()
-            if success:
-                successes += 1
+
+            es_scores.append(metrics["efficacy_score"])
+            em_scores.append(metrics["efficacy_magnitude"])
+            if metrics["paraphrase_score"] is not None:
+                ps_scores.append(metrics["paraphrase_score"])
+            if metrics["neighborhood_score"] is not None:
+                ns_scores.append(metrics["neighborhood_score"])
+            s_scores.append(metrics["overall_score"])
 
         except Exception as exc:
             error = str(exc)
@@ -151,30 +320,45 @@ def run_single_model(model_name: str, n_tests: int, start_idx: int = 0, override
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-        results.append(
-            {
-                "case_id": case_id,
-                "relation_id": rewrite.get("relation_id", ""),
-                "subject": rewrite["subject"],
-                "target_new": rewrite["target_new"]["str"],
-                "target_eval": expected if expected is not None else rewrite["target_new"]["str"],
-                "predicted": predicted,
-                "success": bool(success),
-                "error": error,
-            }
-        )
+        case_result = {
+            "case_id": case_id,
+            "relation_id": rewrite.get("relation_id", ""),
+            "subject": rewrite["subject"],
+            "target_new": target_new_str,
+            "target_true": target_true_str,
+            "error": error,
+        }
+        if metrics is not None:
+            case_result.update(metrics)
 
-        LOGGER.info("%s case=%s success=%s", cfg.model.name, case_id, success)
+        results.append(case_result)
 
-    success_rate = (successes / tested) if tested else 0.0
+        if metrics:
+            LOGGER.info(
+                "%s case=%s ES=%.1f EM=%.4f PS=%s NS=%s S=%.4f",
+                cfg.model.name, case_id,
+                metrics["efficacy_score"],
+                metrics["efficacy_magnitude"],
+                f'{metrics["paraphrase_score"]:.4f}' if metrics["paraphrase_score"] is not None else "N/A",
+                f'{metrics["neighborhood_score"]:.4f}' if metrics["neighborhood_score"] is not None else "N/A",
+                metrics["overall_score"],
+            )
+        else:
+            LOGGER.info("%s case=%s SKIPPED: %s", cfg.model.name, case_id, error)
+
+    n_evaluated = tested - skipped
     summary = {
         "model_key": model_name,
         "model_name": cfg.model.name,
         "layer": int(handler._layer),
         "tested": tested,
-        "successes": successes,
         "skipped": skipped,
-        "success_rate": success_rate,
+        "n_evaluated": n_evaluated,
+        "mean_efficacy_score": float(np.mean(es_scores)) if es_scores else 0.0,
+        "mean_efficacy_magnitude": float(np.mean(em_scores)) if em_scores else 0.0,
+        "mean_paraphrase_score": float(np.mean(ps_scores)) if ps_scores else 0.0,
+        "mean_neighborhood_score": float(np.mean(ns_scores)) if ns_scores else 0.0,
+        "mean_overall_score": float(np.mean(s_scores)) if s_scores else 0.0,
     }
 
     return {"summary": summary, "cases": results}

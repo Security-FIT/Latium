@@ -11,6 +11,7 @@ File containing implementation for common functions used in weight intervention.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import copy
 import re
@@ -101,7 +102,7 @@ def _normalize_generated_template(raw_text: str) -> str:
     """Normalize generated text into a stable `...{}` template."""
     cleaned = raw_text.replace("{", " ").replace("}", " ")
     cleaned = " ".join(cleaned.split()).strip().rstrip(" .,:;!?")
-    return "{}" if not cleaned else f"{cleaned}. {{}}"
+    return "{}" if not cleaned else f"{cleaned}.{{}}"
 
 
 def _load_rome_model_names() -> dict[str, str]:
@@ -162,18 +163,53 @@ def _build_sampled_templates(
 
     prompts = handler.tokenize_prompt(seed_texts)
 
+    if prompts.input_ids.dim() < 2 or int(prompts.input_ids.shape[1]) == 0:
+        LOGGER.warning(
+            "Prefix sampling tokenization produced empty prompts. Falling back to static templates."
+        )
+        static = _build_static_templates(count + 1, shuffle=True)
+        return static[1:count + 1]
+
     prompt_len = int(prompts.input_ids.shape[1])
     target_total_len = max(prompt_len + 1, int(prefix_range[1]))
     max_new_tokens = max(1, target_total_len - prompt_len)
 
-    with torch.no_grad():
-        outputs = handler.model.generate(
-            **prompts,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-        )
+    def _generate(**kwargs):
+        with torch.no_grad():
+            return handler.model.generate(
+                **prompts,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=temperature,
+                top_p=top_p,
+                **kwargs,
+            )
+
+    try:
+        outputs = _generate()
+    except Exception as first_err:
+        msg = str(first_err)
+        if "has_previous_state" in msg or "LinearAttention" in msg:
+            LOGGER.warning(
+                "Prefix sampling generation hit cache incompatibility (%s). Retrying with use_cache=False.",
+                msg,
+            )
+            try:
+                outputs = _generate(use_cache=False)
+            except Exception as second_err:
+                LOGGER.warning(
+                    "Prefix sampling retry failed (%s). Falling back to static templates.",
+                    second_err,
+                )
+                static = _build_static_templates(count + 1, shuffle=True)
+                return static[1:count + 1]
+        else:
+            LOGGER.warning(
+                "Prefix sampling generation failed (%s). Falling back to static templates.",
+                msg,
+            )
+            static = _build_static_templates(count + 1, shuffle=True)
+            return static[1:count + 1]
 
     continuation_ids = outputs[:, prompt_len:]
     continuations = handler.tokenizer.batch_decode(continuation_ids, skip_special_tokens=True)
@@ -246,6 +282,9 @@ class PrefixGenerationHandler:
         if prefix_source is None and cfg_model is not None:
             prefix_source = getattr(cfg_model, "prefix_source", None)
         self.prefix_source: str | None = prefix_source
+        self.prefix_template_static_only = bool(getattr(cfg_model, "prefix_template_static_only", False)) if cfg_model is not None else False
+        self.prefix_enforce_latin = bool(getattr(cfg_model, "prefix_enforce_latin", False)) if cfg_model is not None else False
+        self.prefix_min_words = int(getattr(cfg_model, "prefix_min_words", 0) or 0) if cfg_model is not None else 0
         self._ext_handler = None
         self._ext_model_name: str | None = None
         self._rome_model_names: dict[str, str] | None = None
@@ -261,12 +300,53 @@ class PrefixGenerationHandler:
 
     def _generate_self(self, handler, count: int, prefix_range: Tuple[int, int]) -> List[str]:
         sampled = _build_sampled_templates(handler, max(0, count - 1), prefix_range)
+
+        rejected_non_latin = 0
+        rejected_short = 0
+        if self.prefix_enforce_latin or self.prefix_min_words > 0:
+            filtered = []
+            for tmpl in sampled:
+                body = tmpl.replace("{}", "").strip()
+                if self.prefix_enforce_latin and not _is_english_clean(body):
+                    rejected_non_latin += 1
+                    continue
+                if self.prefix_min_words > 0 and len(body.split()) < self.prefix_min_words:
+                    rejected_short += 1
+                    continue
+                filtered.append(tmpl)
+            sampled = filtered
+
+        if rejected_non_latin or rejected_short:
+            LOGGER.warning(
+                "Rejected %d non-Latin and %d short templates from self-generated templates",
+                rejected_non_latin,
+                rejected_short,
+            )
+
         templates = ["{}"] + sampled
         if len(templates) < count:
-            templates.extend(_build_static_templates(count, shuffle=True)[len(templates):])
+            LOGGER.warning(
+                "prefix_mode=self produced %d/%d usable templates; filling remainder with static templates",
+                len(templates),
+                count,
+            )
+            static_fill = _build_static_templates(count, shuffle=True)
+            existing = set(templates)
+            for t in static_fill:
+                if len(templates) >= count:
+                    break
+                if t not in existing:
+                    templates.append(t)
+                    existing.add(t)
+            while len(templates) < count:
+                templates.append(random.choice(_MANUAL_STATIC_PREFIXES))
         return templates[:count]
 
     def _generate_manual(self, handler, count: int, prefix_range: Tuple[int, int]) -> List[str]:
+        if self.prefix_template_static_only:
+            LOGGER.info("prefix_mode=template (static_only=True): using static templates")
+            return _build_static_templates(count, shuffle=True)
+
         sampled = _build_manual_sampled_templates(handler, max(0, count - 1), prefix_range)
         templates = ["{}"] + sampled
         if len(templates) < count:
@@ -551,14 +631,26 @@ def optimize_v(
     # Prompt preparation
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
 
-    templates = generate_prefixes(handler, N_prompts, additional_prompts=[subject_understanding_template])
+    additional_prompts = [subject_understanding_template]
+    main_prompt_count = max(1, int(N_prompts))
+    templates = generate_prefixes(handler, main_prompt_count, additional_prompts=additional_prompts)
     prefix_mode = getattr(getattr(handler, "prefix_handler", None), "mode", PrefixMode.SELF)
-    LOGGER.info(
-        "Templates for v-step (prefix_mode=%s, total=%d, preview=%s)",
-        prefix_mode,
-        len(templates),
-        templates[:min(5, len(templates))],
-    )
+    log_all_prefixes_env = os.getenv("ROME_LOG_ALL_PREFIXES", "").strip().lower()
+    log_all_prefixes = log_all_prefixes_env in {"1", "true", "yes", "on", "all", "full"}
+    if log_all_prefixes:
+        LOGGER.info(
+            "Templates for v-step (prefix_mode=%s, total=%d, prefixes=%s)",
+            prefix_mode,
+            len(templates),
+            templates,
+        )
+    else:
+        LOGGER.info(
+            "Templates for v-step (prefix_mode=%s, total=%d, preview=%s)",
+            prefix_mode,
+            len(templates),
+            templates[:min(5, len(templates))],
+        )
     for i in range(len(templates)):
         templates[i] = templates[i].format(fact_tuple[0].format(fact_tuple[1]))
 
@@ -625,15 +717,15 @@ def optimize_v(
 
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
-    main_prompt_idx_cpu = torch.arange(N_prompts, dtype=torch.long)
+    main_prompt_idx_cpu = torch.arange(main_prompt_count, dtype=torch.long)
     index_positions_cpu = (
-        prompts.attention_mask[:N_prompts].detach().to("cpu").sum(dim=1).unsqueeze(1)
+        prompts.attention_mask[:main_prompt_count].detach().to("cpu").sum(dim=1).unsqueeze(1)
         - target_len
         + torch.arange(target_len, dtype=torch.long).unsqueeze(0)
     ).long()
 
-    index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(N_prompts, 1)
-    dkl_prompt_idx_cpu = torch.arange(N_prompts, prompts.input_ids.shape[0], dtype=torch.long)
+    index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(main_prompt_count, 1)
+    dkl_prompt_idx_cpu = torch.arange(main_prompt_count, prompts.input_ids.shape[0], dtype=torch.long)
     dkl_index_cpu = (prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu].sum(dim=1) - 1).long()
 
     cache_every = int(getattr(handler.cfg.model, "optimize_v_clear_cache_every", 0) or 0)
@@ -995,6 +1087,24 @@ def get_second_moment(handler) -> torch.Tensor:
     else:
         LOGGER.info(f"Precached second moments not found")
         LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
+        allow_autocompute = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "y",
+        }
+        if not allow_autocompute:
+            raise FileNotFoundError(
+                "Missing second moment statistics for "
+                f"model={handler.cfg.model.name} layer={handler._layer}. "
+                "Auto-computation is disabled by default to avoid long runs. "
+                "Precompute with 'python -m src.cli command=second-moment model=<model-config>' "
+                "or set ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1 to force automatic computation."
+            )
+
+        LOGGER.warning(
+            "Auto-computing missing second moment because ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1"
+        )
         target_samples = getattr(handler.cfg.model, "second_moment_target_samples", None)
         if target_samples is not None:
             target_samples = int(target_samples)

@@ -18,4 +18,4 @@ epochs: 20
 epsilon: 0.0
 optimize_pcs: False
 dtype: "bf16"
-prefix_mode: "self"
+prefix_mode: "template"

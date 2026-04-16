@@ -9,14 +9,17 @@
 #   # ROME-only, N=20, no covariance, no setup (default)
 #   bash pipeline.sh
 #
+#   # Full remote: deploy, setup env, structural N=5, pull results
+#   bash pipeline.sh --remote ubuntu@216.81.248.64 --setup-env --structural --n 5
+#
 #   # Structural + ROME, N=30, with env setup on cluster
 #   bash pipeline.sh --structural --n 30 --setup-env
 #
 #   # Compute covariance first, then ROME-only N=10
 #   bash pipeline.sh --compute-cov --n 10
 #
-#   # Run remotely via SSH
-#   bash pipeline.sh --remote ubuntu@132.145.129.234
+#   # Run remotely, skip result pull
+#   bash pipeline.sh --remote ubuntu@216.81.248.64 --no-pull
 # ==========================================================================
 set -euo pipefail
 
@@ -25,11 +28,13 @@ COMPUTE_COV=false
 N=20
 STRUCTURAL=false
 SETUP_ENV=false
+PULL_RESULTS=true
 REMOTE_HOST=""
 REMOTE_DIR="~/Latium"
 CONDA_ENV="latium"
 OUTPUT_DIR="./pipeline_out"
 LOG_DIR="./pipeline_out/logs"
+LOCAL_RESULTS_DIR="./pipeline_out"
 
 MODELS=(
     gpt2-xl
@@ -58,6 +63,8 @@ while [[ $# -gt 0 ]]; do
         --remote-dir)    REMOTE_DIR="$2"; shift 2 ;;
         --conda-env)     CONDA_ENV="$2"; shift 2 ;;
         --output-dir)    OUTPUT_DIR="$2"; shift 2 ;;
+        --no-pull)       PULL_RESULTS=false; shift ;;
+        --local-results) LOCAL_RESULTS_DIR="$2"; shift 2 ;;
         --models)        # read models until next flag or end
                          shift; MODELS=()
                          while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
@@ -75,6 +82,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --remote-dir <path>  Remote repo path (default: ~/Latium)"
             echo "  --conda-env <name>   Conda env name (default: latium)"
             echo "  --output-dir <path>  Output directory (default: ./pipeline_out)"
+            echo "  --no-pull            Don't pull results from remote to local"
+            echo "  --local-results <p>  Local directory for pulled results (default: ./pipeline_out)"
             echo "  --models <m1 m2 ..>  Override model list"
             echo "  -h, --help           Show this help"
             exit 0 ;;
@@ -89,7 +98,7 @@ mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
 echo "========================================"
 echo " Latium Pipeline"
 echo " N=$N | structural=$STRUCTURAL | compute_cov=$COMPUTE_COV"
-echo " setup_env=$SETUP_ENV | models=${#MODELS[@]}"
+echo " setup_env=$SETUP_ENV | pull=$PULL_RESULTS | models=${#MODELS[@]}"
 if [[ -n "$REMOTE_HOST" ]]; then
     echo " remote=$REMOTE_HOST:$REMOTE_DIR"
 else
@@ -148,10 +157,11 @@ if $SETUP_ENV; then
             fi
             source \$HOME/miniconda3/etc/profile.d/conda.sh
             conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
+            conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
 
             # Create env if missing
             if ! conda env list | awk '{print \$1}' | grep -qx '$CONDA_ENV'; then
-                conda create -y -n $CONDA_ENV python=3.11
+                conda create -y -n $CONDA_ENV python=3.10
             fi
 
             # Install deps
@@ -251,3 +261,22 @@ if [[ -n "$FAILED_MODELS" ]]; then
 fi
 echo " Output: $OUTPUT_DIR"
 echo "========================================"
+
+# ── Step 3: Pull results from remote ──────────────────────────────────────
+if [[ -n "$REMOTE_HOST" ]] && $PULL_RESULTS; then
+    echo ""
+    echo "[PULL] Pulling results from $REMOTE_HOST:$REMOTE_DIR/$OUTPUT_DIR ..."
+    mkdir -p "$LOCAL_RESULTS_DIR"
+
+    # Pull JSON results
+    rsync -avz --progress \
+        "$REMOTE_HOST:$REMOTE_DIR/$OUTPUT_DIR/" \
+        "$LOCAL_RESULTS_DIR/" 2>/dev/null || {
+            echo "[PULL] WARNING: rsync failed, trying scp..."
+            scp -r "$REMOTE_HOST:$REMOTE_DIR/$OUTPUT_DIR/*" "$LOCAL_RESULTS_DIR/" 2>/dev/null || true
+        }
+
+    LOCAL_COUNT=$(find "$LOCAL_RESULTS_DIR" -name '*.json' -type f 2>/dev/null | wc -l)
+    echo "[PULL] Pulled $LOCAL_COUNT JSON files to $LOCAL_RESULTS_DIR"
+    echo "[PULL] Done."
+fi

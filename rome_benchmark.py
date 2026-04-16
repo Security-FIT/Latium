@@ -89,7 +89,8 @@ def _test_batch_prediction(
         ).to(device)
 
         # Account for left-padding: count leading pad tokens per row
-        pad_offsets = (prompt_tok["attention_mask"] == 0).sum(dim=1).tolist()
+        # Use cumsum to find only leading zeros (not trailing right-padding)
+        pad_offsets = (prompt_tok["attention_mask"].cumsum(dim=1) == 0).sum(dim=1).tolist()
 
         with torch.no_grad():
             logits = model(**prompt_tok, use_cache=False).logits

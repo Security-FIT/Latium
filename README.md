@@ -205,6 +205,63 @@ bash pipeline.sh --models gpt2-xl mistral-7b-v0.1 --n 5
 
 ---
 
+## Prefix/Template Spectral Variability Test
+
+`prefixtest/experiment.py` measures how sensitive the spectral
+detection pipeline is to the prefix/template used during the ROME edit.  A
+single fact is edited 20 times under different prefix strategies (self-generated,
+template-based, external) while all other parameters remain fixed.  The spectral
+detector runs on each result, producing per-layer signal curves that reveal
+which prefixes amplify or suppress the edit's spectral footprint.
+
+An additional **baseline_unedited** run captures the spectral detector output on
+the original (unmodified) model weights, so that the edited curves can be
+compared against the clean noise floor.
+
+### Running the experiment
+
+```bash
+# Default: Qwen/Qwen3-8B, case 0
+python prefixtest/experiment.py
+
+# Custom model / case
+python prefixtest/experiment.py --model gpt2-large --case-idx 3
+```
+
+### Running on a remote GPU via `prefixtest/run_remote.sh`
+
+`prefixtest/run_remote.sh` automates upload, environment setup, and tmux-based execution
+on a remote machine:
+
+```bash
+# Launch (uploads code + second-moment stats, installs deps, starts in tmux)
+./prefixtest/run_remote.sh                         # default: Qwen/Qwen3-8B, case 0
+./prefixtest/run_remote.sh gpt2-large 3            # custom model & case
+
+# Monitor progress
+./prefixtest/run_remote.sh --status
+
+# Download results when finished
+./prefixtest/run_remote.sh --fetch
+```
+
+### Visualisation
+
+The notebook `prefixtest/prefixtest.ipynb` is a thin wrapper around
+`prefixtest/prefixtest_support.py`. It auto-discovers the latest artifact in
+`prefixtest/artifacts/` or `analysis_out/`, writes outputs into
+`prefixtest/output/`, plots grouped layer-wise spectral curves with the
+unedited baseline, adds composite-detector graphs, and shows summary tables.
+
+```
+prefixtest/prefixtest.ipynb         # open in Jupyter
+prefixtest/prefixtest_support.py    # all data-loading and plotting logic
+prefixtest/output/                  # saved graphs and summary tables
+prefixtest/artifacts/               # selected local experiment artifacts
+```
+
+---
+
 ## Error codes:
 
 ---

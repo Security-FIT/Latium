@@ -1,5 +1,24 @@
 # Latium Framework
 
+## Quick Start
+
+Use `pipeline.sh` for the standard end-to-end workflow:
+
+```bash
+# ROME-only benchmark with default settings
+bash pipeline.sh
+
+# Structural benchmark, followed by model-specific layer detection
+bash pipeline.sh --structural --n 30
+
+# Show all available pipeline options
+bash pipeline.sh --help
+```
+
+Structural runs write JSON results to `pipeline_out/` by default.  When
+`--structural` is enabled, the pipeline also runs the appropriate detector
+for each model unless `--no-detect` is passed.
+
 ## Running ROME
 
 ROME (and related commands) is driven via the Hydra-based CLI in `src/cli.py`.
@@ -159,8 +178,11 @@ bash pipeline.sh
 # Run on remote cluster with env setup
 bash pipeline.sh --remote ubuntu@132.145.129.234 --setup-env
 
-# Structural benchmark, N=30
+# Structural benchmark, N=30, then run model-specific layer detection
 bash pipeline.sh --structural --n 30
+
+# Structural benchmark with detector graphs
+bash pipeline.sh --structural --n 30 --detect-graphs
 
 # Compute covariance first, then benchmark
 bash pipeline.sh --compute-cov --n 10
@@ -174,6 +196,8 @@ bash pipeline.sh --models gpt2-xl mistral-7b-v0.1 --n 5
 | `--compute-cov` | off | Compute covariance matrices (otherwise uses existing) |
 | `--n <int>` | 20 | Number of test edits per model |
 | `--structural` | off | Run structural benchmark (default: ROME-only) |
+| `--no-detect` | off | Skip model-specific detector after structural benchmark |
+| `--detect-graphs` | off | Generate detector graphs after each structural run |
 | `--setup-env` | off | Set up conda env + deps on cluster from scratch |
 | `--remote <host>` | (local) | SSH target for remote execution |
 | `--models <m1 ..>` | all 13 | Override model list |

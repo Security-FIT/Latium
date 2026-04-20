@@ -27,6 +27,8 @@ set -euo pipefail
 COMPUTE_COV=false
 N=20
 STRUCTURAL=false
+DETECT=true
+DETECT_GRAPHS=false
 SETUP_ENV=false
 PULL_RESULTS=true
 REMOTE_HOST=""
@@ -58,6 +60,8 @@ while [[ $# -gt 0 ]]; do
         --compute-cov)   COMPUTE_COV=true; shift ;;
         --n)             N="$2"; shift 2 ;;
         --structural)    STRUCTURAL=true; shift ;;
+        --no-detect)     DETECT=false; shift ;;
+        --detect-graphs) DETECT_GRAPHS=true; shift ;;
         --setup-env)     SETUP_ENV=true; shift ;;
         --remote)        REMOTE_HOST="$2"; shift 2 ;;
         --remote-dir)    REMOTE_DIR="$2"; shift 2 ;;
@@ -77,6 +81,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --compute-cov        Compute covariance on cluster (default: skip, use existing)"
             echo "  --n <int>            Number of test edits per model (default: 20)"
             echo "  --structural         Run structural benchmark (default: ROME-only)"
+            echo "  --no-detect          Skip post-structural layer detection"
+            echo "  --detect-graphs      Generate detector graphs after each structural run"
             echo "  --setup-env          Set up conda env on cluster from scratch"
             echo "  --remote <host>      SSH host (e.g. ubuntu@132.145.129.234)"
             echo "  --remote-dir <path>  Remote repo path (default: ~/Latium)"
@@ -97,7 +103,7 @@ mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
 # ── Banner ────────────────────────────────────────────────────────────────
 echo "========================================"
 echo " Latium Pipeline"
-echo " N=$N | structural=$STRUCTURAL | compute_cov=$COMPUTE_COV"
+echo " N=$N | structural=$STRUCTURAL | detect=$DETECT | compute_cov=$COMPUTE_COV"
 echo " setup_env=$SETUP_ENV | pull=$PULL_RESULTS | models=${#MODELS[@]}"
 if [[ -n "$REMOTE_HOST" ]]; then
     echo " remote=$REMOTE_HOST:$REMOTE_DIR"
@@ -123,6 +129,37 @@ run_cmd() {
             eval "$*"
         )
     fi
+}
+
+is_gpt_model() {
+    case "$1" in
+        gpt2-*|gpt-j*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+detector_cmd_for_model() {
+    local model="$1"
+    local json_path="$2"
+    local graph_dir="$3"
+    local cmd
+
+    if is_gpt_model "$model"; then
+        cmd="python detector/gpt_detector.py '$json_path'"
+    else
+        cmd="python detector/composite_detector_v2.py '$json_path'"
+    fi
+
+    if $DETECT_GRAPHS; then
+        cmd="$cmd --graphs --graph-dir '$graph_dir'"
+    fi
+
+    echo "$cmd"
+}
+
+latest_structural_json_cmd() {
+    local model="$1"
+    printf "ls -t '%s'/rome_structural_%s_*.json 2>/dev/null | head -1" "$OUTPUT_DIR" "$model"
 }
 
 # ── Step 0: Environment setup (optional) ──────────────────────────────────
@@ -200,6 +237,8 @@ fi
 TOTAL=${#MODELS[@]}
 PASSED=0
 FAILED=0
+DETECTED=0
+DETECTION_FAILED=0
 FAILED_MODELS=""
 
 echo ""
@@ -241,6 +280,33 @@ for i in "${!MODELS[@]}"; do
     if run_cmd "$CMD" 2>&1 | tee "$LOG_FILE"; then
         echo "[$IDX/$TOTAL] $MODEL — DONE ($(date))"
         PASSED=$((PASSED + 1))
+
+        if $STRUCTURAL && $DETECT; then
+            DETECT_LOG="$LOG_DIR/${MODEL}_detector.log"
+            LATEST_JSON="$(run_cmd "$(latest_structural_json_cmd "$MODEL")" | tail -1 || true)"
+
+            if [[ -z "$LATEST_JSON" ]]; then
+                echo "[$IDX/$TOTAL] $MODEL — detector skipped (no structural JSON found)"
+                DETECTION_FAILED=$((DETECTION_FAILED + 1))
+            else
+                if is_gpt_model "$MODEL"; then
+                    DETECT_GRAPH_DIR="$OUTPUT_DIR/detector_graphs/gpt"
+                else
+                    DETECT_GRAPH_DIR="$OUTPUT_DIR/detector_graphs/composite"
+                fi
+
+                DETECT_CMD="$(detector_cmd_for_model "$MODEL" "$LATEST_JSON" "$DETECT_GRAPH_DIR")"
+                echo "[$IDX/$TOTAL] $MODEL — running detector on $LATEST_JSON"
+
+                if run_cmd "$DETECT_CMD" 2>&1 | tee "$DETECT_LOG"; then
+                    echo "[$IDX/$TOTAL] $MODEL — detector DONE ($(date))"
+                    DETECTED=$((DETECTED + 1))
+                else
+                    echo "[$IDX/$TOTAL] $MODEL — detector FAILED ($(date))"
+                    DETECTION_FAILED=$((DETECTION_FAILED + 1))
+                fi
+            fi
+        fi
     else
         echo "[$IDX/$TOTAL] $MODEL — FAILED ($(date))"
         FAILED=$((FAILED + 1))
@@ -256,6 +322,10 @@ echo " Mode: $(if $STRUCTURAL; then echo 'structural'; else echo 'rome-only'; fi
 echo " N=$N"
 echo " Passed: $PASSED / $TOTAL"
 echo " Failed: $FAILED / $TOTAL"
+if $STRUCTURAL && $DETECT; then
+    echo " Detector passed: $DETECTED / $PASSED"
+    echo " Detector failed/skipped: $DETECTION_FAILED"
+fi
 if [[ -n "$FAILED_MODELS" ]]; then
     echo " Failed:$FAILED_MODELS"
 fi

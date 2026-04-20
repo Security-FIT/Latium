@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import random
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -21,19 +22,27 @@ import numpy as np
 import pandas as pd
 import torch
 
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from structural_benchmark import (
     build_cfg,
     extract_weights,
+    extract_attention_weights,
     find_second_moment_files,
     get_fc_template,
     load_test_cases,
     resolve_trim,
-    spectral_signal_delta,
     to_serializable,
 )
 from src.handlers.rome import ModelHandler
 from src.rome.common import PrefixMode, PrefixGenerationHandler, gather_k, insert_kv, optimize_v
+from src.structural.attention_metrics import AttentionContrastDetector
+from src.structural.blind_detector import BlindMSDDetector
+from src.structural.composite_detector import CompositeDetector
 from src.structural.edit_presence_detector import RomeEditPresenceDetector
+from src.structural.novel_metrics import compute_novel_metrics
 from src.structural.spectral_detector import SpectralDetector
 
 LOGGER = logging.getLogger(__name__)
@@ -409,6 +418,16 @@ def build_default_run_configs(
     return runs
 
 
+def filter_run_configs(run_cfgs: List[RunConfig], selected_names: Optional[List[str]]) -> List[RunConfig]:
+    if not selected_names:
+        return run_cfgs
+    wanted = [name.strip() for name in selected_names if name.strip()]
+    missing = [name for name in wanted if name not in {cfg.name for cfg in run_cfgs}]
+    if missing:
+        raise ValueError(f"Unknown run names requested: {missing}")
+    return [cfg for cfg in run_cfgs if cfg.name in wanted]
+
+
 def _set_global_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -425,6 +444,7 @@ def run_experiment(
     trim_first: Optional[int],
     trim_last: Optional[int],
     spectral_neighbor_layers: int,
+    run_names: Optional[List[str]] = None,
 ) -> Dict[str, object]:
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -455,7 +475,15 @@ def run_experiment(
         trim_first_layers=eff_trim_first,
         trim_last_layers=eff_trim_last,
         neighbor_layers=spectral_neighbor_layers,
+        store_raw_spectral=True,
     )
+    blind_detector = BlindMSDDetector()
+    composite_detector = CompositeDetector(
+        top_k=spectral_top_k,
+        trim_first=eff_trim_first,
+        trim_last=eff_trim_last,
+    )
+    attention_detector = AttentionContrastDetector(boundary=2, local_windows=(3, 5, 7))
     presence_detector = RomeEditPresenceDetector()
 
     cases = load_test_cases(n_tests=case_idx + 1, start_idx=0)
@@ -464,9 +492,58 @@ def run_experiment(
 
     base_seed = 1337 + case_idx * 100
     run_cfgs = build_default_run_configs(base_seed=base_seed, cache_dir=cache_dir, fact_tuple=fact)
+    run_cfgs = filter_run_configs(run_cfgs, run_names)
     runs: List[Dict[str, object]] = []
 
     layer_name = proj_template.format(handler._layer)
+    baseline_attention = extract_attention_weights(handler, proj_template)
+
+    # ── Baseline (unedited model) spectral snapshot ──────────────────────
+    LOGGER.info("Computing baseline spectral snapshot on unedited model weights")
+    baseline_proj = extract_weights(handler, proj_template)
+    try:
+        baseline_fc = extract_weights(handler, fc_template)
+    except (KeyError, ValueError):
+        baseline_fc = None
+    baseline_spectral = spectral_detector.detect(baseline_proj, fc_weights=baseline_fc)
+    baseline_blind = blind_detector.detect(baseline_proj)
+    baseline_composite = composite_detector.detect(
+        baseline_proj,
+        fc_weights=baseline_fc,
+        spectral_result=baseline_spectral,
+    )
+    baseline_attention_res = (
+        attention_detector.detect(baseline_proj, attention_weights=baseline_attention, fc_weights=baseline_fc)
+        if baseline_attention
+        else {}
+    )
+    baseline_novel = compute_novel_metrics(baseline_proj, fc_weights=baseline_fc)
+    runs.append({
+        "run_index": -1,
+        "run_name": "baseline_unedited",
+        "prefix_mode": "baseline",
+        "prefix_source": None,
+        "n_prompts": 0,
+        "prefix_range": [0, 0],
+        "subject_template": "",
+        "k_additional_prompts": [],
+        "seed": 0,
+        "error": None,
+        "rome_success": False,
+        "target_prob_delta": 0.0,
+        "update_spectral_norm": 0.0,
+        "update_fro_norm": 0.0,
+        "blind_detection": to_serializable(baseline_blind),
+        "spectral_detection": to_serializable(baseline_spectral),
+        "composite_detection": to_serializable(baseline_composite),
+        "attention_detection": to_serializable(baseline_attention_res),
+        "novel_metrics_detection": to_serializable(baseline_novel),
+        "edited_layer_hybrid_score": float(
+            {int(k): float(v) for k, v in (baseline_spectral.get("rome_hybrid_scores") or {}).items()}.get(handler._layer, 0.0)
+        ),
+        "hybrid_margin_to_top": 0.0,
+    })
+    del baseline_proj, baseline_fc
 
     for i, run_cfg in enumerate(run_cfgs):
         LOGGER.info("Run %d/%d: %s", i + 1, len(run_cfgs), run_cfg.name)
@@ -513,6 +590,18 @@ def run_experiment(
                 modified_fc = None
 
             spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
+            blind_res = blind_detector.detect(modified_proj)
+            composite_res = composite_detector.detect(
+                modified_proj,
+                fc_weights=modified_fc,
+                spectral_result=spectral_res,
+            )
+            attention_res = (
+                attention_detector.detect(modified_proj, attention_weights=baseline_attention, fc_weights=modified_fc)
+                if baseline_attention
+                else {}
+            )
+            novel_res = compute_novel_metrics(modified_proj, fc_weights=modified_fc)
             presence_res = presence_detector.detect(
                 modified_proj=modified_proj,
                 modified_fc=modified_fc,
@@ -541,8 +630,12 @@ def run_experiment(
                     "delta_norm": float(delta.norm().item()),
                     "update_fro_norm": update_fro_norm,
                     "update_spectral_norm": update_spectral_norm,
+                    "blind_detection": to_serializable(blind_res),
                     "spectral_detection": to_serializable(spectral_res),
+                    "composite_detection": to_serializable(composite_res),
+                    "attention_detection": to_serializable(attention_res),
                     "edit_presence_detection": to_serializable(presence_res),
+                    "novel_metrics_detection": to_serializable(novel_res),
                     "edited_layer_hybrid_score": edited_layer_score,
                     "max_hybrid_layer": max_layer,
                     "max_hybrid_score": max_score,
@@ -614,6 +707,8 @@ def run_experiment(
                 "max_hybrid_layer": r.get("max_hybrid_layer"),
                 "edited_layer_is_top": r.get("edited_layer_is_top"),
                 "hybrid_margin_to_top": r.get("hybrid_margin_to_top"),
+                "composite_layer": (r.get("composite_detection") or {}).get("anomalous_layer"),
+                "composite_method": (r.get("composite_detection") or {}).get("method_used"),
                 "presence_confidence": (r.get("edit_presence_detection") or {}).get("confidence"),
                 "presence_is_edited": (r.get("edit_presence_detection") or {}).get("is_edited"),
                 "error": r.get("error"),
@@ -638,6 +733,12 @@ def main() -> None:
     parser.add_argument("--trim-first", type=int, default=None)
     parser.add_argument("--trim-last", type=int, default=None)
     parser.add_argument("--spectral-neighbor-layers", type=int, default=1)
+    parser.add_argument(
+        "--run-names",
+        nargs="+",
+        default=None,
+        help="Optional subset of run names to execute (e.g. self_short template_short)",
+    )
     args = parser.parse_args()
 
     run_experiment(
@@ -648,6 +749,7 @@ def main() -> None:
         trim_first=args.trim_first,
         trim_last=args.trim_last,
         spectral_neighbor_layers=args.spectral_neighbor_layers,
+        run_names=args.run_names,
     )
 
 

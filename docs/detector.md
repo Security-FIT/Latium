@@ -146,11 +146,15 @@ detector/
 ├── gpt_detector.py            # v6 GPT-specific detector
 ├── visualize_detector.py      # Jupytext notebook for visualization
 └── graphs/
-    ├── summary_accuracy.png
-    ├── method_breakdown.png
-    ├── signals_*.png          # Per-model spectral signal profiles
-    └── gpt/
-        └── gpt_signals_*.png  # Per-model NC signal profiles
+  ├── summary_accuracy_all_runs.png
+  ├── summary_accuracy_model_average.png
+  ├── method_breakdown_all_runs.png
+  ├── method_breakdown_model_average.png
+  ├── runs/
+  │   ├── signals_*.png      # Per-run composite signal profiles
+  │   └── gpt_signals_*.png  # Per-run GPT detector signal profiles
+  └── averages/
+    └── signals_*_average.png  # Per-model aggregated signal profiles
 ```
 
 ---
@@ -171,3 +175,7 @@ python detector/gpt_detector.py ultrasupertest/ results_n5/ --graphs --graph-dir
 # Binary edit detection (ROME vs baseline)
 python detector/composite_detector_v2.py --binary ultrasupertest/ --baseline-dir ultrasupertest/
 ```
+
+For run-scoped visualization from finished pipeline outputs, use `detector/visualize_detector.py`
+with `VISUALIZE_SEARCH_ROOTS` pointing at a specific run root, for example
+`pipeline_out/falcon_mistral_sweep/n5_s30`.

@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -61,6 +62,12 @@ from scipy import stats
 
 EPS = 1e-10
 LOW_CONFIDENCE_METHODS = {"s7(trend)", "sg(lz7)"}
+DEFAULT_SMALL_WINDOW = 5
+DEFAULT_LARGE_WINDOW = 7
+DEFAULT_TE_WINDOW = 5
+DEFAULT_NC_WINDOW = 5
+EDGE_RESCUE_TE_Z_MIN = 2.5
+EDGE_RESCUE_GAP_MIN = 4
 
 
 # ---------------------------------------------------------------------------
@@ -118,11 +125,41 @@ def _peak(vals: np.ndarray, eval_layers: List[int]) -> Tuple[int, int, float]:
     return idx, eval_layers[idx], z
 
 
+def _peak_fraction(idx: int, total: int) -> float:
+    """Normalize an evaluated-layer index onto [0, 1]."""
+    if total <= 1:
+        return 0.0
+    return idx / (total - 1)
+
+
+def _parse_int_csv(raw: str) -> List[int]:
+    """Parse a comma-separated list of positive integers."""
+    values = []
+    for item in str(raw).split(","):
+        item = item.strip()
+        if not item:
+            continue
+        value = int(item)
+        if value <= 0:
+            raise ValueError(f"Expected positive integer, got {value}")
+        values.append(value)
+    if not values:
+        raise ValueError("Expected at least one integer value")
+    return values
+
+
 # ---------------------------------------------------------------------------
 # Core detection: v5b confirmation chain with secondary override
 # ---------------------------------------------------------------------------
 
-def detect_layer(test: dict, trim: int = 2) -> Tuple[Optional[int], str, Dict]:
+def detect_layer(
+    test: dict,
+    trim: int = 2,
+    small_window: int = DEFAULT_SMALL_WINDOW,
+    large_window: int = DEFAULT_LARGE_WINDOW,
+    te_window: int = DEFAULT_TE_WINDOW,
+    nc_window: int = DEFAULT_NC_WINDOW,
+) -> Tuple[Optional[int], str, Dict]:
     """Detect which layer was edited using 4-signal confirmation chain
     with secondary structural signal override (v5b).
 
@@ -138,68 +175,99 @@ def detect_layer(test: dict, trim: int = 2) -> Tuple[Optional[int], str, Dict]:
     eval_layers = [int(l) for l in layers[lo:hi]]
     ne = len(eval_layers)
 
+    small_window = max(3, int(small_window))
+    large_window = max(small_window + 2, int(large_window))
+    te_window = max(3, int(te_window))
+    nc_window = max(3, int(nc_window))
+    sg_small_tag = f"sg(lz{small_window})"
+    sg_large_tag = f"sg(lz{large_window})"
+    te_small_tag = f"te(lz{te_window})"
+    te_large_tag = f"te(lz{large_window})"
+
     # Primary signals (v5 spectral chain)
     sg_full = _feature_array(lf, layers, "spectral_gap")
     te_full = _feature_array(lf, layers, "top1_energy")
 
     sg = sg_full[lo:hi]
-    te_lz5 = np.abs(local_zscore(te_full, 5))[lo:hi]
-    sg_lz5 = np.abs(local_zscore(sg_full, 5))[lo:hi]
-    sg_lz7 = np.abs(local_zscore(sg_full, 7))[lo:hi]
+    te_local = np.abs(local_zscore(te_full, te_window))[lo:hi]
+    sg_local_small = np.abs(local_zscore(sg_full, small_window))[lo:hi]
+    sg_local_large = np.abs(local_zscore(sg_full, large_window))[lo:hi]
 
     # Secondary signals (v5b structural)
     nc_full = _feature_array(lf, layers, "norm_cv")
     er_full = _feature_array(lf, layers, "effective_rank")
     ra_full = _feature_array(lf, layers, "row_alignment")
 
-    nc_lz5 = np.abs(local_zscore(nc_full, 5))[lo:hi]
+    nc_local = np.abs(local_zscore(nc_full, nc_window))[lo:hi]
     er_curv = _curvature(er_full)[lo:hi]
     ra_raw = ra_full[lo:hi]
 
     sg_i, sg_l, sg_z = _peak(sg, eval_layers)
-    te_i, te_l, te_z = _peak(te_lz5, eval_layers)
-    s5_i, s5_l, s5_z = _peak(sg_lz5, eval_layers)
-    s7_i, s7_l, s7_z = _peak(sg_lz7, eval_layers)
+    te_i, te_l, te_z = _peak(te_local, eval_layers)
+    s5_i, s5_l, s5_z = _peak(sg_local_small, eval_layers)
+    s7_i, s7_l, s7_z = _peak(sg_local_large, eval_layers)
 
-    nc_i, nc_l, nc_z = _peak(nc_lz5, eval_layers)
+    nc_i, nc_l, nc_z = _peak(nc_local, eval_layers)
     ec_i, ec_l, ec_z = _peak(er_curv, eval_layers)
     ra_i, ra_l, ra_z = _peak(ra_raw, eval_layers)
 
     info = {
+        "windows": {
+            "trim": trim,
+            "small_window": small_window,
+            "large_window": large_window,
+            "te_window": te_window,
+            "nc_window": nc_window,
+        },
         "sg_raw": {"layer": sg_l, "z": round(sg_z, 2), "idx": sg_i},
-        "te_lz5": {"layer": te_l, "z": round(te_z, 2), "idx": te_i},
-        "sg_lz5": {"layer": s5_l, "z": round(s5_z, 2), "idx": s5_i},
-        "sg_lz7": {"layer": s7_l, "z": round(s7_z, 2), "idx": s7_i},
-        "nc_lz5": {"layer": nc_l, "z": round(nc_z, 2), "idx": nc_i},
+        "te_local": {"layer": te_l, "z": round(te_z, 2), "idx": te_i},
+        "sg_local_small": {"layer": s5_l, "z": round(s5_z, 2), "idx": s5_i},
+        "sg_local_large": {"layer": s7_l, "z": round(s7_z, 2), "idx": s7_i},
+        "nc_local": {"layer": nc_l, "z": round(nc_z, 2), "idx": nc_i},
         "er_curv": {"layer": ec_l, "z": round(ec_z, 2), "idx": ec_i},
         "ra_raw": {"layer": ra_l, "z": round(ra_z, 2), "idx": ra_i},
         "eval_layers": eval_layers,
     }
 
+    if te_window == DEFAULT_TE_WINDOW:
+        info["te_lz5"] = info["te_local"]
+    if small_window == DEFAULT_SMALL_WINDOW:
+        info["sg_lz5"] = info["sg_local_small"]
+    if large_window == DEFAULT_LARGE_WINDOW:
+        info["sg_lz7"] = info["sg_local_large"]
+    if nc_window == DEFAULT_NC_WINDOW:
+        info["nc_lz5"] = info["nc_local"]
+
     # === v5 spectral confirmation chain ===
     v5_layer, v5_method = None, "none"
+    v5_idx = None
 
     # Step 1: Agreement
     if sg_l == te_l:
         v5_layer, v5_method = sg_l, "agree"
+        v5_idx = sg_i
 
     # Step 2: SG_lz5 confirms one side exclusively (±1 layer index)
     if v5_layer is None:
         s5_near_sg = abs(s5_i - sg_i) <= 1
         s5_near_te = abs(s5_i - te_i) <= 1
         if s5_near_sg and not s5_near_te:
-            v5_layer, v5_method = sg_l, "sg(lz5)"
+            v5_layer, v5_method = sg_l, sg_small_tag
+            v5_idx = sg_i
         elif s5_near_te and not s5_near_sg:
-            v5_layer, v5_method = te_l, "te(lz5)"
+            v5_layer, v5_method = te_l, te_small_tag
+            v5_idx = te_i
 
     # Step 3: SG_lz7 confirms one side exclusively
     if v5_layer is None:
         s7_near_sg = abs(s7_i - sg_i) <= 1
         s7_near_te = abs(s7_i - te_i) <= 1
         if s7_near_sg and not s7_near_te:
-            v5_layer, v5_method = sg_l, "sg(lz7)"
+            v5_layer, v5_method = sg_l, sg_large_tag
+            v5_idx = sg_i
         elif s7_near_te and not s7_near_sg:
-            v5_layer, v5_method = te_l, "te(lz7)"
+            v5_layer, v5_method = te_l, te_large_tag
+            v5_idx = te_i
 
     # Step 4: Neither lz signal confirms exclusively → trend-based fallback
     if v5_layer is None:
@@ -209,19 +277,60 @@ def detect_layer(test: dict, trim: int = 2) -> Tuple[Optional[int], str, Dict]:
         if abs(rho) > 0.3:
             if abs(s5_i - s7_i) <= 1:
                 layer = s5_l if s5_z >= s7_z else s7_l
-                tag = "lz_cons(5)" if s5_z >= s7_z else "lz_cons(7)"
+                tag = f"lz_cons({small_window})" if s5_z >= s7_z else f"lz_cons({large_window})"
                 v5_layer, v5_method = layer, tag
+                v5_idx = s5_i if s5_z >= s7_z else s7_i
             elif abs(s7_i - te_i) <= 1:
                 v5_layer, v5_method = te_l, "te(trend)"
+                v5_idx = te_i
             else:
                 v5_layer, v5_method = s7_l, "s7(trend)"
+                v5_idx = s7_i
         else:
             v5_layer, v5_method = sg_l, "sg(fb)"
+            v5_idx = sg_i
+
+    if v5_idx is None and v5_layer in eval_layers:
+        v5_idx = eval_layers.index(v5_layer)
+
+    # Edge artifact guard for local-z consensus: if the consensus itself sits at
+    # the boundary but TE forms a strong interior peak, trust TE instead.
+    if v5_method.startswith("lz_cons(") and v5_idx is not None:
+        v5_frac = _peak_fraction(v5_idx, ne)
+        te_frac = _peak_fraction(te_i, ne)
+        if (
+            (v5_frac <= 0.15 or v5_frac >= 0.85)
+            and EDGE_RESCUE_GAP_MIN <= abs(te_i - v5_idx)
+            and te_z >= EDGE_RESCUE_TE_Z_MIN
+            and 0.2 <= te_frac <= 0.8
+        ):
+            info["v5_override"] = {
+                "from": v5_layer,
+                "v5_method": v5_method,
+                "reason": "edge_lz_consensus",
+            }
+            return te_l, f"te(edge_lz{te_window})", info
+
+    # Falcon-style late spectral peaks can be natural architecture artifacts.
+    # If both structural signals agree on a very early layer while SG locks onto
+    # a far-late layer, prefer the structural consensus.
+    if v5_method == sg_small_tag and abs(ec_i - ra_i) <= 1 and v5_idx is not None:
+        struct_l = ec_l if ec_z >= ra_z else ra_l
+        struct_i = ec_i if ec_z >= ra_z else ra_i
+        struct_frac = _peak_fraction(struct_i, ne)
+        v5_frac = _peak_fraction(v5_idx, ne)
+        if struct_frac <= 0.10 and v5_frac >= 0.75 and abs(v5_idx - struct_i) >= 6:
+            info["v5_override"] = {
+                "from": v5_layer,
+                "v5_method": v5_method,
+                "reason": "early_structural_consensus",
+            }
+            return struct_l, "er_ra(edge)", info
 
     # === v5b/c: structural override for lowest-confidence paths ===
     # s7(trend): SG has monotone trend, no lz consensus, no TE agreement.
     # sg(lz7): SL7 near SG, but SL5 didn't confirm — weaker confidence.
-    if v5_method in LOW_CONFIDENCE_METHODS:
+    if v5_method in {"s7(trend)", sg_large_tag}:
         # ER + RA agreement (strong for GPT-2-XL)
         if abs(ec_i - ra_i) <= 1:
             struct_l = ec_l if ec_z >= ra_z else ra_l
@@ -250,7 +359,7 @@ def detect_layer(test: dict, trim: int = 2) -> Tuple[Optional[int], str, Dict]:
 
     # sg(lz7) NC-alone override: when SL7 confirms SG but SL5 didn't,
     # and NC_lz5 points to a different layer, prefer NC (catches GPT-2-large).
-    if v5_method == "sg(lz7)" and nc_l != v5_layer:
+    if v5_method == sg_large_tag and nc_l != v5_layer:
         info["v5_override"] = {"from": v5_layer, "v5_method": v5_method}
         return nc_l, "nc(fb)", info
 
@@ -351,7 +460,15 @@ def detect_edit_binary(rome_path: Path, baseline_path: Optional[Path] = None,
 # Process a full JSON file
 # ---------------------------------------------------------------------------
 
-def process_file(path: Path, trim: int = 2) -> Dict:
+def process_file(
+    path: Path,
+    trim: int = 2,
+    small_window: int = DEFAULT_SMALL_WINDOW,
+    large_window: int = DEFAULT_LARGE_WINDOW,
+    te_window: int = DEFAULT_TE_WINDOW,
+    nc_window: int = DEFAULT_NC_WINDOW,
+    max_tests: Optional[int] = None,
+) -> Dict:
     """Process a structural benchmark JSON and detect edited layers."""
     with open(path) as f:
         data = json.load(f)
@@ -363,12 +480,22 @@ def process_file(path: Path, trim: int = 2) -> Dict:
     results = []
     correct = 0
     method_counts: Dict[str, int] = {}
+    used_tests = 0
 
     for ti, test in enumerate(data.get("tests", [])):
         if not _is_valid_test(test):
             continue
+        if max_tests is not None and used_tests >= max_tests:
+            break
 
-        detected, method, info = detect_layer(test, trim)
+        detected, method, info = detect_layer(
+            test,
+            trim=trim,
+            small_window=small_window,
+            large_window=large_window,
+            te_window=te_window,
+            nc_window=nc_window,
+        )
         hit = detected == target
         if hit:
             correct += 1
@@ -381,8 +508,10 @@ def process_file(path: Path, trim: int = 2) -> Dict:
             "method": method,
             "info": info,
         })
+        used_tests += 1
 
     n_valid = len(results)
+    path_obj = Path(path)
     return {
         "model": model,
         "target_layer": target,
@@ -393,6 +522,81 @@ def process_file(path: Path, trim: int = 2) -> Dict:
         "results": results,
         "path": str(path),
         "trim": trim,
+        "small_window": small_window,
+        "large_window": large_window,
+        "te_window": te_window,
+        "nc_window": nc_window,
+        "run_label": _run_label_from_path(path_obj),
+        "run_slug": _run_slug_from_path(path_obj),
+    }
+
+
+def sweep_file(
+    path: Path,
+    trims: Optional[List[int]] = None,
+    small_windows: Optional[List[int]] = None,
+    large_windows: Optional[List[int]] = None,
+) -> Dict:
+    """Evaluate a grid of detector window/trim configs against benchmark labels."""
+    trims = trims or [1, 2, 3]
+    small_windows = small_windows or [3, 5, 7]
+    large_windows = large_windows or [5, 7, 9, 11]
+
+    configs = []
+    for trim in sorted(set(int(v) for v in trims)):
+        for small_window in sorted(set(int(v) for v in small_windows)):
+            for large_window in sorted(set(int(v) for v in large_windows)):
+                if large_window <= small_window:
+                    continue
+                result = process_file(
+                    path,
+                    trim=trim,
+                    small_window=small_window,
+                    large_window=large_window,
+                    te_window=small_window,
+                    nc_window=small_window,
+                )
+                configs.append({
+                    "trim": trim,
+                    "small_window": small_window,
+                    "large_window": large_window,
+                    "te_window": small_window,
+                    "nc_window": small_window,
+                    "accuracy": float(result["accuracy"]),
+                    "correct": int(result["correct"]),
+                    "n_tests": int(result["n_tests"]),
+                    "method_counts": result["method_counts"],
+                })
+
+    configs.sort(
+        key=lambda item: (
+            item["accuracy"],
+            item["correct"],
+            -abs(item["trim"] - 2),
+            -abs(item["small_window"] - DEFAULT_SMALL_WINDOW),
+            -abs(item["large_window"] - DEFAULT_LARGE_WINDOW),
+        ),
+        reverse=True,
+    )
+
+    with open(path) as f:
+        payload = json.load(f)
+    meta = payload.get("metadata", {})
+    model = meta.get("model_name", meta.get("model", path.stem))
+    target = meta.get("target_layer")
+    return {
+        "model": model,
+        "target_layer": target,
+        "path": str(path),
+        "default_config": {
+            "trim": 2,
+            "small_window": DEFAULT_SMALL_WINDOW,
+            "large_window": DEFAULT_LARGE_WINDOW,
+            "te_window": DEFAULT_TE_WINDOW,
+            "nc_window": DEFAULT_NC_WINDOW,
+        },
+        "best_config": configs[0] if configs else None,
+        "configs": configs,
     }
 
 
@@ -418,80 +622,241 @@ def _setup_style():
     })
 
 
+def _short_model_name(model: str) -> str:
+    return model.split("/")[-1] if "/" in model else model
+
+
+def _safe_slug(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(text).strip("_")) or "run"
+
+
+def _run_root_from_path(path: Path) -> Path:
+    run_dir = path.parent
+    if run_dir.name == "structural":
+        run_dir = run_dir.parent
+    return run_dir
+
+
+def _run_label_from_path(path: Path) -> str:
+    run_dir = _run_root_from_path(path)
+    timestamp = "_".join(path.stem.split("_")[-2:])
+    parts = run_dir.parts
+    if "pipeline_out" in parts:
+        idx = parts.index("pipeline_out")
+        rel_parts = parts[idx + 1:]
+        run_name = "/".join(rel_parts) if rel_parts else run_dir.name
+    else:
+        run_name = run_dir.name
+    if timestamp and timestamp not in run_name:
+        return f"{run_name} | {timestamp}"
+    return run_name
+
+
+def _run_slug_from_path(path: Path) -> str:
+    return _safe_slug(_run_label_from_path(path))
+
+
+def _signal_profile_stats(
+    payload: dict,
+    trim: int,
+    te_window: int,
+    small_window: int,
+    large_window: int,
+) -> Dict[str, dict]:
+    values_by_signal: Dict[str, Dict[int, List[float]]] = {
+        "SG (raw)": {},
+        f"TE (lz{te_window})": {},
+        f"SG (lz{small_window})": {},
+        f"SG (lz{large_window})": {},
+    }
+
+    for test in _valid_tests(payload):
+        lf = test["blind_detection"]["layer_features"]
+        layers = sorted(lf.keys(), key=int)
+        n = len(layers)
+        lo, hi = trim, n - trim
+        if hi <= lo:
+            continue
+
+        eval_layers = [int(layer) for layer in layers[lo:hi]]
+        sg_full = _feature_array(lf, layers, "spectral_gap")
+        te_full = _feature_array(lf, layers, "top1_energy")
+        signal_values = {
+            "SG (raw)": sg_full[lo:hi],
+            f"TE (lz{te_window})": np.abs(local_zscore(te_full, te_window))[lo:hi],
+            f"SG (lz{small_window})": np.abs(local_zscore(sg_full, small_window))[lo:hi],
+            f"SG (lz{large_window})": np.abs(local_zscore(sg_full, large_window))[lo:hi],
+        }
+
+        for name, vals in signal_values.items():
+            for layer, value in zip(eval_layers, vals):
+                if np.isfinite(value):
+                    values_by_signal[name].setdefault(int(layer), []).append(float(value))
+
+    stats_by_signal: Dict[str, dict] = {}
+    for name, layer_map in values_by_signal.items():
+        if not layer_map:
+            continue
+        ordered_layers = np.array(sorted(layer_map), dtype=int)
+        stats_by_signal[name] = {
+            "layers": ordered_layers,
+            "mean": np.array([np.mean(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "std": np.array([np.std(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "count": np.array([len(layer_map[layer]) for layer in ordered_layers], dtype=int),
+        }
+    return stats_by_signal
+
+
+def _aggregate_signal_profile_stats(file_results: List[Dict]) -> Dict[str, dict]:
+    per_signal: Dict[str, Dict[int, List[float]]] = {}
+
+    for file_result in file_results:
+        path = Path(file_result["path"])
+        with open(path) as f:
+            payload = json.load(f)
+        trim = int(file_result.get("trim", 2))
+        te_window = int(file_result.get("te_window", DEFAULT_TE_WINDOW))
+        small_window = int(file_result.get("small_window", DEFAULT_SMALL_WINDOW))
+        large_window = int(file_result.get("large_window", DEFAULT_LARGE_WINDOW))
+        run_stats = _signal_profile_stats(
+            payload,
+            trim=trim,
+            te_window=te_window,
+            small_window=small_window,
+            large_window=large_window,
+        )
+        for name, stats in run_stats.items():
+            target = per_signal.setdefault(name, {})
+            for layer, value in zip(stats["layers"], stats["mean"]):
+                if np.isfinite(value):
+                    target.setdefault(int(layer), []).append(float(value))
+
+    aggregated: Dict[str, dict] = {}
+    for name, layer_map in per_signal.items():
+        if not layer_map:
+            continue
+        ordered_layers = np.array(sorted(layer_map), dtype=int)
+        aggregated[name] = {
+            "layers": ordered_layers,
+            "mean": np.array([np.mean(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "std": np.array([np.std(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "count": np.array([len(layer_map[layer]) for layer in ordered_layers], dtype=int),
+        }
+    return aggregated
+
+
+def aggregate_results_by_model(all_results: List[Dict]) -> List[Dict]:
+    grouped: Dict[str, List[Dict]] = {}
+    for result in all_results:
+        grouped.setdefault(result["model"], []).append(result)
+
+    aggregated: List[Dict] = []
+    for model in sorted(grouped, key=lambda item: _short_model_name(item).lower()):
+        runs = grouped[model]
+        method_counts: Dict[str, int] = {}
+        target_layers = []
+        for run in runs:
+            for method, count in run.get("method_counts", {}).items():
+                method_counts[method] = method_counts.get(method, 0) + int(count)
+            if run.get("target_layer") is not None:
+                target_layers.append(int(run["target_layer"]))
+
+        run_accuracies = [float(run.get("accuracy", 0.0)) for run in runs]
+        total_tests = sum(int(run.get("n_tests", 0)) for run in runs)
+        total_correct = sum(int(run.get("correct", 0)) for run in runs)
+        aggregated.append(
+            {
+                "model": model,
+                "target_layer": int(np.round(np.mean(target_layers))) if target_layers else None,
+                "n_tests": total_tests,
+                "correct": total_correct,
+                "accuracy": float(np.mean(run_accuracies)) if run_accuracies else 0.0,
+                "accuracy_std": float(np.std(run_accuracies)) if len(run_accuracies) > 1 else 0.0,
+                "weighted_accuracy": (total_correct / total_tests) if total_tests else 0.0,
+                "method_counts": method_counts,
+                "n_runs": len(runs),
+                "paths": [run["path"] for run in runs],
+                "run_labels": [run.get("run_label", Path(run["path"]).stem) for run in runs],
+            }
+        )
+
+    return aggregated
+
+
 def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
-    """Plot the 4 signal profiles for the first test of each model file."""
+    """Plot the 4 signal profiles for one run, averaged across valid tests."""
     import matplotlib.pyplot as plt
 
     _setup_style()
 
     model = file_result["model"]
     target = file_result["target_layer"]
-    results = file_result["results"]
+    results = file_result.get("results", [])
     if not results:
         return
 
-    # Reload the first test to get raw values
     path = Path(file_result["path"])
     with open(path) as f:
-        data = json.load(f)
-    test = next(iter(_valid_tests(data)), None)
-    if test is None:
-        return
-
-    lf = test["blind_detection"]["layer_features"]
-    layers = sorted(lf.keys(), key=int)
-    n = len(layers)
+        payload = json.load(f)
     trim = file_result.get("trim", 2)
-    lo, hi = trim, n - trim
-    if hi <= lo:
+    te_window = int(file_result.get("te_window", DEFAULT_TE_WINDOW))
+    small_window = int(file_result.get("small_window", DEFAULT_SMALL_WINDOW))
+    large_window = int(file_result.get("large_window", DEFAULT_LARGE_WINDOW))
+    signal_stats = _signal_profile_stats(
+        payload,
+        trim=trim,
+        te_window=te_window,
+        small_window=small_window,
+        large_window=large_window,
+    )
+    if not signal_stats:
         return
-    el = [int(l) for l in layers[lo:hi]]
 
-    sg_full = _feature_array(lf, layers, "spectral_gap")
-    te_full = _feature_array(lf, layers, "top1_energy")
-
-    signals = {
-        "SG (raw)": sg_full[lo:hi],
-        "TE (lz5)": np.abs(local_zscore(te_full, 5))[lo:hi],
-        "SG (lz5)": np.abs(local_zscore(sg_full, 5))[lo:hi],
-        "SG (lz7)": np.abs(local_zscore(sg_full, 7))[lo:hi],
+    colors = {
+        "SG (raw)": "#1f77b4",
+        f"TE (lz{te_window})": "#ff7f0e",
+        f"SG (lz{small_window})": "#2ca02c",
+        f"SG (lz{large_window})": "#d62728",
     }
-    colors = {"SG (raw)": "#1f77b4", "TE (lz5)": "#ff7f0e",
-              "SG (lz5)": "#2ca02c", "SG (lz7)": "#d62728"}
 
     r0 = results[0]
     detected = r0["detected"]
     method = r0["method"]
+    run_label = file_result.get("run_label") or _run_label_from_path(path)
+    short = _short_model_name(model)
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 8), sharex=True)
 
-    for ax, (name, vals) in zip(axes.flat, signals.items()):
-        ax.plot(range(len(el)), vals, color=colors[name], linewidth=1.5)
-        peak_idx = int(np.argmax(vals))
-        ax.axvline(peak_idx, color=colors[name], alpha=0.4, linestyle="--",
-                   label=f"peak L{el[peak_idx]}")
-        if target in el:
-            tidx = el.index(target)
-            ax.axvline(tidx, color="black", alpha=0.3, linestyle=":",
+    for ax, (name, stats) in zip(axes.flat, signal_stats.items()):
+        layers = stats["layers"]
+        mean = stats["mean"]
+        std = stats["std"]
+        ax.plot(layers, mean, color=colors[name], linewidth=1.7)
+        if np.any(np.isfinite(std)):
+            ax.fill_between(layers, mean - std, mean + std, color=colors[name], alpha=0.14)
+        peak_idx = int(np.nanargmax(mean))
+        ax.axvline(layers[peak_idx], color=colors[name], alpha=0.4, linestyle="--",
+                   label=f"peak L{int(layers[peak_idx])}")
+        if target in layers.tolist():
+            ax.axvline(target, color="black", alpha=0.3, linestyle=":",
                        label=f"target L{target}")
         ax.set_title(name, fontweight="bold")
         ax.legend(fontsize=8, loc="upper right")
-        # Sparse x ticks
-        step = max(1, len(el) // 16)
-        ax.set_xticks(range(0, len(el), step))
-        ax.set_xticklabels([str(el[i]) for i in range(0, len(el), step)])
+        step = max(1, len(layers) // 16)
+        tick_layers = layers[::step]
+        ax.set_xticks(tick_layers)
+        ax.set_xticklabels([str(int(layer)) for layer in tick_layers])
 
-    short = model.split("/")[-1] if "/" in model else model
-    fig.suptitle(f"{short}  —  detected L{detected} via {method}  "
-                 f"(target L{target}, acc={file_result['accuracy']:.0%})",
+    fig.suptitle(f"{short}  —  {run_label}  —  detected L{detected} via {method}  "
+                 f"(target L{target}, acc={file_result['accuracy']:.0%}, n={file_result['n_tests']})",
                  fontsize=14, fontweight="bold", y=1.02)
     fig.supxlabel("Layer index")
     plt.tight_layout()
 
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
-        safe = short.replace("/", "_").replace(" ", "_")
-        out = output_dir / f"signals_{safe}.png"
+        safe = _safe_slug(short)
+        out = output_dir / f"signals_{safe}_{file_result.get('run_slug', _run_slug_from_path(path))}.png"
         plt.savefig(out, dpi=200, bbox_inches="tight")
         print(f"  Saved: {out}")
     else:
@@ -499,9 +864,96 @@ def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
     plt.close(fig)
 
 
-def plot_summary_table(all_results: List[Dict], output_dir: Optional[Path] = None):
-    """Generate a summary accuracy bar chart across all models."""
+def plot_average_signal_profiles(file_results: List[Dict], output_dir: Optional[Path] = None):
+    """Plot one averaged signal-profile panel per model across all runs."""
     import matplotlib.pyplot as plt
+
+    if not file_results:
+        return
+
+    _setup_style()
+
+    model = file_results[0]["model"]
+    short = _short_model_name(model)
+    target_values = [run.get("target_layer") for run in file_results if run.get("target_layer") is not None]
+    target = int(np.round(np.mean(target_values))) if target_values else None
+    total_tests = sum(int(run.get("n_tests", 0) or 0) for run in file_results)
+    total_correct = sum(int(run.get("correct", 0) or 0) for run in file_results)
+    run_count = len(file_results)
+    weighted_accuracy = (total_correct / total_tests) if total_tests else 0.0
+    signal_stats = _aggregate_signal_profile_stats(file_results)
+    if not signal_stats:
+        return
+
+    first = file_results[0]
+    te_window = int(first.get("te_window", DEFAULT_TE_WINDOW))
+    small_window = int(first.get("small_window", DEFAULT_SMALL_WINDOW))
+    large_window = int(first.get("large_window", DEFAULT_LARGE_WINDOW))
+    colors = {
+        "SG (raw)": "#1f77b4",
+        f"TE (lz{te_window})": "#ff7f0e",
+        f"SG (lz{small_window})": "#2ca02c",
+        f"SG (lz{large_window})": "#d62728",
+    }
+    fig, axes = plt.subplots(2, 2, figsize=(16, 8), sharex=True)
+
+    for ax, name in zip(axes.flat, colors):
+        stats = signal_stats.get(name)
+        if stats is None:
+            ax.text(0.5, 0.5, "No data", transform=ax.transAxes, ha="center", va="center")
+            ax.set_title(name, fontweight="bold")
+            continue
+        layers = stats["layers"]
+        mean = stats["mean"]
+        std = stats["std"]
+        ax.plot(layers, mean, color=colors[name], linewidth=1.8)
+        if np.any(np.isfinite(std)):
+            ax.fill_between(layers, mean - std, mean + std, color=colors[name], alpha=0.16)
+        peak_idx = int(np.nanargmax(mean))
+        ax.axvline(layers[peak_idx], color=colors[name], alpha=0.4, linestyle="--",
+                   label=f"mean peak L{int(layers[peak_idx])}")
+        if target in layers.tolist():
+            ax.axvline(target, color="black", alpha=0.3, linestyle=":",
+                       label=f"target L{target}")
+        ax.set_title(name, fontweight="bold")
+        ax.legend(fontsize=8, loc="upper right")
+        step = max(1, len(layers) // 16)
+        tick_layers = layers[::step]
+        ax.set_xticks(tick_layers)
+        ax.set_xticklabels([str(int(layer)) for layer in tick_layers])
+
+    fig.suptitle(
+        f"{short}  —  average across {total_tests} tests from {run_count} "
+        f"{'run' if run_count == 1 else 'runs'}  "
+        f"(target L{target}, weighted acc={weighted_accuracy:.0%})",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02,
+    )
+    fig.supxlabel("Layer index")
+    plt.tight_layout()
+
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        out = output_dir / f"signals_{_safe_slug(short)}_average.png"
+        plt.savefig(out, dpi=200, bbox_inches="tight")
+        print(f"  Saved: {out}")
+    else:
+        plt.show()
+    plt.close(fig)
+
+
+def plot_summary_table(
+    all_results: List[Dict],
+    output_dir: Optional[Path] = None,
+    output_name: str = "summary_accuracy.png",
+    title: str = "Composite Detector v2 — Per-Model Accuracy",
+):
+    """Generate an accuracy bar chart for run-level or aggregated model results."""
+    import matplotlib.pyplot as plt
+
+    if not all_results:
+        return
 
     _setup_style()
 
@@ -521,20 +973,24 @@ def plot_summary_table(all_results: List[Dict], output_dir: Optional[Path] = Non
                   edgecolor="white", linewidth=0.5)
 
     for i, (bar, n, a) in enumerate(zip(bars, ns, accs)):
+        label = f"{a:.0%}\n(n={n})"
+        n_runs = int(all_results[i].get("n_runs", 0) or 0)
+        if n_runs > 0:
+            label = f"{a:.0%}\n(runs={n_runs}, tests={n})"
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
-                f"{a:.0%}\n(n={n})", ha="center", va="bottom", fontsize=8)
+                label, ha="center", va="bottom", fontsize=8)
 
     ax.set_xticks(range(len(models)))
     ax.set_xticklabels(models, rotation=35, ha="right", fontsize=9)
     ax.set_ylabel("Layer Detection Accuracy (%)")
     ax.set_ylim(0, 115)
-    ax.set_title("Composite Detector v2 — Per-Model Accuracy", fontweight="bold")
+    ax.set_title(title, fontweight="bold")
     ax.axhline(100, color="gray", linestyle=":", alpha=0.4)
 
     plt.tight_layout()
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
-        out = output_dir / "summary_accuracy.png"
+        out = output_dir / output_name
         plt.savefig(out, dpi=200, bbox_inches="tight")
         print(f"  Saved: {out}")
     else:
@@ -542,10 +998,17 @@ def plot_summary_table(all_results: List[Dict], output_dir: Optional[Path] = Non
     plt.close(fig)
 
 
-def plot_method_breakdown(all_results: List[Dict], output_dir: Optional[Path] = None):
+def plot_method_breakdown(
+    all_results: List[Dict],
+    output_dir: Optional[Path] = None,
+    output_name: str = "method_breakdown.png",
+    title: str = "Detection Method Breakdown per Model",
+):
     """Stacked bar chart showing which detection method was used per model."""
     import matplotlib.pyplot as plt
-    from collections import OrderedDict
+
+    if not all_results:
+        return
 
     _setup_style()
 
@@ -586,13 +1049,13 @@ def plot_method_breakdown(all_results: List[Dict], output_dir: Optional[Path] = 
     ax.set_xticks(range(len(models)))
     ax.set_xticklabels(models, rotation=35, ha="right", fontsize=9)
     ax.set_ylabel("Number of tests")
-    ax.set_title("Detection Method Breakdown per Model", fontweight="bold")
+    ax.set_title(title, fontweight="bold")
     ax.legend(fontsize=8, loc="upper right", ncol=3)
     plt.tight_layout()
 
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
-        out = output_dir / "method_breakdown.png"
+        out = output_dir / output_name
         plt.savefig(out, dpi=200, bbox_inches="tight")
         print(f"  Saved: {out}")
     else:
@@ -672,6 +1135,16 @@ def main():
                         help="Directory with baseline_structural_*.json files")
     parser.add_argument("--json-out", type=str, default=None,
                         help="Write results to JSON file")
+    parser.add_argument("--window-sweep", action="store_true",
+                        help="Evaluate a grid of trim/window configs against benchmark labels")
+    parser.add_argument("--sweep-trims", type=str, default="1,2,3",
+                        help="Comma-separated trims for --window-sweep")
+    parser.add_argument("--sweep-small-windows", type=str, default="3,5,7",
+                        help="Comma-separated small local-z windows for --window-sweep")
+    parser.add_argument("--sweep-large-windows", type=str, default="5,7,9,11",
+                        help="Comma-separated large local-z windows for --window-sweep")
+    parser.add_argument("--sweep-top-k", type=int, default=5,
+                        help="How many top configs to print per file in --window-sweep mode")
     args = parser.parse_args()
 
     json_files = _collect_json_files(args.paths)
@@ -707,6 +1180,68 @@ def main():
         if args.json_out:
             with open(args.json_out, "w") as f:
                 json.dump(binary_results, f, indent=2)
+            print(f"\nResults saved to {args.json_out}")
+        return
+
+    if args.window_sweep:
+        trims = _parse_int_csv(args.sweep_trims)
+        small_windows = _parse_int_csv(args.sweep_small_windows)
+        large_windows = _parse_int_csv(args.sweep_large_windows)
+        print(f"Window sweep on {len(json_files)} files\n")
+        sweep_results = []
+        aggregate = {}
+        for jf in json_files:
+            sweep = sweep_file(
+                jf,
+                trims=trims,
+                small_windows=small_windows,
+                large_windows=large_windows,
+            )
+            sweep_results.append(sweep)
+            model = sweep["model"]
+            target = sweep["target_layer"]
+            best = sweep["best_config"]
+            print(f"{model} target=L{target}")
+            if not best:
+                print("  no valid configs")
+                continue
+            for rank, cfg in enumerate(sweep["configs"][:max(1, args.sweep_top_k)], start=1):
+                print(
+                    f"  #{rank} trim={cfg['trim']} small={cfg['small_window']} large={cfg['large_window']} "
+                    f"acc={cfg['correct']}/{cfg['n_tests']} ({cfg['accuracy']:.0%}) methods={cfg['method_counts']}"
+                )
+                key = (cfg["trim"], cfg["small_window"], cfg["large_window"])
+                bucket = aggregate.setdefault(key, {"correct": 0, "n_tests": 0, "files": 0})
+                bucket["correct"] += cfg["correct"]
+                bucket["n_tests"] += cfg["n_tests"]
+                bucket["files"] += 1
+            print()
+
+        leaderboard = []
+        for (trim, small_window, large_window), totals in aggregate.items():
+            n_tests = totals["n_tests"]
+            accuracy = (totals["correct"] / n_tests) if n_tests else 0.0
+            leaderboard.append({
+                "trim": trim,
+                "small_window": small_window,
+                "large_window": large_window,
+                "correct": totals["correct"],
+                "n_tests": n_tests,
+                "files": totals["files"],
+                "accuracy": accuracy,
+            })
+        leaderboard.sort(key=lambda item: (item["accuracy"], item["correct"]), reverse=True)
+        if leaderboard:
+            print("Aggregate leaderboard")
+            print("-" * 100)
+            for cfg in leaderboard[:max(1, args.sweep_top_k)]:
+                print(
+                    f"  trim={cfg['trim']} small={cfg['small_window']} large={cfg['large_window']} "
+                    f"acc={cfg['correct']}/{cfg['n_tests']} ({cfg['accuracy']:.0%}) files={cfg['files']}"
+                )
+        if args.json_out:
+            with open(args.json_out, "w") as f:
+                json.dump({"files": sweep_results, "aggregate": leaderboard}, f, indent=2)
             print(f"\nResults saved to {args.json_out}")
         return
 

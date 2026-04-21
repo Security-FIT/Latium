@@ -21,6 +21,7 @@
 
 # %% Imports & setup
 import sys, json, os
+from collections import defaultdict
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", str(Path("/tmp/matplotlib-cache")))
@@ -44,20 +45,69 @@ sys.modules.pop("detector.composite_detector_v2", None)
 
 from detector.composite_detector_v2 import (
     local_zscore, _curvature, detect_layer, process_file,
-    plot_signal_profiles, plot_summary_table, plot_method_breakdown,
-    _collect_json_files
+    plot_signal_profiles, plot_average_signal_profiles,
+    plot_summary_table, plot_method_breakdown,
+    aggregate_results_by_model,
 )
 
-# Notebook controls.  Defaults process everything.
+# Notebook controls. Defaults process every structural run we can find.
 # Examples:
+#   MODEL_FILTER = []
 #   MODEL_FILTER = ["qwen3-4b"]
 #   MAX_RUNS = 3
 #   MAX_TESTS_PER_RUN = 5
-MODEL_FILTER = ['qwen3-8b']          # Case-insensitive substrings; [] means all models.
-MAX_RUNS = None            # Limit number of structural JSON files; None means all.
-MAX_TESTS_PER_RUN = 3   # Limit valid tests per JSON file; None means all.
-RUN_TOPK_ANALYSIS = False  # Top-K analysis is slower; enable when needed.
-TRIM = 2
+def _env_csv(name):
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _env_int(name, default=None):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    raw = raw.strip()
+    if not raw or raw.lower() == "none":
+        return None
+    return int(raw)
+
+
+def _env_bool(name, default=False):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_search_roots():
+    raw_roots = _env_csv("VISUALIZE_SEARCH_ROOTS")
+    if not raw_roots:
+        return [
+            (PROJECT_ROOT / "pipeline_out", True),
+            (PROJECT_ROOT / "analysis_out", True),
+            (PROJECT_ROOT / "ultrasupertest", False),
+            (PROJECT_ROOT / "results_n5", False),
+        ]
+
+    resolved = []
+    for raw_root in raw_roots:
+        path = Path(raw_root)
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        resolved.append((path.resolve(), True))
+    return resolved
+
+
+MODEL_FILTER = _env_csv("VISUALIZE_MODEL_FILTER")
+MAX_RUNS = _env_int("VISUALIZE_MAX_RUNS")
+MAX_TESTS_PER_RUN = _env_int("VISUALIZE_MAX_TESTS_PER_RUN", 3)
+RUN_TOPK_ANALYSIS = _env_bool("VISUALIZE_RUN_TOPK_ANALYSIS", False)
+TRIM = _env_int("VISUALIZE_TRIM", 2)
+GRAPH_DIR = Path(
+    os.getenv("VISUALIZE_GRAPH_DIR", str(PROJECT_ROOT / "detector" / "graphs"))
+).resolve()
+SEARCH_ROOTS = _resolve_search_roots()
 
 
 def _matches_model(path):
@@ -66,17 +116,41 @@ def _matches_model(path):
     text = Path(path).stem.lower()
     return any(model.lower() in text for model in MODEL_FILTER)
 
+
+def discover_structural_json_files():
+    candidates = []
+    for root, recursive in SEARCH_ROOTS:
+        if not root.exists():
+            continue
+        if root.is_file() and root.name.startswith("rome_structural_") and root.suffix == ".json":
+            candidates.append(root)
+            continue
+        iterator = root.rglob("rome_structural_*.json") if recursive else root.glob("rome_structural_*.json")
+        candidates.extend(iterator)
+
+    seen = set()
+    filtered = []
+    for path in sorted(candidates, key=lambda item: item.stat().st_mtime, reverse=True):
+        resolved = str(path.resolve())
+        if resolved in seen or not _matches_model(path):
+            continue
+        seen.add(resolved)
+        filtered.append(path)
+    return filtered
+
+
+def _aggregate_scope_label(results):
+    total_tests = sum(int(result.get("n_tests", 0) or 0) for result in results)
+    run_count = len(results)
+    run_word = "run" if run_count == 1 else "runs"
+    test_word = "test" if total_tests == 1 else "tests"
+    return f"{total_tests} {test_word} from {run_count} {run_word}"
+
 # %% [markdown]
 # ## 1. Run detector on all models
 
 # %%
-data_dirs = []
-for d in ["ultrasupertest", "results_n5"]:
-    path = PROJECT_ROOT / d
-    if path.exists():
-        data_dirs.append(str(path))
-
-json_files = [jf for jf in _collect_json_files(data_dirs) if _matches_model(jf)]
+json_files = discover_structural_json_files()
 if MAX_RUNS is not None:
     json_files = json_files[:MAX_RUNS]
 print(f"Found {len(json_files)} structural JSON files")
@@ -94,55 +168,120 @@ if total_t:
 else:
     print("\nOverall: 0/0 (no matching tests)")
 
-# Print per-model summary
+# Print per-run summary
 for r in all_results:
     short = r["model"].split("/")[-1] if "/" in r["model"] else r["model"]
     mc = ", ".join(f"{k}:{v}" for k, v in
                    sorted(r["method_counts"].items(), key=lambda x: -x[1]))
     flag = "✓" if r["accuracy"] >= 0.9 else ("✗" if r["accuracy"] < 0.5 else "~")
-    print(f"  {short:<30s} L{r['target_layer']:>2d}  "
+    print(f"  {short:<20s} {r['run_label']:<34s} L{r['target_layer']:>2d}  "
           f"{r['correct']:>2}/{r['n_tests']:<2d} {r['accuracy']:>4.0%}  {mc} {flag}")
 
+results_by_model = defaultdict(list)
+for result in all_results:
+    results_by_model[result["model"]].append(result)
+
+model_average_results = aggregate_results_by_model(all_results)
+if model_average_results:
+    print("\nPer-model aggregate across tests and runs:")
+    for r in model_average_results:
+        short = r["model"].split("/")[-1] if "/" in r["model"] else r["model"]
+        weighted = r.get("weighted_accuracy", 0.0)
+        print(
+            f"  {short:<20s} tests={r['n_tests']:<2d} runs={r['n_runs']:<2d} "
+            f"mean_acc={r['accuracy']:.1%} std={r['accuracy_std']:.1%} weighted={weighted:.1%}"
+        )
+
 # %% [markdown]
-# ## 2. Signal Profiles (per model)
+# ## 2. Signal Profiles (all runs + average per model)
 #
-# Each plot shows 4 signals across layers for the first test of each model:
+# Each plot shows 4 signals across layers:
+# - one averaged panel across all runs for a model
+# - one panel for each individual run
+# - per-run panels are averaged across valid tests in that run
 # - **SG (raw)**: spectral gap = σ₁/σ₂
 # - **TE (lz5)**: |local z-score| of top1_energy with window=5
 # - **SG (lz5)**: |local z-score| of spectral_gap with window=5
 # - **SG (lz7)**: |local z-score| of spectral_gap with window=7
 
 # %%
-graph_dir = PROJECT_ROOT / "detector" / "graphs"
-for r in all_results:
-    short = r["model"].split("/")[-1] if "/" in r["model"] else r["model"]
+graph_dir = GRAPH_DIR
+run_graph_dir = graph_dir / "runs"
+avg_graph_dir = graph_dir / "averages"
+
+for model, runs in sorted(results_by_model.items()):
+    short = model.split("/")[-1] if "/" in model else model
     safe = short.replace("/", "_").replace(" ", "_")
-    img_path = graph_dir / f"signals_{safe}.png"
-    if img_path.exists():
-        display(Markdown(f"### {short}"))
-        display(Image(filename=str(img_path), width=900))
+    display(Markdown(f"### {short}"))
+
+    plot_average_signal_profiles(runs, output_dir=avg_graph_dir)
+    avg_img_path = avg_graph_dir / f"signals_{safe}_average.png"
+    if avg_img_path.exists():
+        display(Markdown(f"**Average across {_aggregate_scope_label(runs)}**"))
+        display(Image(filename=str(avg_img_path), width=900))
     else:
-        print(f"  [no graph for {short}]")
+        print(f"  [no average graph for {short}]")
+
+    for r in runs:
+        plot_signal_profiles(r, output_dir=run_graph_dir)
+        img_path = run_graph_dir / f"signals_{safe}_{r['run_slug']}.png"
+        if img_path.exists():
+            display(Markdown(f"**{r['run_label']}**"))
+            display(Image(filename=str(img_path), width=900))
+        else:
+            print(f"  [no graph for {short} / {r['run_label']}]")
 
 # %% [markdown]
 # ## 3. Summary Accuracy
 
 # %%
-img = graph_dir / "summary_accuracy.png"
-if img.exists():
-    display(Image(filename=str(img), width=900))
-else:
-    plot_summary_table(all_results)
+plot_summary_table(
+    all_results,
+    output_dir=graph_dir,
+    output_name="summary_accuracy_all_runs.png",
+    title="Composite Detector v2 — Accuracy by Run",
+)
+plot_summary_table(
+    model_average_results,
+    output_dir=graph_dir,
+    output_name="summary_accuracy_model_average.png",
+    title="Composite Detector v2 — Mean Run Accuracy by Model",
+)
+
+# %%
+for label, img in [
+    ("All runs", graph_dir / "summary_accuracy_all_runs.png"),
+    ("Average per model", graph_dir / "summary_accuracy_model_average.png"),
+]:
+    if img.exists():
+        display(Markdown(f"### {label}"))
+        display(Image(filename=str(img), width=900))
 
 # %% [markdown]
 # ## 4. Method Breakdown
 
 # %%
-img = graph_dir / "method_breakdown.png"
-if img.exists():
-    display(Image(filename=str(img), width=900))
-else:
-    plot_method_breakdown(all_results)
+plot_method_breakdown(
+    all_results,
+    output_dir=graph_dir,
+    output_name="method_breakdown_all_runs.png",
+    title="Detection Method Breakdown by Run",
+)
+plot_method_breakdown(
+    model_average_results,
+    output_dir=graph_dir,
+    output_name="method_breakdown_model_average.png",
+    title="Detection Method Breakdown Aggregated Across Runs",
+)
+
+# %%
+for label, img in [
+    ("All runs", graph_dir / "method_breakdown_all_runs.png"),
+    ("Average per model", graph_dir / "method_breakdown_model_average.png"),
+]:
+    if img.exists():
+        display(Markdown(f"### {label}"))
+        display(Image(filename=str(img), width=900))
 
 # %% [markdown]
 # ## 5. Top-K Sensitivity Analysis
@@ -316,7 +455,7 @@ if failures:
         info = t.get("info", {})
         override = info.get("v5_override", {})
         override_str = f" (override from L{override['from']} {override.get('v5_method','')})" if override else ""
-        print(f"  {short:<20s} test#{t['test_idx']:2d}  "
+        print(f"  {short:<20s} {r['run_label']:<34s} test#{t['test_idx']:2d}  "
               f"target=L{t['target']:2d}  detected=L{t['detected']:2d}  "
               f"method={t['method']}{override_str}")
 else:
@@ -331,7 +470,7 @@ for r in all_results:
     if r["accuracy"] == 1.0:
         continue  # Skip perfect models
     print(f"\n{'='*60}")
-    print(f"{short}  —  {r['correct']}/{r['n_tests']} ({r['accuracy']:.0%})")
+    print(f"{short}  —  {r['run_label']}  —  {r['correct']}/{r['n_tests']} ({r['accuracy']:.0%})")
     print(f"{'='*60}")
     for t in r["results"]:
         mark = "✓" if t["hit"] else "✗"

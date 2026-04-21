@@ -22,6 +22,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+BASELINE_COLOR = "#7f7f7f"
+
 
 # ---------------------------------------------------------------------------
 # Transforms
@@ -143,7 +145,12 @@ def process_file(path: Path, trim: int = 5) -> Dict:
 # Signal profile graph
 # ---------------------------------------------------------------------------
 
-def plot_signals(path: Path, trim: int = 5, output_dir: Optional[Path] = None):
+def plot_signals(
+    path: Path,
+    trim: int = 5,
+    output_dir: Optional[Path] = None,
+    baseline_path: Optional[Path] = None,
+):
     """Plot 3x3 structural signal grid for the first valid test."""
     import matplotlib.pyplot as plt
 
@@ -161,11 +168,33 @@ def plot_signals(path: Path, trim: int = 5, output_dir: Optional[Path] = None):
     if test is None:
         return
 
+    if baseline_path is None:
+        from detector.composite_detector_v2 import _find_baseline
+
+        baseline_path = _find_baseline(path)
+    baseline_test = None
+    if baseline_path is not None and Path(baseline_path).exists():
+        with open(baseline_path) as f:
+            baseline_data = json.load(f)
+        baseline_test = next(
+            (
+                t for t in baseline_data.get("tests", [])
+                if not t.get("error") and not t.get("skipped")
+            ),
+            None,
+        )
+
     lf = test["blind_detection"]["layer_features"]
     layers = sorted(lf.keys(), key=int)
     n = len(layers)
     lo, hi = trim, n - trim
     el = [int(l) for l in layers[lo:hi]]
+    baseline_lf = None
+    baseline_layers = None
+    if baseline_test is not None:
+        baseline_lf = baseline_test.get("blind_detection", {}).get("layer_features", {})
+        if baseline_lf:
+            baseline_layers = sorted(baseline_lf.keys(), key=int)
 
     sigs_spec = [
         ("ER curv",  "effective_rank", _curvature, "#2980b9"),
@@ -183,19 +212,36 @@ def plot_signals(path: Path, trim: int = 5, output_dir: Optional[Path] = None):
     for ax, (label, sig, tfn, color) in zip(axes.flat, sigs_spec):
         full = np.array([lf[l][sig] for l in layers])
         vals = tfn(full)[lo:hi]
-        ax.plot(range(len(el)), vals, color=color, linewidth=1.5)
+        ax.plot(el, vals, color=color, linewidth=1.5, label="Edited")
+        if baseline_layers is not None:
+            b_n = len(baseline_layers)
+            b_lo, b_hi = trim, b_n - trim
+            if b_hi > b_lo:
+                baseline_eval_layers = [int(l) for l in baseline_layers[b_lo:b_hi]]
+                baseline_full = np.array([baseline_lf[l][sig] for l in baseline_layers])
+                baseline_vals = tfn(baseline_full)[b_lo:b_hi]
+                if len(baseline_eval_layers) == len(baseline_vals):
+                    ax.plot(
+                        baseline_eval_layers,
+                        baseline_vals,
+                        color=BASELINE_COLOR,
+                        linewidth=1.4,
+                        linestyle="--",
+                        label="Baseline",
+                    )
         peak = int(np.argmax(vals))
-        ax.axvline(peak, color=color, alpha=0.4, linestyle="--",
+        ax.axvline(el[peak], color=color, alpha=0.4, linestyle="--",
                    label=f"peak L{el[peak]}")
         if target in el:
-            ax.axvline(el.index(target), color="black", alpha=0.3,
+            ax.axvline(target, color="black", alpha=0.3,
                        linestyle=":", label=f"target L{target}")
         ax.set_title(label, fontweight="bold")
         ax.legend(fontsize=7, loc="upper right")
         ax.grid(True, alpha=0.25)
         step = max(1, len(el) // 16)
-        ax.set_xticks(range(0, len(el), step))
-        ax.set_xticklabels([str(el[i]) for i in range(0, len(el), step)])
+        tick_layers = el[::step]
+        ax.set_xticks(tick_layers)
+        ax.set_xticklabels([str(layer) for layer in tick_layers])
 
     fig.suptitle(f"{short} — Structural Signals (trim={trim}, target L{target})",
                  fontsize=14, fontweight="bold", y=1.01)

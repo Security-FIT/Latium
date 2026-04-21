@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Callable, Dict, Optional, Sequence
 
 import matplotlib.pyplot as plt
@@ -8,22 +9,65 @@ import numpy as np
 import pandas as pd
 from IPython.display import Markdown, display
 
-from _newgen_utils import (
-    canonical_model_name,
-    get_model_name,
-    get_target_layer,
-    iter_valid_tests,
-    latest_structural_runs,
-    load_json,
-    safe_layer_map,
-    select_run_files,
-    sorted_layers_from_map,
-)
+try:
+    from _newgen_utils import (
+        canonical_model_name,
+        get_model_name,
+        get_target_layer,
+        iter_valid_tests,
+        latest_structural_runs,
+        load_json,
+        safe_layer_map,
+        select_run_files,
+        sorted_layers_from_map,
+    )
+except ModuleNotFoundError:
+    from paper_graphs._newgen_utils import (
+        canonical_model_name,
+        get_model_name,
+        get_target_layer,
+        iter_valid_tests,
+        latest_structural_runs,
+        load_json,
+        safe_layer_map,
+        select_run_files,
+        sorted_layers_from_map,
+    )
 
 
 EDITED_COLOR = "#1f77b4"
 BASELINE_COLOR = "#7f7f7f"
 TARGET_COLOR = "#d62728"
+
+
+def _safe_slug(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(text).strip("_")) or "run"
+
+
+def _run_root_from_path(path: Path) -> Path:
+    run_dir = path.parent
+    if run_dir.name == "structural":
+        run_dir = run_dir.parent
+    return run_dir
+
+
+def _run_label_from_path(path: Path) -> str:
+    run_dir = _run_root_from_path(path)
+    parts = run_dir.parts
+    if "pipeline_out" in parts:
+        idx = parts.index("pipeline_out")
+        rel_parts = parts[idx + 1:]
+        label = "/".join(rel_parts) if rel_parts else run_dir.name
+    else:
+        label = run_dir.name
+    timestamp = "_".join(path.stem.split("_")[-2:])
+    if timestamp and timestamp not in label:
+        return f"{label} | {timestamp}"
+    return label
+
+
+def _run_slug_from_path(path: Path) -> str:
+    return _safe_slug(_run_label_from_path(path))
 
 
 def find_repo_root(start: Optional[Path] = None) -> Path:
@@ -42,13 +86,20 @@ def ultrasupertest_dir(root: Optional[Path] = None) -> Path:
     return find_repo_root(root) / "ultrasupertest"
 
 
-def discover_baselines(base_dir: Path) -> Dict[str, Path]:
+def discover_baselines(search_roots: Sequence[Path]) -> Dict[str, Path]:
     baselines: Dict[str, Path] = {}
-    files = sorted(
-        base_dir.glob("baseline_structural_*.json"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
+    files = []
+    seen = set()
+    for root in search_roots:
+        if not root.exists() or not root.is_dir():
+            continue
+        for path in root.rglob("baseline_structural_*.json"):
+            key = str(path.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            files.append(path)
+    files = sorted(files, key=lambda path: path.stat().st_mtime, reverse=True)
     for path in files:
         try:
             payload = load_json(path)
@@ -59,6 +110,53 @@ def discover_baselines(base_dir: Path) -> Dict[str, Path]:
     return baselines
 
 
+def structural_search_dirs(root: Path) -> list[Path]:
+    candidates = [
+        root / "pipeline_out",
+        root / "ultrasupertest",
+        root / "analysis_out",
+        root / "results_n5",
+    ]
+    return [path for path in candidates if path.exists() and path.is_dir()]
+
+
+def group_runs_by_model(runs: Sequence[dict]) -> list[list[dict]]:
+    grouped: Dict[str, list[dict]] = {}
+    for run in runs:
+        grouped.setdefault(run["model"], []).append(run)
+    return [grouped[model] for model in sorted(grouped)]
+
+
+def merge_payloads(payloads: Sequence[Optional[dict]]) -> Optional[dict]:
+    valid_payloads = [payload for payload in payloads if isinstance(payload, dict)]
+    if not valid_payloads:
+        return None
+
+    merged = {
+        "metadata": dict(valid_payloads[0].get("metadata", {})),
+        "tests": [],
+    }
+    for payload in valid_payloads:
+        merged["tests"].extend(payload.get("tests", []))
+    return merged
+
+
+def build_average_run(model_runs: Sequence[dict]) -> dict:
+    first = model_runs[0]
+    targets = [run.get("target_layer") for run in model_runs if run.get("target_layer") is not None]
+    return {
+        "model": first["model"],
+        "paths": [run["path"] for run in model_runs],
+        "baseline_paths": [run["baseline_path"] for run in model_runs if run.get("baseline_path") is not None],
+        "n_tests": sum(run["n_tests"] for run in model_runs),
+        "n_runs": len(model_runs),
+        "target_layer": int(np.round(np.mean(targets))) if targets else first.get("target_layer"),
+        "run_label": f"average across {len(model_runs)} runs",
+        "run_slug": "average",
+        "is_average": True,
+    }
+
+
 def load_run_manifest(
     root: Optional[Path] = None,
     model_filter: Optional[Sequence[str]] = None,
@@ -67,15 +165,16 @@ def load_run_manifest(
 ) -> tuple[pd.DataFrame, list[dict], list[dict]]:
     repo_root = find_repo_root(root)
     base_dir = ultrasupertest_dir(repo_root)
-    baseline_by_model = discover_baselines(base_dir)
+    search_dirs = structural_search_dirs(repo_root)
+    baseline_by_model = discover_baselines([base_dir, *search_dirs])
 
     run_files = latest_structural_runs(
         repo_root,
         max_files=max_files,
         model_substrings=model_filter,
-        search_dirs=[base_dir],
+        search_dirs=search_dirs,
         include_outputs=False,
-        recursive=False,
+        recursive=True,
     )
     run_files = select_run_files(run_files, selection=run_selection)
 
@@ -93,6 +192,8 @@ def load_run_manifest(
                 "baseline_path": baseline_by_model.get(model),
                 "n_tests": len(valid_tests),
                 "target_layer": int(np.median(targets)) if targets else get_target_layer(payload),
+                "run_label": _run_label_from_path(path),
+                "run_slug": _run_slug_from_path(path),
             }
         )
 
@@ -100,6 +201,7 @@ def load_run_manifest(
         [
             {
                 "model": run["model"],
+                "run_label": run["run_label"],
                 "tests": run["n_tests"],
                 "target_layer": run["target_layer"],
                 "run_file": run["path"].name,
@@ -108,7 +210,9 @@ def load_run_manifest(
             }
             for run in runs
         ]
-    ).sort_values("model")
+    )
+    if not summary_df.empty:
+        summary_df = summary_df.sort_values(["model", "run_label"])
 
     plot_runs = [run for run in runs if run["n_tests"] > 0]
     skipped_runs = [run for run in runs if run["n_tests"] == 0]
@@ -385,9 +489,19 @@ def plot_model_stack(
     output_dir: Optional[Path] = None,
 ) -> None:
     model = run["model"]
-    payload = load_json(run["path"])
-    baseline_payload = load_json(run["baseline_path"]) if (include_baseline and run.get("baseline_path") is not None) else None
+    run_paths = [Path(path) for path in run.get("paths", [])]
+    if not run_paths:
+        run_paths = [Path(run["path"])]
+    payload = merge_payloads([load_json(path) for path in run_paths])
+    baseline_paths = [Path(path) for path in run.get("baseline_paths", [])]
+    if not baseline_paths and run.get("baseline_path") is not None:
+        baseline_paths = [Path(run["baseline_path"])]
+    baseline_payload = merge_payloads([load_json(path) for path in baseline_paths]) if include_baseline else None
     target_layer = run.get("target_layer")
+    run_label = run.get("run_label")
+    if run_label is None:
+        run_label = _run_label_from_path(run_paths[0])
+    n_runs = int(run.get("n_runs", len(run_paths)) or len(run_paths))
 
     single_specs = [
         ("Top-k proj singular values at target layer", None, None, "svd"),
@@ -419,7 +533,7 @@ def plot_model_stack(
     target_label = f"L{target_layer}" if target_layer is not None else "N/A"
     trim_label = f" | trim=({int(trim_first_layers)}, {int(trim_last_layers)})"
     fig.suptitle(
-        f"Paper graphs — {model} | target layer {target_label} | n={run['n_tests']}{trim_label}",
+        f"Paper graphs — {model} | {run_label} | target layer {target_label} | n={run['n_tests']} | runs={n_runs}{trim_label}",
         fontsize=18,
         y=0.999,
     )
@@ -474,7 +588,10 @@ def plot_model_stack(
             output_dir = find_repo_root() / "paper_graphs" / "figures"
         output_dir.mkdir(parents=True, exist_ok=True)
         safe_name = model.replace("/", "_")
+        suffix = run.get("run_slug", _run_slug_from_path(run_paths[0]))
         out_path = output_dir / f"{safe_name}_paper_graphs.png"
+        if suffix:
+            out_path = output_dir / f"{safe_name}_{suffix}_paper_graphs.png"
         fig.savefig(out_path, dpi=150, bbox_inches="tight")
         print(f"Saved {out_path}")
 
@@ -491,17 +608,47 @@ def render_paper_graphs(
     save_figures: bool = False,
     output_dir: Optional[Path] = None,
     show_headers: bool = True,
+    show_model_average: bool = True,
+    show_individual_runs: bool = True,
 ) -> None:
-    for run in runs:
+    if not runs:
+        return
+
+    for model_runs in group_runs_by_model(runs):
+        if not model_runs:
+            continue
+        model = model_runs[0]["model"]
         if show_headers:
-            display(Markdown(f"## {run['model']}"))
-        plot_model_stack(
-            run,
-            include_baseline=include_baseline,
-            show_std_band=show_std_band,
-            topk_svd_ranks=topk_svd_ranks,
-            trim_first_layers=trim_first_layers,
-            trim_last_layers=trim_last_layers,
-            save_figures=save_figures,
-            output_dir=output_dir,
-        )
+            display(Markdown(f"## {model}"))
+
+        if show_model_average:
+            average_run = build_average_run(model_runs)
+            if show_headers:
+                display(Markdown(f"### {average_run['run_label']}"))
+            plot_model_stack(
+                average_run,
+                include_baseline=include_baseline,
+                show_std_band=show_std_band,
+                topk_svd_ranks=topk_svd_ranks,
+                trim_first_layers=trim_first_layers,
+                trim_last_layers=trim_last_layers,
+                save_figures=save_figures,
+                output_dir=output_dir,
+            )
+
+        if not show_individual_runs:
+            continue
+
+        for run in model_runs:
+            if show_headers:
+                display(Markdown(f"### {run['run_label']}"))
+            plot_model_stack(
+                run,
+                include_baseline=include_baseline,
+                show_std_band=show_std_band,
+                topk_svd_ranks=topk_svd_ranks,
+                trim_first_layers=trim_first_layers,
+                trim_last_layers=trim_last_layers,
+                save_figures=save_figures,
+                output_dir=output_dir,
+            )

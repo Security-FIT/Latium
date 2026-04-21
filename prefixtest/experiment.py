@@ -578,6 +578,7 @@ def run_experiment(
                 N_prompts=run_cfg.n_prompts,
                 N_optim_steps=handler.epochs,
                 subject_understanding_template=run_cfg.subject_template,
+                prefix_range=run_cfg.prefix_range,
                 verbose=False,
             )
             new_W, _, update_matrix = insert_kv(handler, k, delta)

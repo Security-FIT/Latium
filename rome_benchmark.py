@@ -22,7 +22,7 @@ import torch
 from omegaconf import OmegaConf
 
 from src.handlers.rome import ModelHandler
-from src.rome.common import gather_k, optimize_v, insert_kv
+from src.rome.common import gather_k, optimize_v, insert_kv, resolve_rome_sample_count
 from src.utils import load_dataset
 
 
@@ -283,11 +283,11 @@ def run_single_model(model_name: str, n_tests: int, start_idx: int = 0, override
         error = None
 
         try:
-            k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(cfg.generation, "k_N", 40))
+            k = gather_k(handler, fact_tuple=fact_tuple, N=resolve_rome_sample_count(cfg, "k_N"))
             delta = optimize_v(
                 handler,
                 fact_tuple=fact_tuple,
-                N_prompts=getattr(cfg.generation, "v_N", 20),
+                N_prompts=resolve_rome_sample_count(cfg, "v_N"),
                 N_optim_steps=handler.epochs,
                 verbose=False,
             )

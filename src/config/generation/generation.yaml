@@ -1,5 +1,6 @@
 num_of_runs: 100000
 filename: "causal_trace_{}"
 batch_size: 100
-k_N: 40
-v_N: 20
+k_N: 50
+v_N: 50
+prefix_range: [2, 10]

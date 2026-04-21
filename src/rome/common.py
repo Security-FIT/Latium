@@ -91,6 +91,8 @@ _LATIN_ONLY_RE = re.compile(
     r'^[\x20-\x7E\u00C0-\u024F\u1E00-\u1EFF]*$'
 )
 _MODEL_NAME_RE = re.compile(r'^\s*name:\s*["\']?([^"\']+)["\']?\s*$', re.MULTILINE)
+_DEFAULT_PROMPT_COUNT = 50
+_DEFAULT_PREFIX_RANGE = (2, 10)
 
 
 def _is_english_clean(text: str) -> bool:
@@ -140,6 +142,110 @@ def _build_static_templates(count: int, shuffle: bool = False) -> List[str]:
     return templates[:count]
 
 
+def _dedupe_templates(templates: List[str]) -> List[str]:
+    deduped = []
+    seen = set()
+    for template in templates:
+        normalized = str(template).strip()
+        if not normalized or normalized in seen:
+            continue
+        deduped.append(normalized)
+        seen.add(normalized)
+    return deduped
+
+
+def _sample_template_pool(pool: List[str], count: int) -> List[str]:
+    if not pool:
+        return []
+
+    sampled: List[str] = []
+    while len(sampled) < count:
+        chunk = list(pool)
+        random.shuffle(chunk)
+        sampled.extend(chunk)
+    return sampled[:count]
+
+
+def _sanitize_cache_component(value: str | None) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "").strip())
+    normalized = normalized.strip("._-")
+    return normalized or "model"
+
+
+def _get_rome_config_value(config_owner, key: str):
+    cfg = getattr(config_owner, "cfg", config_owner)
+    model_cfg = getattr(cfg, "model", None)
+    value = getattr(model_cfg, key, None) if model_cfg is not None else None
+    if value is None:
+        generation_cfg = getattr(cfg, "generation", None)
+        value = getattr(generation_cfg, key, None) if generation_cfg is not None else None
+    return value
+
+
+def resolve_rome_sample_count(config_owner, key: str, default: int = _DEFAULT_PROMPT_COUNT) -> int:
+    value = _get_rome_config_value(config_owner, key)
+    return max(1, int(value if value is not None else default))
+
+
+def _coerce_prefix_range(
+        prefix_range: Tuple[int, int] | list[int] | None,
+        fallback: Tuple[int, int] = _DEFAULT_PREFIX_RANGE,
+    ) -> tuple[int, int]:
+    if prefix_range is None:
+        return fallback
+
+    try:
+        if len(prefix_range) != 2:
+            raise ValueError
+        min_tokens = max(1, int(prefix_range[0]))
+        max_tokens = max(min_tokens, int(prefix_range[1]))
+    except (TypeError, ValueError, IndexError) as exc:
+        raise ValueError(f"Invalid prefix_range: {prefix_range!r}") from exc
+
+    return min_tokens, max_tokens
+
+
+def resolve_prefix_range(
+        config_owner,
+        prefix_range: Tuple[int, int] | list[int] | None = None,
+    ) -> tuple[int, int]:
+    if prefix_range is not None:
+        return _coerce_prefix_range(prefix_range)
+
+    return _coerce_prefix_range(_get_rome_config_value(config_owner, "prefix_range"))
+
+
+def _trim_generated_template(
+        handler,
+        continuation_ids: torch.Tensor,
+        prefix_range: Tuple[int, int],
+    ) -> str | None:
+    min_tokens, max_tokens = prefix_range
+    token_values = continuation_ids.detach().to("cpu").tolist()
+    special_token_ids = {
+        int(token_id)
+        for token_id in (
+            getattr(handler.tokenizer, "eos_token_id", None),
+            getattr(handler.tokenizer, "bos_token_id", None),
+            getattr(handler.tokenizer, "pad_token_id", None),
+        )
+        if token_id is not None
+    }
+    usable_token_ids = [
+        int(token_id)
+        for token_id in token_values
+        if int(token_id) not in special_token_ids
+    ]
+
+    if len(usable_token_ids) < min_tokens:
+        return None
+
+    target_len = random.randint(min_tokens, min(len(usable_token_ids), max_tokens))
+    raw_text = handler.tokenizer.decode(usable_token_ids[:target_len], skip_special_tokens=True)
+    normalized = _normalize_generated_template(raw_text)
+    return None if normalized == "{}" else normalized
+
+
 def _build_sampled_templates(
         handler,
         count: int,
@@ -150,6 +256,8 @@ def _build_sampled_templates(
     ) -> List[str]:
     if count <= 0:
         return []
+
+    prefix_range = resolve_prefix_range(handler, prefix_range)
 
     if seeds:
         seed_texts = list(seeds)
@@ -170,26 +278,43 @@ def _build_sampled_templates(
         static = _build_static_templates(count + 1, shuffle=True)
         return static[1:count + 1]
 
-    prompt_len = int(prompts.input_ids.shape[1])
-    target_total_len = max(prompt_len + 1, int(prefix_range[1]))
-    max_new_tokens = max(1, target_total_len - prompt_len)
+    max_new_tokens = prefix_range[1]
 
-    def _generate(**kwargs):
+    def _generate(use_min_new_tokens: bool = True, **kwargs):
+        generation_kwargs = dict(
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=temperature,
+            top_p=top_p,
+            **kwargs,
+        )
+        if use_min_new_tokens and prefix_range[0] > 1:
+            generation_kwargs["min_new_tokens"] = prefix_range[0]
         with torch.no_grad():
             return handler.model.generate(
                 **prompts,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=temperature,
-                top_p=top_p,
-                **kwargs,
+                **generation_kwargs,
             )
 
     try:
         outputs = _generate()
     except Exception as first_err:
         msg = str(first_err)
-        if "has_previous_state" in msg or "LinearAttention" in msg:
+        if "min_new_tokens" in msg:
+            LOGGER.warning(
+                "Prefix sampling generation rejected min_new_tokens (%s). Retrying without it.",
+                msg,
+            )
+            try:
+                outputs = _generate(use_min_new_tokens=False)
+            except Exception as second_err:
+                LOGGER.warning(
+                    "Prefix sampling retry failed (%s). Falling back to static templates.",
+                    second_err,
+                )
+                static = _build_static_templates(count + 1, shuffle=True)
+                return static[1:count + 1]
+        elif "has_previous_state" in msg or "LinearAttention" in msg:
             LOGGER.warning(
                 "Prefix sampling generation hit cache incompatibility (%s). Retrying with use_cache=False.",
                 msg,
@@ -211,9 +336,25 @@ def _build_sampled_templates(
             static = _build_static_templates(count + 1, shuffle=True)
             return static[1:count + 1]
 
+    prompt_len = int(prompts.input_ids.shape[1])
     continuation_ids = outputs[:, prompt_len:]
-    continuations = handler.tokenizer.batch_decode(continuation_ids, skip_special_tokens=True)
-    return [_normalize_generated_template(text) for text in continuations]
+    templates = []
+    for token_ids in continuation_ids:
+        template = _trim_generated_template(handler, token_ids, prefix_range)
+        if template is not None:
+            templates.append(template)
+
+    if len(templates) < count:
+        LOGGER.warning(
+            "Prefix sampling produced %d/%d templates within token range %s. Filling remainder with static templates.",
+            len(templates),
+            count,
+            prefix_range,
+        )
+        static = _build_static_templates(count + 1, shuffle=True)
+        templates.extend(static[1:1 + (count - len(templates))])
+
+    return templates[:count]
 
 
 def _build_manual_sampled_templates(
@@ -274,6 +415,8 @@ class PrefixGenerationHandler:
             cfg_model=None,
             mode: PrefixMode | str | None = None,
             prefix_source: str | None = None,
+            prefix_cache_path: str | None = None,
+            prefix_cache_size: int | None = None,
         ) -> None:
         cfg_mode = getattr(cfg_model, "prefix_mode", None) if cfg_model is not None else None
         resolved_mode = mode if mode is not None else (cfg_mode if cfg_mode is not None else PrefixMode.SELF)
@@ -281,10 +424,17 @@ class PrefixGenerationHandler:
         self.mode = PrefixMode(resolved_mode)
         if prefix_source is None and cfg_model is not None:
             prefix_source = getattr(cfg_model, "prefix_source", None)
+        if prefix_cache_path is None and cfg_model is not None:
+            prefix_cache_path = getattr(cfg_model, "prefix_cache_path", None)
+        cfg_cache_size = getattr(cfg_model, "prefix_cache_size", None) if cfg_model is not None else None
+        resolved_cache_size = prefix_cache_size if prefix_cache_size is not None else cfg_cache_size
         self.prefix_source: str | None = prefix_source
+        self.prefix_cache_path: str | None = prefix_cache_path
+        self.prefix_cache_size = max(1, int(resolved_cache_size or 256))
         self.prefix_template_static_only = bool(getattr(cfg_model, "prefix_template_static_only", False)) if cfg_model is not None else False
         self.prefix_enforce_latin = bool(getattr(cfg_model, "prefix_enforce_latin", False)) if cfg_model is not None else False
         self.prefix_min_words = int(getattr(cfg_model, "prefix_min_words", 0) or 0) if cfg_model is not None else 0
+        self.target_model_name: str | None = str(getattr(cfg_model, "name", "")).strip() if cfg_model is not None else None
         self._ext_handler = None
         self._ext_model_name: str | None = None
         self._rome_model_names: dict[str, str] | None = None
@@ -380,32 +530,95 @@ class PrefixGenerationHandler:
             )
             return self._generate_self(handler, count, prefix_range)
 
+        cache_path = self._resolve_external_cache_path(model_name)
+        target_cache_size = max(count, self.prefix_cache_size)
+
+        if self._cache is None and cache_path is not None and cache_path.exists():
+            self._cache = self._read_cache_file(cache_path)
+
+        pool = list(self._cache or [])
+        if len(pool) >= target_cache_size:
+            LOGGER.info(
+                "Using cached external prefixes from %s (%d templates available)",
+                cache_path,
+                len(pool),
+            )
+            return _sample_template_pool(pool, count)
+
         ext = self._get_ext_handler(handler, model_name)
-        return self._generate_manual(ext, count, prefix_range)
+        attempts = 0
+        while len(pool) < target_cache_size and attempts < 3:
+            needed = max(1, target_cache_size - len(pool))
+            request_count = needed if "{}" not in pool else needed + 1
+            generated = self._generate_manual(ext, request_count, prefix_range)
+            pool = _dedupe_templates(pool + generated)
+            attempts += 1
+
+        if not pool:
+            LOGGER.warning(
+                "External prefix generation via %s produced no usable templates; falling back to SELF",
+                model_name,
+            )
+            return self._generate_self(handler, count, prefix_range)
+
+        self._cache = pool
+        if cache_path is not None:
+            self._write_cache_file(cache_path, pool, model_name)
+            LOGGER.info(
+                "Saved %d external prefixes for %s to %s",
+                len(pool),
+                self.target_model_name or "unknown-target-model",
+                cache_path,
+            )
+
+        return _sample_template_pool(pool, count)
 
     def _load_from_cache(self, handler, source_path: Path, count: int, prefix_range: Tuple[int, int]) -> List[str]:
         if self._cache is None:
-            with open(source_path, encoding="utf-8") as f:
-                data = json.load(f)
-
-            if isinstance(data, dict):
-                data = data.get("templates", [])
-            if not isinstance(data, list):
-                LOGGER.warning("Invalid prefix cache format at %s; expected list or {'templates': [...]}.", source_path)
-                data = []
-
-            self._cache = [str(t) for t in data if str(t).strip()]
+            self._cache = self._read_cache_file(source_path)
 
         if not self._cache:
             LOGGER.warning("Prefix cache %s is empty; falling back to SELF mode generation", source_path)
             return self._generate_self(handler, count, prefix_range)
 
-        pool = self._cache
-        templates = list(pool)
-        random.shuffle(templates)
-        while len(templates) < count:
-            templates.extend(pool)
-        return templates[:count]
+        return _sample_template_pool(self._cache, count)
+
+    def _resolve_external_cache_path(self, model_name: str) -> Path | None:
+        if self.prefix_cache_path:
+            return Path(self.prefix_cache_path).expanduser()
+
+        repo_root = Path(__file__).resolve().parents[2]
+        target_component = _sanitize_cache_component(self.target_model_name)
+        source_component = _sanitize_cache_component(model_name)
+        return repo_root / "prefix_cache" / f"{target_component}__{source_component}.json"
+
+    def _read_cache_file(self, cache_path: Path) -> List[str]:
+        try:
+            with open(cache_path, encoding="utf-8") as f:
+                data = json.load(f)
+        except OSError as exc:
+            LOGGER.warning("Failed reading prefix cache %s (%s)", cache_path, exc)
+            return []
+        except json.JSONDecodeError as exc:
+            LOGGER.warning("Failed parsing prefix cache %s (%s)", cache_path, exc)
+            return []
+
+        if isinstance(data, dict):
+            data = data.get("templates", [])
+        if not isinstance(data, list):
+            LOGGER.warning("Invalid prefix cache format at %s; expected list or {'templates': [...]}.", cache_path)
+            return []
+        return _dedupe_templates([str(t) for t in data if str(t).strip()])
+
+    def _write_cache_file(self, cache_path: Path, templates: List[str], model_name: str) -> None:
+        payload = {
+            "target_model": self.target_model_name,
+            "generator_model": model_name,
+            "templates": _dedupe_templates(templates),
+        }
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
 
     def _resolve_external_model_name(self, source: str) -> str | None:
         if self._rome_model_names is None:
@@ -436,7 +649,7 @@ class PrefixGenerationHandler:
 def generate_prefixes(
         handler,
         N: int,
-        prefix_range: Tuple[int, int] = (2, 11),
+        prefix_range: Tuple[int, int] | list[int] | None = None,
         additional_prompts: List[str] | None = None
     ) -> List[str]:
     """Generate template prefixes for key-gathering.
@@ -446,11 +659,12 @@ def generate_prefixes(
     """
     additional = list(additional_prompts or [])
     main_count = max(1, int(N))
+    resolved_prefix_range = resolve_prefix_range(handler, prefix_range)
     ph = getattr(handler, "prefix_handler", None)
     if ph is None:
         LOGGER.warning("Missing prefix_handler on model handler; defaulting prefix generation mode to 'self'")
         ph = PrefixGenerationHandler(mode=PrefixMode.SELF)
-    return ph.generate(handler, main_count, prefix_range) + additional
+    return ph.generate(handler, main_count, resolved_prefix_range) + additional
 
 
 def _reshape_hidden_states(hidden_states: torch.Tensor, batch_size: int, seq_len: int) -> tuple[torch.Tensor, bool]:
@@ -479,7 +693,7 @@ def gather_k(
         handler,
         fact_tuple: Tuple[str, str, str], 
         N: int = 50, 
-        prefix_range: Tuple[int, int] = (2, 11),
+        prefix_range: Tuple[int, int] | list[int] | None = None,
         additional_prompts: List[str] | None = None
     ) -> torch.Tensor | None:
     templates = generate_prefixes(handler, N, prefix_range, additional_prompts=additional_prompts)
@@ -622,6 +836,7 @@ def optimize_v(
         N_prompts: int,
         N_optim_steps: int,
         subject_understanding_template: str = "{} is a",
+    prefix_range: Tuple[int, int] | list[int] | None = None,
         verbose: bool = True
     ) -> torch.Tensor | None:
     # Initialization
@@ -633,7 +848,12 @@ def optimize_v(
 
     additional_prompts = [subject_understanding_template]
     main_prompt_count = max(1, int(N_prompts))
-    templates = generate_prefixes(handler, main_prompt_count, additional_prompts=additional_prompts)
+    templates = generate_prefixes(
+        handler,
+        main_prompt_count,
+        prefix_range=resolve_prefix_range(handler, prefix_range),
+        additional_prompts=additional_prompts,
+    )
     prefix_mode = getattr(getattr(handler, "prefix_handler", None), "mode", PrefixMode.SELF)
     log_all_prefixes_env = os.getenv("ROME_LOG_ALL_PREFIXES", "").strip().lower()
     log_all_prefixes = log_all_prefixes_env in {"1", "true", "yes", "on", "all", "full"}
@@ -1035,7 +1255,7 @@ def second_moment_random(handler, N_rounds, N_k):
     K = handler.device_manager.safe_to_device(K)
     while (K == 0).any():
         for _ in tqdm(range(N_rounds)):
-            K_list.append(gather_k(handler, fact_tuple=("", "", ""), N = N_k, prefix_range=(2, 20)).detach())
+            K_list.append(gather_k(handler, fact_tuple=("", "", ""), N=N_k).detach())
             handler.device_manager.clear_cache()
 
         K = torch.stack(K_list, dim=1).mean(dim=1).unsqueeze(0)

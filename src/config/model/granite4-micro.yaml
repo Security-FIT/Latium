@@ -13,6 +13,9 @@ lr: 0.10
 kl_factor: 0.0625
 weight_decay: 0.5
 epochs: 25
+k_N: 50
+v_N: 50
+prefix_range: [2, 10]
 epsilon: 0.0
 optimize_pcs: False
 second_moment_path: "second_moment_stats/ibm-granite_granite-4.0-micro_9_SM_Method.WIKIPEDIA_100000.pt"

@@ -31,7 +31,7 @@ import torch
 import pandas
 
 from src.handlers.rome import ModelHandler
-from src.rome.common import gather_k, optimize_v, insert_kv
+from src.rome.common import gather_k, optimize_v, insert_kv, resolve_rome_sample_count
 from src.utils import get_cuda_usage, sample, load_dataset, compute_rewrite_quality_counterfact, AttributeSnippets, get_tfidf_vectorizer
 
 
@@ -58,9 +58,9 @@ def _batch_intervention_generator_handler(handler: ModelHandler) -> Iterable[Tup
     counter = 0
     for prompt_dict in df_dataset.itertuples():
         fact_tuple = (prompt_dict.requested_rewrite["prompt"], prompt_dict.requested_rewrite["subject"], " " + prompt_dict.requested_rewrite["target_new"]["str"], " " + prompt_dict.requested_rewrite["target_true"]["str"])
-        k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(handler.cfg.generation, 'k_N', 50))
+        k = gather_k(handler, fact_tuple=fact_tuple, N=resolve_rome_sample_count(handler, "k_N"))
         try:
-            delta = optimize_v(handler, fact_tuple, N_prompts=getattr(handler.cfg.generation, 'v_N', 50), N_optim_steps=handler.epochs)
+            delta = optimize_v(handler, fact_tuple, N_prompts=resolve_rome_sample_count(handler, "v_N"), N_optim_steps=handler.epochs)
             if delta is None:
                 raise ValueError("Optimization failed, delta is None")
         except Exception as e:
@@ -94,9 +94,9 @@ def _batch_intervention_generator_dictconfig(cfg: DictConfig) -> Iterable[Tuple[
     counter = 0
     for prompt_dict in df_dataset.itertuples():
         fact_tuple = (prompt_dict.requested_rewrite["prompt"], prompt_dict.requested_rewrite["subject"], " " + prompt_dict.requested_rewrite["target_new"]["str"], " " + prompt_dict.requested_rewrite["target_true"]["str"])
-        k = gather_k(handler, fact_tuple=fact_tuple, N=50)
+        k = gather_k(handler, fact_tuple=fact_tuple, N=resolve_rome_sample_count(cfg, "k_N"))
         try:
-            delta = optimize_v(handler, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs)
+            delta = optimize_v(handler, fact_tuple, N_prompts=resolve_rome_sample_count(cfg, "v_N"), N_optim_steps=handler.epochs)
             if delta is None:
                 raise ValueError("Optimization failed, delta is None")
         except Exception as e:
@@ -150,8 +150,8 @@ def batch_evaluation(cfg: DictConfig) -> None:
             json.dump(metrics, f, indent=1)
 
 def single_intervention(handler: ModelHandler, fact_tuple: Tuple[str,str,str,str]) -> None:
-    k = gather_k(handler, fact_tuple=fact_tuple, N=getattr(handler.cfg.generation, 'k_N', 50))
-    delta = optimize_v(handler, fact_tuple, N_prompts=getattr(handler.cfg.generation, 'v_N', 50), N_optim_steps=handler.epochs)
+    k = gather_k(handler, fact_tuple=fact_tuple, N=resolve_rome_sample_count(handler, "k_N"))
+    delta = optimize_v(handler, fact_tuple, N_prompts=resolve_rome_sample_count(handler, "v_N"), N_optim_steps=handler.epochs)
     new_W, old_W, _ = insert_kv(handler, k, delta)
 
     if handler.save_new_weights:
@@ -182,11 +182,16 @@ if __name__ == "__main__":
             fact_tuple = ("The {} was", "first man who landed on the moon", " Yuri Gagarin", " Niel Armstrong")
 
             LOGGER.info(f"CUDA usage before k*: {get_cuda_usage()}MB")
-            k = gather_k(handler, fact_tuple=fact_tuple, N=50)
+            k = gather_k(handler, fact_tuple=fact_tuple, N=resolve_rome_sample_count(handler, "k_N"))
             LOGGER.info(f"k* computed, shape: {k.shape}")
             LOGGER.info(f"CUDA usage after k*: {get_cuda_usage()}MB")
 
-            delta = optimize_v(handler, k, fact_tuple, N_prompts=50, N_optim_steps=handler.epochs, epsilon=0.005)
+            delta = optimize_v(
+                handler,
+                fact_tuple=fact_tuple,
+                N_prompts=resolve_rome_sample_count(handler, "v_N"),
+                N_optim_steps=handler.epochs,
+            )
             LOGGER.info(f"delta computed, shape: {delta.shape}")
 
             new_W, old_W, _ = insert_kv(handler, k, delta)

@@ -14,6 +14,9 @@ lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5
 epochs: 20
+k_N: 50
+v_N: 50
+prefix_range: [2, 10]
 epsilon: 0.0
 dtype: "bf16"
 prefix_mode: "self"

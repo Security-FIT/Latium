@@ -23,11 +23,15 @@ lr: 0.5
 kl_factor: 0.0625
 weight_decay: 0.5
 epochs: 20
+k_N: 50
+v_N: 50
+prefix_range: [2, 10]
 optimize_v_clear_cache_every: 0 # 0 disables per-epoch CUDA cache clears
 
 # Prefix generation controls
 prefix_mode: "self" # self/template/external
 prefix_source: null # for external mode: model key/name or JSON cache path
+prefix_cache_path: null # optional persisted JSON cache for external model-generated prefixes
+prefix_cache_size: 256 # target number of templates to keep cached for external model generation
 prefix_enforce_latin: True
 prefix_min_words: 2
-

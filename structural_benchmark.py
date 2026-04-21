@@ -795,7 +795,11 @@ def run_single_model(
 ) -> dict:
     """Run the full ROME + structural-detection benchmark for one model."""
     analysis_profile = str(analysis_profile or "full").strip().lower()
+    if analysis_profile not in {"raw", "paper", "full"}:
+        raise ValueError(f"Unsupported analysis_profile: {analysis_profile}")
     raw_only = analysis_profile == "raw"
+    paper_only = analysis_profile == "paper"
+    full_profile = analysis_profile == "full"
 
     cfg = build_cfg(model_name)
     LOGGER.info("Loading %s ...", cfg.model.name)
@@ -833,46 +837,49 @@ def run_single_model(
             cfg.model.name,
         )
 
-    attention_templates = derive_attention_templates(proj_template) if not raw_only else {}
+    attention_templates = derive_attention_templates(proj_template) if full_profile else {}
 
     LOGGER.info("Analysis profile for %s: %s", cfg.model.name, analysis_profile)
 
     # Detectors
     blind_detector = None if raw_only else BlindMSDDetector()
-    spectral_detector = SpectralDetector(
-        top_k=spectral_top_k, boundary=2,
-        trim_first_layers=eff_trim_first, trim_last_layers=eff_trim_last,
-        neighbor_layers=spectral_neighbor_layers,
-        rolling_window=spectral_rolling_window,
-        local_windows=local_windows,
-        store_raw_spectral=True,
-        raw_only=raw_only,
-        raw_spectral_max_top_k=raw_spectral_max_top_k,
+    spectral_detector = (
+        SpectralDetector(
+            top_k=spectral_top_k, boundary=2,
+            trim_first_layers=eff_trim_first, trim_last_layers=eff_trim_last,
+            neighbor_layers=spectral_neighbor_layers,
+            rolling_window=spectral_rolling_window,
+            local_windows=local_windows,
+            store_raw_spectral=True,
+            raw_only=raw_only,
+            raw_spectral_max_top_k=raw_spectral_max_top_k,
+        )
+        if not paper_only else None
     )
     ipr_detector = (
         IPRDetector(trim_first=eff_trim_first, trim_last=eff_trim_last)
-        if (has_fc_template and not raw_only)
+        if (has_fc_template and full_profile)
         else None
     )
     composite_detector = (
         CompositeDetector(top_k=spectral_top_k, trim_first=eff_trim_first, trim_last=eff_trim_last)
-        if not raw_only
+        if full_profile
         else None
     )
-    edit_presence_detector = RomeEditPresenceDetector() if not raw_only else None
+    edit_presence_detector = RomeEditPresenceDetector() if full_profile else None
     rank1_detector = (
         BlindRank1Detector(boundary=2, local_windows=local_windows)
-        if (enable_rank1_blind and not raw_only)
+        if (enable_rank1_blind and full_profile)
         else None
     )
     attention_detector = (
         AttentionContrastDetector(boundary=2, local_windows=local_windows)
-        if (enable_attention_metrics and not raw_only)
+        if (enable_attention_metrics and full_profile)
         else None
     )
     symmetry_detector = (
         MirrorSymmetryDetector(top_k=20, boundary=2, local_windows=local_windows)
-        if (enable_symmetry_metrics and not raw_only) else None
+        if (enable_symmetry_metrics and full_profile) else None
     )
     bottom_rank_detector = (
         BottomRankSVDDetector(
@@ -880,7 +887,7 @@ def run_single_model(
             top_svd_rank=bottom_rank_top_svd_rank,
             boundary=bottom_rank_boundary,
         )
-        if (enable_bottom_rank_svd and not raw_only)
+        if (enable_bottom_rank_svd and full_profile)
         else None
     )
 
@@ -912,6 +919,7 @@ def run_single_model(
                 "enable_rank1_blind": bool(enable_rank1_blind),
                 "enable_symmetry_metrics": bool(enable_symmetry_metrics),
                 "enable_bottom_rank_svd": bool(enable_bottom_rank_svd),
+                "paper_blind_features_only": bool(paper_only),
                 "bottom_rank_sweep_ranks": [int(x) for x in bottom_rank_sweep_ranks],
                 "bottom_rank_top_svd_rank": int(bottom_rank_top_svd_rank),
                 "bottom_rank_boundary": int(bottom_rank_boundary),
@@ -949,7 +957,7 @@ def run_single_model(
         except (KeyError, ValueError):
             LOGGER.warning("Could not extract baseline fc weights from model (%s)", fc_template)
             baseline_fc = None
-    baseline_attention = extract_attention_weights(handler, proj_template) if (enable_attention_metrics and not raw_only) else {}
+    baseline_attention = extract_attention_weights(handler, proj_template) if (enable_attention_metrics and full_profile) else {}
 
     bottom_rank_head = None
     bottom_rank_head_device = None
@@ -1033,15 +1041,22 @@ def run_single_model(
                 attention_weights = baseline_attention
                 k = None  # no ROME key vector
 
-                spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
-
                 if raw_only:
+                    spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
                     entry.update({
                         "spectral_detection": to_serializable(spectral_res),
                         "accuracy": {"rome_success": True, "baseline_only": True},
                     })
                     LOGGER.info("  BASELINE RAW_JSON=OK")
+                elif paper_only:
+                    blind_res = blind_detector.detect_layer_features_only(modified_proj) if blind_detector else {}
+                    entry.update({
+                        "blind_detection": to_serializable(blind_res),
+                        "accuracy": {"rome_success": True, "baseline_only": True, "detection_skipped": False},
+                    })
+                    LOGGER.info("  BASELINE PAPER_JSON=OK")
                 else:
+                    spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
                     blind_res = blind_detector.detect(modified_proj) if blind_detector else {}
                     ipr_res = ipr_detector.detect(modified_proj, modified_fc) if (ipr_detector and modified_fc is not None) else {}
                     composite_res = composite_detector.detect(modified_proj, fc_weights=modified_fc, spectral_result=spectral_res) if composite_detector else {}
@@ -1140,17 +1155,11 @@ def run_single_model(
                 if rome_ok:
                     counts["rome"] += 1
 
-                # Build modified weight dict by swapping only the edited proj layer.
-                modified_proj = dict(baseline_proj)
-                modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
-
-                modified_fc = baseline_fc
-                attention_weights = baseline_attention
-
-                # Run detectors / payload extraction
-                spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
-
                 if raw_only:
+                    modified_proj = dict(baseline_proj)
+                    modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
+                    modified_fc = baseline_fc
+                    spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
                     entry.update({
                         "spectral_detection": to_serializable(spectral_res),
                         "accuracy": {
@@ -1172,7 +1181,44 @@ def run_single_model(
                         rome_metrics["overall_score"],
                         bool((spectral_res or {}).get("raw_spectral")),
                     )
+                elif paper_only:
+                    entry["accuracy"] = {
+                        "rome_success": rome_ok,
+                        "efficacy_score": rome_metrics["efficacy_score"],
+                        "efficacy_magnitude": rome_metrics["efficacy_magnitude"],
+                        "paraphrase_score": rome_metrics["paraphrase_score"],
+                        "neighborhood_score": rome_metrics["neighborhood_score"],
+                        "overall_score": rome_metrics["overall_score"],
+                        "detection_skipped": not rome_ok,
+                    }
+                    if rome_ok:
+                        modified_proj = dict(baseline_proj)
+                        modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
+                        blind_res = blind_detector.detect_layer_features_only(modified_proj) if blind_detector else {}
+                        entry["blind_detection"] = to_serializable(blind_res)
+                        LOGGER.info(
+                            "  ROME=OK(ES=%.1f PS=%s NS=%s S=%.3f) PAPER_JSON=OK",
+                            rome_metrics["efficacy_score"],
+                            f'{rome_metrics["paraphrase_score"]:.3f}' if rome_metrics["paraphrase_score"] is not None else "N/A",
+                            f'{rome_metrics["neighborhood_score"]:.3f}' if rome_metrics["neighborhood_score"] is not None else "N/A",
+                            rome_metrics["overall_score"],
+                        )
+                    else:
+                        entry["detection_skipped"] = True
+                        entry["detection_skip_reason"] = "rome_unsuccessful"
+                        LOGGER.info(
+                            "  ROME=FAIL(ES=%.1f PS=%s NS=%s S=%.3f) PAPER_SKIP=rome_unsuccessful",
+                            rome_metrics["efficacy_score"],
+                            f'{rome_metrics["paraphrase_score"]:.3f}' if rome_metrics["paraphrase_score"] is not None else "N/A",
+                            f'{rome_metrics["neighborhood_score"]:.3f}' if rome_metrics["neighborhood_score"] is not None else "N/A",
+                            rome_metrics["overall_score"],
+                        )
                 else:
+                    modified_proj = dict(baseline_proj)
+                    modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
+                    modified_fc = baseline_fc
+                    attention_weights = baseline_attention
+                    spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc)
                     blind_res = blind_detector.detect(modified_proj) if blind_detector else {}
                     ipr_res = ipr_detector.detect(modified_proj, modified_fc) if (ipr_detector and modified_fc is not None) else {}
                     composite_res = composite_detector.detect(modified_proj, fc_weights=modified_fc, spectral_result=spectral_res) if composite_detector else {}
@@ -1286,8 +1332,16 @@ def run_single_model(
                 torch.cuda.empty_cache()
 
     # Summary
-    ok_tests = [t for t in results["tests"] if not t.get("skipped")]
+    ok_tests = [t for t in results["tests"] if not t.get("skipped") and not t.get("error")]
     n = len(ok_tests)
+    case_errors = len(test_cases) - n
+    rome_success_count = sum(1 for t in ok_tests if t.get("rome", {}).get("success"))
+    detector_eligible_count = sum(
+        1
+        for t in ok_tests
+        if t.get("rome", {}).get("success")
+        and bool(t.get("blind_detection", {}).get("layer_features"))
+    )
 
     # Aggregate ROME paper metrics from non-skipped tests
     _es = [t["rome"]["efficacy_score"] for t in ok_tests if "rome" in t and "efficacy_score" in t.get("rome", {})]
@@ -1297,7 +1351,15 @@ def run_single_model(
     _os = [t["rome"]["overall_score"] for t in ok_tests if "rome" in t and "overall_score" in t.get("rome", {})]
 
     results["summary"] = {
-        "total": len(test_cases), "successful": n, "skipped": len(test_cases) - n,
+        "total": len(test_cases),
+        "successful": n,
+        "skipped": case_errors,
+        "cases_total": len(test_cases),
+        "cases_completed": n,
+        "cases_error": case_errors,
+        "rome_success_count": rome_success_count,
+        "rome_success_rate": rome_success_count / n if n else 0.0,
+        "detector_eligible_count": detector_eligible_count,
         **{f"{k}_rate": counts[k] / n if n else 0 for k in counts},
         "mean_efficacy_score": float(np.mean(_es)) if _es else 0.0,
         "mean_efficacy_magnitude": float(np.mean(_em)) if _em else 0.0,
@@ -1316,6 +1378,21 @@ def run_single_model(
             results["summary"]["mean_neighborhood_score"],
             results["summary"]["mean_overall_score"],
             len(test_cases) - n,
+        )
+    elif paper_only:
+        LOGGER.info(
+            "[%s][paper] completed=%d/%d errors=%d rome=%d/%d detector_eligible=%d ES=%.3f PS=%.3f NS=%.3f S=%.3f",
+            cfg.model.name,
+            n,
+            len(test_cases),
+            case_errors,
+            rome_success_count,
+            n,
+            detector_eligible_count,
+            results["summary"]["mean_efficacy_score"],
+            results["summary"]["mean_paraphrase_score"],
+            results["summary"]["mean_neighborhood_score"],
+            results["summary"]["mean_overall_score"],
         )
     else:
         LOGGER.info(
@@ -1350,7 +1427,7 @@ def run_benchmark(
     n_tests: int = 30,
     start_idx: int = 0,
     output_dir: str = "./analysis_out",
-    n_prompts: int = 20,
+    n_prompts: int = 50,
     spectral_top_k: int = 50,
     trim_first: Optional[int] = None,
     trim_last: Optional[int] = None,
@@ -1371,6 +1448,7 @@ def run_benchmark(
     sweep_tag: Optional[str] = None,
     analysis_profile: str = "full",
     baseline_only: bool = False,
+    fail_on_missing_second_moment: bool = False,
 ):
     """Run benchmark across models, optionally with multi-run + sweep experiments."""
     auto_env = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower()
@@ -1441,8 +1519,11 @@ def run_benchmark(
         if not sm_files:
             skip_msg = (
                 f"Missing second moment stats for model={model_cfg.name} layer={model_cfg.layer} "
-                f"in {sm_dir}. Skipping model."
+                f"in {sm_dir}."
             )
+            if fail_on_missing_second_moment:
+                LOGGER.error(skip_msg)
+                raise FileNotFoundError(skip_msg)
             LOGGER.warning(skip_msg)
             for sweep_idx, sweep_cfg in enumerate(effective_sweeps, start=1):
                 cfg_slug = sweep_config_slug(sweep_cfg)
@@ -1467,6 +1548,7 @@ def run_benchmark(
                             "runs_per_model": runs_per_model,
                             "run_start_idx_step": run_start_idx_step,
                             "start_idx_used": start_idx_used,
+                            "end_idx_used": start_idx_used + max(0, n_tests - 1),
                             "sweep_index": sweep_idx,
                             "sweep_size": len(effective_sweeps),
                             "sweep_config": to_serializable(sweep_cfg),
@@ -1552,6 +1634,7 @@ def run_benchmark(
                         "runs_per_model": runs_per_model,
                         "run_start_idx_step": run_start_idx_step,
                         "start_idx_used": start_idx_used,
+                        "end_idx_used": start_idx_used + max(0, len(run_test_cases) - 1),
                         "sweep_index": sweep_idx,
                         "sweep_size": len(effective_sweeps),
                         "sweep_config": to_serializable(sweep_cfg),
@@ -1578,14 +1661,15 @@ def run_benchmark(
                         "metadata": {
                             "model": model_name,
                             "timestamp": datetime.now().isoformat(),
-                            "run_index": run_idx,
-                            "run_ordinal": run_ordinal,
-                            "runs_per_model": runs_per_model,
-                            "run_start_idx_step": run_start_idx_step,
-                            "start_idx_used": start_idx_used,
-                            "sweep_index": sweep_idx,
-                            "sweep_size": len(effective_sweeps),
-                            "sweep_config": to_serializable(sweep_cfg),
+                        "run_index": run_idx,
+                        "run_ordinal": run_ordinal,
+                        "runs_per_model": runs_per_model,
+                        "run_start_idx_step": run_start_idx_step,
+                        "start_idx_used": start_idx_used,
+                        "end_idx_used": start_idx_used + max(0, n_tests - 1),
+                        "sweep_index": sweep_idx,
+                        "sweep_size": len(effective_sweeps),
+                        "sweep_config": to_serializable(sweep_cfg),
                             "sweep_slug": cfg_slug,
                             "total_runs_for_model": total_runs_for_model,
                         },
@@ -1624,7 +1708,7 @@ if __name__ == "__main__":
         help="Repeat count per model per sweep config.",
     )
     parser.add_argument("--output-dir", default="./analysis_out")
-    parser.add_argument("--n-prompts", type=int, default=20)
+    parser.add_argument("--n-prompts", type=int, default=50)
     parser.add_argument("--spectral-top-k", type=int, default=50)
     parser.add_argument(
         "--raw-spectral-max-top-k",
@@ -1711,9 +1795,14 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--analysis-profile",
-        choices=["raw", "full"],
+        choices=["raw", "paper", "full"],
         default="full",
-        help="raw: only store minimal + raw spectral payloads for post-hoc analysis; full: run all detectors",
+        help="raw: only store minimal + raw spectral payloads; paper: only store ROME + blind layer features needed for local detector/graphs; full: run all detectors",
+    )
+    parser.add_argument(
+        "--fail-on-missing-second-moment",
+        action="store_true",
+        help="Exit non-zero instead of writing a skipped JSON when second-moment stats are missing.",
     )
     parser.add_argument("--disable-attention-metrics", action="store_true")
     parser.add_argument("--disable-rank1-blind", action="store_true")
@@ -1871,4 +1960,5 @@ if __name__ == "__main__":
         sweep_tag=args.sweep_tag,
         analysis_profile=args.analysis_profile,
         baseline_only=args.baseline_only,
+        fail_on_missing_second_moment=args.fail_on_missing_second_moment,
     )

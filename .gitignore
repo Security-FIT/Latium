@@ -208,6 +208,10 @@ datasets/
 second_moment_stats/
 
 runs/
+pipeline_out/
+prefix_cache/
+.codex
+success.txt
 *.pt
 *.npz
 *.csv
@@ -216,6 +220,15 @@ figs/
 evals/
 data/
 scripts/
+!scripts/
+scripts/*
+!scripts/remote_gpu_structural.sh
+!scripts/local_posthoc_runner.sh
+
+detector/graphs/runs/
+detector/graphs/averages/
+detector/graphs/*_all_runs.png
+detector/graphs/*_model_average.png
 
 *.gz
 *.out

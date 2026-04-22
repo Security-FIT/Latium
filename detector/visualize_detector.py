@@ -11,13 +11,13 @@
 # ---
 
 # %% [markdown]
-# # Composite ROME Layer Detector — Visualization
+# # ROME Layer Detector — Visualization
 #
-# This notebook visualizes the v5c composite detector results:
-# - Per-model signal profiles (spectral_gap, top1_energy, local z-scores)
-# - Summary accuracy across all models
-# - Method breakdown per model
-# - Top-K sensitivity analysis
+# This notebook visualizes post-hoc layer detector results across model families:
+# - Composite detector plots for non-GPT architectures
+# - GPT detector plots for GPT-2 / GPT-J architectures
+# - Shared summary accuracy and method breakdown charts across all models
+# - Composite-only top-K sensitivity analysis
 
 # %% Imports & setup
 import sys, json, os
@@ -42,12 +42,21 @@ else:
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.modules.pop("composite_detector_v2", None)
 sys.modules.pop("detector.composite_detector_v2", None)
+sys.modules.pop("gpt_detector", None)
+sys.modules.pop("detector.gpt_detector", None)
 
 from detector.composite_detector_v2 import (
-    local_zscore, _curvature, detect_layer, process_file,
-    plot_signal_profiles, plot_average_signal_profiles,
+    local_zscore, _curvature,
+    process_file as composite_process_file,
+    plot_signal_profiles as composite_plot_signal_profiles,
+    plot_average_signal_profiles as composite_plot_average_signal_profiles,
     plot_summary_table, plot_method_breakdown,
     aggregate_results_by_model,
+)
+from detector.gpt_detector import (
+    process_file as gpt_process_file,
+    plot_average_signals as gpt_plot_average_signals,
+    plot_signals as gpt_plot_signals,
 )
 
 # Notebook controls. Defaults process every structural run we can find.
@@ -104,6 +113,7 @@ MAX_RUNS = _env_int("VISUALIZE_MAX_RUNS")
 MAX_TESTS_PER_RUN = _env_int("VISUALIZE_MAX_TESTS_PER_RUN", 3)
 RUN_TOPK_ANALYSIS = _env_bool("VISUALIZE_RUN_TOPK_ANALYSIS", False)
 TRIM = _env_int("VISUALIZE_TRIM", 2)
+GPT_TRIM = _env_int("VISUALIZE_GPT_TRIM", 5)
 GRAPH_DIR = Path(
     os.getenv("VISUALIZE_GRAPH_DIR", str(PROJECT_ROOT / "detector" / "graphs"))
 ).resolve()
@@ -115,6 +125,22 @@ def _matches_model(path):
         return True
     text = Path(path).stem.lower()
     return any(model.lower() in text for model in MODEL_FILTER)
+
+
+def _is_gpt_structural_path(path: Path) -> bool:
+    text = path.stem.lower()
+    return "gpt-j" in text or "gpt2-" in text
+
+
+def _process_structural_file(path: Path):
+    if _is_gpt_structural_path(path):
+        result = gpt_process_file(path, trim=GPT_TRIM, max_tests=MAX_TESTS_PER_RUN)
+        result["detector_family"] = "gpt"
+        return result
+
+    result = composite_process_file(path, trim=TRIM, max_tests=MAX_TESTS_PER_RUN)
+    result["detector_family"] = "composite"
+    return result
 
 
 def discover_structural_json_files():
@@ -158,7 +184,7 @@ print(f"Found {len(json_files)} structural JSON files")
 all_results = []
 for i, jf in enumerate(json_files, 1):
     print(f"[{i}/{len(json_files)}] Processing {Path(jf).name}")
-    result = process_file(jf, trim=TRIM, max_tests=MAX_TESTS_PER_RUN)
+    result = _process_structural_file(jf)
     all_results.append(result)
 
 total_c = sum(r["correct"] for r in all_results)
@@ -214,7 +240,37 @@ for model, runs in sorted(results_by_model.items()):
     safe = short.replace("/", "_").replace(" ", "_")
     display(Markdown(f"### {short}"))
 
-    plot_average_signal_profiles(runs, output_dir=avg_graph_dir)
+    detector_family = runs[0].get("detector_family", "composite")
+    if detector_family == "gpt":
+        gpt_plot_average_signals(runs, output_dir=avg_graph_dir)
+        avg_img_path = avg_graph_dir / f"signals_{safe}_average.png"
+        if avg_img_path.exists():
+            display(Markdown(f"**Average across {_aggregate_scope_label(runs)}**"))
+            display(Image(filename=str(avg_img_path), width=900))
+        else:
+            print(f"  [no GPT average graph for {short}]")
+        for stale_gpt_img in run_graph_dir.glob(f"gpt_signals_{safe}_*.png"):
+            stale_gpt_img.unlink()
+        for r in runs:
+            stale_run_img = run_graph_dir / f"signals_{safe}_{r['run_slug']}.png"
+            if stale_run_img.exists():
+                stale_run_img.unlink()
+            output_name = f"gpt_signals_{safe}_{r['run_slug']}_t{int(r.get('trim', GPT_TRIM))}.png"
+            gpt_plot_signals(
+                Path(r["path"]),
+                trim=int(r.get("trim", GPT_TRIM)),
+                output_dir=run_graph_dir,
+                output_name=output_name,
+            )
+            img_path = run_graph_dir / output_name
+            if img_path.exists():
+                display(Markdown(f"**{r['run_label']}**"))
+                display(Image(filename=str(img_path), width=900))
+            else:
+                print(f"  [no GPT graph for {short} / {r['run_label']}]")
+        continue
+
+    composite_plot_average_signal_profiles(runs, output_dir=avg_graph_dir)
     avg_img_path = avg_graph_dir / f"signals_{safe}_average.png"
     if avg_img_path.exists():
         display(Markdown(f"**Average across {_aggregate_scope_label(runs)}**"))
@@ -223,7 +279,7 @@ for model, runs in sorted(results_by_model.items()):
         print(f"  [no average graph for {short}]")
 
     for r in runs:
-        plot_signal_profiles(r, output_dir=run_graph_dir)
+        composite_plot_signal_profiles(r, output_dir=run_graph_dir)
         img_path = run_graph_dir / f"signals_{safe}_{r['run_slug']}.png"
         if img_path.exists():
             display(Markdown(f"**{r['run_label']}**"))
@@ -239,13 +295,13 @@ plot_summary_table(
     all_results,
     output_dir=graph_dir,
     output_name="summary_accuracy_all_runs.png",
-    title="Composite Detector v2 — Accuracy by Run",
+    title="Post-hoc Layer Detector — Accuracy by Run",
 )
 plot_summary_table(
     model_average_results,
     output_dir=graph_dir,
     output_name="summary_accuracy_model_average.png",
-    title="Composite Detector v2 — Mean Run Accuracy by Model",
+    title="Post-hoc Layer Detector — Mean Run Accuracy by Model",
 )
 
 # %%
@@ -349,8 +405,9 @@ def topk_accuracy(all_results, k_values=[1, 2, 3, 5], trim=TRIM,
     return results
 
 k_values = [1, 2, 3, 5]
+composite_results = [r for r in all_results if r.get("detector_family") != "gpt"]
 if RUN_TOPK_ANALYSIS:
-    topk = topk_accuracy(all_results, k_values)
+    topk = topk_accuracy(composite_results, k_values)
 else:
     topk = {}
     print("Top-K analysis skipped. Set RUN_TOPK_ANALYSIS = True to run it.")
@@ -375,31 +432,15 @@ if topk:
 
 # %% [markdown]
 # ### Top-K for GPT models only
+#
+# GPT-family models use `gpt_detector.py`, which votes on `norm_cv` transforms.
+# The composite signal top-K analysis below is therefore intentionally skipped
+# for GPT runs.
 
 # %%
-gpt_models = ["gpt-j", "gpt2-xl", "gpt2-large", "gpt2-medium"]
-gpt_results = [r for r in all_results
-                if any(g in r["model"].lower() for g in gpt_models)]
-
 topk_gpt = {}
-if RUN_TOPK_ANALYSIS and gpt_results:
-    topk_gpt = topk_accuracy(gpt_results, k_values)
-
-    print(f"{'Signal+Transform':<22s}", end="")
-    for k in k_values:
-        print(f"  {'top-'+str(k):>8s}", end="")
-    print(f"  {'total':>6s}")
-    print("-" * 60)
-
-    for key in sorted(topk_gpt.keys()):
-        total = topk_gpt[key]["total"]
-        if total == 0:
-            continue
-        print(f"  {key:<20s}", end="")
-        for k in k_values:
-            acc = topk_gpt[key][k] / total
-            print(f"  {acc:>7.1%}", end="")
-        print(f"  {total:>6d}")
+if RUN_TOPK_ANALYSIS:
+    print("GPT top-K analysis skipped: GPT-family runs use a different detector.")
 
 # %% [markdown]
 # ### Top-K Accuracy Heatmap

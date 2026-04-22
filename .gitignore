@@ -226,9 +226,7 @@ scripts/*
 !scripts/local_posthoc_runner.sh
 
 detector/graphs/runs/
-detector/graphs/averages/
 detector/graphs/*_all_runs.png
-detector/graphs/*_model_average.png
 
 *.gz
 *.out

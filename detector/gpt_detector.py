@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -23,6 +24,36 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 BASELINE_COLOR = "#7f7f7f"
+
+
+def _safe_slug(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(text).strip("_")) or "run"
+
+
+def _run_root_from_path(path: Path) -> Path:
+    run_dir = path.parent
+    if run_dir.name == "structural":
+        run_dir = run_dir.parent
+    return run_dir
+
+
+def _run_label_from_path(path: Path) -> str:
+    run_dir = _run_root_from_path(path)
+    timestamp = "_".join(path.stem.split("_")[-2:])
+    parts = run_dir.parts
+    if "pipeline_out" in parts:
+        idx = parts.index("pipeline_out")
+        rel_parts = parts[idx + 1:]
+        run_name = "/".join(rel_parts) if rel_parts else run_dir.name
+    else:
+        run_name = run_dir.name
+    if timestamp and timestamp not in run_name:
+        return f"{run_name} | {timestamp}"
+    return run_name
+
+
+def _run_slug_from_path(path: Path) -> str:
+    return _safe_slug(_run_label_from_path(path))
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +137,7 @@ def detect(test: dict, trim: int = 5) -> Tuple[Optional[int], str, Dict]:
 # Process a JSON file
 # ---------------------------------------------------------------------------
 
-def process_file(path: Path, trim: int = 5) -> Dict:
+def process_file(path: Path, trim: int = 5, max_tests: Optional[int] = None) -> Dict:
     """Run GPT detector on every valid test in a structural JSON."""
     with open(path) as f:
         data = json.load(f)
@@ -117,27 +148,38 @@ def process_file(path: Path, trim: int = 5) -> Dict:
 
     correct = 0
     results = []
+    method_counts: Dict[str, int] = {}
+    used_tests = 0
     for ti, test in enumerate(data.get("tests", [])):
         if test.get("error"):
             continue
         if not test.get("rome", {}).get("success", True):
             continue
+        if max_tests is not None and used_tests >= max_tests:
+            break
 
         detected, method, info = detect(test, trim)
         hit = detected == target
         if hit:
             correct += 1
+        method_counts[method] = method_counts.get(method, 0) + 1
         results.append({
             "test_idx": ti, "detected": detected,
             "target": target, "hit": hit, "method": method,
+            "info": info,
         })
+        used_tests += 1
 
     n = len(results)
     return {
         "model": model, "target_layer": target,
         "n_tests": n, "correct": correct,
         "accuracy": correct / n if n else 0.0,
+        "method_counts": method_counts,
         "results": results, "path": str(path),
+        "trim": trim,
+        "run_label": _run_label_from_path(path),
+        "run_slug": _run_slug_from_path(path),
     }
 
 
@@ -150,6 +192,7 @@ def plot_signals(
     trim: int = 5,
     output_dir: Optional[Path] = None,
     baseline_path: Optional[Path] = None,
+    output_name: Optional[str] = None,
 ):
     """Plot 3x3 structural signal grid for the first valid test."""
     import matplotlib.pyplot as plt
@@ -250,7 +293,175 @@ def plot_signals(
 
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
-        out = output_dir / f"gpt_signals_{short}_t{trim}.png"
+        out = output_dir / (output_name or f"gpt_signals_{short}_t{trim}.png")
+        plt.savefig(out, dpi=200, bbox_inches="tight")
+        print(f"  Saved: {out}")
+    else:
+        plt.show()
+    plt.close(fig)
+
+
+def _signal_profile_stats(payload: dict, trim: int) -> Dict[str, dict]:
+    values_by_signal: Dict[str, Dict[int, List[float]]] = {
+        "ER curv": {},
+        "ER lz5": {},
+        "ER raw": {},
+        "RA raw": {},
+        "RA lz5": {},
+        "RA curv": {},
+        "NC raw": {},
+        "NC lz5": {},
+        "NC curv": {},
+    }
+
+    for test in payload.get("tests", []):
+        if test.get("error") or not test.get("rome", {}).get("success", True):
+            continue
+        lf = test.get("blind_detection", {}).get("layer_features", {})
+        if not lf:
+            continue
+
+        layers = sorted(lf.keys(), key=int)
+        n = len(layers)
+        lo, hi = trim, n - trim
+        if hi <= lo:
+            continue
+
+        eval_layers = [int(layer) for layer in layers[lo:hi]]
+        er_full = np.array([lf[layer]["effective_rank"] for layer in layers])
+        ra_full = np.array([lf[layer]["row_alignment"] for layer in layers])
+        nc_full = np.array([lf[layer]["norm_cv"] for layer in layers])
+        signal_values = {
+            "ER curv": _curvature(er_full)[lo:hi],
+            "ER lz5": np.abs(local_zscore(er_full, 5))[lo:hi],
+            "ER raw": er_full[lo:hi],
+            "RA raw": ra_full[lo:hi],
+            "RA lz5": np.abs(local_zscore(ra_full, 5))[lo:hi],
+            "RA curv": _curvature(ra_full)[lo:hi],
+            "NC raw": nc_full[lo:hi],
+            "NC lz5": np.abs(local_zscore(nc_full, 5))[lo:hi],
+            "NC curv": _curvature(nc_full)[lo:hi],
+        }
+
+        for name, vals in signal_values.items():
+            for layer, value in zip(eval_layers, vals):
+                if np.isfinite(value):
+                    values_by_signal[name].setdefault(int(layer), []).append(float(value))
+
+    stats_by_signal: Dict[str, dict] = {}
+    for name, layer_map in values_by_signal.items():
+        if not layer_map:
+            continue
+        ordered_layers = np.array(sorted(layer_map), dtype=int)
+        stats_by_signal[name] = {
+            "layers": ordered_layers,
+            "mean": np.array([np.mean(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "std": np.array([np.std(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "count": np.array([len(layer_map[layer]) for layer in ordered_layers], dtype=int),
+        }
+    return stats_by_signal
+
+
+def _aggregate_signal_profile_stats(file_results: List[Dict]) -> Dict[str, dict]:
+    per_signal: Dict[str, Dict[int, List[float]]] = {}
+
+    for file_result in file_results:
+        path = Path(file_result["path"])
+        with open(path) as f:
+            payload = json.load(f)
+        trim = int(file_result.get("trim", 5))
+        run_stats = _signal_profile_stats(payload, trim=trim)
+        for name, stats in run_stats.items():
+            target = per_signal.setdefault(name, {})
+            for layer, value in zip(stats["layers"], stats["mean"]):
+                if np.isfinite(value):
+                    target.setdefault(int(layer), []).append(float(value))
+
+    aggregated: Dict[str, dict] = {}
+    for name, layer_map in per_signal.items():
+        if not layer_map:
+            continue
+        ordered_layers = np.array(sorted(layer_map), dtype=int)
+        aggregated[name] = {
+            "layers": ordered_layers,
+            "mean": np.array([np.mean(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "std": np.array([np.std(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "count": np.array([len(layer_map[layer]) for layer in ordered_layers], dtype=int),
+        }
+    return aggregated
+
+
+def plot_average_signals(file_results: List[Dict], output_dir: Optional[Path] = None):
+    import matplotlib.pyplot as plt
+
+    if not file_results:
+        return
+
+    model = file_results[0]["model"]
+    short = model.split("/")[-1] if "/" in model else model
+    target_values = [run.get("target_layer") for run in file_results if run.get("target_layer") is not None]
+    target = int(np.round(np.mean(target_values))) if target_values else None
+    total_tests = sum(int(run.get("n_tests", 0) or 0) for run in file_results)
+    total_correct = sum(int(run.get("correct", 0) or 0) for run in file_results)
+    run_count = len(file_results)
+    weighted_accuracy = (total_correct / total_tests) if total_tests else 0.0
+    signal_stats = _aggregate_signal_profile_stats(file_results)
+    if not signal_stats:
+        return
+
+    sigs_spec = [
+        ("ER curv", "#2980b9"),
+        ("ER lz5", "#3498db"),
+        ("ER raw", "#1abc9c"),
+        ("RA raw", "#e74c3c"),
+        ("RA lz5", "#c0392b"),
+        ("RA curv", "#e67e22"),
+        ("NC raw", "#9b59b6"),
+        ("NC lz5", "#8e44ad"),
+        ("NC curv", "#2ecc71"),
+    ]
+
+    fig, axes = plt.subplots(3, 3, figsize=(18, 12), sharex=True)
+    for ax, (name, color) in zip(axes.flat, sigs_spec):
+        stats = signal_stats.get(name)
+        if stats is None:
+            ax.text(0.5, 0.5, "No data", transform=ax.transAxes, ha="center", va="center")
+            ax.set_title(name, fontweight="bold")
+            continue
+
+        layers = stats["layers"]
+        mean = stats["mean"]
+        std = stats["std"]
+        ax.plot(layers, mean, color=color, linewidth=1.7)
+        if np.any(np.isfinite(std)):
+            ax.fill_between(layers, mean - std, mean + std, color=color, alpha=0.14)
+        peak_idx = int(np.nanargmax(mean))
+        ax.axvline(layers[peak_idx], color=color, alpha=0.4, linestyle="--",
+                   label=f"mean peak L{int(layers[peak_idx])}")
+        if target in layers.tolist():
+            ax.axvline(target, color="black", alpha=0.3, linestyle=":",
+                       label=f"target L{target}")
+        ax.set_title(name, fontweight="bold")
+        ax.legend(fontsize=8, loc="upper right")
+        step = max(1, len(layers) // 16)
+        tick_layers = layers[::step]
+        ax.set_xticks(tick_layers)
+        ax.set_xticklabels([str(int(layer)) for layer in tick_layers])
+
+    fig.suptitle(
+        f"{short}  —  average across {total_tests} tests from {run_count} "
+        f"{'run' if run_count == 1 else 'runs'}  "
+        f"(target L{target}, weighted acc={weighted_accuracy:.0%})",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02,
+    )
+    fig.supxlabel("Layer index")
+    plt.tight_layout()
+
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        out = output_dir / f"signals_{_safe_slug(short)}_average.png"
         plt.savefig(out, dpi=200, bbox_inches="tight")
         print(f"  Saved: {out}")
     else:

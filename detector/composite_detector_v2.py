@@ -1,51 +1,17 @@
 #!/usr/bin/env python3
-"""
-Post-hoc composite ROME layer detector v2 (v5c).
+"""Post-hoc composite ROME layer detector for non-GPT architectures.
 
-Detects which layer was edited using a 4-signal spectral confirmation chain
-with structural signal fallback.  Achieves 161/169 (95%) overall accuracy:
-99.2% on spectrally-detectable architectures, 96% on GPT-2-XL via
-effective_rank/row_alignment fallback + edge-artifact guard, 100% on
-GPT-2-medium and GPT-2-large via norm_cv fallback.  GPT-J remains
-undetectable (no usable signal changes from ROME edits).
+The detector uses a spectral confirmation chain built from raw spectral-gap,
+top-1-energy local-z, and two spectral-gap local-z windows. Two targeted edge
+rescues remain after that chain:
 
-Algorithm (v5b):
-  Primary signals: spectral_gap (SG), top1_energy local-z w=5 (TE),
-           spectral_gap local-z w=5 (SL5), spectral_gap local-z w=7 (SL7).
-  Secondary signals: norm_cv local-z w=5 (NC), effective_rank curvature (ER),
-           row_alignment raw (RA).
+- `te(edge_lz5)`: when local-z consensus lands on a boundary artifact but
+    top-1-energy forms a strong interior peak.
+- `er_ra(edge)`: when a late spectral peak conflicts with a very early
+    effective-rank/row-alignment consensus.
 
-  v5 confirmation chain:
-  1. SG == TE (same peak layer)                → agree
-  2. SL5 confirms SG exclusively (±1 layer)    → SG
-  3. SL5 confirms TE exclusively               → TE
-  4. SL7 confirms SG exclusively               → SG
-  5. SL7 confirms TE exclusively               → TE
-  6. Neither confirms:
-     a. |ρ(SG)| > 0.3 → SG has monotone trend, don't trust raw peak:
-        - SL5 ≈ SL7 (±1): use local-z consensus
-        - SL7 ≈ TE   (±1): use TE
-        - else: use SL7  (most trend-robust)
-     b. |ρ(SG)| ≤ 0.3 → SG reliable → use SG
-
-  v5b/c secondary override (post-chain):
-  Only fires for low-confidence paths "s7(trend)" and "sg(lz7)":
-  - s7(trend): SG has monotone trend, no lz consensus, no TE agreement
-  - sg(lz7): SL7 confirms SG but SL5 didn't — weaker than lz5-confirmed
-  v5b paired checks:
-  - If ER_curv and RA_raw agree within ±1 → use ER/RA consensus (GPT-2-XL)
-  - If NC_lz5 and ER_curv agree within ±1 → use NC/ER consensus (GPT-2-medium)
-  v5c single-signal overrides:
-  - s7(trend) + edge artifact (detected in top 15% of layers) → use RA_raw
-  - sg(lz7) + NC disagrees → use NC_lz5 alone (GPT-2-large)
-
-Also provides binary "is this model edited?" classification by comparing
-ROME vs baseline structural JSONs.
-
-Usage:
-  python composite_detector_v2.py ultrasupertest/
-  python composite_detector_v2.py ultrasupertest/ results_n5/ --graphs
-  python composite_detector_v2.py --binary ultrasupertest/ --baseline-dir ultrasupertest/
+The file also provides binary "was this model edited?" classification by
+comparing ROME and baseline structural JSONs.
 """
 
 from __future__ import annotations
@@ -61,7 +27,6 @@ import numpy as np
 from scipy import stats
 
 EPS = 1e-10
-LOW_CONFIDENCE_METHODS = {"s7(trend)", "sg(lz7)"}
 DEFAULT_SMALL_WINDOW = 5
 DEFAULT_LARGE_WINDOW = 7
 DEFAULT_TE_WINDOW = 5
@@ -149,7 +114,7 @@ def _parse_int_csv(raw: str) -> List[int]:
 
 
 # ---------------------------------------------------------------------------
-# Core detection: v5b confirmation chain with secondary override
+# Core detection: spectral confirmation chain with targeted edge rescues
 # ---------------------------------------------------------------------------
 
 def detect_layer(
@@ -161,7 +126,7 @@ def detect_layer(
     nc_window: int = DEFAULT_NC_WINDOW,
 ) -> Tuple[Optional[int], str, Dict]:
     """Detect which layer was edited using 4-signal confirmation chain
-    with secondary structural signal override (v5b).
+    with targeted edge rescues.
 
     Returns (detected_layer, method_tag, signal_info).
     """
@@ -193,7 +158,7 @@ def detect_layer(
     sg_local_small = np.abs(local_zscore(sg_full, small_window))[lo:hi]
     sg_local_large = np.abs(local_zscore(sg_full, large_window))[lo:hi]
 
-    # Secondary signals (v5b structural)
+    # Secondary signals retained for debug info and targeted rescues
     nc_full = _feature_array(lf, layers, "norm_cv")
     er_full = _feature_array(lf, layers, "effective_rank")
     ra_full = _feature_array(lf, layers, "row_alignment")
@@ -326,42 +291,6 @@ def detect_layer(
                 "reason": "early_structural_consensus",
             }
             return struct_l, "er_ra(edge)", info
-
-    # === v5b/c: structural override for lowest-confidence paths ===
-    # s7(trend): SG has monotone trend, no lz consensus, no TE agreement.
-    # sg(lz7): SL7 near SG, but SL5 didn't confirm — weaker confidence.
-    if v5_method in {"s7(trend)", sg_large_tag}:
-        # ER + RA agreement (strong for GPT-2-XL)
-        if abs(ec_i - ra_i) <= 1:
-            struct_l = ec_l if ec_z >= ra_z else ra_l
-            if struct_l != v5_layer:
-                info["v5_override"] = {"from": v5_layer, "v5_method": v5_method}
-                return struct_l, "er_ra(fb)", info
-        # NC + ER agreement (catches GPT-2-medium)
-        if abs(nc_i - ec_i) <= 1:
-            struct_l = nc_l if nc_z >= ec_z else ec_l
-            if struct_l != v5_layer:
-                info["v5_override"] = {"from": v5_layer, "v5_method": v5_method}
-                return struct_l, "nc_er(fb)", info
-
-    # === v5c: additional single-signal overrides ===
-
-    # s7(trend) edge-artifact guard: when s7 peaks in the top 15% of eval
-    # range, the SG_lz7 peak is likely a boundary artifact, not ROME signal.
-    # Use RA_raw alone (catches GPT-2-XL remaining failures).
-    if v5_method == "s7(trend)":
-        det_pos = eval_layers.index(v5_layer) if v5_layer in eval_layers else 0
-        frac = det_pos / (ne - 1) if ne > 1 else 0
-        if frac > 0.85 and ra_l != v5_layer:
-            info["v5_override"] = {"from": v5_layer, "v5_method": v5_method,
-                                   "edge_frac": round(frac, 3)}
-            return ra_l, "ra(fb)", info
-
-    # sg(lz7) NC-alone override: when SL7 confirms SG but SL5 didn't,
-    # and NC_lz5 points to a different layer, prefer NC (catches GPT-2-large).
-    if v5_method == sg_large_tag and nc_l != v5_layer:
-        info["v5_override"] = {"from": v5_layer, "v5_method": v5_method}
-        return nc_l, "nc(fb)", info
 
     return v5_layer, v5_method, info
 
@@ -1023,8 +952,7 @@ def plot_method_breakdown(
         "sg(lz7)": "#1abc9c", "te(lz7)": "#e74c3c", "lz_cons(5)": "#9b59b6",
         "lz_cons(7)": "#8e44ad", "te(trend)": "#f1c40f", "s7(trend)": "#d35400",
         "sg(fb)": "#95a5a6", "empty": "#bdc3c7",
-        "er_ra(fb)": "#2980b9", "nc_er(fb)": "#16a085", "nc(fb)": "#c0392b",
-        "ra(fb)": "#8e44ad",
+        "er_ra(edge)": "#2980b9", "te(edge_lz5)": "#16a085",
     }
     default_cmap = plt.cm.tab20
     for i, m in enumerate(method_order):

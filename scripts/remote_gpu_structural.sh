@@ -6,6 +6,8 @@ N_TESTS=50
 START_IDX=30
 N_PROMPTS=50
 COMPUTE_COV=false
+ANALYSIS_PROFILE="paper"
+SLICE_POLICY="iterating_per_model"
 CONDA_ENV="${CONDA_ENV:-latium}"
 COV_SOURCE_NOTE="${COV_SOURCE_NOTE:-local -> ../reimagined -> kubapc fallback}"
 MODELS=()
@@ -20,6 +22,11 @@ Options:
   --start-idx <int>     CounterFact starting index (default: 30)
   --n-prompts <int>     Number of prompts per benchmark evaluation (default: 50)
   --compute-cov         Compute missing covariance remotely before benchmarking
+  --slice-policy <mode> CounterFact assignment: iterating_per_model or shared (default: iterating_per_model)
+  --analysis-profile <name>
+                        Structural benchmark payload: raw, paper, or full (default: paper)
+  --posthoc-only        Alias for --analysis-profile paper
+  --detection-only      Alias for --analysis-profile paper
   --conda-env <name>    Conda env to activate if available (default: latium)
   --models <...>        Model config keys
 EOF
@@ -32,6 +39,9 @@ while [[ $# -gt 0 ]]; do
     --start-idx) START_IDX="$2"; shift 2 ;;
     --n-prompts) N_PROMPTS="$2"; shift 2 ;;
     --compute-cov) COMPUTE_COV=true; shift ;;
+    --slice-policy) SLICE_POLICY="$2"; shift 2 ;;
+    --analysis-profile) ANALYSIS_PROFILE="$2"; shift 2 ;;
+    --posthoc-only|--detection-only) ANALYSIS_PROFILE="paper"; shift ;;
     --conda-env) CONDA_ENV="$2"; shift 2 ;;
     --models)
       shift
@@ -62,6 +72,11 @@ if [[ ${#MODELS[@]} -eq 0 ]]; then
   exit 1
 fi
 
+if [[ "$SLICE_POLICY" != "iterating_per_model" && "$SLICE_POLICY" != "shared" ]]; then
+  echo "ERROR: unsupported --slice-policy: $SLICE_POLICY" >&2
+  exit 1
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
@@ -84,6 +99,7 @@ PY
 
 echo "[remote-gpu] run_root=$RUN_ROOT"
 echo "[remote-gpu] gpu=$GPU_NAME"
+echo "[remote-gpu] slice_policy=$SLICE_POLICY"
 if [[ "$GPU_NAME" != *H100* ]]; then
   echo "[remote-gpu] WARNING: GPU is not H100" >&2
 fi
@@ -93,6 +109,10 @@ STARTED_AT="$(date --iso-8601=seconds)"
 
 model_start_idx() {
   local model_index="$1"
+  if [[ "$SLICE_POLICY" == "shared" ]]; then
+    echo "$START_IDX"
+    return 0
+  fi
   echo $((START_IDX + (model_index * N_TESTS)))
 }
 
@@ -109,6 +129,7 @@ write_status_json() {
   STARTED_AT="$STARTED_AT" \
   N_TESTS="$N_TESTS" \
   START_IDX="$START_IDX" \
+  SLICE_POLICY="$SLICE_POLICY" \
   COMPUTE_COV="$COMPUTE_COV" \
   COV_SOURCE_NOTE="$COV_SOURCE_NOTE" \
   python - <<'PY'
@@ -119,11 +140,20 @@ from pathlib import Path
 models = [item for item in os.environ.get("MODELS_CSV", "").split(",") if item]
 base_start = int(os.environ.get("START_IDX", "0") or 0)
 n_tests = int(os.environ.get("N_TESTS", "0") or 0)
+slice_policy = os.environ.get("SLICE_POLICY", "iterating_per_model")
+
+
+def assignment_start(model_index: int) -> int:
+  if slice_policy == "shared":
+    return base_start
+  return base_start + model_index * n_tests
+
+
 model_assignments = [
     {
         "model": model,
-        "start_idx": base_start + idx * n_tests,
-        "end_idx": base_start + idx * n_tests + max(0, n_tests - 1),
+    "start_idx": assignment_start(idx),
+    "end_idx": assignment_start(idx) + max(0, n_tests - 1),
     }
     for idx, model in enumerate(models)
 ]
@@ -133,6 +163,7 @@ payload = {
     "models": models,
     "n_tests": n_tests,
     "start_idx": base_start,
+    "slice_policy": slice_policy,
     "model_assignments": model_assignments,
     "compute_cov": os.environ.get("COMPUTE_COV", "").lower() == "true",
     "cov_source": os.environ.get("COV_SOURCE_NOTE", ""),
@@ -170,6 +201,7 @@ write_failure_json() {
   START_IDX_USED="$start_idx_used" \
   ERROR_MESSAGE="$error_message" \
   OUT_PATH="$out_path" \
+  ANALYSIS_PROFILE="$ANALYSIS_PROFILE" \
   N_TESTS="$N_TESTS" \
   python - <<'PY'
 import json
@@ -181,7 +213,7 @@ payload = {
     "metadata": {
         "model": os.environ["MODEL_KEY"],
         "timestamp": datetime.now().isoformat(),
-        "analysis_profile": "paper",
+        "analysis_profile": os.environ.get("ANALYSIS_PROFILE", "paper"),
         "start_idx_used": int(os.environ.get("START_IDX_USED", "0") or 0),
         "end_idx_used": int(os.environ.get("START_IDX_USED", "0") or 0) + max(0, int(os.environ.get("N_TESTS", "0") or 0) - 1),
         "runner_generated_failure": True,
@@ -254,7 +286,7 @@ for model_index in "${!MODELS[@]}"; do
     --n-tests "$N_TESTS"
     --start-idx "$model_start"
     --n-prompts "$N_PROMPTS"
-    --analysis-profile paper
+    --analysis-profile "$ANALYSIS_PROFILE"
     --output-dir "$RUN_ROOT/structural"
     --fail-on-missing-second-moment
   )

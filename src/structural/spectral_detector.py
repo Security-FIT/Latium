@@ -411,6 +411,8 @@ class SpectralDetector:
         store_raw_spectral: bool = True,
         raw_only: bool = False,
         raw_spectral_max_top_k: Optional[int] = None,
+        raw_payload_level: str = "full",
+        emit_local_window_scores: bool = True,
     ):
         self.top_k = top_k
         self.boundary = boundary
@@ -421,6 +423,11 @@ class SpectralDetector:
         self.local_windows = tuple(int(w) for w in local_windows)
         self.store_raw_spectral = bool(store_raw_spectral)
         self.raw_only = bool(raw_only)
+        raw_payload_level = str(raw_payload_level or "full").strip().lower()
+        if raw_payload_level not in {"full", "sv_only", "none"}:
+            raise ValueError(f"Unsupported raw_payload_level: {raw_payload_level!r}")
+        self.raw_payload_level = raw_payload_level
+        self.emit_local_window_scores = bool(emit_local_window_scores)
         if raw_spectral_max_top_k is None:
             self.raw_spectral_max_top_k = None
         else:
@@ -439,6 +446,8 @@ class SpectralDetector:
             "store_raw_spectral": self.store_raw_spectral,
             "raw_only": self.raw_only,
             "raw_spectral_max_top_k": self.raw_spectral_max_top_k,
+            "raw_payload_level": self.raw_payload_level,
+            "emit_local_window_scores": self.emit_local_window_scores,
         }
 
     def _trim(self, n: int) -> Tuple[int, int]:
@@ -476,7 +485,12 @@ class SpectralDetector:
         if not all_layers:
             return self._empty_result([], [], [])
 
-        pcs_pairwise_full, pcs_flip_pairwise_full = _pcs_pairwise_cache(vh_full, sv_full, self.top_k)
+        include_pairwise_raw = self.raw_payload_level == "full"
+        if include_pairwise_raw:
+            pcs_pairwise_full, pcs_flip_pairwise_full = _pcs_pairwise_cache(vh_full, sv_full, self.top_k)
+        else:
+            empty_pairwise = np.empty((0, 0), dtype=np.float64)
+            pcs_pairwise_full, pcs_flip_pairwise_full = empty_pairwise, empty_pairwise
 
         ts, te = self._trim(len(all_layers))
         if te <= ts:
@@ -497,22 +511,25 @@ class SpectralDetector:
         stored_top_k = int(min(storage_top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0))
 
         def _build_raw_payload() -> Dict[str, object]:
-            dot_w_cum, flip_w_cum, w_cum = _pcs_pairwise_rank_cumsums(vh_full, sv_full, stored_top_k)
+            if self.raw_payload_level == "none":
+                return {}
             payload = {
                 "all_layers": [int(l) for l in all_layers],
                 "top_k": int(min(self.top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0)),
                 "stored_top_k": int(stored_top_k),
                 "boundary": int(self.boundary),
                 "sv_proj_topk": _sv_map(all_layers, sv_full, stored_top_k),
-                "pcs_pairwise": pcs_pairwise_full.tolist(),
-                "pcs_flip_pairwise": pcs_flip_pairwise_full.tolist(),
             }
-            if dot_w_cum.size and w_cum.size:
-                payload["pcs_pairwise_dot_weight_cumsum"] = dot_w_cum.tolist()
-                payload["pcs_flip_pairwise_weight_cumsum"] = flip_w_cum.tolist()
-                payload["pcs_pairwise_weight_cumsum"] = w_cum.tolist()
             if has_fc and sv_fc_full.size:
                 payload["sv_fc_topk"] = _sv_map(all_layers, sv_fc_full, stored_top_k)
+            if self.raw_payload_level == "full":
+                dot_w_cum, flip_w_cum, w_cum = _pcs_pairwise_rank_cumsums(vh_full, sv_full, stored_top_k)
+                payload["pcs_pairwise"] = pcs_pairwise_full.tolist()
+                payload["pcs_flip_pairwise"] = pcs_flip_pairwise_full.tolist()
+                if dot_w_cum.size and w_cum.size:
+                    payload["pcs_pairwise_dot_weight_cumsum"] = dot_w_cum.tolist()
+                    payload["pcs_flip_pairwise_weight_cumsum"] = flip_w_cum.tolist()
+                    payload["pcs_pairwise_weight_cumsum"] = w_cum.tolist()
             return payload
 
         if self.raw_only:
@@ -573,13 +590,16 @@ class SpectralDetector:
             "pcs_neighbor_var_scores": pcs["pcs_neighbor_var_scores"],
             "pcs_next_curvature_scores": pcs["pcs_next_curvature_scores"],
         }
-        result["local_window_scores"] = {
-            name: {
-                score_name: _map_to_all(all_layers, eval_layers, vals)
-                for score_name, vals in local_score_bank(series, windows=self.local_windows).items()
+        if self.emit_local_window_scores:
+            result["local_window_scores"] = {
+                name: {
+                    score_name: _map_to_all(all_layers, eval_layers, vals)
+                    for score_name, vals in local_score_bank(series, windows=self.local_windows).items()
+                }
+                for name, series in local_series.items()
             }
-            for name, series in local_series.items()
-        }
+        else:
+            result["local_window_scores"] = {}
 
         result.update({
             "has_fc_weights": has_fc,

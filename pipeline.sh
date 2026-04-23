@@ -21,6 +21,8 @@ MODELS=("${DEFAULT_MODELS[@]}")
 N=50
 START_IDX=30
 N_PROMPTS=50
+ANALYSIS_PROFILE="paper"
+SLICE_POLICY="iterating_per_model"
 REMOTE_HOST=""
 REMOTE_DIR="~/Latium"
 CONDA_ENV="latium"
@@ -54,6 +56,10 @@ Options:
   --n <int>                  Number of CounterFact cases (default: 50)
   --start-idx <int>          CounterFact start index (default: 30)
   --n-prompts <int>          Number of prompts per benchmark evaluation (default: 50)
+  --slice-policy <mode>      CounterFact assignment: iterating_per_model or shared (default: iterating_per_model)
+  --analysis-profile <name>  Structural benchmark payload: raw, paper, or full (default: paper)
+  --posthoc-only             Alias for --analysis-profile paper
+  --detection-only           Alias for --analysis-profile paper
   --output-dir <path>        Local/remote output root (default: ./pipeline_out)
   --models <m1 m2 ...>       Override model list
   --tmux-session-gpu <name>  Remote tmux session name
@@ -77,6 +83,9 @@ while [[ $# -gt 0 ]]; do
     --n) N="$2"; shift 2 ;;
     --start-idx) START_IDX="$2"; shift 2 ;;
     --n-prompts) N_PROMPTS="$2"; shift 2 ;;
+    --slice-policy) SLICE_POLICY="$2"; shift 2 ;;
+    --analysis-profile) ANALYSIS_PROFILE="$2"; shift 2 ;;
+    --posthoc-only|--detection-only) ANALYSIS_PROFILE="paper"; shift ;;
     --output-dir) OUTPUT_ROOT="$2"; shift 2 ;;
     --tmux-session-gpu) TMUX_SESSION_GPU="$2"; shift 2 ;;
     --tmux-session-local) TMUX_SESSION_LOCAL="$2"; shift 2 ;;
@@ -111,6 +120,11 @@ fi
 
 if [[ ${#MODELS[@]} -eq 0 ]]; then
   echo "ERROR: no models selected" >&2
+  exit 1
+fi
+
+if [[ "$SLICE_POLICY" != "iterating_per_model" && "$SLICE_POLICY" != "shared" ]]; then
+  echo "ERROR: unsupported --slice-policy: $SLICE_POLICY" >&2
   exit 1
 fi
 
@@ -263,7 +277,11 @@ mkdir -p "$LOCAL_RUN_DIR/archive" "$COV_CACHE_DIR"
 echo "========================================"
 echo " Latium Split Pipeline"
 echo " models=${#MODELS[@]} | n=$N | start_idx=$START_IDX | compute_cov=$COMPUTE_COV"
-echo " counterfact=iterating_per_model stride=$N"
+if [[ "$SLICE_POLICY" == "shared" ]]; then
+  echo " counterfact=shared slice across all models"
+else
+  echo " counterfact=iterating_per_model stride=$N"
+fi
 echo " remote=$REMOTE_HOST:$REMOTE_DIR_ABS"
 echo " remote_run=$REMOTE_RUN_DIR_ABS"
 echo " local_run=$LOCAL_RUN_DIR"
@@ -368,9 +386,9 @@ for model in "${MODELS[@]}"; do
 done
 
 echo "[5/7] Launching remote GPU tmux session ..."
-REMOTE_CMD=(bash scripts/remote_gpu_structural.sh --run-root "$REMOTE_REL_RUN_DIR" --n-tests "$N" --start-idx "$START_IDX" --n-prompts "$N_PROMPTS" --conda-env "$CONDA_ENV" --models "${MODELS[@]}")
+REMOTE_CMD=(bash scripts/remote_gpu_structural.sh --run-root "$REMOTE_REL_RUN_DIR" --n-tests "$N" --start-idx "$START_IDX" --n-prompts "$N_PROMPTS" --slice-policy "$SLICE_POLICY" --analysis-profile "$ANALYSIS_PROFILE" --conda-env "$CONDA_ENV" --models "${MODELS[@]}")
 if $COMPUTE_COV; then
-  REMOTE_CMD=(bash scripts/remote_gpu_structural.sh --run-root "$REMOTE_REL_RUN_DIR" --n-tests "$N" --start-idx "$START_IDX" --n-prompts "$N_PROMPTS" --compute-cov --conda-env "$CONDA_ENV" --models "${MODELS[@]}")
+  REMOTE_CMD=(bash scripts/remote_gpu_structural.sh --run-root "$REMOTE_REL_RUN_DIR" --n-tests "$N" --start-idx "$START_IDX" --n-prompts "$N_PROMPTS" --slice-policy "$SLICE_POLICY" --analysis-profile "$ANALYSIS_PROFILE" --compute-cov --conda-env "$CONDA_ENV" --models "${MODELS[@]}")
 fi
 REMOTE_CMD_STR="$(quote_cmd "${REMOTE_CMD[@]}")"
 HF_TOKEN_B64="$(printf '%s' "${HF_TOKEN:-}" | base64 -w0 2>/dev/null || printf '%s' "${HF_TOKEN:-}" | base64 | tr -d '\n')"
@@ -407,6 +425,7 @@ LOCAL_CMD=(
   --local-run-dir "$LOCAL_RUN_DIR"
   --n-tests "$N"
   --start-idx "$START_IDX"
+  --slice-policy "$SLICE_POLICY"
   --sync-interval "$SYNC_INTERVAL"
   --composite-window-sweep
   --success-file "$REPO_ROOT/success.txt"
@@ -421,5 +440,9 @@ echo
 echo "Remote attach: ssh ${REMOTE_HOST} -t tmux attach -t ${TMUX_SESSION_GPU}"
 echo "Local attach:  tmux attach -t ${TMUX_SESSION_LOCAL}"
 echo "Status:        bash pipeline.sh --remote ${REMOTE_HOST} --remote-dir ${REMOTE_DIR} --output-dir ${OUTPUT_ROOT} --n ${N} --start-idx ${START_IDX} --tmux-session-gpu ${TMUX_SESSION_GPU} --tmux-session-local ${TMUX_SESSION_LOCAL} --status"
-echo "CounterFact:   first model starts at ${START_IDX}, then +${N} per model"
+if [[ "$SLICE_POLICY" == "shared" ]]; then
+  echo "CounterFact:   all models use shared slice ${START_IDX}-$((START_IDX + N - 1))"
+else
+  echo "CounterFact:   first model starts at ${START_IDX}, then +${N} per model"
+fi
 echo "Run root:      $LOCAL_RUN_DIR"

@@ -221,7 +221,8 @@ if model_average_results:
 # %% [markdown]
 # ## 2. Signal Profiles (all runs + average per model)
 #
-# Each plot shows 4 signals across layers:
+# Each plot shows the blind-feature signals across layers, and for full-profile
+# runs it also appends the spectral detector's Signal A / Signal B panels:
 # - one averaged panel across all runs for a model
 # - one panel for each individual run
 # - per-run panels are averaged across valid tests in that run
@@ -229,6 +230,8 @@ if model_average_results:
 # - **TE (lz5)**: |local z-score| of top1_energy with window=5
 # - **SG (lz5)**: |local z-score| of spectral_gap with window=5
 # - **SG (lz7)**: |local z-score| of spectral_gap with window=7
+# - **Signal A**: `spectral_detection.sv_z_scores`
+# - **Signal B**: `spectral_detection.sv_ratio_scores`
 
 # %%
 graph_dir = GRAPH_DIR

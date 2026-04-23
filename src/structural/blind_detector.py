@@ -43,13 +43,67 @@ class BlindMSDDetector:
 
     def detect_layer_features_only(self, weights: Dict[int, torch.Tensor]) -> Dict[str, Any]:
         """Return only the per-layer feature map needed by post-hoc detectors."""
-        layer_features = self.compute_layer_features(weights)
+        layer_features = self.compute_layer_features(weights, fast_exact=True)
         return {
             "layer_features": {str(k): v for k, v in layer_features.items()},
         }
 
-    def compute_layer_features(self, weights: Dict[int, torch.Tensor]) -> Dict[int, Dict[str, float]]:
+    def _compute_layer_features_exact_fast(self, weights: Dict[int, torch.Tensor]) -> Dict[int, Dict[str, float]]:
+        """Compute the minimal per-layer blind feature bundle with GPU-first exact math."""
+        layer_features = {}
+        for idx, W in weights.items():
+            W_float = W.float()
+            S = gpu_svdvals(W_float)
+            U_top, _, _ = gpu_svd_topk(W_float, k=1, niter=2)
+
+            normalized_S = S / (S.sum() + 1e-10)
+            entropy = -(normalized_S * torch.log(normalized_S + 1e-10)).sum()
+            effective_rank = torch.exp(entropy).item()
+
+            spectral_gap = (S[0] / (S[1] + 1e-10)).item() if len(S) > 1 else 0.0
+
+            total_energy = (S**2).sum()
+            top1_energy = (S[0] ** 2 / total_energy).item()
+
+            from src.rome.common import pcs
+
+            pcs_value = pcs(W)
+            if hasattr(pcs_value, "item"):
+                pcs_value = pcs_value.item()
+
+            row_norms = W.norm(dim=1)
+            norm_cv = (row_norms.std() / row_norms.mean()).item()
+
+            top_column = U_top[:, 0].abs()
+            row_alignment = (top_column.max() / (top_column.mean() + 1e-10)).item()
+
+            S_prob = (S ** 2) / ((S ** 2).sum() + 1e-10)
+            if len(S) > 1:
+                spectral_entropy = (-(S_prob * torch.log(S_prob + 1e-10)).sum() / np.log(len(S))).item()
+            else:
+                spectral_entropy = 0.0
+
+            layer_features[idx] = {
+                "effective_rank": effective_rank,
+                "spectral_gap": spectral_gap,
+                "top1_energy": top1_energy,
+                "pcs": pcs_value,
+                "norm_cv": norm_cv,
+                "row_alignment": row_alignment,
+                "spectral_entropy": spectral_entropy,
+            }
+
+        return layer_features
+
+    def compute_layer_features(
+        self,
+        weights: Dict[int, torch.Tensor],
+        fast_exact: bool = False,
+    ) -> Dict[int, Dict[str, float]]:
         """Compute the minimal per-layer blind feature bundle."""
+        if fast_exact:
+            return self._compute_layer_features_exact_fast(weights)
+
         layer_features = {}
         for idx, W in weights.items():
             W_float = W.float()
@@ -329,4 +383,3 @@ class BlindMSDDetector:
             "n_outlier_rows": int(n_outliers),
             "outlier_indices": np.where(outlier_labels == -1)[0].tolist(),
         }
-

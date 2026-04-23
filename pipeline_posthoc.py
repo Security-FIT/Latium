@@ -29,6 +29,7 @@ from detector.composite_detector_v2 import (
 )
 from detector.gpt_detector import plot_signals as gpt_plot_signals, process_file as gpt_process_file
 from paper_graphs._newgen_utils import canonical_model_name
+from paper_graphs.paper_graphs_support import plot_model_stack
 
 
 DEFAULT_MODELS = [
@@ -45,11 +46,11 @@ DEFAULT_MODELS = [
 ]
 
 FEATURE_PLOT_SPECS = [
-    ("norm_cv", "norm_cv"),
-    ("spectral_gap", "spectral_gap"),
-    ("top1_energy", "top1_energy"),
-    ("effective_rank", "effective_rank"),
-    ("row_alignment", "row_alignment"),
+    ("Norm CV", "norm_cv", "CV", "#6c5ce7"),
+    ("Spectral Gap", "spectral_gap", "Ratio", "#1f77b4"),
+    ("Top-1 Energy", "top1_energy", "Energy", "#f39c12"),
+    ("Effective Rank", "effective_rank", "eRank", "#16a085"),
+    ("Row Alignment", "row_alignment", "Alignment", "#c0392b"),
 ]
 
 REMOTE_DONE_SENTINEL = "REMOTE_GPU_DONE"
@@ -65,6 +66,40 @@ def is_gpt_model(model_key: str) -> bool:
 
 def now_ts() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def short_model_name(name: str) -> str:
+    return str(name).split("/")[-1] if "/" in str(name) else str(name)
+
+
+def run_label_from_structural_path(path: Optional[Path]) -> str:
+    if path is None:
+        return "unknown run"
+    run_dir = path.parent
+    if run_dir.name == "structural":
+        run_dir = run_dir.parent
+    parts = run_dir.parts
+    if "pipeline_out" in parts:
+        idx = parts.index("pipeline_out")
+        rel_parts = parts[idx + 1:]
+        if rel_parts:
+            return "/".join(rel_parts)
+    return run_dir.name
+
+
+def summarize_method_counts(method_counts: Optional[dict], limit: int = 3) -> str:
+    if not isinstance(method_counts, dict) or not method_counts:
+        return "n/a"
+    ranked = sorted(method_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+    return ", ".join(f"{name}:{count}" for name, count in ranked[:limit])
+
+
+def infer_run_label(model_summaries: Sequence[dict]) -> str:
+    for summary in model_summaries:
+        structural_json = summary.get("structural_json")
+        if structural_json:
+            return run_label_from_structural_path(Path(structural_json))
+    return "unknown run"
 
 
 def load_json(path: Path) -> dict:
@@ -86,21 +121,42 @@ def load_model_meta(model_key: str) -> dict:
     }
 
 
-def assigned_case_range(base_start_idx: int, n_tests: int, model_index: int) -> tuple[int, int]:
-    start_idx = int(base_start_idx) + int(model_index) * int(n_tests)
+def assigned_case_range(
+    base_start_idx: int,
+    n_tests: int,
+    model_index: int,
+    slice_policy: str = "iterating_per_model",
+) -> tuple[int, int]:
+    policy = str(slice_policy or "iterating_per_model").strip().lower()
+    if policy == "shared":
+        start_idx = int(base_start_idx)
+    else:
+        start_idx = int(base_start_idx) + int(model_index) * int(n_tests)
     end_idx = start_idx + max(0, int(n_tests) - 1)
     return start_idx, end_idx
 
 
-def model_assignment_map(model_keys: Sequence[str], base_start_idx: int, n_tests: int) -> Dict[str, dict]:
+def model_assignment_map(
+    model_keys: Sequence[str],
+    base_start_idx: int,
+    n_tests: int,
+    slice_policy: str = "iterating_per_model",
+) -> Dict[str, dict]:
     assignments: Dict[str, dict] = {}
     for idx, model_key in enumerate(model_keys):
-        start_idx, end_idx = assigned_case_range(base_start_idx, n_tests, idx)
+        start_idx, end_idx = assigned_case_range(base_start_idx, n_tests, idx, slice_policy=slice_policy)
         assignments[model_key] = {
             "assigned_start_idx": start_idx,
             "assigned_end_idx": end_idx,
         }
     return assignments
+
+
+def describe_slice_policy(slice_policy: str, n_tests: int) -> str:
+    policy = str(slice_policy or "iterating_per_model").strip().lower()
+    if policy == "shared":
+        return f"shared slice for all models ({n_tests} cases each)"
+    return f"iterative per model with stride {n_tests}"
 
 
 def summarize_tests(payload: dict, expected_n_tests: int) -> dict:
@@ -214,7 +270,7 @@ def run_detector_for_file(
 
 
 def aggregate_blind_feature_means(payload: dict) -> Dict[str, dict]:
-    per_feature: Dict[str, Dict[int, List[float]]] = {name: {} for _, name in FEATURE_PLOT_SPECS}
+    per_feature: Dict[str, Dict[int, List[float]]] = {name: {} for _, name, _, _ in FEATURE_PLOT_SPECS}
     for test in payload.get("tests", []):
         if test.get("error") or test.get("skipped"):
             continue
@@ -230,14 +286,14 @@ def aggregate_blind_feature_means(payload: dict) -> Dict[str, dict]:
                 layer = int(layer_key)
             except (TypeError, ValueError):
                 continue
-            for _, feature_name in FEATURE_PLOT_SPECS:
+            for _, feature_name, _, _ in FEATURE_PLOT_SPECS:
                 value = feature_map.get(feature_name)
                 if value is None:
                     continue
                 per_feature[feature_name].setdefault(layer, []).append(float(value))
 
     out: Dict[str, dict] = {}
-    for _, feature_name in FEATURE_PLOT_SPECS:
+    for _, feature_name, _, _ in FEATURE_PLOT_SPECS:
         values_by_layer = per_feature[feature_name]
         if not values_by_layer:
             continue
@@ -250,79 +306,92 @@ def aggregate_blind_feature_means(payload: dict) -> Dict[str, dict]:
     return out
 
 
-def save_model_feature_plot(model_summary: dict, payload: dict, output_dir: Path) -> None:
-    baseline_payload = None
-    structural_json = model_summary.get("structural_json")
-    if structural_json:
-        baseline_path = composite_find_baseline(Path(structural_json))
-        if baseline_path is not None and baseline_path.exists():
-            baseline_payload = load_json(baseline_path)
+def _load_detector_metadata(detector_summary_path: str) -> dict:
+    if not detector_summary_path:
+        return {}
+    try:
+        return load_json(Path(detector_summary_path))
+    except Exception:
+        return {}
 
-    profiles = aggregate_blind_feature_means(payload)
-    if not profiles:
+
+def _set_layer_ticks(ax, layers: np.ndarray) -> None:
+    if layers.size == 0:
         return
-    baseline_profiles = aggregate_blind_feature_means(baseline_payload) if baseline_payload else {}
+    step = max(1, int(np.ceil(layers.size / 12)))
+    tick_layers = layers[::step]
+    ax.set_xticks(tick_layers)
+    ax.set_xticklabels([str(int(layer)) for layer in tick_layers])
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    fig, axes = plt.subplots(len(FEATURE_PLOT_SPECS), 1, figsize=(14, 3.2 * len(FEATURE_PLOT_SPECS)), sharex=True)
-    if len(FEATURE_PLOT_SPECS) == 1:
-        axes = [axes]
 
-    target_layer = model_summary["layer"]
-    model_key = model_summary["model"]
+def cleanup_paper_graph_outputs(output_dir: Path) -> None:
+    if not output_dir.exists():
+        return
+    for pattern in ("*_blind_features.png", "*_paper_profile.png", "*_paper_graphs.png"):
+        for path in output_dir.glob(pattern):
+            path.unlink()
 
-    for ax, (title, feature_name) in zip(axes, FEATURE_PLOT_SPECS):
-        profile = profiles.get(feature_name)
-        if not profile:
-            ax.text(0.5, 0.5, "No eligible tests", transform=ax.transAxes, ha="center", va="center")
-            ax.set_title(title)
-            continue
-        layers = np.array(profile["layers"], dtype=int)
-        mean = np.array(profile["mean"], dtype=float)
-        std = np.array(profile["std"], dtype=float)
-        ax.plot(layers, mean, color="#1f77b4", linewidth=1.8, label="Edited mean")
-        if np.any(np.isfinite(std)):
-            ax.fill_between(layers, mean - std, mean + std, color="#1f77b4", alpha=0.15)
-        baseline_profile = baseline_profiles.get(feature_name)
-        if baseline_profile:
-            ax.plot(
-                np.array(baseline_profile["layers"], dtype=int),
-                np.array(baseline_profile["mean"], dtype=float),
-                color="#7f7f7f",
-                linewidth=1.6,
-                linestyle="--",
-                label="Baseline mean",
-            )
-        ax.axvline(target_layer, color="#d62728", linestyle=":", linewidth=1.5)
-        ax.set_title(title)
-        ax.set_ylabel("Score")
-        ax.grid(alpha=0.25)
-        ax.legend(fontsize=8, loc="best")
 
-    axes[-1].set_xlabel("Layer")
-    fig.suptitle(f"{model_key} blind feature means | target L{target_layer}", fontsize=15, y=0.995)
-    fig.tight_layout()
-    fig.savefig(output_dir / f"{model_key}_blind_features.png", dpi=160, bbox_inches="tight")
-    plt.close(fig)
+def save_model_feature_plot(model_summary: dict, payload: dict, output_dir: Path) -> None:
+    structural_json = model_summary.get("structural_json")
+    if not structural_json:
+        return
+    structural_path = Path(structural_json)
+    baseline_path = composite_find_baseline(structural_path)
+    valid_case_count = sum(
+        1
+        for case in payload.get("tests", [])
+        if not case.get("error") and case.get("rome", {}).get("success", True)
+    )
+    plot_model_stack(
+        {
+            "model": model_summary["model"],
+            "path": str(structural_path),
+            "baseline_path": str(baseline_path) if baseline_path is not None and baseline_path.exists() else None,
+            "n_tests": valid_case_count,
+            "n_runs": 1,
+            "target_layer": model_summary["layer"],
+            "run_label": run_label_from_structural_path(structural_path),
+            "run_slug": "average",
+            "flat_output_name": True,
+        },
+        include_baseline=True,
+        show_std_band=True,
+        save_figures=True,
+        output_dir=output_dir,
+    )
 
 
 def save_aggregate_graphs(model_summaries: Sequence[dict], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    models = [summary["model"] for summary in model_summaries]
+    models = [short_model_name(summary.get("hf_name", summary["model"])) for summary in model_summaries]
     if not models:
         return
+    run_label = infer_run_label(model_summaries)
 
     detector_acc = [summary["det_rate"] * 100.0 for summary in model_summaries]
     detector_n = [summary["det_eval"] for summary in model_summaries]
+    detector_ok = [summary["det_ok"] for summary in model_summaries]
+    detector_colors = [
+        "#2c7fb8" if summary.get("detector_type") == "composite" else "#7b6fd6"
+        for summary in model_summaries
+    ]
     fig, ax = plt.subplots(figsize=(max(10, len(models) * 0.9), 5))
-    bars = ax.bar(range(len(models)), detector_acc, color="#2c7fb8")
-    for bar, acc, n in zip(bars, detector_acc, detector_n):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.0, f"{acc:.0f}%\n(n={n})", ha="center", va="bottom", fontsize=8)
+    bars = ax.bar(range(len(models)), detector_acc, color=detector_colors)
+    for bar, acc, ok, n in zip(bars, detector_acc, detector_ok, detector_n):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.0,
+            f"{ok}/{n}\n{acc:.0f}%",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
     ax.set_xticks(range(len(models)))
     ax.set_xticklabels(models, rotation=30, ha="right")
     ax.set_ylabel("Detector accuracy (%)")
     ax.set_ylim(0, 110)
-    ax.set_title("Post-hoc detector accuracy")
+    ax.set_title(f"Post-hoc detector accuracy — {run_label}\nAccuracy over detector-eligible edits", fontweight="bold")
     ax.grid(axis="y", alpha=0.25)
     fig.tight_layout()
     fig.savefig(output_dir / "detector_accuracy.png", dpi=160, bbox_inches="tight")
@@ -345,7 +414,7 @@ def save_aggregate_graphs(model_summaries: Sequence[dict], output_dir: Path) -> 
     ax.set_xticklabels(models, rotation=30, ha="right")
     ax.set_ylabel("Mean score")
     ax.set_ylim(0, 1.05)
-    ax.set_title("ROME metric means")
+    ax.set_title(f"ROME metric means — {run_label}\nMeans over completed cases in each model slice", fontweight="bold")
     ax.legend()
     ax.grid(axis="y", alpha=0.25)
     fig.tight_layout()
@@ -500,6 +569,7 @@ def write_success_file(
     remote_status: dict,
     start_idx: int,
     n_tests: int,
+    slice_policy: str,
     run_root: Path,
     archive: bool,
 ) -> None:
@@ -508,7 +578,7 @@ def write_success_file(
         f"remote_host | {remote_host or 'local-only'}",
         f"remote_gpu | {remote_status.get('gpu_name', 'unknown')}",
         f"start_idx | {start_idx}",
-        f"counterfact_policy | iterative per model with stride {n_tests}",
+        f"counterfact_policy | {describe_slice_policy(slice_policy, n_tests)}",
         f"n_tests | {n_tests}",
         f"run_root | {run_root}",
         f"covariance_source | {remote_status.get('cov_source', 'local -> ../reimagined -> kubapc fallback')}",
@@ -555,6 +625,7 @@ def write_run_summaries(
     remote_status: dict,
     start_idx: int,
     n_tests: int,
+    slice_policy: str,
     archive: bool,
 ) -> None:
     summary_dir.mkdir(parents=True, exist_ok=True)
@@ -565,8 +636,8 @@ def write_run_summaries(
         "start_idx": start_idx,
         "n_tests": n_tests,
         "counterfact_policy": {
-            "mode": "iterating_per_model",
-            "stride": n_tests,
+            "mode": str(slice_policy or "iterating_per_model"),
+            "stride": n_tests if str(slice_policy or "iterating_per_model") != "shared" else 0,
         },
         "run_root": str(run_root),
         "models": list(model_summaries),
@@ -653,12 +724,21 @@ def sync_remote_run(remote_host: str, remote_run_dir: str, local_run_dir: Path) 
 
 def process_once(args: argparse.Namespace, final_archive: bool) -> List[dict]:
     model_meta = {model: load_model_meta(model) for model in args.models}
-    assignments = model_assignment_map(args.models, args.start_idx, args.n_tests)
+    assignments = model_assignment_map(
+        args.models,
+        args.start_idx,
+        args.n_tests,
+        slice_policy=args.slice_policy,
+    )
     structural_dir = args.structural_dir
     detector_dir = args.detector_dir
     paper_graph_dir = None if args.skip_graphs else args.graphs_dir
     detector_graph_dir = None if args.skip_graphs else (args.graphs_dir / "detector")
     composite_sweep_dir = args.composite_sweep_dir
+
+    if paper_graph_dir is not None:
+        paper_graph_dir.mkdir(parents=True, exist_ok=True)
+        cleanup_paper_graph_outputs(paper_graph_dir)
 
     latest_jsons = collect_latest_model_jsons(structural_dir, args.models)
     model_summaries = [
@@ -688,6 +768,7 @@ def process_once(args: argparse.Namespace, final_archive: bool) -> List[dict]:
         remote_status=remote_status,
         start_idx=args.start_idx,
         n_tests=args.n_tests,
+        slice_policy=args.slice_policy,
         archive=final_archive,
     )
     write_success_file(
@@ -698,6 +779,7 @@ def process_once(args: argparse.Namespace, final_archive: bool) -> List[dict]:
         remote_status=remote_status,
         start_idx=args.start_idx,
         n_tests=args.n_tests,
+        slice_policy=args.slice_policy,
         run_root=args.local_run_dir,
         archive=final_archive,
     )
@@ -713,6 +795,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS, help="Model config keys to summarize.")
     parser.add_argument("--n-tests", type=int, default=50)
     parser.add_argument("--start-idx", type=int, default=30)
+    parser.add_argument(
+        "--slice-policy",
+        choices=["iterating_per_model", "shared"],
+        default="iterating_per_model",
+        help="How to label assigned CounterFact slices in summaries.",
+    )
     parser.add_argument("--sync-interval", type=int, default=60, help="Seconds between remote sync attempts in watch mode.")
     parser.add_argument("--skip-graphs", action="store_true", help="Skip detector/paper graph generation.")
     parser.add_argument("--composite-window-sweep", action="store_true", help="Run composite detector trim/window sweeps and save reports for non-GPT models.")

@@ -53,6 +53,54 @@ def _tensor_storage_key(W: torch.Tensor) -> tuple:
     )
 
 
+def _tensor_value_fingerprint(W: torch.Tensor, sample_size: int = 16) -> tuple:
+    """Content fingerprint for cache keys.
+
+    Storage-pointer reuse can make two different cloned tensors look identical to
+    identity-only cache keys. Include a small value-sensitive fingerprint so SVD
+    caches stay correct across per-case cloned weights.
+    """
+    if W.numel() == 0:
+        return (0, 0.0, 0.0, 0.0, ())
+
+    view = W.detach().reshape(-1).float()
+    sample_count = min(int(sample_size), int(view.numel()))
+    if sample_count <= 0:
+        samples = ()
+    elif sample_count == 1:
+        samples = (float(view[0].item()),)
+    else:
+        indices = _fingerprint_sample_indices(int(view.numel()), sample_count, view.device)
+        samples = tuple(float(x) for x in view.index_select(0, indices).cpu())
+
+    sq_norm = torch.dot(view, view)
+    return (
+        int(view.numel()),
+        float(view.sum().item()),
+        float(sq_norm.item()),
+        float(view.abs().max().item()),
+        samples,
+    )
+
+
+def _tensor_cache_key(W: torch.Tensor) -> tuple:
+    """Cache key that is sensitive to both tensor identity and tensor values."""
+    return _tensor_storage_key(W) + _tensor_value_fingerprint(W)
+
+
+def _fingerprint_sample_indices(numel: int, sample_count: int, device: torch.device | str) -> torch.Tensor:
+    """Build evenly spaced sample indices without float-rounding overflow."""
+    total = max(0, int(numel))
+    count = max(0, int(sample_count))
+    if total <= 0 or count <= 0:
+        return torch.empty(0, dtype=torch.long, device=device)
+    if count == 1:
+        return torch.zeros(1, dtype=torch.long, device=device)
+
+    steps = torch.arange(count, dtype=torch.long, device=device)
+    return torch.div(steps * max(0, total - 1), count - 1, rounding_mode="floor")
+
+
 def _resolve_cuda_device(device: int | str, W: torch.Tensor | None = None) -> str | None:
     """Resolve CUDA target device string, preferring the tensor's current CUDA device."""
     if not torch.cuda.is_available():
@@ -316,7 +364,7 @@ def gpu_svd(W: torch.Tensor, full_matrices: bool = False, device: int | str = 0,
     Returns (U, S, Vh) from ``torch.linalg.svd``.
     """
     _ = vram_fraction
-    tensor_key = _tensor_storage_key(W)
+    tensor_key = _tensor_cache_key(W)
     cache_key = ("svd", bool(full_matrices)) + tensor_key
     cached = _cache_get(_SVDFULL_CACHE, cache_key)
     if cached is not None:
@@ -343,7 +391,7 @@ def gpu_svdvals(W: torch.Tensor, device: int | str = 0,
                 vram_fraction: float = 0.5) -> torch.Tensor:
     """Compute singular values with GPU-first execution and CPU cache."""
     _ = vram_fraction
-    tensor_key = _tensor_storage_key(W)
+    tensor_key = _tensor_cache_key(W)
     cache_key = ("svdvals",) + tensor_key
     cached = _cache_get(_SVDVALS_CACHE, cache_key)
     if cached is not None:
@@ -381,11 +429,26 @@ def gpu_svd_topk(
     """Compute rank-k SVD (U, S, Vh) with GPU-first execution and caching."""
     _ = vram_fraction
     q = max(1, min(int(k), int(min(W.shape))))
-    tensor_key = _tensor_storage_key(W)
+    tensor_key = _tensor_cache_key(W)
     cache_key = ("svd_topk", q, int(niter)) + tensor_key
     cached = _cache_get(_SVDTOPK_CACHE, cache_key)
     if cached is not None:
         return cached
+
+    prefix = ("svd_topk",)
+    suffix = tensor_key
+    for existing_key, existing_value in reversed(_SVDTOPK_CACHE.items()):
+        if len(existing_key) < 4 or existing_key[0] != prefix[0]:
+            continue
+        q_cached = existing_key[1]
+        niter_cached = existing_key[2]
+        existing_suffix = existing_key[3:]
+        if niter_cached != int(niter) or existing_suffix != suffix or q_cached < q:
+            continue
+        U_cached, S_cached, Vh_cached = existing_value
+        result = (U_cached[:, :q], S_cached[:q], Vh_cached[:q, :])
+        _cache_put(_SVDTOPK_CACHE, cache_key, result, _SVDTOPK_CACHE_MAXSIZE)
+        return result
 
     full_cached = _cache_get(_SVDFULL_CACHE, ("svd", False) + tensor_key)
     if full_cached is not None:

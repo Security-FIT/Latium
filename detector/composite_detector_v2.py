@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """Post-hoc composite ROME layer detector for non-GPT architectures.
 
-The detector uses a spectral confirmation chain built from raw spectral-gap,
-top-1-energy local-z, and two spectral-gap local-z windows. Two targeted edge
-rescues remain after that chain:
-
-- `te(edge_lz5)`: when local-z consensus lands on a boundary artifact but
-    top-1-energy forms a strong interior peak.
-- `er_ra(edge)`: when a late spectral peak conflicts with a very early
-    effective-rank/row-alignment consensus.
+The detector keeps a blind-feature fallback built from raw spectral-gap,
+top-1-energy local-z, and two spectral-gap local-z windows. When a full
+spectral payload is available, it can also use Signal A (`sv_z_scores`) and a
+joint Signal A/B boundary check to support the final layer choice.
 
 The file also provides binary "was this model edited?" classification by
 comparing ROME and baseline structural JSONs.
@@ -27,12 +23,14 @@ import numpy as np
 from scipy import stats
 
 EPS = 1e-10
+BASELINE_COLOR = "#000000"
 DEFAULT_SMALL_WINDOW = 5
 DEFAULT_LARGE_WINDOW = 7
 DEFAULT_TE_WINDOW = 5
 DEFAULT_NC_WINDOW = 5
-EDGE_RESCUE_TE_Z_MIN = 2.5
-EDGE_RESCUE_GAP_MIN = 4
+SIGNAL_A_CONFIRM_Z_MIN = 2.0
+SIGNAL_AB_BOUNDARY_WIDTH = 4
+SIGNAL_AB_CLUSTER_SPAN = 2
 
 
 # ---------------------------------------------------------------------------
@@ -83,18 +81,39 @@ def _feature_array(layer_features: dict, layers: List[str], name: str) -> np.nda
     return np.array([layer_features[l][name] for l in layers], dtype=float)
 
 
+def _spectral_signal_array(
+    spectral_detection: dict,
+    layers: List[str],
+    name: str,
+) -> Optional[np.ndarray]:
+    """Extract one per-layer spectral signal when a full payload is available."""
+    layer_map = spectral_detection.get(name)
+    if not isinstance(layer_map, dict):
+        return None
+
+    values = []
+    for layer in layers:
+        raw = layer_map.get(layer, layer_map.get(str(layer), 0.0))
+        try:
+            values.append(float(raw))
+        except (TypeError, ValueError):
+            return None
+
+    arr = np.array(values, dtype=float)
+    if not np.any(np.isfinite(arr)):
+        return None
+
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0 or np.max(np.abs(finite)) <= EPS:
+        return None
+    return arr
+
+
 def _peak(vals: np.ndarray, eval_layers: List[int]) -> Tuple[int, int, float]:
     """Return peak index, layer, and global z-score for one evaluated signal."""
     idx = int(np.argmax(vals))
     z = float((vals[idx] - vals.mean()) / (vals.std() + EPS))
     return idx, eval_layers[idx], z
-
-
-def _peak_fraction(idx: int, total: int) -> float:
-    """Normalize an evaluated-layer index onto [0, 1]."""
-    if total <= 1:
-        return 0.0
-    return idx / (total - 1)
 
 
 def _parse_int_csv(raw: str) -> List[int]:
@@ -114,7 +133,7 @@ def _parse_int_csv(raw: str) -> List[int]:
 
 
 # ---------------------------------------------------------------------------
-# Core detection: spectral confirmation chain with targeted edge rescues
+# Core detection: blind-feature chain with full-profile Signal A/B support
 # ---------------------------------------------------------------------------
 
 def detect_layer(
@@ -125,8 +144,8 @@ def detect_layer(
     te_window: int = DEFAULT_TE_WINDOW,
     nc_window: int = DEFAULT_NC_WINDOW,
 ) -> Tuple[Optional[int], str, Dict]:
-    """Detect which layer was edited using 4-signal confirmation chain
-    with targeted edge rescues.
+    """Detect which layer was edited using the blind-feature chain plus
+    optional full-profile spectral support.
 
     Returns (detected_layer, method_tag, signal_info).
     """
@@ -203,6 +222,26 @@ def detect_layer(
     if nc_window == DEFAULT_NC_WINDOW:
         info["nc_lz5"] = info["nc_local"]
 
+    spectral_detection = test.get("spectral_detection", {})
+    a_i = a_l = None
+    a_z = 0.0
+    b_i = b_l = None
+    b_z = 0.0
+
+    if isinstance(spectral_detection, dict):
+        signal_a_full = _spectral_signal_array(spectral_detection, layers, "sv_z_scores")
+        signal_b_full = _spectral_signal_array(spectral_detection, layers, "sv_ratio_scores")
+
+        if signal_a_full is not None:
+            signal_a = signal_a_full[lo:hi]
+            a_i, a_l, a_z = _peak(signal_a, eval_layers)
+            info["signal_a"] = {"layer": a_l, "z": round(a_z, 2), "idx": a_i}
+
+        if signal_b_full is not None:
+            signal_b = signal_b_full[lo:hi]
+            b_i, b_l, b_z = _peak(signal_b, eval_layers)
+            info["signal_b"] = {"layer": b_l, "z": round(b_z, 2), "idx": b_i}
+
     # === v5 spectral confirmation chain ===
     v5_layer, v5_method = None, "none"
     v5_idx = None
@@ -258,39 +297,32 @@ def detect_layer(
     if v5_idx is None and v5_layer in eval_layers:
         v5_idx = eval_layers.index(v5_layer)
 
-    # Edge artifact guard for local-z consensus: if the consensus itself sits at
-    # the boundary but TE forms a strong interior peak, trust TE instead.
-    if v5_method.startswith("lz_cons(") and v5_idx is not None:
-        v5_frac = _peak_fraction(v5_idx, ne)
-        te_frac = _peak_fraction(te_i, ne)
-        if (
-            (v5_frac <= 0.15 or v5_frac >= 0.85)
-            and EDGE_RESCUE_GAP_MIN <= abs(te_i - v5_idx)
-            and te_z >= EDGE_RESCUE_TE_Z_MIN
-            and 0.2 <= te_frac <= 0.8
-        ):
-            info["v5_override"] = {
-                "from": v5_layer,
-                "v5_method": v5_method,
-                "reason": "edge_lz_consensus",
-            }
-            return te_l, f"te(edge_lz{te_window})", info
+    # Full-profile support 1: when Signal A lines up with the TE branch, trust
+    # the spectral confirmation over the blind fallback tag.
+    if a_l is not None and a_z >= SIGNAL_A_CONFIRM_Z_MIN and a_l == te_l:
+        info["spectral_support"] = {
+            "kind": "signal_a",
+            "reason": "te_alignment",
+        }
+        return a_l, "signal_a", info
 
-    # Falcon-style late spectral peaks can be natural architecture artifacts.
-    # If both structural signals agree on a very early layer while SG locks onto
-    # a far-late layer, prefer the structural consensus.
-    if v5_method == sg_small_tag and abs(ec_i - ra_i) <= 1 and v5_idx is not None:
-        struct_l = ec_l if ec_z >= ra_z else ra_l
-        struct_i = ec_i if ec_z >= ra_z else ra_i
-        struct_frac = _peak_fraction(struct_i, ne)
-        v5_frac = _peak_fraction(v5_idx, ne)
-        if struct_frac <= 0.10 and v5_frac >= 0.75 and abs(v5_idx - struct_i) >= 6:
-            info["v5_override"] = {
-                "from": v5_layer,
-                "v5_method": v5_method,
-                "reason": "early_structural_consensus",
+    # Full-profile support 2: if SG, Signal A, and Signal B all cluster inside
+    # the same boundary band, keep the raw SG layer instead of inventing a
+    # separate edge-only rescue path.
+    if a_i is not None and b_i is not None:
+        peak_indices = [sg_i, a_i, b_i]
+        cluster_span = max(peak_indices) - min(peak_indices)
+        early_limit = min(SIGNAL_AB_BOUNDARY_WIDTH - 1, ne - 1)
+        late_limit = max(0, ne - SIGNAL_AB_BOUNDARY_WIDTH)
+        early_cluster = max(peak_indices) <= early_limit
+        late_cluster = min(peak_indices) >= late_limit
+        if cluster_span <= SIGNAL_AB_CLUSTER_SPAN and (early_cluster or late_cluster):
+            info["spectral_support"] = {
+                "kind": "signal_ab_boundary",
+                "reason": "boundary_cluster",
+                "cluster_span": cluster_span,
             }
-            return struct_l, "er_ra(edge)", info
+            return sg_l, "signal_ab_boundary", info
 
     return v5_layer, v5_method, info
 
@@ -441,6 +473,7 @@ def process_file(
 
     n_valid = len(results)
     path_obj = Path(path)
+    baseline_path = _find_baseline(path_obj, payload=data)
     return {
         "model": model,
         "target_layer": target,
@@ -455,6 +488,7 @@ def process_file(
         "large_window": large_window,
         "te_window": te_window,
         "nc_window": nc_window,
+        "baseline_path": str(baseline_path) if baseline_path is not None else None,
         "run_label": _run_label_from_path(path_obj),
         "run_slug": _run_slug_from_path(path_obj),
     }
@@ -617,10 +651,19 @@ def _signal_profile_stats(
             f"SG (lz{large_window})": np.abs(local_zscore(sg_full, large_window))[lo:hi],
         }
 
+        spectral_detection = test.get("spectral_detection", {})
+        if isinstance(spectral_detection, dict):
+            signal_a_full = _spectral_signal_array(spectral_detection, layers, "sv_z_scores")
+            signal_b_full = _spectral_signal_array(spectral_detection, layers, "sv_ratio_scores")
+            if signal_a_full is not None:
+                signal_values["Signal A"] = signal_a_full[lo:hi]
+            if signal_b_full is not None:
+                signal_values["Signal B"] = signal_b_full[lo:hi]
+
         for name, vals in signal_values.items():
             for layer, value in zip(eval_layers, vals):
                 if np.isfinite(value):
-                    values_by_signal[name].setdefault(int(layer), []).append(float(value))
+                    values_by_signal.setdefault(name, {}).setdefault(int(layer), []).append(float(value))
 
     stats_by_signal: Dict[str, dict] = {}
     for name, layer_map in values_by_signal.items():
@@ -642,6 +685,114 @@ def _aggregate_signal_profile_stats(file_results: List[Dict]) -> Dict[str, dict]
     for file_result in file_results:
         path = Path(file_result["path"])
         with open(path) as f:
+            payload = json.load(f)
+        trim = int(file_result.get("trim", 2))
+        te_window = int(file_result.get("te_window", DEFAULT_TE_WINDOW))
+        small_window = int(file_result.get("small_window", DEFAULT_SMALL_WINDOW))
+        large_window = int(file_result.get("large_window", DEFAULT_LARGE_WINDOW))
+        run_stats = _signal_profile_stats(
+            payload,
+            trim=trim,
+            te_window=te_window,
+            small_window=small_window,
+            large_window=large_window,
+        )
+        for name, stats in run_stats.items():
+            target = per_signal.setdefault(name, {})
+            for layer, value in zip(stats["layers"], stats["mean"]):
+                if np.isfinite(value):
+                    target.setdefault(int(layer), []).append(float(value))
+
+    aggregated: Dict[str, dict] = {}
+    for name, layer_map in per_signal.items():
+        if not layer_map:
+            continue
+        ordered_layers = np.array(sorted(layer_map), dtype=int)
+        aggregated[name] = {
+            "layers": ordered_layers,
+            "mean": np.array([np.mean(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "std": np.array([np.std(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "count": np.array([len(layer_map[layer]) for layer in ordered_layers], dtype=int),
+        }
+    return aggregated
+
+
+def _plot_baseline_overlay(ax, layers, values, label: Optional[str]) -> None:
+    import matplotlib.patheffects as pe
+
+    markevery = max(1, len(layers) // 12)
+    line = ax.plot(
+        layers,
+        values,
+        color=BASELINE_COLOR,
+        linewidth=1.8,
+        linestyle="--",
+        marker="o",
+        markersize=2.4,
+        markerfacecolor="white",
+        markeredgecolor=BASELINE_COLOR,
+        markeredgewidth=0.8,
+        markevery=markevery,
+        label=label,
+        zorder=4,
+    )[0]
+    line.set_path_effects([pe.Stroke(linewidth=3.2, foreground="white"), pe.Normal()])
+
+
+def _signal_profile_colors(
+    te_window: int,
+    small_window: int,
+    large_window: int,
+) -> Dict[str, str]:
+    return {
+        "SG (raw)": "#1f77b4",
+        f"TE (lz{te_window})": "#ff7f0e",
+        f"SG (lz{small_window})": "#2ca02c",
+        f"SG (lz{large_window})": "#d62728",
+        "Signal A": "#6b6ecf",
+        "Signal B": "#8c564b",
+    }
+
+
+def _load_baseline_signal_profile_stats(
+    rome_path: Path,
+    trim: int,
+    te_window: int,
+    small_window: int,
+    large_window: int,
+    baseline_path: Optional[Path] = None,
+) -> Dict[str, dict]:
+    if baseline_path is None:
+        baseline_path = _find_baseline(rome_path)
+    if baseline_path is None or not baseline_path.exists():
+        return {}
+    with open(baseline_path) as f:
+        payload = json.load(f)
+    return _signal_profile_stats(
+        payload,
+        trim=trim,
+        te_window=te_window,
+        small_window=small_window,
+        large_window=large_window,
+    )
+
+
+def _aggregate_baseline_signal_profile_stats(file_results: List[Dict]) -> Dict[str, dict]:
+    per_signal: Dict[str, Dict[int, List[float]]] = {}
+    seen_paths: set[str] = set()
+
+    for file_result in file_results:
+        path = Path(file_result["path"])
+        baseline_path_raw = file_result.get("baseline_path")
+        baseline_path = Path(baseline_path_raw) if baseline_path_raw else _find_baseline(path)
+        if baseline_path is None or not baseline_path.exists():
+            continue
+        key = str(baseline_path.resolve())
+        if key in seen_paths:
+            continue
+        seen_paths.add(key)
+
+        with open(baseline_path) as f:
             payload = json.load(f)
         trim = int(file_result.get("trim", 2))
         te_window = int(file_result.get("te_window", DEFAULT_TE_WINDOW))
@@ -705,6 +856,9 @@ def aggregate_results_by_model(all_results: List[Dict]) -> List[Dict]:
                 "method_counts": method_counts,
                 "n_runs": len(runs),
                 "paths": [run["path"] for run in runs],
+                "baseline_paths": [
+                    run["baseline_path"] for run in runs if run.get("baseline_path")
+                ],
                 "run_labels": [run.get("run_label", Path(run["path"]).stem) for run in runs],
             }
         )
@@ -713,7 +867,7 @@ def aggregate_results_by_model(all_results: List[Dict]) -> List[Dict]:
 
 
 def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
-    """Plot the 4 signal profiles for one run, averaged across valid tests."""
+    """Plot the available signal profiles for one run, averaged across valid tests."""
     import matplotlib.pyplot as plt
 
     _setup_style()
@@ -740,13 +894,16 @@ def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
     )
     if not signal_stats:
         return
+    baseline_signal_stats = _load_baseline_signal_profile_stats(
+        path,
+        trim=trim,
+        te_window=te_window,
+        small_window=small_window,
+        large_window=large_window,
+        baseline_path=Path(file_result["baseline_path"]) if file_result.get("baseline_path") else None,
+    )
 
-    colors = {
-        "SG (raw)": "#1f77b4",
-        f"TE (lz{te_window})": "#ff7f0e",
-        f"SG (lz{small_window})": "#2ca02c",
-        f"SG (lz{large_window})": "#d62728",
-    }
+    colors = _signal_profile_colors(te_window, small_window, large_window)
 
     r0 = results[0]
     detected = r0["detected"]
@@ -754,17 +911,30 @@ def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
     run_label = file_result.get("run_label") or _run_label_from_path(path)
     short = _short_model_name(model)
 
-    fig, axes = plt.subplots(2, 2, figsize=(16, 8), sharex=True)
+    signal_items = list(signal_stats.items())
+    ncols = 2
+    nrows = max(1, (len(signal_items) + ncols - 1) // ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4 * nrows), sharex=True)
+    axes_flat = np.atleast_1d(axes).ravel()
 
-    for ax, (name, stats) in zip(axes.flat, signal_stats.items()):
+    for ax, (name, stats) in zip(axes_flat, signal_items):
         layers = stats["layers"]
         mean = stats["mean"]
         std = stats["std"]
-        ax.plot(layers, mean, color=colors[name], linewidth=1.7)
+        color = colors.get(name, "#4c78a8")
+        ax.plot(layers, mean, color=color, linewidth=1.7, label="Edited mean")
         if np.any(np.isfinite(std)):
-            ax.fill_between(layers, mean - std, mean + std, color=colors[name], alpha=0.14)
+            ax.fill_between(layers, mean - std, mean + std, color=color, alpha=0.14)
+        baseline_stats = baseline_signal_stats.get(name)
+        if baseline_stats is not None:
+            _plot_baseline_overlay(
+                ax,
+                baseline_stats["layers"],
+                baseline_stats["mean"],
+                label="Unedited baseline",
+            )
         peak_idx = int(np.nanargmax(mean))
-        ax.axvline(layers[peak_idx], color=colors[name], alpha=0.4, linestyle="--",
+        ax.axvline(layers[peak_idx], color=color, alpha=0.4, linestyle="--",
                    label=f"peak L{int(layers[peak_idx])}")
         if target in layers.tolist():
             ax.axvline(target, color="black", alpha=0.3, linestyle=":",
@@ -775,6 +945,9 @@ def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
         tick_layers = layers[::step]
         ax.set_xticks(tick_layers)
         ax.set_xticklabels([str(int(layer)) for layer in tick_layers])
+
+    for ax in axes_flat[len(signal_items):]:
+        ax.set_visible(False)
 
     fig.suptitle(f"{short}  —  {run_label}  —  detected L{detected} via {method}  "
                  f"(target L{target}, acc={file_result['accuracy']:.0%}, n={file_result['n_tests']})",
@@ -794,7 +967,7 @@ def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
 
 
 def plot_average_signal_profiles(file_results: List[Dict], output_dir: Optional[Path] = None):
-    """Plot one averaged signal-profile panel per model across all runs."""
+    """Plot averaged signal-profile panels per model across all runs."""
     import matplotlib.pyplot as plt
 
     if not file_results:
@@ -813,20 +986,20 @@ def plot_average_signal_profiles(file_results: List[Dict], output_dir: Optional[
     signal_stats = _aggregate_signal_profile_stats(file_results)
     if not signal_stats:
         return
+    baseline_signal_stats = _aggregate_baseline_signal_profile_stats(file_results)
 
     first = file_results[0]
     te_window = int(first.get("te_window", DEFAULT_TE_WINDOW))
     small_window = int(first.get("small_window", DEFAULT_SMALL_WINDOW))
     large_window = int(first.get("large_window", DEFAULT_LARGE_WINDOW))
-    colors = {
-        "SG (raw)": "#1f77b4",
-        f"TE (lz{te_window})": "#ff7f0e",
-        f"SG (lz{small_window})": "#2ca02c",
-        f"SG (lz{large_window})": "#d62728",
-    }
-    fig, axes = plt.subplots(2, 2, figsize=(16, 8), sharex=True)
+    colors = _signal_profile_colors(te_window, small_window, large_window)
+    signal_names = [name for name in colors if name in signal_stats]
+    ncols = 2
+    nrows = max(1, (len(signal_names) + ncols - 1) // ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4 * nrows), sharex=True)
+    axes_flat = np.atleast_1d(axes).ravel()
 
-    for ax, name in zip(axes.flat, colors):
+    for ax, name in zip(axes_flat, signal_names):
         stats = signal_stats.get(name)
         if stats is None:
             ax.text(0.5, 0.5, "No data", transform=ax.transAxes, ha="center", va="center")
@@ -835,11 +1008,20 @@ def plot_average_signal_profiles(file_results: List[Dict], output_dir: Optional[
         layers = stats["layers"]
         mean = stats["mean"]
         std = stats["std"]
-        ax.plot(layers, mean, color=colors[name], linewidth=1.8)
+        color = colors.get(name, "#4c78a8")
+        ax.plot(layers, mean, color=color, linewidth=1.8, label="Edited mean")
         if np.any(np.isfinite(std)):
-            ax.fill_between(layers, mean - std, mean + std, color=colors[name], alpha=0.16)
+            ax.fill_between(layers, mean - std, mean + std, color=color, alpha=0.16)
+        baseline_stats = baseline_signal_stats.get(name)
+        if baseline_stats is not None:
+            _plot_baseline_overlay(
+                ax,
+                baseline_stats["layers"],
+                baseline_stats["mean"],
+                label="Unedited baseline",
+            )
         peak_idx = int(np.nanargmax(mean))
-        ax.axvline(layers[peak_idx], color=colors[name], alpha=0.4, linestyle="--",
+        ax.axvline(layers[peak_idx], color=color, alpha=0.4, linestyle="--",
                    label=f"mean peak L{int(layers[peak_idx])}")
         if target in layers.tolist():
             ax.axvline(target, color="black", alpha=0.3, linestyle=":",
@@ -850,6 +1032,9 @@ def plot_average_signal_profiles(file_results: List[Dict], output_dir: Optional[
         tick_layers = layers[::step]
         ax.set_xticks(tick_layers)
         ax.set_xticklabels([str(int(layer)) for layer in tick_layers])
+
+    for ax in axes_flat[len(signal_names):]:
+        ax.set_visible(False)
 
     fig.suptitle(
         f"{short}  —  average across {total_tests} tests from {run_count} "
@@ -952,7 +1137,7 @@ def plot_method_breakdown(
         "sg(lz7)": "#1abc9c", "te(lz7)": "#e74c3c", "lz_cons(5)": "#9b59b6",
         "lz_cons(7)": "#8e44ad", "te(trend)": "#f1c40f", "s7(trend)": "#d35400",
         "sg(fb)": "#95a5a6", "empty": "#bdc3c7",
-        "er_ra(edge)": "#2980b9", "te(edge_lz5)": "#16a085",
+        "signal_a": "#6b6ecf", "signal_ab_boundary": "#8c564b",
     }
     default_cmap = plt.cm.tab20
     for i, m in enumerate(method_order):
@@ -1009,34 +1194,76 @@ def _collect_json_files(paths: List[str], prefix: str = "rome_structural_") -> L
     return files
 
 
-def _find_baseline(rome_path: Path, baseline_dir: Optional[Path] = None) -> Optional[Path]:
-    """Heuristic to find the matching baseline JSON for a ROME file.
+def _find_baseline(
+    rome_path: Path,
+    baseline_dir: Optional[Path] = None,
+    payload: Optional[dict] = None,
+) -> Optional[Path]:
+    """Find the matching baseline JSON for a structural run.
 
-    Matches by model slug (the segment after rome_structural_ / baseline_structural_
-    up to the first _tk or timestamp).
+    Resolution order:
+    1. explicit metadata references emitted by newer benchmark runs
+    2. exact filename replacement when edited/baseline share the same run token
+    3. exact run-stem match ignoring the final timestamp fields
+    4. legacy model-slug fallback for older outputs
     """
-    import re
-    name = rome_path.name
-    # Try exact name replacement first
-    base_name = name.replace("rome_structural_", "baseline_structural_", 1)
+    search_dirs: List[Path] = []
+    seen_dirs: set[str] = set()
     for search_dir in [rome_path.parent, baseline_dir]:
         if search_dir is None:
             continue
+        resolved = str(Path(search_dir).resolve())
+        if resolved in seen_dirs:
+            continue
+        seen_dirs.add(resolved)
+        search_dirs.append(Path(search_dir))
+
+    metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+    for key in ("baseline_structural_path", "baseline_structural_file"):
+        raw_candidate = metadata.get(key)
+        if not raw_candidate:
+            continue
+        candidate_path = Path(str(raw_candidate))
+        if candidate_path.is_absolute() and candidate_path.exists():
+            return candidate_path
+        for search_dir in search_dirs:
+            candidate = search_dir / candidate_path
+            if candidate.exists():
+                return candidate
+
+    name = rome_path.name
+    base_name = name.replace("rome_structural_", "baseline_structural_", 1)
+    for search_dir in search_dirs:
         candidate = search_dir / base_name
         if candidate.exists():
             return candidate
 
-    # Fuzzy: extract model slug from rome filename and match any baseline with same slug
+    stem = rome_path.stem
+    if stem.startswith("rome_structural_"):
+        run_stem = stem[len("rome_structural_"):]
+        run_stem_prefix = run_stem.rsplit("_", 2)[0]
+        if run_stem_prefix and run_stem_prefix != run_stem:
+            for search_dir in search_dirs:
+                candidates = sorted(
+                    search_dir.glob(f"baseline_structural_{run_stem_prefix}_*.json"),
+                    key=lambda path: path.stat().st_mtime,
+                    reverse=True,
+                )
+                if candidates:
+                    return candidates[0]
+
     m = re.match(r"rome_structural_(.+?)_tk\d+", name)
     if not m:
         m = re.match(r"rome_structural_(.+?)_\d{4}-\d{2}-\d{2}", name)
     if not m:
         return None
     slug = m.group(1)
-    for search_dir in [rome_path.parent, baseline_dir]:
-        if search_dir is None:
-            continue
-        candidates = sorted(search_dir.glob(f"baseline_structural_{slug}_*.json"))
+    for search_dir in search_dirs:
+        candidates = sorted(
+            search_dir.glob(f"baseline_structural_{slug}_*.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
         if candidates:
             return candidates[0]
     return None

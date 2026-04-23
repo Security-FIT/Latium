@@ -21,6 +21,7 @@ import math
 import os
 import re
 import sys
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -79,6 +80,16 @@ FC_TEMPLATE_MAP = {
     "output_linear": "input_linear",  # Granite shared MLP
 }
 
+ANALYSIS_PROFILE_ALIASES = {
+    "raw": "raw",
+    "full": "full",
+    "paper": "paper",
+    "posthoc": "paper",
+    "posthoc-only": "paper",
+    "detection": "paper",
+    "detection-only": "paper",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -108,6 +119,22 @@ def normalize_target_text(text: str) -> str:
     s = re.sub(r"[\s\.,;:!?\"'`]+$", "", s)
     s = re.sub(r"^[\s\"'`]+", "", s)
     return s
+
+
+def normalize_analysis_profile(analysis_profile: Optional[str], posthoc_only: bool = False) -> str:
+    """Map user-facing aliases onto the canonical analysis profiles."""
+    if posthoc_only:
+        return "paper"
+
+    profile = str(analysis_profile or "full").strip().lower()
+    canonical = ANALYSIS_PROFILE_ALIASES.get(profile)
+    if canonical is None:
+        supported = ", ".join(sorted(ANALYSIS_PROFILE_ALIASES))
+        raise ValueError(
+            f"Unsupported analysis_profile: {analysis_profile!r}. "
+            f"Supported values/aliases: {supported}"
+        )
+    return canonical
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +617,55 @@ def _append_model_result(all_results: Dict[str, object], model_name: str, result
     all_results[model_name] = [existing, result]
 
 
+def _build_run_output_path(
+    output_path: Path,
+    file_prefix: str,
+    safe_name: str,
+    cfg_slug: str,
+    sweep_idx: int,
+    run_idx: int,
+    run_token: str,
+) -> Path:
+    return output_path / (
+        f"{file_prefix}_{safe_name}_{cfg_slug}"
+        f"_s{sweep_idx:02d}_r{run_idx:02d}_{run_token}.json"
+    )
+
+
+def _build_run_metadata(
+    model_name: str,
+    start_idx_used: int,
+    run_idx: int,
+    run_ordinal: int,
+    runs_per_model: int,
+    run_start_idx_step: int,
+    sweep_idx: int,
+    sweep_cfg: Dict[str, object],
+    sweep_count: int,
+    cfg_slug: str,
+    total_runs_for_model: int,
+    sweep_tag: Optional[str],
+    n_cases: int,
+) -> Dict[str, object]:
+    metadata: Dict[str, object] = {
+        "model": model_name,
+        "run_index": run_idx,
+        "run_ordinal": run_ordinal,
+        "runs_per_model": runs_per_model,
+        "run_start_idx_step": run_start_idx_step,
+        "start_idx_used": start_idx_used,
+        "end_idx_used": start_idx_used + max(0, n_cases - 1),
+        "sweep_index": sweep_idx,
+        "sweep_size": sweep_count,
+        "sweep_config": to_serializable(sweep_cfg),
+        "sweep_slug": cfg_slug,
+        "total_runs_for_model": total_runs_for_model,
+    }
+    if sweep_tag:
+        metadata["sweep_tag"] = str(sweep_tag)
+    return metadata
+
+
 def auto_trim_from_layers(num_layers: int) -> int:
     """
     Choose trim count from model depth.
@@ -794,9 +870,7 @@ def run_single_model(
     baseline_only: bool = False,
 ) -> dict:
     """Run the full ROME + structural-detection benchmark for one model."""
-    analysis_profile = str(analysis_profile or "full").strip().lower()
-    if analysis_profile not in {"raw", "paper", "full"}:
-        raise ValueError(f"Unsupported analysis_profile: {analysis_profile}")
+    analysis_profile = normalize_analysis_profile(analysis_profile)
     raw_only = analysis_profile == "raw"
     paper_only = analysis_profile == "paper"
     full_profile = analysis_profile == "full"
@@ -853,8 +927,9 @@ def run_single_model(
             store_raw_spectral=True,
             raw_only=raw_only,
             raw_spectral_max_top_k=raw_spectral_max_top_k,
+            raw_payload_level="sv_only" if paper_only else "full",
+            emit_local_window_scores=not paper_only,
         )
-        if not paper_only else None
     )
     ipr_detector = (
         IPRDetector(trim_first=eff_trim_first, trim_last=eff_trim_last)
@@ -911,6 +986,8 @@ def run_single_model(
                 "raw_spectral_max_top_k": (
                     None if raw_spectral_max_top_k is None else int(raw_spectral_max_top_k)
                 ),
+                "raw_payload_level": "sv_only" if paper_only else "full",
+                "emit_local_window_scores": not paper_only,
                 "signal_keys": SPECTRAL_SIGNAL_KEYS,
             },
             "analytics_config": {
@@ -919,7 +996,7 @@ def run_single_model(
                 "enable_rank1_blind": bool(enable_rank1_blind),
                 "enable_symmetry_metrics": bool(enable_symmetry_metrics),
                 "enable_bottom_rank_svd": bool(enable_bottom_rank_svd),
-                "paper_blind_features_only": bool(paper_only),
+                "paper_spectral_lite": bool(paper_only),
                 "bottom_rank_sweep_ranks": [int(x) for x in bottom_rank_sweep_ranks],
                 "bottom_rank_top_svd_rank": int(bottom_rank_top_svd_rank),
                 "bottom_rank_boundary": int(bottom_rank_boundary),
@@ -1049,9 +1126,11 @@ def run_single_model(
                     })
                     LOGGER.info("  BASELINE RAW_JSON=OK")
                 elif paper_only:
+                    spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc) if spectral_detector else {}
                     blind_res = blind_detector.detect_layer_features_only(modified_proj) if blind_detector else {}
                     entry.update({
                         "blind_detection": to_serializable(blind_res),
+                        "spectral_detection": to_serializable(spectral_res),
                         "accuracy": {"rome_success": True, "baseline_only": True, "detection_skipped": False},
                     })
                     LOGGER.info("  BASELINE PAPER_JSON=OK")
@@ -1194,8 +1273,11 @@ def run_single_model(
                     if rome_ok:
                         modified_proj = dict(baseline_proj)
                         modified_proj[handler._layer] = handler._get_module(layer_name).weight.detach().clone().cpu()
+                        modified_fc = baseline_fc
+                        spectral_res = spectral_detector.detect(modified_proj, fc_weights=modified_fc) if spectral_detector else {}
                         blind_res = blind_detector.detect_layer_features_only(modified_proj) if blind_detector else {}
                         entry["blind_detection"] = to_serializable(blind_res)
+                        entry["spectral_detection"] = to_serializable(spectral_res)
                         LOGGER.info(
                             "  ROME=OK(ES=%.1f PS=%s NS=%s S=%.3f) PAPER_JSON=OK",
                             rome_metrics["efficacy_score"],
@@ -1324,6 +1406,8 @@ def run_single_model(
             entry["error"] = str(e)
             entry["skipped"] = True
             LOGGER.warning("  SKIPPED: %s", e)
+            if os.getenv("LATIUM_LOG_SKIP_TRACEBACK", "").strip().lower() in {"1", "true", "yes", "on"}:
+                LOGGER.warning("  SKIPPED TRACEBACK:\n%s", traceback.format_exc())
         finally:
             handler.remove_hooks()
             handler._get_module(layer_name).weight = torch.nn.Parameter(old_W)
@@ -1448,6 +1532,7 @@ def run_benchmark(
     sweep_tag: Optional[str] = None,
     analysis_profile: str = "full",
     baseline_only: bool = False,
+    create_paired_baseline: bool = True,
     fail_on_missing_second_moment: bool = False,
 ):
     """Run benchmark across models, optionally with multi-run + sweep experiments."""
@@ -1598,13 +1683,83 @@ def run_benchmark(
                     test_case_cache[start_idx_used] = load_test_cases(n_tests, start_idx_used)
                 run_test_cases = test_case_cache[start_idx_used]
 
-                ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                out_file = output_path / (
-                    f"{file_prefix}_{safe_name}_{cfg_slug}"
-                    f"_s{sweep_idx:02d}_r{run_idx:02d}_{ts}.json"
+                run_token = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                out_file = _build_run_output_path(
+                    output_path,
+                    file_prefix,
+                    safe_name,
+                    cfg_slug,
+                    sweep_idx,
+                    run_idx,
+                    run_token,
+                )
+                baseline_out_file = _build_run_output_path(
+                    output_path,
+                    "baseline_structural",
+                    safe_name,
+                    cfg_slug,
+                    sweep_idx,
+                    run_idx,
+                    run_token,
+                )
+                run_metadata = _build_run_metadata(
+                    model_name=model_name,
+                    start_idx_used=start_idx_used,
+                    run_idx=run_idx,
+                    run_ordinal=run_ordinal,
+                    runs_per_model=runs_per_model,
+                    run_start_idx_step=run_start_idx_step,
+                    sweep_idx=sweep_idx,
+                    sweep_cfg=sweep_cfg,
+                    sweep_count=len(effective_sweeps),
+                    cfg_slug=cfg_slug,
+                    total_runs_for_model=total_runs_for_model,
+                    sweep_tag=sweep_tag,
+                    n_cases=len(run_test_cases),
                 )
 
                 try:
+                    if create_paired_baseline and not baseline_only:
+                        LOGGER.info(
+                            "Running paired baseline for %s (sweep=%d run=%d) before edited benchmark",
+                            model_name,
+                            sweep_idx,
+                            run_idx,
+                        )
+                        baseline_results = run_single_model(
+                            model_name,
+                            run_test_cases,
+                            n_prompts,
+                            spectral_top_k=cfg_top_k,
+                            trim_first=cfg_trim_first,
+                            trim_last=cfg_trim_last,
+                            spectral_neighbor_layers=cfg_neighbor,
+                            spectral_rolling_window=cfg_rolling,
+                            local_windows=cfg_local_windows,
+                            enable_attention_metrics=enable_attention_metrics,
+                            enable_rank1_blind=enable_rank1_blind,
+                            enable_symmetry_metrics=enable_symmetry_metrics,
+                            enable_bottom_rank_svd=enable_bottom_rank_svd,
+                            bottom_rank_sweep_ranks=bottom_rank_sweep_ranks,
+                            bottom_rank_top_svd_rank=bottom_rank_top_svd_rank,
+                            bottom_rank_boundary=bottom_rank_boundary,
+                            raw_spectral_max_top_k=raw_spectral_max_top_k,
+                            analysis_profile=analysis_profile,
+                            baseline_only=True,
+                        )
+                        baseline_metadata = baseline_results.setdefault("metadata", {})
+                        baseline_metadata.update(run_metadata)
+                        baseline_metadata.update({
+                            "paired_role": "baseline",
+                            "paired_run_id": run_token,
+                            "baseline_structural_file": baseline_out_file.name,
+                            "edited_structural_file": out_file.name,
+                            "baseline_source": "auto_paired",
+                        })
+                        with open(baseline_out_file, "w") as f:
+                            json.dump(to_serializable(baseline_results), f, indent=2)
+                        LOGGER.info("Saved paired baseline: %s", baseline_out_file)
+
                     model_results = run_single_model(
                         model_name,
                         run_test_cases,
@@ -1628,21 +1783,18 @@ def run_benchmark(
                     )
 
                     metadata = model_results.setdefault("metadata", {})
+                    metadata.update(run_metadata)
                     metadata.update({
-                        "run_index": run_idx,
-                        "run_ordinal": run_ordinal,
-                        "runs_per_model": runs_per_model,
-                        "run_start_idx_step": run_start_idx_step,
-                        "start_idx_used": start_idx_used,
-                        "end_idx_used": start_idx_used + max(0, len(run_test_cases) - 1),
-                        "sweep_index": sweep_idx,
-                        "sweep_size": len(effective_sweeps),
-                        "sweep_config": to_serializable(sweep_cfg),
-                        "sweep_slug": cfg_slug,
-                        "total_runs_for_model": total_runs_for_model,
+                        "paired_role": "baseline" if baseline_only else "edited",
+                        "paired_run_id": run_token,
                     })
-                    if sweep_tag:
-                        metadata["sweep_tag"] = str(sweep_tag)
+                    if baseline_only:
+                        metadata["baseline_structural_file"] = out_file.name
+                    elif create_paired_baseline:
+                        metadata.update({
+                            "baseline_structural_file": baseline_out_file.name,
+                            "baseline_source": "auto_paired",
+                        })
 
                     _append_model_result(all_results, model_name, model_results)
                     with open(out_file, "w") as f:
@@ -1795,9 +1947,30 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--analysis-profile",
-        choices=["raw", "paper", "full"],
         default="full",
-        help="raw: only store minimal + raw spectral payloads; paper: only store ROME + blind layer features needed for local detector/graphs; full: run all detectors",
+        help=(
+            "Analysis payload level. Canonical values: raw, paper, full. "
+            "Aliases: posthoc, posthoc-only, detection, detection-only -> paper."
+        ),
+    )
+    parser.add_argument(
+        "--posthoc-only",
+        "--detection-only",
+        dest="posthoc_only",
+        action="store_true",
+        help=(
+            "Only compute the spectral-lite structural payload needed by the post-hoc "
+            "detector and paper graphs. Equivalent to --analysis-profile paper."
+        ),
+    )
+    parser.add_argument(
+        "--paper",
+        dest="paper_profile",
+        action="store_true",
+        help=(
+            "Compatibility alias for the spectral-lite paper/post-hoc payload. "
+            "Equivalent to --posthoc-only and --analysis-profile paper."
+        ),
     )
     parser.add_argument(
         "--fail-on-missing-second-moment",
@@ -1813,6 +1986,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip ROME edits and run all detectors on the original (unedited) model weights. "
              "Output files use 'baseline_structural_' prefix instead of 'rome_structural_'.",
+    )
+    parser.add_argument(
+        "--no-paired-baseline",
+        action="store_true",
+        help="Disable the automatic unedited baseline run that is otherwise saved before each edited run.",
     )
     parser.add_argument(
         "--bottom-rank-sweep-ranks",
@@ -1839,6 +2017,10 @@ if __name__ == "__main__":
         help="Best-effort load models/settings from docs/*.md",
     )
     args = parser.parse_args()
+    args.analysis_profile = normalize_analysis_profile(
+        args.analysis_profile,
+        posthoc_only=bool(args.posthoc_only or args.paper_profile),
+    )
 
     if args.experiment_doc:
         exp = parse_experiment_doc(
@@ -1960,5 +2142,6 @@ if __name__ == "__main__":
         sweep_tag=args.sweep_tag,
         analysis_profile=args.analysis_profile,
         baseline_only=args.baseline_only,
+        create_paired_baseline=not args.no_paired_baseline,
         fail_on_missing_second_moment=args.fail_on_missing_second_moment,
     )

@@ -23,7 +23,29 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-BASELINE_COLOR = "#7f7f7f"
+BASELINE_COLOR = "#000000"
+
+
+def _plot_baseline_overlay(ax, layers, values, label: Optional[str]) -> None:
+    import matplotlib.patheffects as pe
+
+    markevery = max(1, len(layers) // 12)
+    line = ax.plot(
+        layers,
+        values,
+        color=BASELINE_COLOR,
+        linewidth=1.8,
+        linestyle="--",
+        marker="o",
+        markersize=2.4,
+        markerfacecolor="white",
+        markeredgecolor=BASELINE_COLOR,
+        markeredgewidth=0.8,
+        markevery=markevery,
+        label=label,
+        zorder=4,
+    )[0]
+    line.set_path_effects([pe.Stroke(linewidth=3.2, foreground="white"), pe.Normal()])
 
 
 def _safe_slug(text: str) -> str:
@@ -142,6 +164,8 @@ def process_file(path: Path, trim: int = 5, max_tests: Optional[int] = None) -> 
     with open(path) as f:
         data = json.load(f)
 
+    from detector.composite_detector_v2 import _find_baseline
+
     meta = data.get("metadata", {})
     target = meta.get("target_layer")
     model = meta.get("model_name", meta.get("model", path.stem))
@@ -171,6 +195,7 @@ def process_file(path: Path, trim: int = 5, max_tests: Optional[int] = None) -> 
         used_tests += 1
 
     n = len(results)
+    baseline_path = _find_baseline(path, payload=data)
     return {
         "model": model, "target_layer": target,
         "n_tests": n, "correct": correct,
@@ -178,6 +203,7 @@ def process_file(path: Path, trim: int = 5, max_tests: Optional[int] = None) -> 
         "method_counts": method_counts,
         "results": results, "path": str(path),
         "trim": trim,
+        "baseline_path": str(baseline_path) if baseline_path is not None else None,
         "run_label": _run_label_from_path(path),
         "run_slug": _run_slug_from_path(path),
     }
@@ -214,7 +240,7 @@ def plot_signals(
     if baseline_path is None:
         from detector.composite_detector_v2 import _find_baseline
 
-        baseline_path = _find_baseline(path)
+        baseline_path = _find_baseline(path, payload=data)
     baseline_test = None
     if baseline_path is not None and Path(baseline_path).exists():
         with open(baseline_path) as f:
@@ -264,13 +290,11 @@ def plot_signals(
                 baseline_full = np.array([baseline_lf[l][sig] for l in baseline_layers])
                 baseline_vals = tfn(baseline_full)[b_lo:b_hi]
                 if len(baseline_eval_layers) == len(baseline_vals):
-                    ax.plot(
+                    _plot_baseline_overlay(
+                        ax,
                         baseline_eval_layers,
                         baseline_vals,
-                        color=BASELINE_COLOR,
-                        linewidth=1.4,
-                        linestyle="--",
-                        label="Baseline",
+                        label="Unedited baseline",
                     )
         peak = int(np.argmax(vals))
         ax.axvline(el[peak], color=color, alpha=0.4, linestyle="--",
@@ -391,6 +415,58 @@ def _aggregate_signal_profile_stats(file_results: List[Dict]) -> Dict[str, dict]
     return aggregated
 
 
+def _load_baseline_signal_profile_stats(path: Path, trim: int) -> Dict[str, dict]:
+    from detector.composite_detector_v2 import _find_baseline
+
+    baseline_path = _find_baseline(path)
+    if baseline_path is None or not baseline_path.exists():
+        return {}
+    with open(baseline_path) as f:
+        payload = json.load(f)
+    return _signal_profile_stats(payload, trim=trim)
+
+
+def _aggregate_baseline_signal_profile_stats(file_results: List[Dict]) -> Dict[str, dict]:
+    from detector.composite_detector_v2 import _find_baseline
+
+    per_signal: Dict[str, Dict[int, List[float]]] = {}
+    seen_paths: set[str] = set()
+
+    for file_result in file_results:
+        path = Path(file_result["path"])
+        baseline_path_raw = file_result.get("baseline_path")
+        baseline_path = Path(baseline_path_raw) if baseline_path_raw else _find_baseline(path)
+        if baseline_path is None or not baseline_path.exists():
+            continue
+        resolved = str(baseline_path.resolve())
+        if resolved in seen_paths:
+            continue
+        seen_paths.add(resolved)
+
+        with open(baseline_path) as f:
+            payload = json.load(f)
+        trim = int(file_result.get("trim", 5))
+        run_stats = _signal_profile_stats(payload, trim=trim)
+        for name, stats in run_stats.items():
+            target = per_signal.setdefault(name, {})
+            for layer, value in zip(stats["layers"], stats["mean"]):
+                if np.isfinite(value):
+                    target.setdefault(int(layer), []).append(float(value))
+
+    aggregated: Dict[str, dict] = {}
+    for name, layer_map in per_signal.items():
+        if not layer_map:
+            continue
+        ordered_layers = np.array(sorted(layer_map), dtype=int)
+        aggregated[name] = {
+            "layers": ordered_layers,
+            "mean": np.array([np.mean(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "std": np.array([np.std(layer_map[layer]) for layer in ordered_layers], dtype=float),
+            "count": np.array([len(layer_map[layer]) for layer in ordered_layers], dtype=int),
+        }
+    return aggregated
+
+
 def plot_average_signals(file_results: List[Dict], output_dir: Optional[Path] = None):
     import matplotlib.pyplot as plt
 
@@ -408,6 +484,7 @@ def plot_average_signals(file_results: List[Dict], output_dir: Optional[Path] = 
     signal_stats = _aggregate_signal_profile_stats(file_results)
     if not signal_stats:
         return
+    baseline_signal_stats = _aggregate_baseline_signal_profile_stats(file_results)
 
     sigs_spec = [
         ("ER curv", "#2980b9"),
@@ -432,9 +509,17 @@ def plot_average_signals(file_results: List[Dict], output_dir: Optional[Path] = 
         layers = stats["layers"]
         mean = stats["mean"]
         std = stats["std"]
-        ax.plot(layers, mean, color=color, linewidth=1.7)
+        ax.plot(layers, mean, color=color, linewidth=1.7, label="Edited mean", zorder=2)
         if np.any(np.isfinite(std)):
             ax.fill_between(layers, mean - std, mean + std, color=color, alpha=0.14)
+        baseline_stats = baseline_signal_stats.get(name)
+        if baseline_stats is not None:
+            _plot_baseline_overlay(
+                ax,
+                baseline_stats["layers"],
+                baseline_stats["mean"],
+                label="Unedited baseline",
+            )
         peak_idx = int(np.nanargmax(mean))
         ax.axvline(layers[peak_idx], color=color, alpha=0.4, linestyle="--",
                    label=f"mean peak L{int(layers[peak_idx])}")

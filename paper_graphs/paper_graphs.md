@@ -2,6 +2,29 @@
 
 This note explains every graph rendered by `paper_graphs.ipynb`.
 
+Two payload levels are supported:
+
+- `paper` / `--posthoc-only` / `--paper`: spectral-lite structural JSONs with blind layer features, Signal A / Signal B, PCS series, slim raw singular-value maps, and paired baselines.
+- `full`: full structural JSONs with the heavyweight raw spectral payload plus attention-contrast and the other full analytics.
+
+When a run comes from the `paper` profile, the notebook renders:
+
+- Top-k proj singular values at target layer
+- Signal A
+- Signal B
+- PCS next jump
+- PCS next curvature
+- PCS cross scores
+- PCS cross curvature
+- Blind spectral_gap
+- Blind top1_energy
+- Stable/effective rank ratio
+- Blind norm_cv
+- Blind spectral_entropy
+- Blind row_alignment
+
+Only the attention-contrast panel requires a `full` payload.
+
 ## Common Conventions
 
 Let the projection matrix at layer $\ell$ be $W^{(p)}_\ell$ and, when available, the paired FC matrix be $W^{(f)}_\ell$.

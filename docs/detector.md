@@ -16,7 +16,7 @@ The repository has two post-hoc layer detectors that operate on
 
 | Detector | Intended scope | Main idea |
 |----------|----------------|-----------|
-| `composite_detector_v2.py` | Non-GPT architectures | Multi-signal spectral chain with two targeted edge rescues |
+| `composite_detector_v2.py` | Non-GPT architectures | Blind-feature chain with optional full-profile Signal A / Signal B support |
 | `gpt_detector.py` | GPT-2 family and GPT-J | 3-way `norm_cv` vote with multi-trim fallback |
 
 Important:
@@ -38,6 +38,15 @@ Pipeline routing:
 Both detectors read:
 
 - `test["blind_detection"]["layer_features"]`
+
+The composite detector can also read:
+
+- `test["spectral_detection"]`
+
+when the structural JSON was produced with a spectral-capable payload. The
+default `paper` profile now includes the Signal A / Signal B and PCS series
+needed by the post-hoc detector, while blind-only payloads still fall back to
+the blind-feature chain automatically.
 
 Those features are produced by `BlindMSDDetector.detect_layer_features_only()`
 in `src/structural/blind_detector.py`, and are written into structural JSON
@@ -143,21 +152,26 @@ recommended workflow. GPT-family runs should use `gpt_detector.py`.
 
 ### Signals used by the composite detector
 
-Primary spectral signals:
+Blind-feature signals:
 
 - `SG`: raw `spectral_gap`
 - `TE`: local-z `top1_energy`
 - `SG_small`: local-z `spectral_gap` with the small window
 - `SG_large`: local-z `spectral_gap` with the large window
 
-Secondary structural signals:
+Full-profile support signals:
+
+- `Signal A`: `spectral_detection.sv_z_scores`
+- `Signal B`: `spectral_detection.sv_ratio_scores`
+
+Debug-only structural signals:
 
 - `NC`: local-z `norm_cv`
 - `ER`: curvature of `effective_rank`
 - `RA`: raw `row_alignment`
 
-`NC` is still recorded in detector metadata for debugging, but the current
-final decision path only uses `ER` and `RA` in the structural rescue.
+`NC`, `ER`, and `RA` are still recorded in detector metadata for debugging, but
+the current decision path does not branch on them.
 
 ### Core decision chain
 
@@ -168,7 +182,7 @@ Let:
 - `s5_l` be the small-window spectral-gap local-z peak layer
 - `s7_l` be the large-window spectral-gap local-z peak layer
 
-The detector follows this cascade:
+The detector first runs the blind-feature cascade:
 
 1. If `SG == TE`, return `agree`.
 2. If `SG_small` is within `+-1` index of `SG` but not `TE`, return `sg(lz{small_window})`.
@@ -187,35 +201,29 @@ If `abs(rho) <= 0.3`:
 
 - Return `sg(fb)`.
 
-### Additional rescue rules and overrides
+After that, full-profile runs can apply two spectral-support rules:
 
-The current implementation keeps two targeted rescues beyond the basic v5 chain.
+1. **Signal A confirmation**
 
-#### 1. Edge local-z consensus rescue
+If Signal A has a strong peak and that peak matches the `TE` branch, the
+detector returns:
 
-If the chosen `lz_cons(*)` peak lies near the boundary of the evaluated range,
-but `TE` forms a strong interior peak far enough away, the detector switches to:
+- `signal_a`
 
-- `te(edge_lz{te_window})`
+This is the path that now explains the validated OPT-6.7B full-profile runs.
 
-This is an explicit edge-artifact correction.
+2. **Signal A/B boundary support**
 
-#### 2. Early structural consensus rescue
+If raw `SG`, Signal A, and Signal B all cluster inside the same boundary band,
+the detector keeps the raw `SG` layer and returns:
 
-If the current method is `sg(lz{small_window})`, but:
+- `signal_ab_boundary`
 
-- `ER` and `RA` agree closely,
-- their consensus is very early,
-- and the spectral-gap peak is much later,
+This replaces the older need for detector-side edge-specific rescue rules in
+the documented behavior for early-boundary models such as Falcon.
 
-the detector switches to:
-
-- `er_ra(edge)`
-
-This is meant to catch late spectral peaks that look like architecture artifacts.
-
-The earlier low-confidence structural fallbacks (`er_ra(fb)`, `nc_er(fb)`,
-`ra(fb)`, `nc(fb)`) are no longer part of the implemented detector.
+The earlier documented `te(edge_lz5)` and `er_ra(edge)` rescue branches are no
+longer part of the implemented detector.
 
 ### Returned metadata
 
@@ -225,7 +233,7 @@ For each test, the detector records debug info including:
 - per-signal peak layer/index/z-score
 - evaluated layer range
 - Spearman `rho` when the trend fallback is used
-- any override metadata in `info["v5_override"]`
+- any full-profile support metadata in `info["spectral_support"]`
 
 ### Binary edit detection
 

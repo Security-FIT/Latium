@@ -2,8 +2,13 @@
 
 This pipeline splits the run into:
 
-- remote H100 GPU work: `structural_benchmark.py --analysis-profile paper`
+- remote H100 GPU work: `structural_benchmark.py --posthoc-only`
 - local CPU work: post-hoc detector summaries, paper graphs, `success.txt`
+
+`--posthoc-only` is a clearer alias for `--analysis-profile paper`: it keeps only
+the spectral-lite structural JSON payload needed by the post-hoc detector and
+paper graphs, without the heavyweight full-profile analytics.
+`structural_benchmark.py --paper` is also accepted as a compatibility alias.
 
 Defaults:
 
@@ -11,6 +16,17 @@ Defaults:
 - `N=50`
 - `start_idx=30`
 - CounterFact slices iterate by model: `30-79`, `80-129`, `130-179`, ...
+
+To run the same CounterFact slice for every model instead, pass:
+
+```bash
+bash pipeline.sh \
+  --remote user@your-h100-host \
+  --slice-policy shared
+```
+
+With `--slice-policy shared`, every selected model uses the same `start_idx`
+through `start_idx + N - 1` range.
 
 ## Prerequisites
 
@@ -32,6 +48,18 @@ Bootstrap the remote env, stage covariance, and start both tmux sessions:
 bash pipeline.sh \
   --remote user@your-h100-host \
   --setup-env
+```
+
+Lightweight shared-slice example:
+
+```bash
+bash pipeline.sh \
+  --remote user@your-h100-host \
+  --setup-env \
+  --posthoc-only \
+  --slice-policy shared \
+  --n 3 \
+  --start-idx 30
 ```
 
 If a covariance file is missing from the search path, allow the remote runner to compute only the missing one:

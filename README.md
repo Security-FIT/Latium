@@ -102,6 +102,11 @@ python -m src.causal_trace.layer_heuristic \
 
 `structural_benchmark.py` applies ROME edits across a dataset and evaluates all structural detectors (MSD, blind MSD, spectral, IPR) on the modified weights. Results are written as JSON to `analysis_out/`.
 
+For the lightweight payload used by the post-hoc detector and
+`paper_graphs.ipynb`, run `structural_benchmark.py --posthoc-only ...`
+or `structural_benchmark.py --paper ...`
+(`--analysis-profile paper` remains the underlying profile name).
+
 ```bash
 python structural_benchmark.py \
     --model gpt2-large \

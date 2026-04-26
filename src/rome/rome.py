@@ -39,6 +39,18 @@ import logging
 LOGGER = logging.getLogger(__name__)
 
 
+def _ensure_output_dir(path: str | Path) -> Path:
+    """Create ``path`` (and parents) if possible, otherwise fall back to the CWD."""
+    out = Path(path)
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        return out
+    except OSError as exc:
+        fallback = Path.cwd()
+        LOGGER.warning("Could not create %s (%s); saving to %s instead", out, exc, fallback)
+        return fallback
+
+
 def batch_intervention_generator(bs: ModelHandler | DictConfig) -> Iterable[Tuple[torch.Tensor, torch.Tensor]]:
     if isinstance(bs, ModelHandler):
         yield from _batch_intervention_generator_handler(bs)
@@ -77,8 +89,9 @@ def _batch_intervention_generator_handler(handler: ModelHandler) -> Iterable[Tup
             LOGGER.info(f"The weight intervention was not successful for {prompt_dict.requested_rewrite['relation_id']}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs_str}' predicted instead of '{fact_tuple[2]}'")
         
         if handler.save_new_weights:
-            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt"))
-        
+            out_dir = _ensure_output_dir(handler.new_weights_dir)
+            torch.save(new_W, out_dir / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt")
+
         counter += 1
         yield new_W, old_W, prompt_dict
 
@@ -113,8 +126,9 @@ def _batch_intervention_generator_dictconfig(cfg: DictConfig) -> Iterable[Tuple[
             LOGGER.info(f"The weight intervention was not successful for {prompt_dict.requested_rewrite['relation_id']}. PROMPT: '{fact_tuple[0]}' SUBJECT: '{fact_tuple[1]}', '{outputs_str}' predicted instead of '{fact_tuple[2]}'")
         
         if handler.save_new_weights:
-            torch.save(new_W, Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt"))
-        
+            out_dir = _ensure_output_dir(handler.new_weights_dir)
+            torch.save(new_W, out_dir / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt")
+
         counter += 1
         yield new_W, old_W, prompt_dict
 
@@ -155,7 +169,8 @@ def single_intervention(handler: ModelHandler, fact_tuple: Tuple[str,str,str,str
     new_W, old_W, _ = insert_kv(handler, k, delta)
 
     if handler.save_new_weights:
-        out_path = Path(handler.new_weights_dir) / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"
+        out_dir = _ensure_output_dir(handler.new_weights_dir)
+        out_path = out_dir / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"
         torch.save(new_W, out_path)
         LOGGER.info("Saved new weights to %s", out_path)
 

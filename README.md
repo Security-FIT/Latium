@@ -56,7 +56,7 @@ python rome_benchmark.py --models gpt2-medium --n-tests 1 --start-idx 0 --output
 ```
 
 Notes:
-
+- You can use other models, e.g. gpt2-xl, qwen3-4b etc (scroll down for full model list)
 - `python -m src.cli command=rome ...` does **not** auto-compute missing second moments unless `ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1` is set.
 - By default, model downloads are cached under `../models`, dataset downloads under `../datasets`, and computed covariance files under `./second_moment_stats`.
 - A true cold first run on a GPU host can stay quiet for several minutes while `command=second-moment` downloads assets and builds the covariance file.

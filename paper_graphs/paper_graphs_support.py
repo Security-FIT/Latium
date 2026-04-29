@@ -7,7 +7,15 @@ from typing import Callable, Dict, Optional, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from IPython.display import Markdown, display
+
+try:
+    from IPython.display import Markdown, display
+except ModuleNotFoundError:
+    class Markdown(str):
+        pass
+
+    def display(*_args, **_kwargs) -> None:
+        return None
 
 from detector.composite_detector_v2 import _find_baseline as resolve_structural_baseline
 

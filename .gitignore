@@ -50,6 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+.tmp/
 
 # Translations
 *.mo
@@ -216,6 +217,9 @@ success.txt
 *.npz
 *.csv
 *.json
+!finetuned_qwen3_8b_fleet.json
+!manifests/
+!manifests/counterfact_seed20260423_n500.json
 figs/
 evals/
 data/
@@ -223,8 +227,28 @@ scripts/
 !scripts/
 scripts/*
 !scripts/remote_gpu_structural.sh
+!scripts/remote_gpu_rome.sh
 !scripts/local_posthoc_runner.sh
+!scripts/fetch_finetuned_qwen3_8b.py
+!scripts/find_successful_case.py
+!scripts/fleet_runner.py
+!scripts/bundle_graphs/
+!scripts/bundle_graphs/**
+scripts/bundle_graphs/**/__pycache__/
+scripts/bundle_graphs/**/*.py[codz]
 
+analysis_out/
+new_graphs/
+fleet_out*/
+final_n500_bundle/
+final_n500_bundle.zip
+preparation.md
+preparation.pdf
+difference.md
+src/config/model/fleet_*.yaml
+paper_graphs/figures/
+prefixtest/output/
+detector/graphs/
 detector/graphs/runs/
 detector/graphs/*_all_runs.png
 

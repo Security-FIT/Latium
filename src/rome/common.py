@@ -1283,9 +1283,15 @@ def get_second_moment(handler) -> torch.Tensor:
     Returns the appropriate second moment statistics
     """
     # Check the existence of matrix
+    file_paths = []
     if handler.second_moment_path:
-        file_paths = [Path(handler.second_moment_path)]
-    else:
+        configured_path = Path(handler.second_moment_path)
+        if configured_path.exists():
+            file_paths = [configured_path]
+        else:
+            LOGGER.info("Configured second moment path not found: %s", configured_path)
+
+    if not file_paths:
         # Check for both .pt and .npz files
         file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.pt"))
         file_paths += list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.npz"))

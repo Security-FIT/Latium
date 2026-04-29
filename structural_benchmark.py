@@ -24,9 +24,8 @@ import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-import datasets
 import numpy as np
 import torch
 from omegaconf import OmegaConf
@@ -57,7 +56,15 @@ from src.structural.ipr import (
     layer_fc_proj_ipr_discrepancy,
     IPRDetector,
 )
+from src.counterfact_selection import (
+    build_case_selection_metadata,
+    load_case_manifest,
+    load_cases_by_range,
+    load_cases_from_manifest,
+)
+from src.model_config import load_model_config as resolve_model_config
 from src.utils import clear_linalg_caches
+from src.worker_progress import effective_progress_interval, write_worker_progress
 
 CONFIG_DIR = Path(__file__).parent / "src" / "config"
 MODEL_CONFIG_DIR = CONFIG_DIR / "model"
@@ -292,20 +299,8 @@ def get_fc_template(layer_name_template: str) -> Optional[str]:
 
 
 def load_model_config(model_name: str) -> OmegaConf:
-    """Load a model config YAML by stem name or by the 'name' field inside the YAML."""
-    yaml_path = MODEL_CONFIG_DIR / f"{model_name}.yaml"
-    if yaml_path.exists():
-        return OmegaConf.load(yaml_path)
-    for path in sorted(MODEL_CONFIG_DIR.glob("*.yaml")):
-        if path.name == "boilerplate.yaml":
-            continue
-        cfg = OmegaConf.load(path)
-        if getattr(cfg, "name", "") == model_name:
-            return cfg
-    available = ", ".join(
-        p.stem for p in sorted(MODEL_CONFIG_DIR.glob("*.yaml")) if p.name != "boilerplate.yaml"
-    )
-    raise FileNotFoundError(f"No config for '{model_name}'. Available: {available}")
+    """Load a model config by key, HF model id, or manifest-backed fleet key."""
+    return resolve_model_config(model_name)
 
 
 def build_cfg(model_name: str) -> OmegaConf:
@@ -635,6 +630,7 @@ def _build_run_output_path(
 def _build_run_metadata(
     model_name: str,
     start_idx_used: int,
+    end_idx_used: int,
     run_idx: int,
     run_ordinal: int,
     runs_per_model: int,
@@ -646,6 +642,7 @@ def _build_run_metadata(
     total_runs_for_model: int,
     sweep_tag: Optional[str],
     n_cases: int,
+    case_selection: Optional[Dict[str, object]] = None,
 ) -> Dict[str, object]:
     metadata: Dict[str, object] = {
         "model": model_name,
@@ -654,13 +651,15 @@ def _build_run_metadata(
         "runs_per_model": runs_per_model,
         "run_start_idx_step": run_start_idx_step,
         "start_idx_used": start_idx_used,
-        "end_idx_used": start_idx_used + max(0, n_cases - 1),
+        "end_idx_used": end_idx_used,
         "sweep_index": sweep_idx,
         "sweep_size": sweep_count,
         "sweep_config": to_serializable(sweep_cfg),
         "sweep_slug": cfg_slug,
         "total_runs_for_model": total_runs_for_model,
     }
+    if case_selection is not None:
+        metadata["case_selection"] = to_serializable(case_selection)
     if sweep_tag:
         metadata["sweep_tag"] = str(sweep_tag)
     return metadata
@@ -818,30 +817,114 @@ def add_ipr_z_scores(summary: Dict[int, Dict[str, float]]) -> Dict[int, Dict[str
     return summary
 
 
-def load_test_cases(n_tests: int, start_idx: int = 0) -> List[dict]:
-    """Load test cases from the CounterFact dataset."""
-    ds = datasets.load_dataset("azhx/counterfact", split="train")
-    cases = []
-    for i, item in enumerate(ds):
-        if i < start_idx:
-            continue
-        if len(cases) >= n_tests:
-            break
-        rw = item["requested_rewrite"]
-        cases.append({
-            "case_id": item.get("case_id", i),
-            "subject": rw["subject"],
-            "target_new_str": rw["target_new"]["str"],
-            "target_true_str": rw["target_true"]["str"],
-            "fact_tuple": (
-                rw["prompt"], rw["subject"],
-                " " + rw["target_new"]["str"],
-                " " + rw["target_true"]["str"],
-            ),
-            "paraphrase_prompts": item.get("paraphrase_prompts", []) or [],
-            "neighborhood_prompts": item.get("neighborhood_prompts", []) or [],
-        })
-    return cases
+def load_test_cases(
+    n_tests: int,
+    start_idx: int = 0,
+    *,
+    case_index_file: Optional[str] = None,
+) -> tuple[List[dict], dict[str, Any]]:
+    """Load test cases from the CounterFact dataset via contiguous slice or explicit manifest."""
+    if case_index_file:
+        manifest, cases = load_cases_from_manifest(case_index_file, n_tests=n_tests)
+        case_selection = build_case_selection_metadata(
+            manifest=manifest,
+            manifest_path=case_index_file,
+            selected_cases=cases,
+        )
+        return cases, case_selection
+
+    cases = load_cases_by_range(n_tests=n_tests, start_idx=start_idx)
+    case_selection = build_case_selection_metadata(start_idx=start_idx, n_cases=len(cases))
+    return cases, case_selection
+
+
+def _collapse_to_single_baseline_case(
+    test_cases: Sequence[Mapping[str, Any]],
+    case_selection: Mapping[str, Any],
+    *,
+    fallback_start_idx: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    collapsed_cases = [dict(test_cases[0])] if test_cases else []
+    mode = str(case_selection.get("mode") or "contiguous_slice")
+
+    if mode == "explicit_indices":
+        dataset = str(case_selection.get("dataset") or "azhx/counterfact")
+        split = str(case_selection.get("split") or "train")
+        seed = case_selection.get("seed")
+        manifest_path = case_selection.get("manifest_path")
+        manifest_hash = str(case_selection.get("manifest_hash") or "")
+
+        if collapsed_cases:
+            collapsed_selection = build_case_selection_metadata(
+                manifest={
+                    "dataset": dataset,
+                    "split": split,
+                    "seed": seed,
+                    "manifest_hash": manifest_hash,
+                },
+                manifest_path=manifest_path,
+                selected_cases=collapsed_cases,
+            )
+        else:
+            collapsed_selection = {
+                "mode": "explicit_indices",
+                "dataset": dataset,
+                "split": split,
+                "seed": seed,
+                "manifest_path": str(manifest_path or ""),
+                "manifest_hash": manifest_hash,
+                "count": min(1, int(case_selection.get("count", 0) or 0)),
+                "selected_dataset_indices": [
+                    int(v) for v in list(case_selection.get("selected_dataset_indices", []))[:1]
+                ],
+                "selected_case_ids": [
+                    int(v) for v in list(case_selection.get("selected_case_ids", []))[:1]
+                ],
+            }
+        return collapsed_cases, collapsed_selection
+
+    start_idx = int(case_selection.get("start_idx", fallback_start_idx) or fallback_start_idx)
+    collapsed_count = len(collapsed_cases)
+    if not collapsed_count:
+        collapsed_count = min(1, int(case_selection.get("count", 0) or 0))
+    collapsed_selection = build_case_selection_metadata(start_idx=start_idx, n_cases=collapsed_count)
+    return collapsed_cases, collapsed_selection
+
+
+def _selection_bounds(case_selection: Mapping[str, Any], fallback_start_idx: int, n_cases: int) -> tuple[int, int]:
+    if str(case_selection.get("mode", "")) == "explicit_indices":
+        indices = [int(v) for v in case_selection.get("selected_dataset_indices", [])]
+        if indices:
+            return indices[0], indices[-1]
+        return 0, -1
+    start_idx = int(case_selection.get("start_idx", fallback_start_idx) or 0)
+    end_idx = int(case_selection.get("end_idx", start_idx + max(0, n_cases - 1)) or 0)
+    return start_idx, end_idx
+
+
+def _update_model_progress(
+    progress_file: Optional[str],
+    *,
+    worker_id: Optional[str],
+    model_name: str,
+    completed: int,
+    total: int,
+    progress_interval: int,
+    status: str = "running",
+) -> None:
+    if not progress_file:
+        return
+    write_worker_progress(
+        progress_file,
+        {
+            "worker_id": worker_id or "",
+            "status": status,
+            "current_model": model_name,
+            "current_model_progress": f"{completed}/{total}",
+            "progress_interval": progress_interval,
+        },
+        preserve_existing=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -868,6 +951,9 @@ def run_single_model(
     raw_spectral_max_top_k: Optional[int] = None,
     analysis_profile: str = "full",
     baseline_only: bool = False,
+    progress_file: Optional[str] = None,
+    progress_interval: int = 10,
+    worker_id: Optional[str] = None,
 ) -> dict:
     """Run the full ROME + structural-detection benchmark for one model."""
     analysis_profile = normalize_analysis_profile(analysis_profile)
@@ -1089,6 +1175,18 @@ def run_single_model(
     required_successes_hint = int(required_successes_hint_raw) if required_successes_hint_raw.isdigit() else None
     attempt_hint = int(attempt_hint_raw) if attempt_hint_raw.isdigit() else None
     cumulative_hint = int(cumulative_hint_raw) if cumulative_hint_raw.isdigit() else None
+
+    effective_interval = effective_progress_interval(len(test_cases), progress_interval)
+    if progress_file and not baseline_only:
+        _update_model_progress(
+            progress_file,
+            worker_id=worker_id,
+            model_name=model_name,
+            completed=0,
+            total=len(test_cases),
+            progress_interval=effective_interval,
+            status="running",
+        )
 
     for i, case in enumerate(test_cases):
         case_tag = f"[{i + 1}/{len(test_cases)}]"
@@ -1412,6 +1510,18 @@ def run_single_model(
             handler.remove_hooks()
             handler._get_module(layer_name).weight = torch.nn.Parameter(old_W)
             results["tests"].append(entry)
+            completed_cases = len(results["tests"])
+            if progress_file and not baseline_only:
+                if completed_cases % effective_interval == 0 or completed_cases == len(test_cases):
+                    _update_model_progress(
+                        progress_file,
+                        worker_id=worker_id,
+                        model_name=model_name,
+                        completed=completed_cases,
+                        total=len(test_cases),
+                        progress_interval=effective_interval,
+                        status="running",
+                    )
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
@@ -1510,6 +1620,7 @@ def run_benchmark(
     models: List[str],
     n_tests: int = 30,
     start_idx: int = 0,
+    case_index_file: Optional[str] = None,
     output_dir: str = "./analysis_out",
     n_prompts: int = 50,
     spectral_top_k: int = 50,
@@ -1534,6 +1645,9 @@ def run_benchmark(
     baseline_only: bool = False,
     create_paired_baseline: bool = True,
     fail_on_missing_second_moment: bool = False,
+    progress_file: Optional[str] = None,
+    progress_interval: int = 10,
+    worker_id: Optional[str] = None,
 ):
     """Run benchmark across models, optionally with multi-run + sweep experiments."""
     auto_env = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower()
@@ -1584,7 +1698,27 @@ def run_benchmark(
             cfg.get("local_windows"),
         )
 
-    test_case_cache: Dict[int, List[dict]] = {}
+    manifest_path = str(case_index_file) if case_index_file else None
+    manifest_payload: Optional[dict[str, Any]] = None
+    explicit_case_selection: Optional[dict[str, Any]] = None
+    explicit_test_cases: Optional[List[dict]] = None
+    if manifest_path:
+        if run_start_idx_step:
+            raise ValueError("--run-start-idx-step is not supported with --case-index-file.")
+        manifest_payload = load_case_manifest(manifest_path)
+        explicit_test_cases, explicit_case_selection = load_test_cases(
+            n_tests,
+            case_index_file=manifest_path,
+        )
+        LOGGER.info(
+            "Loaded explicit CounterFact manifest %s (seed=%s count=%d hash=%s)",
+            manifest_path,
+            manifest_payload.get("seed"),
+            int(explicit_case_selection.get("count", 0) or 0),
+            explicit_case_selection.get("manifest_hash"),
+        )
+
+    test_case_cache: Dict[str, tuple[List[dict], dict[str, Any]]] = {}
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -1615,6 +1749,24 @@ def run_benchmark(
                 for run_idx in range(1, runs_per_model + 1):
                     run_ordinal = (sweep_idx - 1) * runs_per_model + run_idx
                     start_idx_used = start_idx + run_start_idx_step * (run_ordinal - 1)
+                    skip_case_selection = (
+                        explicit_case_selection
+                        if explicit_case_selection is not None
+                        else build_case_selection_metadata(start_idx=start_idx_used, n_cases=n_tests)
+                    )
+                    skip_total = n_tests
+                    if baseline_only:
+                        _, skip_case_selection = _collapse_to_single_baseline_case(
+                            (),
+                            skip_case_selection,
+                            fallback_start_idx=start_idx_used,
+                        )
+                        skip_total = int(skip_case_selection.get("count", 0) or 0)
+                    skip_start_idx, skip_end_idx = _selection_bounds(
+                        skip_case_selection,
+                        fallback_start_idx=start_idx_used,
+                        n_cases=skip_total,
+                    )
                     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                     out_file = output_path / (
                         f"{file_prefix}_{safe_name}_{cfg_slug}"
@@ -1632,20 +1784,21 @@ def run_benchmark(
                             "run_ordinal": run_ordinal,
                             "runs_per_model": runs_per_model,
                             "run_start_idx_step": run_start_idx_step,
-                            "start_idx_used": start_idx_used,
-                            "end_idx_used": start_idx_used + max(0, n_tests - 1),
+                            "start_idx_used": skip_start_idx,
+                            "end_idx_used": skip_end_idx,
                             "sweep_index": sweep_idx,
                             "sweep_size": len(effective_sweeps),
                             "sweep_config": to_serializable(sweep_cfg),
                             "sweep_slug": cfg_slug,
                             "total_runs_for_model": total_runs_for_model,
+                            "case_selection": to_serializable(skip_case_selection),
                         },
                         "error": skip_msg,
                         "tests": [],
                         "summary": {
-                            "total": n_tests,
+                            "total": skip_total,
                             "successful": 0,
-                            "skipped": n_tests,
+                            "skipped": skip_total,
                         },
                     }
                     if sweep_tag:
@@ -1678,10 +1831,32 @@ def run_benchmark(
             for run_idx in range(1, runs_per_model + 1):
                 run_ordinal = (sweep_idx - 1) * runs_per_model + run_idx
                 start_idx_used = start_idx + run_start_idx_step * (run_ordinal - 1)
-
-                if start_idx_used not in test_case_cache:
-                    test_case_cache[start_idx_used] = load_test_cases(n_tests, start_idx_used)
-                run_test_cases = test_case_cache[start_idx_used]
+                cache_key = manifest_path or f"start:{start_idx_used}:n:{n_tests}"
+                if cache_key not in test_case_cache:
+                    if explicit_test_cases is not None and explicit_case_selection is not None:
+                        test_case_cache[cache_key] = (explicit_test_cases, explicit_case_selection)
+                    else:
+                        test_case_cache[cache_key] = load_test_cases(n_tests, start_idx_used)
+                run_test_cases, run_case_selection = test_case_cache[cache_key]
+                run_start_bound, run_end_bound = _selection_bounds(
+                    run_case_selection,
+                    fallback_start_idx=start_idx_used,
+                    n_cases=len(run_test_cases),
+                )
+                baseline_test_cases, baseline_case_selection = _collapse_to_single_baseline_case(
+                    run_test_cases,
+                    run_case_selection,
+                    fallback_start_idx=start_idx_used,
+                )
+                baseline_start_bound, baseline_end_bound = _selection_bounds(
+                    baseline_case_selection,
+                    fallback_start_idx=start_idx_used,
+                    n_cases=int(baseline_case_selection.get("count", len(baseline_test_cases)) or 0),
+                )
+                active_test_cases = baseline_test_cases if baseline_only else run_test_cases
+                active_case_selection = baseline_case_selection if baseline_only else run_case_selection
+                active_start_bound = baseline_start_bound if baseline_only else run_start_bound
+                active_end_bound = baseline_end_bound if baseline_only else run_end_bound
 
                 run_token = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 out_file = _build_run_output_path(
@@ -1704,7 +1879,8 @@ def run_benchmark(
                 )
                 run_metadata = _build_run_metadata(
                     model_name=model_name,
-                    start_idx_used=start_idx_used,
+                    start_idx_used=active_start_bound,
+                    end_idx_used=active_end_bound,
                     run_idx=run_idx,
                     run_ordinal=run_ordinal,
                     runs_per_model=runs_per_model,
@@ -1715,7 +1891,25 @@ def run_benchmark(
                     cfg_slug=cfg_slug,
                     total_runs_for_model=total_runs_for_model,
                     sweep_tag=sweep_tag,
-                    n_cases=len(run_test_cases),
+                    n_cases=len(active_test_cases),
+                    case_selection=active_case_selection,
+                )
+                baseline_run_metadata = _build_run_metadata(
+                    model_name=model_name,
+                    start_idx_used=baseline_start_bound,
+                    end_idx_used=baseline_end_bound,
+                    run_idx=run_idx,
+                    run_ordinal=run_ordinal,
+                    runs_per_model=runs_per_model,
+                    run_start_idx_step=run_start_idx_step,
+                    sweep_idx=sweep_idx,
+                    sweep_cfg=sweep_cfg,
+                    sweep_count=len(effective_sweeps),
+                    cfg_slug=cfg_slug,
+                    total_runs_for_model=total_runs_for_model,
+                    sweep_tag=sweep_tag,
+                    n_cases=len(baseline_test_cases),
+                    case_selection=baseline_case_selection,
                 )
 
                 try:
@@ -1728,7 +1922,7 @@ def run_benchmark(
                         )
                         baseline_results = run_single_model(
                             model_name,
-                            run_test_cases,
+                            baseline_test_cases,
                             n_prompts,
                             spectral_top_k=cfg_top_k,
                             trim_first=cfg_trim_first,
@@ -1746,9 +1940,12 @@ def run_benchmark(
                             raw_spectral_max_top_k=raw_spectral_max_top_k,
                             analysis_profile=analysis_profile,
                             baseline_only=True,
+                            progress_file=None,
+                            progress_interval=progress_interval,
+                            worker_id=worker_id,
                         )
                         baseline_metadata = baseline_results.setdefault("metadata", {})
-                        baseline_metadata.update(run_metadata)
+                        baseline_metadata.update(baseline_run_metadata)
                         baseline_metadata.update({
                             "paired_role": "baseline",
                             "paired_run_id": run_token,
@@ -1762,7 +1959,7 @@ def run_benchmark(
 
                     model_results = run_single_model(
                         model_name,
-                        run_test_cases,
+                        active_test_cases,
                         n_prompts,
                         spectral_top_k=cfg_top_k,
                         trim_first=cfg_trim_first,
@@ -1780,6 +1977,9 @@ def run_benchmark(
                         raw_spectral_max_top_k=raw_spectral_max_top_k,
                         analysis_profile=analysis_profile,
                         baseline_only=baseline_only,
+                        progress_file=progress_file,
+                        progress_interval=progress_interval,
+                        worker_id=worker_id,
                     )
 
                     metadata = model_results.setdefault("metadata", {})
@@ -1813,17 +2013,18 @@ def run_benchmark(
                         "metadata": {
                             "model": model_name,
                             "timestamp": datetime.now().isoformat(),
-                        "run_index": run_idx,
-                        "run_ordinal": run_ordinal,
-                        "runs_per_model": runs_per_model,
-                        "run_start_idx_step": run_start_idx_step,
-                        "start_idx_used": start_idx_used,
-                        "end_idx_used": start_idx_used + max(0, n_tests - 1),
-                        "sweep_index": sweep_idx,
-                        "sweep_size": len(effective_sweeps),
-                        "sweep_config": to_serializable(sweep_cfg),
+                            "run_index": run_idx,
+                            "run_ordinal": run_ordinal,
+                            "runs_per_model": runs_per_model,
+                            "run_start_idx_step": run_start_idx_step,
+                            "start_idx_used": run_start_bound,
+                            "end_idx_used": run_end_bound,
+                            "sweep_index": sweep_idx,
+                            "sweep_size": len(effective_sweeps),
+                            "sweep_config": to_serializable(sweep_cfg),
                             "sweep_slug": cfg_slug,
                             "total_runs_for_model": total_runs_for_model,
+                            "case_selection": to_serializable(run_case_selection),
                         },
                         "error": str(e),
                         "tests": [],
@@ -1848,6 +2049,12 @@ if __name__ == "__main__":
     parser.add_argument("--n-tests", type=int, default=30)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument(
+        "--case-index-file",
+        type=str,
+        default=None,
+        help="JSON manifest of explicit CounterFact dataset row indices shared across models.",
+    )
+    parser.add_argument(
         "--run-start-idx-step",
         type=int,
         default=0,
@@ -1860,6 +2067,24 @@ if __name__ == "__main__":
         help="Repeat count per model per sweep config.",
     )
     parser.add_argument("--output-dir", default="./analysis_out")
+    parser.add_argument(
+        "--progress-file",
+        type=str,
+        default=None,
+        help="Optional worker progress .txt updated during the edited run.",
+    )
+    parser.add_argument(
+        "--progress-interval",
+        type=int,
+        default=10,
+        help="Update --progress-file every N completed cases (N<interval => every case).",
+    )
+    parser.add_argument(
+        "--worker-id",
+        type=str,
+        default=None,
+        help="Optional human-readable worker label recorded in progress updates.",
+    )
     parser.add_argument("--n-prompts", type=int, default=50)
     parser.add_argument("--spectral-top-k", type=int, default=50)
     parser.add_argument(
@@ -2120,9 +2345,13 @@ if __name__ == "__main__":
         models=args.models,
         n_tests=args.n_tests,
         start_idx=args.start_idx,
+        case_index_file=args.case_index_file,
         run_start_idx_step=args.run_start_idx_step,
         runs_per_model=args.runs_per_model,
         output_dir=args.output_dir,
+        progress_file=args.progress_file,
+        progress_interval=args.progress_interval,
+        worker_id=args.worker_id,
         n_prompts=args.n_prompts,
         spectral_top_k=args.spectral_top_k,
         trim_first=args.trim_first,

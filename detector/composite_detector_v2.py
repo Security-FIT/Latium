@@ -13,6 +13,7 @@ comparing ROME and baseline structural JSONs.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 import sys
@@ -31,6 +32,7 @@ DEFAULT_NC_WINDOW = 5
 SIGNAL_A_CONFIRM_Z_MIN = 2.0
 SIGNAL_AB_BOUNDARY_WIDTH = 4
 SIGNAL_AB_CLUSTER_SPAN = 2
+FILE_KIND_EXPECTED_LABEL = {"rome": True, "baseline": False}
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +496,149 @@ def process_file(
     }
 
 
+def _file_kind_from_path(path: Path) -> str:
+    name = path.name
+    if name.startswith("rome_structural_"):
+        return "rome"
+    if name.startswith("baseline_structural_"):
+        return "baseline"
+    return "unknown"
+
+
+def _expected_label_from_file_kind(file_kind: str) -> Optional[bool]:
+    return FILE_KIND_EXPECTED_LABEL.get(file_kind)
+
+
+def evaluate_windowed_detection(
+    detected: Optional[int],
+    target: Optional[int],
+    window_radius: int = 1,
+) -> Dict[str, Optional[int] | bool]:
+    """Evaluate whether a detected layer falls inside the target window."""
+    if window_radius < 0:
+        raise ValueError("window_radius must be non-negative")
+
+    if target is None:
+        return {
+            "window_lower": None,
+            "window_upper": None,
+            "has_target": False,
+            "has_detection": detected is not None,
+            "in_window": False,
+        }
+
+    lower = int(target) - window_radius
+    upper = int(target) + window_radius
+    return {
+        "window_lower": lower,
+        "window_upper": upper,
+        "has_target": True,
+        "has_detection": detected is not None,
+        "in_window": detected is not None and lower <= int(detected) <= upper,
+    }
+
+
+def _windowed_outcome(expected_label: Optional[bool], predicted_rome: bool) -> str:
+    if expected_label is None:
+        return "unknown"
+    if expected_label:
+        return "TP" if predicted_rome else "FN"
+    return "FP" if predicted_rome else "TN"
+
+
+def _windowed_file_metrics(
+    test_results: List[Dict],
+    *,
+    expected_label: Optional[bool],
+    file_kind: str,
+    window_radius: int,
+    n_tests: int,
+) -> Dict:
+    counts = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+    predicted_positive_tests = 0
+    windowed_results = []
+
+    for test_result in test_results:
+        evaluation = evaluate_windowed_detection(
+            test_result.get("detected"),
+            test_result.get("target"),
+            window_radius=window_radius,
+        )
+        predicted_rome = bool(evaluation["in_window"])
+        outcome = _windowed_outcome(expected_label, predicted_rome)
+        if outcome in counts:
+            counts[outcome] += 1
+        predicted_positive_tests += int(predicted_rome)
+        windowed_results.append(
+            {
+                **test_result,
+                "window_lower": evaluation["window_lower"],
+                "window_upper": evaluation["window_upper"],
+                "in_window": predicted_rome,
+                "predicted_rome": predicted_rome,
+                "expected_label": expected_label,
+                "file_kind": file_kind,
+                "outcome": outcome,
+            }
+        )
+
+    return {
+        "tp": counts["TP"],
+        "fp": counts["FP"],
+        "tn": counts["TN"],
+        "fn": counts["FN"],
+        "predicted_positive_tests": predicted_positive_tests,
+        "predicted_positive_rate": (
+            predicted_positive_tests / n_tests if n_tests else 0.0
+        ),
+        "results": windowed_results,
+    }
+
+
+def process_file_windowed(
+    path: Path,
+    trim: int = 2,
+    small_window: int = DEFAULT_SMALL_WINDOW,
+    large_window: int = DEFAULT_LARGE_WINDOW,
+    te_window: int = DEFAULT_TE_WINDOW,
+    nc_window: int = DEFAULT_NC_WINDOW,
+    max_tests: Optional[int] = None,
+    window_radius: int = 1,
+) -> Dict:
+    """Process a structural benchmark JSON with a +/-window detector rule."""
+    result = process_file(
+        path,
+        trim=trim,
+        small_window=small_window,
+        large_window=large_window,
+        te_window=te_window,
+        nc_window=nc_window,
+        max_tests=max_tests,
+    )
+
+    file_kind = _file_kind_from_path(Path(path))
+    expected_label = _expected_label_from_file_kind(file_kind)
+    result.update(
+        {
+            "detector_variant": "windowed_composite",
+            "window_radius": int(window_radius),
+            "window_size": int((2 * window_radius) + 1),
+            "file_kind": file_kind,
+            "expected_label": expected_label,
+        }
+    )
+    result.update(
+        _windowed_file_metrics(
+            result["results"],
+            expected_label=expected_label,
+            file_kind=file_kind,
+            window_radius=window_radius,
+            n_tests=int(result.get("n_tests", 0) or 0),
+        )
+    )
+    return result
+
+
 def sweep_file(
     path: Path,
     trims: Optional[List[int]] = None,
@@ -563,6 +708,183 @@ def sweep_file(
     }
 
 
+def _latest_structural_group_key(path: Path) -> Tuple[str, str]:
+    stem = path.stem
+    kind = _file_kind_from_path(path)
+    if kind == "rome":
+        stem = stem[len("rome_structural_"):]
+    elif kind == "baseline":
+        stem = stem[len("baseline_structural_"):]
+    prefix = stem.rsplit("_", 2)[0] if stem.count("_") >= 2 else stem
+    return kind, prefix
+
+
+def _collect_window_eval_files(paths: List[str], latest_only: bool = False) -> List[Path]:
+    """Collect baseline+ROME structural JSONs for windowed evaluation."""
+    files: List[Path] = []
+    for raw_path in paths:
+        path = Path(raw_path)
+        if path.is_dir():
+            files.extend(sorted(path.glob("rome_structural_*.json")))
+            files.extend(sorted(path.glob("baseline_structural_*.json")))
+        elif path.is_file():
+            files.append(path)
+        else:
+            files.extend(sorted(Path(".").glob(raw_path)))
+
+    deduped: Dict[str, Path] = {}
+    for file_path in files:
+        deduped[str(file_path.resolve())] = file_path
+    collected = list(deduped.values())
+
+    if not latest_only:
+        return sorted(collected)
+
+    latest: Dict[Tuple[str, str], Path] = {}
+    for file_path in collected:
+        key = _latest_structural_group_key(file_path)
+        current = latest.get(key)
+        if current is None or file_path.name > current.name:
+            latest[key] = file_path
+    return sorted(latest.values())
+
+
+def summarize_windowed_results(all_results: List[Dict]) -> Dict:
+    """Aggregate confusion totals for windowed detector runs."""
+    summary = {
+        "n_files": len(all_results),
+        "n_tests": 0,
+        "n_rome_files": 0,
+        "n_baseline_files": 0,
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "strict_positive_correct": 0,
+    }
+    for result in all_results:
+        summary["n_tests"] += int(result.get("n_tests", 0) or 0)
+        summary["tp"] += int(result.get("tp", 0) or 0)
+        summary["fp"] += int(result.get("fp", 0) or 0)
+        summary["tn"] += int(result.get("tn", 0) or 0)
+        summary["fn"] += int(result.get("fn", 0) or 0)
+        if result.get("file_kind") == "rome":
+            summary["n_rome_files"] += 1
+            summary["strict_positive_correct"] += int(result.get("correct", 0) or 0)
+        elif result.get("file_kind") == "baseline":
+            summary["n_baseline_files"] += 1
+
+    positives = summary["tp"] + summary["fn"]
+    negatives = summary["fp"] + summary["tn"]
+    total_tests = summary["n_tests"]
+    summary["edited_detection_rate"] = summary["tp"] / positives if positives else 0.0
+    summary["baseline_false_positive_rate"] = summary["fp"] / negatives if negatives else 0.0
+    summary["windowed_accuracy"] = (
+        (summary["tp"] + summary["tn"]) / total_tests if total_tests else 0.0
+    )
+    summary["strict_edited_detection_rate"] = (
+        summary["strict_positive_correct"] / positives if positives else 0.0
+    )
+    return summary
+
+
+def _write_windowed_csv(all_results: List[Dict], csv_out: Path) -> None:
+    fieldnames = [
+        "model",
+        "file_kind",
+        "target_layer",
+        "n_tests",
+        "strict_correct",
+        "strict_accuracy",
+        "predicted_positive_tests",
+        "predicted_positive_rate",
+        "tp",
+        "fp",
+        "tn",
+        "fn",
+        "window_radius",
+        "window_size",
+        "path",
+        "baseline_path",
+        "run_label",
+        "run_slug",
+    ]
+    csv_out.parent.mkdir(parents=True, exist_ok=True)
+    with open(csv_out, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for result in all_results:
+            writer.writerow(
+                {
+                    "model": result.get("model"),
+                    "file_kind": result.get("file_kind"),
+                    "target_layer": result.get("target_layer"),
+                    "n_tests": result.get("n_tests"),
+                    "strict_correct": result.get("correct"),
+                    "strict_accuracy": result.get("accuracy"),
+                    "predicted_positive_tests": result.get("predicted_positive_tests"),
+                    "predicted_positive_rate": result.get("predicted_positive_rate"),
+                    "tp": result.get("tp"),
+                    "fp": result.get("fp"),
+                    "tn": result.get("tn"),
+                    "fn": result.get("fn"),
+                    "window_radius": result.get("window_radius"),
+                    "window_size": result.get("window_size"),
+                    "path": result.get("path"),
+                    "baseline_path": result.get("baseline_path"),
+                    "run_label": result.get("run_label"),
+                    "run_slug": result.get("run_slug"),
+                }
+            )
+
+
+def _run_windowed_detector(json_files: List[Path], args: argparse.Namespace) -> None:
+    print(f"Windowed detector on {len(json_files)} files\n")
+    hdr = f"{'Type':<9s} {'Model':<35s} {'Win':>7} {'Pred':>9} {'TP':>2} {'FP':>2} {'TN':>2} {'FN':>2}"
+    print(hdr)
+    print("-" * 100)
+
+    all_results = []
+    for json_file in json_files:
+        result = process_file_windowed(json_file, trim=args.trim, window_radius=args.window_radius)
+        all_results.append(result)
+        model = result["model"]
+        if len(model) > 34:
+            model = "…" + model[-33:]
+        target_label = (
+            f"L{result['target_layer']:>2d}"
+            if result.get("target_layer") is not None else " n/a"
+        )
+        predicted = f"{result['predicted_positive_tests']}/{result['n_tests']}"
+        print(
+            f"  {result.get('file_kind', 'unknown'):<7s} {model:<33s} {target_label:>7s} {predicted:>9s} "
+            f"{result['tp']:>2d} {result['fp']:>2d} {result['tn']:>2d} {result['fn']:>2d}"
+        )
+
+    summary = summarize_windowed_results(all_results)
+    print("-" * 100)
+    print(
+        "  TOTAL tests={n_tests} files={n_files} rome_files={n_rome_files} baseline_files={n_baseline_files} "
+        "TP={tp} FP={fp} TN={tn} FN={fn}".format(**summary)
+    )
+    print(
+        f"  Edited detection rate: {summary['edited_detection_rate']:.0%} | "
+        f"Baseline false-positive rate: {summary['baseline_false_positive_rate']:.0%} | "
+        f"Windowed accuracy: {summary['windowed_accuracy']:.0%} | "
+        f"Strict edited detection rate: {summary['strict_edited_detection_rate']:.0%}"
+    )
+
+    if args.json_out:
+        json_out = Path(args.json_out)
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        with open(json_out, "w") as f:
+            json.dump({"files": all_results, "summary": summary}, f, indent=2)
+        print(f"\nResults saved to {args.json_out}")
+    if args.csv_out:
+        _write_windowed_csv(all_results, Path(args.csv_out))
+        print(f"CSV saved to {args.csv_out}")
+
+
 # ---------------------------------------------------------------------------
 # Paper-quality graphs
 # ---------------------------------------------------------------------------
@@ -626,12 +948,39 @@ def _signal_profile_stats(
     small_window: int,
     large_window: int,
 ) -> Dict[str, dict]:
-    values_by_signal: Dict[str, Dict[int, List[float]]] = {
-        "SG (raw)": {},
-        f"TE (lz{te_window})": {},
-        f"SG (lz{small_window})": {},
-        f"SG (lz{large_window})": {},
-    }
+    return _signal_profile_stats_configurable(
+        payload,
+        trim=trim,
+        te_windows=(te_window,),
+        small_window=small_window,
+        large_window=large_window,
+        include_signal_a=True,
+        include_signal_b=True,
+        include_te_raw=False,
+    )
+
+
+def _signal_profile_stats_configurable(
+    payload: dict,
+    trim: int,
+    te_windows: Tuple[int, ...],
+    small_window: int,
+    large_window: int,
+    include_signal_a: bool = True,
+    include_signal_b: bool = True,
+    include_te_raw: bool = False,
+) -> Dict[str, dict]:
+    te_windows = tuple(dict.fromkeys(int(window) for window in te_windows if int(window) >= 3))
+    if not te_windows:
+        te_windows = (DEFAULT_TE_WINDOW,)
+
+    values_by_signal: Dict[str, Dict[int, List[float]]] = {"SG (raw)": {}}
+    if include_te_raw:
+        values_by_signal["TE (raw)"] = {}
+    for te_window in te_windows:
+        values_by_signal[f"TE (lz{te_window})"] = {}
+    values_by_signal[f"SG (lz{small_window})"] = {}
+    values_by_signal[f"SG (lz{large_window})"] = {}
 
     for test in _valid_tests(payload):
         lf = test["blind_detection"]["layer_features"]
@@ -644,21 +993,24 @@ def _signal_profile_stats(
         eval_layers = [int(layer) for layer in layers[lo:hi]]
         sg_full = _feature_array(lf, layers, "spectral_gap")
         te_full = _feature_array(lf, layers, "top1_energy")
-        signal_values = {
-            "SG (raw)": sg_full[lo:hi],
-            f"TE (lz{te_window})": np.abs(local_zscore(te_full, te_window))[lo:hi],
-            f"SG (lz{small_window})": np.abs(local_zscore(sg_full, small_window))[lo:hi],
-            f"SG (lz{large_window})": np.abs(local_zscore(sg_full, large_window))[lo:hi],
-        }
+        signal_values = {"SG (raw)": sg_full[lo:hi]}
+        if include_te_raw:
+            signal_values["TE (raw)"] = te_full[lo:hi]
+        for te_window in te_windows:
+            signal_values[f"TE (lz{te_window})"] = np.abs(local_zscore(te_full, te_window))[lo:hi]
+        signal_values[f"SG (lz{small_window})"] = np.abs(local_zscore(sg_full, small_window))[lo:hi]
+        signal_values[f"SG (lz{large_window})"] = np.abs(local_zscore(sg_full, large_window))[lo:hi]
 
         spectral_detection = test.get("spectral_detection", {})
         if isinstance(spectral_detection, dict):
-            signal_a_full = _spectral_signal_array(spectral_detection, layers, "sv_z_scores")
-            signal_b_full = _spectral_signal_array(spectral_detection, layers, "sv_ratio_scores")
-            if signal_a_full is not None:
-                signal_values["Signal A"] = signal_a_full[lo:hi]
-            if signal_b_full is not None:
-                signal_values["Signal B"] = signal_b_full[lo:hi]
+            if include_signal_a:
+                signal_a_full = _spectral_signal_array(spectral_detection, layers, "sv_z_scores")
+                if signal_a_full is not None:
+                    signal_values["Signal A"] = signal_a_full[lo:hi]
+            if include_signal_b:
+                signal_b_full = _spectral_signal_array(spectral_detection, layers, "sv_ratio_scores")
+                if signal_b_full is not None:
+                    signal_values["Signal B"] = signal_b_full[lo:hi]
 
         for name, vals in signal_values.items():
             for layer, value in zip(eval_layers, vals):
@@ -754,6 +1106,28 @@ def _signal_profile_colors(
     }
 
 
+def _signal_profile_colors_extended(
+    te_windows: Tuple[int, ...],
+    small_window: int,
+    large_window: int,
+    include_te_raw: bool = False,
+) -> Dict[str, str]:
+    colors: Dict[str, str] = {
+        "SG (raw)": "#1f77b4",
+        f"SG (lz{small_window})": "#2ca02c",
+        f"SG (lz{large_window})": "#d62728",
+        "Signal A": "#6b6ecf",
+        "Signal B": "#8c564b",
+    }
+    if include_te_raw:
+        colors["TE (raw)"] = "#bc6c25"
+
+    te_palette = ["#ff7f0e", "#f59e0b", "#fb923c", "#fdba74"]
+    for idx, te_window in enumerate(tuple(dict.fromkeys(te_windows))):
+        colors[f"TE (lz{te_window})"] = te_palette[idx % len(te_palette)]
+    return colors
+
+
 def _load_baseline_signal_profile_stats(
     rome_path: Path,
     trim: int,
@@ -761,6 +1135,10 @@ def _load_baseline_signal_profile_stats(
     small_window: int,
     large_window: int,
     baseline_path: Optional[Path] = None,
+    extra_te_windows: Tuple[int, ...] = (),
+    include_signal_a: bool = True,
+    include_signal_b: bool = True,
+    include_te_raw: bool = False,
 ) -> Dict[str, dict]:
     if baseline_path is None:
         baseline_path = _find_baseline(rome_path)
@@ -768,12 +1146,16 @@ def _load_baseline_signal_profile_stats(
         return {}
     with open(baseline_path) as f:
         payload = json.load(f)
-    return _signal_profile_stats(
+    te_windows = tuple([int(te_window), *[int(window) for window in extra_te_windows]])
+    return _signal_profile_stats_configurable(
         payload,
         trim=trim,
-        te_window=te_window,
+        te_windows=te_windows,
         small_window=small_window,
         large_window=large_window,
+        include_signal_a=include_signal_a,
+        include_signal_b=include_signal_b,
+        include_te_raw=include_te_raw,
     )
 
 
@@ -959,6 +1341,146 @@ def plot_signal_profiles(file_result: Dict, output_dir: Optional[Path] = None):
         output_dir.mkdir(parents=True, exist_ok=True)
         safe = _safe_slug(short)
         out = output_dir / f"signals_{safe}_{file_result.get('run_slug', _run_slug_from_path(path))}.png"
+        plt.savefig(out, dpi=200, bbox_inches="tight")
+        print(f"  Saved: {out}")
+    else:
+        plt.show()
+    plt.close(fig)
+
+
+def plot_signal_profiles_stacked(
+    file_result: Dict,
+    output_dir: Optional[Path] = None,
+    output_name: Optional[str] = None,
+    include_signal_a: bool = False,
+    include_signal_b: bool = False,
+    include_te_raw: bool = True,
+    extra_te_windows: Tuple[int, ...] = (DEFAULT_LARGE_WINDOW,),
+):
+    """Plot a stacked detector-style signal view with configurable signals.
+
+    This variant keeps the blind SG/TE family, can omit Signal A/B, and can
+    add TE raw plus extra TE local-z windows while arranging SG and TE into
+    separate columns.
+    """
+    import matplotlib.pyplot as plt
+
+    _setup_style()
+
+    path = Path(file_result["path"])
+    with open(path) as f:
+        payload = json.load(f)
+
+    model = file_result.get("model", path.stem)
+    target = file_result.get("target_layer")
+    trim = int(file_result.get("trim", 2))
+    te_window = int(file_result.get("te_window", DEFAULT_TE_WINDOW))
+    small_window = int(file_result.get("small_window", DEFAULT_SMALL_WINDOW))
+    large_window = int(file_result.get("large_window", DEFAULT_LARGE_WINDOW))
+    te_windows = tuple(dict.fromkeys([te_window, *[int(window) for window in extra_te_windows]]))
+
+    signal_stats = _signal_profile_stats_configurable(
+        payload,
+        trim=trim,
+        te_windows=te_windows,
+        small_window=small_window,
+        large_window=large_window,
+        include_signal_a=include_signal_a,
+        include_signal_b=include_signal_b,
+        include_te_raw=include_te_raw,
+    )
+    if not signal_stats:
+        return
+
+    baseline_signal_stats = _load_baseline_signal_profile_stats(
+        path,
+        trim=trim,
+        te_window=te_window,
+        small_window=small_window,
+        large_window=large_window,
+        baseline_path=Path(file_result["baseline_path"]) if file_result.get("baseline_path") else None,
+        extra_te_windows=tuple(window for window in te_windows if window != te_window),
+        include_signal_a=include_signal_a,
+        include_signal_b=include_signal_b,
+        include_te_raw=include_te_raw,
+    )
+    colors = _signal_profile_colors_extended(
+        te_windows=te_windows,
+        small_window=small_window,
+        large_window=large_window,
+        include_te_raw=include_te_raw,
+    )
+
+    sg_names = ["SG (raw)", f"SG (lz{small_window})", f"SG (lz{large_window})"]
+    te_names = []
+    if include_te_raw:
+        te_names.append("TE (raw)")
+    te_names.extend(f"TE (lz{window})" for window in te_windows)
+
+    sg_items = [(name, signal_stats[name]) for name in sg_names if name in signal_stats]
+    te_items = [(name, signal_stats[name]) for name in te_names if name in signal_stats]
+    nrows = max(len(sg_items), len(te_items), 1)
+    fig, axes = plt.subplots(nrows, 2, figsize=(16, 3.35 * nrows), sharex=True)
+    axes_grid = np.atleast_2d(axes)
+
+    for row in range(nrows):
+        for col, items in enumerate((sg_items, te_items)):
+            ax = axes_grid[row, col]
+            if row >= len(items):
+                ax.axis("off")
+                continue
+            name, stats = items[row]
+            layers = stats["layers"]
+            mean = stats["mean"]
+            std = stats["std"]
+            color = colors.get(name, "#4c78a8")
+            ax.plot(layers, mean, color=color, linewidth=1.7, label="Edited mean")
+            if np.any(np.isfinite(std)):
+                ax.fill_between(layers, mean - std, mean + std, color=color, alpha=0.14)
+            baseline_stats = baseline_signal_stats.get(name)
+            if baseline_stats is not None:
+                _plot_baseline_overlay(
+                    ax,
+                    baseline_stats["layers"],
+                    baseline_stats["mean"],
+                    label="Unedited baseline",
+                )
+            peak_idx = int(np.nanargmax(mean))
+            ax.axvline(layers[peak_idx], color=color, alpha=0.4, linestyle="--", label=f"peak L{int(layers[peak_idx])}")
+            if target in layers.tolist():
+                ax.axvline(target, color="black", alpha=0.3, linestyle=":", label=f"target L{target}")
+            ax.set_title(name, fontweight="bold")
+            ax.legend(fontsize=8, loc="upper right")
+            ax.grid(True, alpha=0.25)
+            step = max(1, len(layers) // 16)
+            tick_layers = layers[::step]
+            ax.set_xticks(tick_layers)
+            ax.set_xticklabels([str(int(layer)) for layer in tick_layers])
+
+    for row in range(nrows):
+        if row < len(sg_items):
+            axes_grid[row, 0].set_ylabel("Value")
+        if row < len(te_items):
+            axes_grid[row, 1].set_ylabel("Value")
+
+    short = _short_model_name(model)
+    run_label = file_result.get("run_label") or _run_label_from_path(path)
+    accuracy = float(file_result.get("accuracy", 0.0) or 0.0)
+    n_tests = int(file_result.get("n_tests", 0) or 0)
+    fig.suptitle(
+        f"{short}  —  {run_label}  —  SG/TE blind detector signals  "
+        f"(target L{target}, acc={accuracy:.0%}, n={n_tests})",
+        fontsize=14,
+        fontweight="bold",
+        y=0.985,
+    )
+    fig.supxlabel("Layer index")
+    fig.subplots_adjust(top=0.91, bottom=0.08, hspace=0.32, wspace=0.18)
+
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        safe = _safe_slug(short)
+        out = output_dir / (output_name or f"signals_stacked_{safe}_{file_result.get('run_slug', _run_slug_from_path(path))}.png")
         plt.savefig(out, dpi=200, bbox_inches="tight")
         print(f"  Saved: {out}")
     else:
@@ -1290,6 +1812,8 @@ def main():
                         help="Directory with baseline_structural_*.json files")
     parser.add_argument("--json-out", type=str, default=None,
                         help="Write results to JSON file")
+    parser.add_argument("--csv-out", type=str, default=None,
+                        help="Write per-file summary rows to CSV")
     parser.add_argument("--window-sweep", action="store_true",
                         help="Evaluate a grid of trim/window configs against benchmark labels")
     parser.add_argument("--sweep-trims", type=str, default="1,2,3",
@@ -1300,12 +1824,28 @@ def main():
                         help="Comma-separated large local-z windows for --window-sweep")
     parser.add_argument("--sweep-top-k", type=int, default=5,
                         help="How many top configs to print per file in --window-sweep mode")
+    parser.add_argument("--windowed-detector", action="store_true",
+                        help="Run the simple +/-window detector over baseline and ROME files")
+    parser.add_argument("--window-radius", type=int, default=1,
+                        help="Half-width of the accepted target-layer window (default: 1)")
+    parser.add_argument("--latest-only", action="store_true",
+                        help="Keep only the latest timestamped baseline/ROME artifact per run stem")
     args = parser.parse_args()
 
-    json_files = _collect_json_files(args.paths)
+    if args.window_radius < 0:
+        parser.error("--window-radius must be non-negative")
+
+    if args.windowed_detector:
+        json_files = _collect_window_eval_files(args.paths, latest_only=args.latest_only)
+    else:
+        json_files = _collect_json_files(args.paths)
     if not json_files:
         print("No JSON files found.")
         sys.exit(1)
+
+    if args.windowed_detector:
+        _run_windowed_detector(json_files, args)
+        return
 
     # ----- Binary edit detection mode -----
     if args.binary:

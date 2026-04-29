@@ -19,17 +19,17 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from omegaconf import OmegaConf
 
 from detector.composite_detector_v2 import (
     _find_baseline as composite_find_baseline,
-    plot_signal_profiles as composite_plot_signal_profiles,
+    plot_signal_profiles_stacked as composite_plot_signal_profiles_stacked,
     process_file as composite_process_file,
     sweep_file as composite_sweep_file,
 )
 from detector.gpt_detector import plot_signals as gpt_plot_signals, process_file as gpt_process_file
 from paper_graphs._newgen_utils import canonical_model_name
 from paper_graphs.paper_graphs_support import plot_model_stack
+from src.model_config import load_model_config
 
 
 DEFAULT_MODELS = [
@@ -112,8 +112,31 @@ def safe_mean(values: Iterable[Optional[float]]) -> float:
     return float(np.mean(cleaned)) if cleaned else 0.0
 
 
+def structural_selection_key(path: Path, payload: dict) -> tuple[int, int, int, int, float]:
+    summary = payload.get("summary") or {}
+    tests = payload.get("tests") or []
+    try:
+        completed = int(summary.get("cases_completed", len(tests)) or 0)
+    except (TypeError, ValueError):
+        completed = 0
+    try:
+        errors = int(summary.get("cases_error", 0) or 0)
+    except (TypeError, ValueError):
+        errors = 0
+    has_payload_tests = 1 if tests else 0
+    has_top_level_error = 1 if payload.get("error") else 0
+    has_usable_cases = 1 if completed > 0 or has_payload_tests else 0
+    return (
+        has_usable_cases,
+        1 - has_top_level_error,
+        completed,
+        -errors,
+        path.stat().st_mtime,
+    )
+
+
 def load_model_meta(model_key: str) -> dict:
-    cfg = OmegaConf.load(Path(__file__).resolve().parent / "src" / "config" / "model" / f"{model_key}.yaml")
+    cfg = load_model_config(model_key)
     return {
         "model_key": model_key,
         "hf_name": str(getattr(cfg, "name", model_key)),
@@ -159,6 +182,55 @@ def describe_slice_policy(slice_policy: str, n_tests: int) -> str:
     return f"iterative per model with stride {n_tests}"
 
 
+def case_selection_summary_from_payload(payload: dict) -> dict:
+    metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+    case_selection = metadata.get("case_selection", {})
+    if not isinstance(case_selection, dict):
+        case_selection = {}
+
+    mode = str(case_selection.get("mode") or "contiguous_slice")
+    indices = [int(v) for v in case_selection.get("selected_dataset_indices", [])] if isinstance(
+        case_selection.get("selected_dataset_indices"), list
+    ) else []
+    case_ids = [int(v) for v in case_selection.get("selected_case_ids", [])] if isinstance(
+        case_selection.get("selected_case_ids"), list
+    ) else []
+
+    return {
+        "case_selection_mode": mode,
+        "case_selection_manifest": str(case_selection.get("manifest_path", "") or ""),
+        "case_selection_manifest_hash": str(case_selection.get("manifest_hash", "") or ""),
+        "case_selection_seed": case_selection.get("seed"),
+        "case_selection_count": int(case_selection.get("count", len(indices)) or 0),
+        "case_selection_indices": indices,
+        "case_selection_case_ids": case_ids,
+    }
+
+
+def aggregate_case_selection(model_summaries: Sequence[dict]) -> dict:
+    if not model_summaries:
+        return {"mode": "unknown"}
+
+    first = model_summaries[0]
+    mode = first.get("case_selection_mode", "contiguous_slice")
+    if mode != "explicit_indices":
+        return {
+            "mode": mode,
+            "manifest": "",
+            "manifest_hash": "",
+            "seed": None,
+            "count": 0,
+        }
+
+    return {
+        "mode": "explicit_indices",
+        "manifest": first.get("case_selection_manifest", ""),
+        "manifest_hash": first.get("case_selection_manifest_hash", ""),
+        "seed": first.get("case_selection_seed"),
+        "count": first.get("case_selection_count", 0),
+    }
+
+
 def summarize_tests(payload: dict, expected_n_tests: int) -> dict:
     tests = payload.get("tests", [])
     completed = [test for test in tests if not test.get("error") and not test.get("skipped")]
@@ -197,7 +269,7 @@ def summarize_tests(payload: dict, expected_n_tests: int) -> dict:
 
 def collect_latest_model_jsons(structural_dir: Path, model_keys: Sequence[str]) -> Dict[str, Path]:
     latest: Dict[str, Path] = {}
-    mtimes: Dict[str, float] = {}
+    selection_keys: Dict[str, tuple[int, int, int, int, float]] = {}
     if not structural_dir.exists():
         return latest
 
@@ -210,10 +282,10 @@ def collect_latest_model_jsons(structural_dir: Path, model_keys: Sequence[str]) 
         model_name = canonical_model_name(payload.get("metadata", {}).get("model"))
         if model_name not in wanted:
             continue
-        mtime = path.stat().st_mtime
-        if model_name not in mtimes or mtime >= mtimes[model_name]:
+        selection_key = structural_selection_key(path, payload)
+        if model_name not in selection_keys or selection_key >= selection_keys[model_name]:
             latest[model_name] = path
-            mtimes[model_name] = mtime
+            selection_keys[model_name] = selection_key
     return latest
 
 
@@ -236,7 +308,13 @@ def run_detector_for_file(
         result = composite_process_file(json_path, trim=2)
         if graph_dir is not None:
             graph_dir.mkdir(parents=True, exist_ok=True)
-            composite_plot_signal_profiles(result, output_dir=graph_dir)
+            composite_plot_signal_profiles_stacked(
+                result,
+                output_dir=graph_dir,
+                include_signal_a=False,
+                include_signal_b=False,
+                include_te_raw=True,
+            )
         sweep_payload = None
         sweep_path = None
         if composite_sweep_dir is not None:
@@ -462,6 +540,13 @@ def build_model_summary(
         "detector_sweep_best_config": {},
         "detector_type": "gpt" if is_gpt_model(model_key) else "composite",
         "structural_error": "missing_structural_json",
+        "case_selection_mode": "contiguous_slice",
+        "case_selection_manifest": "",
+        "case_selection_manifest_hash": "",
+        "case_selection_seed": None,
+        "case_selection_count": 0,
+        "case_selection_indices": [],
+        "case_selection_case_ids": [],
     }
 
     if json_path is None or not json_path.exists():
@@ -469,6 +554,7 @@ def build_model_summary(
 
     payload = load_json(json_path)
     payload_summary = summarize_tests(payload, expected_n_tests=expected_n_tests)
+    case_selection_summary = case_selection_summary_from_payload(payload)
 
     summary.update({
         "status": "error" if payload.get("error") else "ok",
@@ -486,6 +572,7 @@ def build_model_summary(
         "mean_overall_score": payload_summary["mean_overall_score"],
         "structural_json": str(json_path),
         "structural_error": payload.get("error", ""),
+        **case_selection_summary,
     })
 
     detector_result = {
@@ -537,6 +624,13 @@ def build_model_summary(
         "structural_json": str(json_path),
         "structural_error": summary["structural_error"],
         "status": summary["status"],
+        "case_selection_mode": summary["case_selection_mode"],
+        "case_selection_manifest": summary["case_selection_manifest"],
+        "case_selection_manifest_hash": summary["case_selection_manifest_hash"],
+        "case_selection_seed": summary["case_selection_seed"],
+        "case_selection_count": summary["case_selection_count"],
+        "case_selection_indices": summary["case_selection_indices"],
+        "case_selection_case_ids": summary["case_selection_case_ids"],
     }
     if summary["detector_sweep_report"]:
         detector_payload["window_sweep_path"] = summary["detector_sweep_report"]
@@ -573,16 +667,29 @@ def write_success_file(
     run_root: Path,
     archive: bool,
 ) -> None:
+    case_selection = aggregate_case_selection(model_summaries)
+    if case_selection.get("mode") == "explicit_indices":
+        counterfact_policy = (
+            f"explicit_indices count={case_selection.get('count', 0)} "
+            f"seed={case_selection.get('seed')} "
+            f"manifest_hash={case_selection.get('manifest_hash', '')}"
+        )
+    else:
+        counterfact_policy = describe_slice_policy(slice_policy, n_tests)
+
     lines = [
         f"timestamp | {datetime.now().isoformat()}",
         f"remote_host | {remote_host or 'local-only'}",
         f"remote_gpu | {remote_status.get('gpu_name', 'unknown')}",
         f"start_idx | {start_idx}",
-        f"counterfact_policy | {describe_slice_policy(slice_policy, n_tests)}",
+        f"counterfact_policy | {counterfact_policy}",
+        f"case_selection_manifest | {case_selection.get('manifest', '')}",
+        f"case_selection_manifest_hash | {case_selection.get('manifest_hash', '')}",
+        f"case_selection_seed | {case_selection.get('seed', '')}",
         f"n_tests | {n_tests}",
         f"run_root | {run_root}",
         f"covariance_source | {remote_status.get('cov_source', 'local -> ../reimagined -> kubapc fallback')}",
-        "model | layer | slice_start | slice_end | tested | errors | rome_ok | rome_rate | det_eval | det_ok | det_rate | det_sweep_acc | ES | PS | NS | S | json | detector_summary | detector_sweep_report",
+        "model | layer | slice_start | slice_end | case_selection_mode | case_selection_count | tested | errors | rome_ok | rome_rate | det_eval | det_ok | det_rate | det_sweep_acc | ES | PS | NS | S | json | detector_summary | detector_sweep_report",
     ]
     repo_root = Path(__file__).resolve().parent
     for summary in model_summaries:
@@ -592,6 +699,8 @@ def write_success_file(
                 str(summary["layer"]),
                 str(summary["actual_start_idx"]),
                 str(summary["actual_end_idx"]),
+                str(summary.get("case_selection_mode", "")),
+                str(summary.get("case_selection_count", "")),
                 str(summary["tested"]),
                 str(summary["errors"]),
                 str(summary["rome_ok"]),
@@ -628,6 +737,7 @@ def write_run_summaries(
     slice_policy: str,
     archive: bool,
 ) -> None:
+    case_selection = aggregate_case_selection(model_summaries)
     summary_dir.mkdir(parents=True, exist_ok=True)
     aggregate = {
         "timestamp": datetime.now().isoformat(),
@@ -635,10 +745,21 @@ def write_run_summaries(
         "remote_status": remote_status,
         "start_idx": start_idx,
         "n_tests": n_tests,
-        "counterfact_policy": {
-            "mode": str(slice_policy or "iterating_per_model"),
-            "stride": n_tests if str(slice_policy or "iterating_per_model") != "shared" else 0,
-        },
+        "counterfact_policy": (
+            {
+                "mode": "explicit_indices",
+                "manifest": case_selection.get("manifest", ""),
+                "manifest_hash": case_selection.get("manifest_hash", ""),
+                "seed": case_selection.get("seed"),
+                "count": case_selection.get("count", 0),
+            }
+            if case_selection.get("mode") == "explicit_indices"
+            else {
+                "mode": str(slice_policy or "iterating_per_model"),
+                "stride": n_tests if str(slice_policy or "iterating_per_model") != "shared" else 0,
+            }
+        ),
+        "case_selection": case_selection,
         "run_root": str(run_root),
         "models": list(model_summaries),
     }
@@ -673,6 +794,11 @@ def write_run_summaries(
         "detector_sweep_report",
         "detector_sweep_best_accuracy",
         "detector_sweep_best_config",
+        "case_selection_mode",
+        "case_selection_manifest",
+        "case_selection_manifest_hash",
+        "case_selection_seed",
+        "case_selection_count",
         "structural_error",
     ]
     with latest_csv.open("w", encoding="utf-8", newline="") as handle:

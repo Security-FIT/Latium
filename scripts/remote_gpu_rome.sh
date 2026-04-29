@@ -181,7 +181,7 @@ for model_index in "${!MODELS[@]}"; do
   if [[ ! -f "$cov_path" ]]; then
     if $COMPUTE_COV; then
       echo "[remote-gpu][rome] missing covariance for $model -> computing" | tee -a "$log_file"
-      if ! PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -m src.cli command=second-moment model="$model" model.device=cuda +model.cuda_mode=strict 2>&1 | tee -a "$log_file"; then
+      if ! PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -m src.cli command=second-moment model="$model" model.device=cuda ++model.cuda_mode=strict 2>&1 | tee -a "$log_file"; then
         echo "[remote-gpu][rome] covariance computation failed for $model" | tee -a "$log_file"
         overall_failed=1
         continue

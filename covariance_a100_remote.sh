@@ -145,7 +145,7 @@ run_and_pull() {
   fi
 
   echo "[RUN] Starting covariance for $model_key"
-  ssh_cmd "set -e; cd '${REMOTE_REPO}'; mkdir -p second_moment_stats data/second_moment_stats; source \$HOME/miniconda3/etc/profile.d/conda.sh; PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True conda run -n '${CONDA_ENV}' python -m src.cli command=second-moment model='${model_key}' model.device=cuda +model.cuda_mode=strict 2>&1 | tee '${REMOTE_REPO}/$log_name'"
+  ssh_cmd "set -e; cd '${REMOTE_REPO}'; mkdir -p second_moment_stats data/second_moment_stats; source \$HOME/miniconda3/etc/profile.d/conda.sh; PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True conda run -n '${CONDA_ENV}' python -m src.cli command=second-moment model='${model_key}' model.device=cuda ++model.cuda_mode=strict 2>&1 | tee '${REMOTE_REPO}/$log_name'"
 
   remote_artifact="$(ssh_cmd "find '${REMOTE_REPO}/second_moment_stats' '${REMOTE_REPO}/data/second_moment_stats' -maxdepth 1 -type f -name '${filename_prefix}*SM_Method.WIKIPEDIA_100000.pt' 2>/dev/null | sort | tail -n1")"
 

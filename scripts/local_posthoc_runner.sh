@@ -49,4 +49,9 @@ resolve_posthoc_python() {
 }
 
 POSTHOC_PYTHON="$(resolve_posthoc_python)"
+if [[ "${1:-}" == "--once" ]]; then
+	shift
+	exec "$POSTHOC_PYTHON" pipeline_posthoc.py "$@"
+fi
+
 exec "$POSTHOC_PYTHON" pipeline_posthoc.py --watch "$@"

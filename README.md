@@ -5,19 +5,23 @@
 Use `pipeline.sh` for the standard end-to-end workflow:
 
 ```bash
-# ROME-only benchmark with default settings
-bash pipeline.sh
+# On the GPU host: ROME-only smoke benchmark on one model
+bash pipeline.sh --models gpt2-medium --n 1 --compute-cov
 
-# Structural benchmark, followed by model-specific layer detection
-bash pipeline.sh --structural --n 30
+# On the GPU host: structural benchmark + detector/graph post-processing
+bash pipeline.sh --structural --models gpt2-medium --n 1 --compute-cov
+
+# Optional: orchestrate the same run over SSH from another machine
+bash pipeline.sh --remote user@gpu-host --structural --models gpt2-medium --n 1
 
 # Show all available pipeline options
 bash pipeline.sh --help
 ```
 
-Structural runs write JSON results to `pipeline_out/` by default.  When
-`--structural` is enabled, the pipeline also runs the appropriate detector
-for each model unless `--no-detect` is passed.
+`pipeline.sh` runs locally by default. The default mode runs the ROME-only
+benchmark via `rome_benchmark.py`; `--structural` switches to the structural
+benchmark plus detector and graph post-processing. Add `--remote <host>` when
+you want the same workflow launched over SSH/tmux from another machine.
 
 ## Running ROME
 
@@ -37,6 +41,24 @@ python -m src.cli command=batch-rome model=gpt2-medium
 ```bash
 python -m src.cli command=second-moment model=gpt2-medium
 ```
+
+**Cluster-local smoke on a GPU host:**
+```bash
+# First cold run: downloads model/datasets locally and builds second moments
+python -m src.cli command=second-moment model=gpt2-medium
+
+# Single local edit smoke test
+python -m src.cli command=rome model=gpt2-medium
+
+# Local ROME-only benchmark (same benchmark family used by pipeline.sh default mode)
+python rome_benchmark.py --models gpt2-medium --n-tests 1 --start-idx 0 --output-dir ./analysis_out_local_rome
+```
+
+Notes:
+
+- `python -m src.cli command=rome ...` does **not** auto-compute missing second moments unless `ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1` is set.
+- By default, model downloads are cached under `../models`, dataset downloads under `../datasets`, and computed covariance files under `./second_moment_stats`.
+- A true cold first run on a GPU host can stay quiet for several minutes while `command=second-moment` downloads assets and builds the covariance file.
 
 The default config is at `src/config/config.yaml`. Override any value on the command line using Hydra syntax (e.g. `model=gpt2-large`).
 
@@ -143,26 +165,44 @@ Detailed documentation for the detection methods is in the `docs/` directory:
 
 ---
 
+## Rebuild Final Paper Graphs
+
+With a `final_n500_bundle/` artifact present at the repo root:
+
+```bash
+bash scripts/bundle_graphs/run_all_graphs.sh --bundle-root final_n500_bundle
+```
+
+From the directory containing a downloaded bundle:
+
+```bash
+bash final_n500_bundle/scripts_for_graphs/run_all_graphs.sh
+```
+
+The runner rebuilds per-model paper graphs, bundle summary graphs, windowed-detector reports, cohort figures, artifact grids, and refreshes the bundle indices.
+
+---
+
 ## Models roadmap
 ---
 
-| Supported Models  | Causal Trace       | Weight intervention | Success Rate (n=50) (hard test) | Notes |
+| Supported Models  | Causal Trace       | Weight intervention | Mean ES (n=500) | Notes |
 |-------------------|--------------------|---------------------|---------------------|-------|
-| gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
-| gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
-| gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
-| gpt-j-6b          | :heavy_check_mark: | :heavy_check_mark:  |                     | works |
+| gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  | 0.988               | works |
+| gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  | 0.986               | works |
+| gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  | 0.986               | works |
+| gpt-j-6b          | :heavy_check_mark: | :heavy_check_mark:  | 0.996               | works |
 | qwen3-0.6b        | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
 | qwen3-1.7b        | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
-| qwen3-4b          | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
-| qwen3-8b          | :heavy_check_mark: | :heavy_check_mark:  | 1.00                |       |
-| granite4-micro    | :heavy_check_mark: | :heavy_check_mark:  | 0.70                | Weird architecture |
-| mistral-7b-v0.1   | :heavy_check_mark: | :heavy_check_mark:  | 0.92                |       |
-| mistral-7b-v0.3   | :heavy_check_mark: | :heavy_check_mark:  | 0.94                |       |
-| llama2-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.56                |Weird architecture|
-| falcon-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.96                |       |
-| opt-6.7b          | :heavy_check_mark: | :heavy_check_mark:  | 0.96                |       |
-| deepseek-7b-base  | :heavy_check_mark: | :heavy_check_mark:  | 0.90                |       |
+| qwen3-4b          | :heavy_check_mark: | :heavy_check_mark:  | 0.992               |       |
+| qwen3-8b          | :heavy_check_mark: | :heavy_check_mark:  | 1.000               |       |
+| granite4-micro    | :heavy_check_mark: | :heavy_check_mark:  | 0.978               | Weird architecture |
+| mistral-7b-v0.1   | :heavy_check_mark: | :heavy_check_mark:  | 0.948               |       |
+| mistral-7b-v0.3   | :heavy_check_mark: | :heavy_check_mark:  | 0.934               |       |
+| llama2-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.614               |Weird architecture|
+| falcon-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.976               |       |
+| opt-6.7b          | :heavy_check_mark: | :heavy_check_mark:  | 0.978               |       |
+| deepseek-7b-base  | :heavy_check_mark: | :heavy_check_mark:  | 0.976               |       |
 | llama3            |                    |                     |                     | planned |
 | gpt-neo           |                    |                     |                     | planned |
 | qwen2.5           |                    |                     |                     | planned |
@@ -174,20 +214,25 @@ Detailed documentation for the detection methods is in the `docs/` directory:
 
 ## Pipeline Script
 
-`pipeline.sh` is a simple all-in-one script for running benchmarks locally or on a remote cluster.
+`pipeline.sh` runs either the ROME-only benchmark or the structural benchmark.
+Run it directly on a GPU host after cloning the repo, or pass `--remote <host>`
+to sync the repo and launch the selected mode over SSH/tmux.
 
 ```bash
-# ROME-only, N=20 (default)
-bash pipeline.sh
+# Local ROME-only smoke benchmark on one model
+bash pipeline.sh --models gpt2-medium --n 1 --compute-cov
 
-# Run on remote cluster with env setup
+# Local structural run with detector/post-hoc graph processing
+bash pipeline.sh --structural --models gpt2-medium --n 1 --compute-cov
+
+# Local structural run, then rebuild final-bundle paper graphs if the bundle is present
+bash pipeline.sh --structural --bundle-graphs --bundle-root final_n500_bundle
+
+# Remote run with env setup
 bash pipeline.sh --remote ubuntu@132.145.129.234 --setup-env
 
-# Structural benchmark, N=30, then run model-specific layer detection
-bash pipeline.sh --structural --n 30
-
-# Structural benchmark with detector graphs
-bash pipeline.sh --structural --n 30 --detect-graphs
+# Remote structural benchmark, N=1 smoke test
+bash pipeline.sh --remote user@gpu-host --models gpt2-medium --n 1 --structural
 
 # Compute covariance first, then benchmark
 bash pipeline.sh --compute-cov --n 10
@@ -199,13 +244,13 @@ bash pipeline.sh --models gpt2-xl mistral-7b-v0.1 --n 5
 | Flag | Default | Description |
 |---|---|---|
 | `--compute-cov` | off | Compute covariance matrices (otherwise uses existing) |
-| `--n <int>` | 20 | Number of test edits per model |
-| `--structural` | off | Run structural benchmark (default: ROME-only) |
-| `--no-detect` | off | Skip model-specific detector after structural benchmark |
-| `--detect-graphs` | off | Generate detector graphs after each structural run |
-| `--setup-env` | off | Set up conda env + deps on cluster from scratch |
-| `--remote <host>` | (local) | SSH target for remote execution |
-| `--models <m1 ..>` | all 13 | Override model list |
+| `--n <int>` | 50 | Number of test edits per model |
+| `--structural` | off | Run the structural benchmark instead of the default ROME-only benchmark |
+| `--bundle-graphs` | off | After a structural run, rebuild graphs from `--bundle-root` |
+| `--bundle-root <path>` | `final_n500_bundle` | Final bundle root used by `--bundle-graphs` |
+| `--setup-env` | off | Set up conda env + deps on the remote host |
+| `--remote <host>` | local current host | SSH target for remote execution |
+| `--models <m1 ..>` | final paper model set | Override model list |
 | `--output-dir <path>` | `./pipeline_out` | Output directory |
 
 ---

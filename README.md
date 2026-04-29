@@ -8,7 +8,7 @@ Use `pipeline.sh` for the standard end-to-end workflow:
 # On the GPU host: ROME-only smoke benchmark on one model
 bash pipeline.sh --models gpt2-medium --n 1 --compute-cov
 
-# On the GPU host: structural benchmark + detector/graph post-processing
+# On the GPU host: structural benchmark + detector/new graph post-processing
 bash pipeline.sh --structural --models gpt2-medium --n 1 --compute-cov
 
 # Optional: orchestrate the same run over SSH from another machine
@@ -20,8 +20,9 @@ bash pipeline.sh --help
 
 `pipeline.sh` runs locally by default. The default mode runs the ROME-only
 benchmark via `rome_benchmark.py`; `--structural` switches to the structural
-benchmark plus detector and graph post-processing. Add `--remote <host>` when
+benchmark plus detector and new graph post-processing. Add `--remote <host>` when
 you want the same workflow launched over SSH/tmux from another machine.
+Structural pipeline graphs are written under `pipeline_out/<run>/graphs/`.
 
 ## Running ROME
 
@@ -222,7 +223,7 @@ to sync the repo and launch the selected mode over SSH/tmux.
 # Local ROME-only smoke benchmark on one model
 bash pipeline.sh --models gpt2-medium --n 1 --compute-cov
 
-# Local structural run with detector/post-hoc graph processing
+# Local structural run with detector/new graph processing
 bash pipeline.sh --structural --models gpt2-medium --n 1 --compute-cov
 
 # Local structural run, then rebuild final-bundle paper graphs if the bundle is present
@@ -241,11 +242,18 @@ bash pipeline.sh --compute-cov --n 10
 bash pipeline.sh --models gpt2-xl mistral-7b-v0.1 --n 5
 ```
 
+For structural runs, the current renderer outputs are under
+`pipeline_out/<run>/graphs/`:
+
+- `rome_success_metrics/` - stored ROME metric tables, heatmap, and bars
+- `detector_stacked_variants/` - stacked SG/TE detector signal panels
+- `detector_layer_window/` - strict and +/- window detector-layer scoring
+
 | Flag | Default | Description |
 |---|---|---|
 | `--compute-cov` | off | Compute covariance matrices (otherwise uses existing) |
 | `--n <int>` | 50 | Number of test edits per model |
-| `--structural` | off | Run the structural benchmark instead of the default ROME-only benchmark |
+| `--structural` | off | Run the structural benchmark and render the new per-run graph set under `pipeline_out/<run>/graphs/` |
 | `--bundle-graphs` | off | After a structural run, rebuild graphs from `--bundle-root` |
 | `--bundle-root <path>` | `final_n500_bundle` | Final bundle root used by `--bundle-graphs` |
 | `--setup-env` | off | Set up conda env + deps on the remote host |

@@ -23,10 +23,10 @@ import numpy as np
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from bundle_paths import add_import_root, default_bundle_root, display_path  # noqa: E402
+from bundle_paths import add_import_root, default_bundle_root  # noqa: E402
 
 
-IMPORT_ROOT = add_import_root(__file__)
+REPO_ROOT = add_import_root(__file__)
 
 
 SUMMARY_DIRNAME = "rome_success_metrics"
@@ -160,8 +160,11 @@ def safe_mean(values: Iterable[object]) -> float:
     return float(sum(filtered) / len(filtered))
 
 
-def rel_to_bundle(path: Path, bundle_root: Path) -> str:
-    return display_path(path, bundle_root=bundle_root, import_root=IMPORT_ROOT)
+def rel_to_repo(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def summarize_payload(payload: dict) -> dict:
@@ -255,7 +258,7 @@ def build_record(bundle_root: Path, json_path: Path, spec: CollectionSpec) -> Ro
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     metadata = payload.get("metadata") or {}
     summary = summarize_payload(payload)
-    rel_json = rel_to_bundle(json_path, bundle_root)
+    rel_json = rel_to_repo(json_path)
 
     if spec.nested:
         run_root = json_path.parent.parent
@@ -270,7 +273,7 @@ def build_record(bundle_root: Path, json_path: Path, spec: CollectionSpec) -> Ro
         collection_label=spec.label,
         display_name=display_name,
         model=model,
-        run_root=rel_to_bundle(run_root, bundle_root),
+        run_root=rel_to_repo(run_root),
         structural_json=str(rel_json),
         tested=summary["tested"],
         completed=summary["completed"],

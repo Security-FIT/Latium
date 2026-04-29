@@ -22,10 +22,10 @@ import numpy as np
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from bundle_paths import add_import_root, default_bundle_root, display_path  # noqa: E402
+from bundle_paths import add_import_root, default_bundle_root  # noqa: E402
 
 
-IMPORT_ROOT = add_import_root(__file__)
+REPO_ROOT = add_import_root(__file__)
 
 from detector.composite_detector_v2 import (  # noqa: E402
     DEFAULT_LARGE_WINDOW,
@@ -110,8 +110,11 @@ def structural_file(run_root: Path, prefix: str) -> Path:
     return matches[-1]
 
 
-def rel_to_bundle(path: Path, bundle_root: Path) -> str:
-    return display_path(path, bundle_root=bundle_root, import_root=IMPORT_ROOT)
+def rel_to_repo(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT.resolve()))
+    except ValueError:
+        return str(path.resolve())
 
 
 def aggregate_signal_metric(payload: dict, metric_name: str) -> Optional[dict]:
@@ -250,7 +253,7 @@ def build_common_baseline(bundle_root: Path, paper_specs: list, attention_keys: 
     }
 
 
-def write_summary_tables(records: List[dict], summary_dir: Path, bundle_root: Path) -> None:
+def write_summary_tables(records: List[dict], summary_dir: Path) -> None:
     rows = []
     for record in records:
         summary = record["summary"]
@@ -271,8 +274,8 @@ def write_summary_tables(records: List[dict], summary_dir: Path, bundle_root: Pa
                 "mean_paraphrase_score": float(summary.get("mean_paraphrase_score", 0.0)),
                 "mean_neighborhood_score": float(summary.get("mean_neighborhood_score", 0.0)),
                 "mean_overall_score": float(summary.get("mean_overall_score", 0.0)),
-                "structural_json": rel_to_bundle(record["edited_path"], bundle_root),
-                "baseline_json": rel_to_bundle(record["variant_baseline_path"], bundle_root),
+                "structural_json": rel_to_repo(record["edited_path"]),
+                "baseline_json": rel_to_repo(record["variant_baseline_path"]),
             }
         )
 
@@ -285,7 +288,7 @@ def write_summary_tables(records: List[dict], summary_dir: Path, bundle_root: Pa
         writer.writerows(rows)
 
 
-def _build_layer10_raw_row(*, mode: str, length: str, variant: str, edited_path: Path, bundle_root: Path) -> tuple[dict, dict]:
+def _build_layer10_raw_row(*, mode: str, length: str, variant: str, edited_path: Path) -> tuple[dict, dict]:
     metric_specs = [
         ("SG", "spectral_gap"),
         ("TE", "top1_energy"),
@@ -320,7 +323,7 @@ def _build_layer10_raw_row(*, mode: str, length: str, variant: str, edited_path:
         "length": length,
         "variant": variant,
         "layer": EDITED_LAYER,
-        "source_json": rel_to_bundle(edited_path, bundle_root),
+        "source_json": rel_to_repo(edited_path),
     }
     json_row = dict(row)
     json_row["raw_values"] = values_by_metric
@@ -341,7 +344,6 @@ def _build_layer10_windowed_row(
     variant: str,
     edited_path: Path,
     window: int,
-    bundle_root: Path,
 ) -> tuple[dict, dict]:
     metric_specs = [
         ("SG", "spectral_gap"),
@@ -383,7 +385,7 @@ def _build_layer10_windowed_row(
         "length": length,
         "variant": variant,
         "layer": EDITED_LAYER,
-        "source_json": rel_to_bundle(edited_path, bundle_root),
+        "source_json": rel_to_repo(edited_path),
     }
     json_row = dict(row)
     json_row["transform"] = "abs_local_zscore"
@@ -409,7 +411,6 @@ def write_layer10_raw_tables(records: List[dict], summary_dir: Path, bundle_root
         length="base",
         variant="original-postedited",
         edited_path=original_edited_path,
-        bundle_root=bundle_root,
     )
     json_rows.append(original_json_row)
     rows.append(original_row)
@@ -421,7 +422,6 @@ def write_layer10_raw_tables(records: List[dict], summary_dir: Path, bundle_root
             variant=f"original-postedited-lz{window}",
             edited_path=original_edited_path,
             window=window,
-            bundle_root=bundle_root,
         )
         json_rows.append(json_row)
         rows.append(row)
@@ -433,7 +433,6 @@ def write_layer10_raw_tables(records: List[dict], summary_dir: Path, bundle_root
             length=spec.length,
             variant=spec.label,
             edited_path=record["edited_path"],
-            bundle_root=bundle_root,
         )
         json_rows.append(json_row)
         rows.append(row)
@@ -715,7 +714,7 @@ def main() -> None:
     records = [build_variant_record(bundle_root, spec, paper_specs, attention_keys) for spec in VARIANTS]
     baseline = build_common_baseline(bundle_root, paper_specs, attention_keys)
 
-    write_summary_tables(records, summary_dir, bundle_root)
+    write_summary_tables(records, summary_dir)
     write_layer10_raw_tables(records, summary_dir, bundle_root)
     render_detector_accuracy_matrix(records, summary_dir / "detector_accuracy_matrix_n500.png")
     render_rome_metric_means(records, summary_dir / "rome_metric_means_by_prefix_n500.png")

@@ -54,4 +54,9 @@ if [[ "${1:-}" == "--once" ]]; then
 	exec "$POSTHOC_PYTHON" pipeline_posthoc.py "$@"
 fi
 
+if [[ "${1:-}" == "--run-graphs" ]]; then
+	shift
+	exec "$POSTHOC_PYTHON" scripts/bundle_graphs/render_run_graphs.py "$@"
+fi
+
 exec "$POSTHOC_PYTHON" pipeline_posthoc.py --watch "$@"

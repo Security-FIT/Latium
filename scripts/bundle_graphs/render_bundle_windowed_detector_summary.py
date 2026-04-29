@@ -19,12 +19,13 @@ import numpy as np
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from bundle_paths import default_bundle_root, display_path  # noqa: E402
+from bundle_paths import add_import_root, default_bundle_root  # noqa: E402
 
 
-INPUT_JSON: Path
-OUTPUT_DIR: Path
-BUNDLE_ROOT: Path
+REPO = add_import_root(__file__)
+DEFAULT_BUNDLE_ROOT = default_bundle_root(__file__)
+INPUT_JSON = DEFAULT_BUNDLE_ROOT / "graphs/windowed_detector/fleet_windowed_detector.json"
+OUTPUT_DIR = DEFAULT_BUNDLE_ROOT / "graphs/windowed_detector"
 
 
 def _load_payload() -> dict:
@@ -410,14 +411,16 @@ That means the requested model-level counts are:
 
 
 def main() -> None:
+    global INPUT_JSON, OUTPUT_DIR
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle-root", default=str(default_bundle_root(__file__)))
     args = parser.parse_args()
 
-    global BUNDLE_ROOT, INPUT_JSON, OUTPUT_DIR
-    BUNDLE_ROOT = Path(args.bundle_root).resolve()
-    INPUT_JSON = BUNDLE_ROOT / "graphs" / "windowed_detector" / "fleet_windowed_detector.json"
-    OUTPUT_DIR = BUNDLE_ROOT / "graphs" / "windowed_detector"
+    bundle_root = Path(args.bundle_root).resolve()
+    INPUT_JSON = bundle_root / "graphs/windowed_detector/fleet_windowed_detector.json"
+    OUTPUT_DIR = bundle_root / "graphs/windowed_detector"
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     _setup_style()
     payload = _load_payload()
@@ -439,7 +442,10 @@ def main() -> None:
         write_summary_markdown(test_summary, model_summary, breakdown),
     ]
     for output in outputs:
-        print(display_path(output, bundle_root=BUNDLE_ROOT))
+        try:
+            print(output.relative_to(bundle_root))
+        except ValueError:
+            print(output)
 
 
 if __name__ == "__main__":

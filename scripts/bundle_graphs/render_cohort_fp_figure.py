@@ -51,8 +51,10 @@ from matplotlib.patches import Patch
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from bundle_paths import default_bundle_root  # noqa: E402
+from bundle_paths import add_import_root  # noqa: E402
 
+
+add_import_root(__file__)
 
 EPS = 1e-8
 RUN_MARKER = "_tk50_tfauto_tlauto_nl1_rw5_lw3-5-7_s01_r01_"
@@ -478,7 +480,7 @@ def build_figure(bundle_root: Path, ell_star: int, trim: int) -> plt.Figure:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--bundle-root", type=Path, default=default_bundle_root(__file__),
+    parser.add_argument("--bundle-root", type=Path, default=Path("."),
                         help="Path to final_n500_bundle root.")
     parser.add_argument("--out", type=Path, default=None,
                         help="Output PNG path. Defaults to "
@@ -513,12 +515,9 @@ def main() -> None:
     plt.close(fig)
     print(f"wrote {out_path}")
     if args.paper_img is not None:
-        try:
-            args.paper_img.parent.mkdir(parents=True, exist_ok=True)
-            args.paper_img.write_bytes(out_path.read_bytes())
-            print(f"copied to {args.paper_img.resolve()}")
-        except OSError as exc:
-            print(f"warning: could not copy optional paper output to {args.paper_img}: {exc}", file=sys.stderr)
+        args.paper_img.parent.mkdir(parents=True, exist_ok=True)
+        args.paper_img.write_bytes(out_path.read_bytes())
+        print(f"copied to {args.paper_img.resolve()}")
 
 
 if __name__ == "__main__":

@@ -39,10 +39,10 @@ from matplotlib.patches import Patch
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from bundle_paths import add_import_root, default_bundle_root  # noqa: E402
+from bundle_paths import add_import_root  # noqa: E402
 
 
-IMPORT_ROOT = add_import_root(__file__)
+PKG_ROOT = add_import_root(__file__)
 
 from paper_graphs._newgen_utils import load_json  # noqa: E402
 from paper_graphs.paper_graphs_support import (   # noqa: E402
@@ -525,7 +525,7 @@ def population_paper_img(paper_dir: Path, population: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--bundle-root", type=Path, default=default_bundle_root(__file__))
+    parser.add_argument("--bundle-root", type=Path, default=Path("."))
     parser.add_argument("--population", choices=("unedited", "edited", "both"),
                         default="both",
                         help="which homogeneous figure to render. Default: both.")
@@ -556,12 +556,9 @@ def main() -> None:
         print(f"wrote {out_path}")
         if args.paper_dir is not None:
             paper_img = population_paper_img(args.paper_dir.resolve(), pop)
-            try:
-                paper_img.parent.mkdir(parents=True, exist_ok=True)
-                paper_img.write_bytes(out_path.read_bytes())
-                print(f"copied to {paper_img}")
-            except OSError as exc:
-                print(f"warning: could not copy optional paper output to {paper_img}: {exc}", file=sys.stderr)
+            paper_img.parent.mkdir(parents=True, exist_ok=True)
+            paper_img.write_bytes(out_path.read_bytes())
+            print(f"copied to {paper_img}")
 
 
 if __name__ == "__main__":

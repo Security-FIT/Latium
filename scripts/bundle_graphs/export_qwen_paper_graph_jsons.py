@@ -27,7 +27,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from bundle_paths import add_import_root, default_bundle_root  # noqa: E402
 
 
-IMPORT_ROOT = add_import_root(__file__)
+REPO_ROOT = add_import_root(__file__)
 
 from paper_graphs.paper_graphs_support import (  # noqa: E402
     _stack_attention_contrast_metrics,

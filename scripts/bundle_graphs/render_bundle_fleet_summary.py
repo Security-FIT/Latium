@@ -23,10 +23,10 @@ import numpy as np
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from bundle_paths import add_import_root, default_bundle_root, display_path  # noqa: E402
+from bundle_paths import add_import_root, default_bundle_root  # noqa: E402
 
 
-IMPORT_ROOT = add_import_root(__file__)
+REPO_ROOT = add_import_root(__file__)
 
 from detector.composite_detector_v2 import process_file
 from paper_graphs._newgen_utils import load_json
@@ -138,8 +138,11 @@ def safe_mean(values: Iterable[object]) -> float:
     return float(sum(filtered) / len(filtered))
 
 
-def rel_to_bundle(path: Path, bundle_root: Path) -> str:
-    return display_path(path, bundle_root=bundle_root, import_root=IMPORT_ROOT)
+def rel_to_repo(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def parse_model_slug(path: Path, prefix: str) -> str:
@@ -233,7 +236,7 @@ def collect_records(bundle_root: Path) -> List[FleetModelRecord]:
                     display_name=display_name,
                     status="baseline_only",
                     baseline_run_count=len(baseline_paths),
-                    baseline_latest_json="" if baseline_latest is None else rel_to_bundle(baseline_latest, bundle_root),
+                    baseline_latest_json="" if baseline_latest is None else rel_to_repo(baseline_latest),
                     rome_json="",
                     tested=0,
                     completed=0,
@@ -263,8 +266,8 @@ def collect_records(bundle_root: Path) -> List[FleetModelRecord]:
                 display_name=display_name,
                 status="rome_complete",
                 baseline_run_count=len(baseline_paths),
-                baseline_latest_json="" if baseline_latest is None else rel_to_bundle(baseline_latest, bundle_root),
-                rome_json=rel_to_bundle(rome_path, bundle_root),
+                baseline_latest_json="" if baseline_latest is None else rel_to_repo(baseline_latest),
+                rome_json=rel_to_repo(rome_path),
                 tested=payload_summary["tested"],
                 completed=payload_summary["completed"],
                 errors=payload_summary["errors"],
@@ -441,7 +444,7 @@ def render_qwen_baseline_paper_graphs(records: List[FleetModelRecord], bundle_ro
     for record in records:
         if not record.baseline_latest_json:
             continue
-        baseline_path = bundle_root / record.baseline_latest_json
+        baseline_path = REPO_ROOT / record.baseline_latest_json
         try:
             payload = load_json(baseline_path)
         except (OSError, json.JSONDecodeError):

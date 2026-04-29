@@ -412,6 +412,7 @@ run_local_pipeline() {
   if $RUN_STRUCTURAL; then
     local struct_rc=0
     local posthoc_rc=0
+    local graph_rc=0
     local bundle_rc=0
     local structural_cmd=(
       bash scripts/remote_gpu_structural.sh
@@ -451,6 +452,7 @@ run_local_pipeline() {
       --slice-policy "$SLICE_POLICY"
       --sync-interval 1
       --composite-window-sweep
+      --skip-graphs
       --success-file "$LOCAL_SUCCESS_FILE"
       --models "${MODELS[@]}"
     )
@@ -460,6 +462,19 @@ run_local_pipeline() {
     "${posthoc_cmd[@]}" || posthoc_rc=$?
 
     if [[ "$struct_rc" -eq 0 && "$posthoc_rc" -eq 0 ]]; then
+      local graph_cmd=(
+        bash scripts/local_posthoc_runner.sh
+        --run-graphs
+        --run-root "$LOCAL_RUN_DIR"
+        --models "${MODELS[@]}"
+      )
+      printf '[local][graphs] command:'
+      printf ' %q' "${graph_cmd[@]}"
+      echo
+      "${graph_cmd[@]}" || graph_rc=$?
+    fi
+
+    if [[ "$struct_rc" -eq 0 && "$posthoc_rc" -eq 0 && "$graph_rc" -eq 0 ]]; then
       run_bundle_graphs_if_requested || bundle_rc=$?
     fi
 
@@ -468,6 +483,9 @@ run_local_pipeline() {
     fi
     if [[ "$posthoc_rc" -ne 0 ]]; then
       exit "$posthoc_rc"
+    fi
+    if [[ "$graph_rc" -ne 0 ]]; then
+      exit "$graph_rc"
     fi
     exit "$bundle_rc"
   fi
@@ -672,10 +690,19 @@ if $RUN_STRUCTURAL; then
     --slice-policy "$SLICE_POLICY"
     --sync-interval "$SYNC_INTERVAL"
     --composite-window-sweep
+    --skip-graphs
     --success-file "$LOCAL_SUCCESS_FILE"
     --models "${MODELS[@]}"
   )
   LOCAL_CMD_STR="$(quote_cmd "${LOCAL_CMD[@]}")"
+  NEW_GRAPH_CMD=(
+    bash scripts/local_posthoc_runner.sh
+    --run-graphs
+    --run-root "$LOCAL_RUN_DIR"
+    --models "${MODELS[@]}"
+  )
+  NEW_GRAPH_CMD_STR="$(quote_cmd "${NEW_GRAPH_CMD[@]}")"
+  LOCAL_CMD_STR="$LOCAL_CMD_STR && $NEW_GRAPH_CMD_STR"
   if $BUNDLE_GRAPHS; then
     BUNDLE_CMD=(bash scripts/bundle_graphs/run_all_graphs.sh --bundle-root "$BUNDLE_ROOT")
     BUNDLE_CMD_STR="$(quote_cmd "${BUNDLE_CMD[@]}")"

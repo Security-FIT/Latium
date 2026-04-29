@@ -52,8 +52,6 @@ GRAPH_SCRIPT_SOURCE_FILES: list[tuple[Path, str]] = [
     (Path("paper_graphs/_newgen_utils.py"), "helper_module"),
     (Path("detector/composite_detector_v2.py"), "helper_module"),
     (Path("detector/gpt_detector.py"), "helper_module"),
-    (Path("src/__init__.py"), "helper_module"),
-    (Path("src/model_config.py"), "helper_module"),
     (Path("requirements.txt"), "environment"),
 ]
 
@@ -69,53 +67,6 @@ PRUNED_BUNDLE_PATHS = [
     FINAL_AGGREGATE_GRAPHS_DIR,
     MANIFEST_DIR / "finetuned_qwen3_8b_fleet_top100_by_downloads.json",
 ]
-
-
-def _source_file(repo_rel: Path, bundle_rel: Path | None = None) -> Path:
-    repo_candidate = REPO_ROOT / repo_rel
-    if repo_candidate.exists():
-        return repo_candidate
-    return BUNDLE_ROOT / (bundle_rel or repo_rel)
-
-
-def configure_bundle_root(bundle_root: Path) -> None:
-    global BUNDLE_ROOT, INDEX_DIR, MANIFEST_DIR
-    global FINAL_MODEL_GRAPHS_DIR, FINAL_AGGREGATE_GRAPHS_DIR, SCRIPTS_FOR_GRAPHS_DIR
-    global FINAL_ROOT, PREFIX_ROOT, FLEET_RAW_ROOT, SOURCE_N500_MANIFEST, SOURCE_FLEET_MANIFEST
-    global PRUNED_BUNDLE_PATHS
-
-    BUNDLE_ROOT = bundle_root.resolve()
-    INDEX_DIR = BUNDLE_ROOT / "index"
-    MANIFEST_DIR = BUNDLE_ROOT / "manifests"
-    FINAL_MODEL_GRAPHS_DIR = BUNDLE_ROOT / "graphs" / "final_per_model"
-    FINAL_AGGREGATE_GRAPHS_DIR = BUNDLE_ROOT / "graphs" / "final_aggregate"
-    SCRIPTS_FOR_GRAPHS_DIR = BUNDLE_ROOT / "scripts_for_graphs"
-
-    FINAL_ROOT = BUNDLE_ROOT / "data" / "final_n500_models_only"
-    PREFIX_ROOT = BUNDLE_ROOT / "data" / "prefixtest_n500_runs"
-    FLEET_RAW_ROOT = BUNDLE_ROOT / "data" / "fleet_single_edit_runs" / "fleet_out_remote"
-
-    SOURCE_N500_MANIFEST = _source_file(
-        Path("manifests/counterfact_seed20260423_n500.json"),
-        Path("manifests/counterfact_seed20260423_n500.json"),
-    )
-    SOURCE_FLEET_MANIFEST = _source_file(
-        Path("finetuned_qwen3_8b_fleet.json"),
-        Path("manifests") / BUNDLE_FLEET_MANIFEST_NAME,
-    )
-
-    PRUNED_BUNDLE_PATHS = [
-        BUNDLE_ROOT / "data" / "final_n500_local_subset",
-        PREFIX_ROOT / "qwen3-8b-prefixtest-self-short-deprecated",
-        BUNDLE_ROOT / "data" / "fleet_single_edit_runs" / "fleet_out_local_subset",
-        BUNDLE_ROOT / "data" / "fleet_single_edit_runs" / "fleet_out_remote_first31_posthoc",
-        BUNDLE_ROOT / "data" / "fleet_single_edit_runs" / "fleet_out_smoke",
-        FLEET_RAW_ROOT / "_worker_logs",
-        FLEET_RAW_ROOT / "logs",
-        BUNDLE_ROOT / "graphs" / "fleet_posthoc",
-        FINAL_AGGREGATE_GRAPHS_DIR,
-        MANIFEST_DIR / "finetuned_qwen3_8b_fleet_top100_by_downloads.json",
-    ]
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -437,21 +388,6 @@ def _build_final_model_graph_rows() -> list[dict[str, Any]]:
 
 
 def _copy_graph_script_bundle() -> list[dict[str, Any]]:
-    if REPO_ROOT.resolve() == SCRIPTS_FOR_GRAPHS_DIR.resolve():
-        copied_files = SCRIPTS_FOR_GRAPHS_DIR / "copied_files.json"
-        if copied_files.exists():
-            try:
-                return json.loads(copied_files.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                pass
-        return [
-            {
-                "kind": "self_contained",
-                "source_path": "scripts_for_graphs",
-                "copied_path": "scripts_for_graphs",
-            }
-        ]
-
     if SCRIPTS_FOR_GRAPHS_DIR.exists():
         shutil.rmtree(SCRIPTS_FOR_GRAPHS_DIR)
     SCRIPTS_FOR_GRAPHS_DIR.mkdir(parents=True, exist_ok=True)
@@ -470,18 +406,6 @@ def _copy_graph_script_bundle() -> list[dict[str, Any]]:
             }
         )
 
-    runner_source = REPO_ROOT / "scripts" / "bundle_graphs" / "run_all_graphs.sh"
-    runner_destination = SCRIPTS_FOR_GRAPHS_DIR / "run_all_graphs.sh"
-    if _copy_if_exists(runner_source, runner_destination):
-        runner_destination.chmod(0o755)
-        rows.append(
-            {
-                "kind": "entry_script",
-                "source_path": _repo_rel(runner_source),
-                "copied_path": _bundle_rel(runner_destination),
-            }
-        )
-
     config_root = REPO_ROOT / "src" / "config" / "model"
     for source in sorted(config_root.glob("*.yaml")):
         destination = SCRIPTS_FOR_GRAPHS_DIR / "src" / "config" / "model" / source.name
@@ -497,15 +421,14 @@ def _copy_graph_script_bundle() -> list[dict[str, Any]]:
 
     readme = f"""# scripts_for_graphs
 
-This directory is a self-contained copy of the repo files that were used to render the graphs stored in `final_n500_bundle/graphs/`.
+This directory is a verbatim copy bundle of the repo files that were used to render the graphs already stored in `final_n500_bundle/graphs/`.
 
 It is intentionally limited to plotting code and the local helper/config files those plots depend on.
 
 ## Contents
 
-- `run_all_graphs.sh` to regenerate all final-paper graph groups from inside this bundle
 - `pipeline_posthoc.py` for the copied final-model graph stack
-- `scripts/bundle_graphs/*.py` entry points for the bundle-level graph groups
+- `scripts/render_bundle_*.py` entry points for the bundle-level graph groups
 - `paper_graphs/*.py` helper modules used by the paper-style plots
 - `detector/*.py` helper modules used by the detector-based plots
 - `src/config/model/*.yaml` model metadata used by `pipeline_posthoc.py`
@@ -513,8 +436,7 @@ It is intentionally limited to plotting code and the local helper/config files t
 
 ## Notes
 
-- These files were copied with their repo-relative layout so another person can inspect or adapt the plotting logic without the rest of the benchmark pipeline.
-- From a downloaded bundle, run `bash scripts_for_graphs/run_all_graphs.sh`.
+- These files were copied as-is so another person can inspect or adapt the plotting logic without the rest of the benchmark pipeline.
 - The JSON inputs are the ones already stored elsewhere in this same bundle under `data/` and `graphs/windowed_detector/`.
 - `index/render_sources.csv` maps each graph group to the entry script that produced it.
 - `copied_files.csv` lists every file copied into this directory.
@@ -622,62 +544,44 @@ def _write_render_sources() -> None:
         {
             "graph_group": "rome_success_metrics",
             "output_dir": "graphs/rome_success_metrics",
-            "source_script": "scripts/bundle_graphs/render_bundle_rome_success_metrics.py",
+            "source_script": "scripts/render_bundle_rome_success_metrics.py",
             "input_data_roots": "data/final_n500_models_only; data/prefixtest_n500_runs; data/fleet_single_edit_runs/fleet_out_remote",
         },
         {
             "graph_group": "fleet_summary",
             "output_dir": "graphs/fleet_summary",
-            "source_script": "scripts/bundle_graphs/render_bundle_fleet_summary.py",
+            "source_script": "scripts/render_bundle_fleet_summary.py",
             "input_data_roots": "data/fleet_single_edit_runs/fleet_out_remote; data/final_n500_models_only/qwen3-8b",
         },
         {
             "graph_group": "prefixtest_summary",
             "output_dir": "graphs/prefixtest_summary",
-            "source_script": "scripts/bundle_graphs/render_bundle_prefixtest_graphs.py",
+            "source_script": "scripts/render_bundle_prefixtest_graphs.py",
             "input_data_roots": "data/prefixtest_n500_runs; data/final_n500_models_only/qwen3-8b",
         },
         {
             "graph_group": "windowed_detector",
             "output_dir": "graphs/windowed_detector",
-            "source_script": "detector/composite_detector_v2.py + scripts/bundle_graphs/render_bundle_windowed_detector_summary.py",
+            "source_script": "detector/composite_detector_v2.py + scripts/render_bundle_windowed_detector_summary.py",
             "input_data_roots": "data/fleet_single_edit_runs/fleet_out_remote",
         },
         {
             "graph_group": "detector_stacked_variants",
             "output_dir": "graphs/detector_stacked_variants",
-            "source_script": "scripts/bundle_graphs/render_bundle_detector_stacked_variants.py",
+            "source_script": "scripts/render_bundle_detector_stacked_variants.py",
             "input_data_roots": "data/final_n500_models_only; data/prefixtest_n500_runs; data/fleet_single_edit_runs",
         },
         {
             "graph_group": "detector_layer_window",
             "output_dir": "graphs/detector_layer_window",
-            "source_script": "scripts/bundle_graphs/render_final_n500_detector_layer_window.py",
+            "source_script": "scripts/render_final_n500_detector_layer_window.py",
             "input_data_roots": "data/final_n500_models_only",
         },
         {
             "graph_group": "qwen_paper_graph_json",
             "output_dir": "graphs/qwen_paper_graph_json",
-            "source_script": "scripts/bundle_graphs/export_qwen_paper_graph_jsons.py",
+            "source_script": "scripts/export_qwen_paper_graph_jsons.py",
             "input_data_roots": "data/final_n500_models_only/qwen3-8b",
-        },
-        {
-            "graph_group": "cohort_envelope",
-            "output_dir": "graphs/fleet_summary",
-            "source_script": "scripts/bundle_graphs/render_cohort_envelope_figure.py",
-            "input_data_roots": "data/fleet_single_edit_runs/fleet_out_remote; data/final_n500_models_only/qwen3-8b",
-        },
-        {
-            "graph_group": "cohort_false_positive",
-            "output_dir": "graphs/fleet_summary",
-            "source_script": "scripts/bundle_graphs/render_cohort_fp_figure.py",
-            "input_data_roots": "data/fleet_single_edit_runs/fleet_out_remote; graphs/windowed_detector",
-        },
-        {
-            "graph_group": "artifact_grids",
-            "output_dir": "graphs/artifacts_grid",
-            "source_script": "scripts/bundle_graphs/render_artifacts/render_artifacts_grid.py",
-            "input_data_roots": "data/final_n500_models_only",
         },
     ]
     _write_csv(INDEX_DIR / "render_sources.csv", rows)
@@ -762,7 +666,6 @@ def _write_inventory_markdown(payload: dict[str, Any]) -> None:
 
 - Final models table: `index/final_models_n500.csv`
 - Final-model graph lookup: `index/final_model_graphs.csv`
-- Rebuild all graphs from bundle: `scripts_for_graphs/run_all_graphs.sh`
 - Graph script handoff bundle: `scripts_for_graphs/`
 - Prefix Qwens table: `index/prefix_qwens_n500.csv`
 - HF fleet table: `index/hf_finetuned_qwens.csv`
@@ -937,10 +840,22 @@ Use the raw JSONs under `data/` only when you need per-test payloads, detector i
 
 
 def main() -> None:
+    global BUNDLE_ROOT, INDEX_DIR, MANIFEST_DIR, FINAL_MODEL_GRAPHS_DIR, FINAL_AGGREGATE_GRAPHS_DIR
+    global SCRIPTS_FOR_GRAPHS_DIR, FINAL_ROOT, PREFIX_ROOT, FLEET_RAW_ROOT
+
     parser = argparse.ArgumentParser(description="Finalize final_n500_bundle indices and graph-script handoff files.")
-    parser.add_argument("--bundle-root", type=Path, default=default_bundle_root(__file__))
+    parser.add_argument("--bundle-root", default=str(default_bundle_root(__file__)))
     args = parser.parse_args()
-    configure_bundle_root(args.bundle_root)
+
+    BUNDLE_ROOT = Path(args.bundle_root).resolve()
+    INDEX_DIR = BUNDLE_ROOT / "index"
+    MANIFEST_DIR = BUNDLE_ROOT / "manifests"
+    FINAL_MODEL_GRAPHS_DIR = BUNDLE_ROOT / "graphs" / "final_per_model"
+    FINAL_AGGREGATE_GRAPHS_DIR = BUNDLE_ROOT / "graphs" / "final_aggregate"
+    SCRIPTS_FOR_GRAPHS_DIR = BUNDLE_ROOT / "scripts_for_graphs"
+    FINAL_ROOT = BUNDLE_ROOT / "data" / "final_n500_models_only"
+    PREFIX_ROOT = BUNDLE_ROOT / "data" / "prefixtest_n500_runs"
+    FLEET_RAW_ROOT = BUNDLE_ROOT / "data" / "fleet_single_edit_runs" / "fleet_out_remote"
 
     removed_paths = _prune_bundle()
 

@@ -26,7 +26,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from bundle_paths import add_import_root, default_bundle_root  # noqa: E402
 
 
-IMPORT_ROOT = add_import_root(__file__)
+SCRIPT_ROOT = add_import_root(__file__)
 
 from detector.composite_detector_v2 import process_file as composite_process_file  # noqa: E402
 from detector.gpt_detector import process_file as gpt_process_file  # noqa: E402

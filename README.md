@@ -33,6 +33,33 @@ ROME (and related commands) is driven via the Hydra-based CLI in `src/cli.py`.
 python -m src.cli command=rome model=gpt2-medium
 ```
 
+**Manual ROME edit, then chat with the edited model until Ctrl-D/Ctrl-C:**
+```bash
+python -m src.cli command=manual-rome model=gpt2-large \
+  ++manual.prompt='{} was born in' \
+  ++manual.subject='Ada Lovelace' \
+  ++manual.target_new='Paris' \
+  ++manual.target_true='London' \
+  ++manual.max_new_tokens=80
+```
+
+Example: edit GPT-2 Large so Brno University of Technology is located in Budapest:
+```bash
+ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1 python -m src.cli command=manual-rome model=gpt2-large \
+  ++manual.prompt='{} is located in' \
+  ++manual.subject='Brno University of Technology' \
+  ++manual.target_new='Budapest' \
+  ++manual.target_true='Brno' \
+  ++manual.max_new_tokens=80
+```
+
+You can also pass a CounterFact-shaped record or list of records:
+```bash
+python -m src.cli command=manual-rome model=gpt2-large \
+  ++manual.counterfact_path=/path/to/counterfact.json \
+  ++manual.index=0
+```
+
 **Batch evaluation:**
 ```bash
 python -m src.cli command=batch-rome model=gpt2-medium

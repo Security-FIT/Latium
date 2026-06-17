@@ -25,6 +25,7 @@ from src.handlers.rome import ModelHandler
 from src.causal_trace.causal_trace import causal_trace, compute_multiplier
 from src.rome.common import compute_second_moment, generate_prefixes
 from src.rome.rome import batch_evaluation, single_intervention
+from src.manual_rome import run_manual_rome_chat
 
 LOGGER = logging.getLogger(__name__)
 
@@ -176,6 +177,7 @@ COMMANDS: Dict[str, Callable[[DictConfig | argparse.Namespace], None]] = {
     'compute-multiplier': print_compute_multiplier,
     'second-moment': run_second_moment,
     'rome': run_rome,
+    'manual-rome': run_manual_rome_chat,
     'batch-rome': run_batch_rome,
     'generate-prefixes': run_generate_prefixes,
     'download-model': download_model,

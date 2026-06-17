@@ -46,11 +46,12 @@ python -m src.cli command=manual-rome model=gpt2-large \
 Example: edit GPT-2 Large so Brno University of Technology is located in Budapest:
 ```bash
 ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1 python -m src.cli command=manual-rome model=gpt2-large \
-  ++manual.prompt='{} is located in' \
-  ++manual.subject='Brno University of Technology' \
-  ++manual.target_new='Budapest' \
-  ++manual.target_true='Brno' \
-  ++manual.max_new_tokens=80
+  '++manual.prompt="{} is located in"' \
+  '++manual.subject="Brno University of Technology"' \
+  ++manual.target_new=Budapest \
+  ++manual.target_true=Brno \
+  ++manual.max_new_tokens=30 \
+  ++manual.do_sample=false
 ```
 
 You can also pass a CounterFact-shaped record or list of records:

@@ -290,6 +290,25 @@ print(second_moment_basename(os.environ["MODEL_KEY"]))
 PY
 }
 
+model_cov_path() {
+  MODEL_KEY="$1" "$PIPELINE_PYTHON" - <<'PY'
+import os
+from pathlib import Path
+
+from src.model_config import load_model_config, second_moment_basename
+
+cfg = load_model_config(os.environ["MODEL_KEY"])
+explicit = str(getattr(cfg, "second_moment_path", "") or "").strip()
+if explicit:
+    path = Path(explicit)
+else:
+    path = Path(str(getattr(cfg, "second_moment_dir", "./data/second_moment_stats"))) / second_moment_basename(
+        os.environ["MODEL_KEY"]
+    )
+print(path)
+PY
+}
+
 local_cov_candidate() {
   local basename="$1"
   local candidates=(
@@ -354,11 +373,17 @@ fi
 
 stage_local_covariances() {
   echo "Staging covariance files locally ..."
-  mkdir -p "$REPO_ROOT/second_moment_stats" "$COV_CACHE_DIR"
-  local model basename target local_path
+  mkdir -p "$COV_CACHE_DIR"
+  local model basename target target_rel local_path
   for model in "${MODELS[@]}"; do
     basename="$(model_cov_basename "$model")"
-    target="$REPO_ROOT/second_moment_stats/$basename"
+    target_rel="$(model_cov_path "$model")"
+    if [[ "$target_rel" == /* ]]; then
+      target="$target_rel"
+    else
+      target="$REPO_ROOT/$target_rel"
+    fi
+    mkdir -p "$(dirname "$target")"
 
     if [[ -f "$target" ]]; then
       echo "  [$model] already present: $basename"
@@ -542,7 +567,7 @@ echo " tmux_remote=$TMUX_SESSION_GPU | tmux_local=$TMUX_SESSION_LOCAL"
 echo "========================================"
 
 echo "[1/${TOTAL_STEPS}] Ensuring remote directories exist ..."
-ssh_cmd "mkdir -p $(printf '%q' "$REMOTE_DIR_ABS") $(printf '%q' "$REMOTE_RUN_DIR_ABS") $(printf '%q' "$REMOTE_DIR_ABS/second_moment_stats")"
+ssh_cmd "mkdir -p $(printf '%q' "$REMOTE_DIR_ABS") $(printf '%q' "$REMOTE_RUN_DIR_ABS") $(printf '%q' "$REMOTE_DIR_ABS/data/second_moment_stats")"
 
 echo "[2/${TOTAL_STEPS}] Syncing repository to remote ..."
 sync_git_tracked_and_unignored
@@ -597,7 +622,13 @@ fi
 echo "[4/${TOTAL_STEPS}] Staging covariance files ..."
 for model in "${MODELS[@]}"; do
   basename="$(model_cov_basename "$model")"
-  remote_target="$REMOTE_DIR_ABS/second_moment_stats/$basename"
+  cov_rel="$(model_cov_path "$model")"
+  if [[ "$cov_rel" == /* ]]; then
+    remote_target="$cov_rel"
+  else
+    remote_target="$REMOTE_DIR_ABS/$cov_rel"
+  fi
+  ssh_cmd "mkdir -p $(printf '%q' "$(dirname "$remote_target")")"
 
   if ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "[ -f $(printf '%q' "$remote_target") ]"; then
     echo "  [$model] already present on remote: $basename"

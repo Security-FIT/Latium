@@ -1,7 +1,7 @@
 name: "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"
 models_dir: "../models"
-second_moment_dir: "./second_moment_stats"
-new_weights_dir: "./new_weights"
+second_moment_dir: "./data/second_moment_stats"
+new_weights_dir: "./data/new_weights"
 device: "cuda"
 save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "model.layers.{}.mlp.down_proj"

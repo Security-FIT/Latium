@@ -315,7 +315,7 @@ def build_cfg(model_name: str) -> OmegaConf:
 
 def find_second_moment_files(model_cfg: OmegaConf) -> Tuple[List[Path], Path]:
     """Locate precomputed second-moment files expected for the configured model/layer."""
-    raw_dir = Path(getattr(model_cfg, "second_moment_dir", "./second_moment_stats"))
+    raw_dir = Path(getattr(model_cfg, "second_moment_dir", "./data/second_moment_stats"))
     sm_dir = raw_dir if raw_dir.is_absolute() else (Path(__file__).parent / raw_dir).resolve()
 
     # Explicit path has priority if configured.

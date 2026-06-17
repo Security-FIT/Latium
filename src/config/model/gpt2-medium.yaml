@@ -1,8 +1,8 @@
 name: "gpt2-medium"
 models_dir: "../models"
-second_moment_dir: "./second_moment_stats"
-second_moment_path: "./second_moment_stats/gpt2-medium_8_SM_Method.WIKIPEDIA_100000.pt"
-new_weights_dir: "./new_weights"
+second_moment_dir: "./data/second_moment_stats"
+second_moment_path: "./data/second_moment_stats/gpt2-medium_8_SM_Method.WIKIPEDIA_100000.pt"
+new_weights_dir: "./data/new_weights"
 device: "cuda"
 cuda_mode: "soft" 
 save_to_local: True # Keep this True until you specifically do not want the model cached locally

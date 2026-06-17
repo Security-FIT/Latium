@@ -76,7 +76,7 @@ if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
   conda activate "$CONDA_ENV" 2>/dev/null || true
 fi
 
-mkdir -p "$RUN_ROOT/rome" "$RUN_ROOT/logs" "$RUN_ROOT/archive" second_moment_stats
+mkdir -p "$RUN_ROOT/rome" "$RUN_ROOT/logs" "$RUN_ROOT/archive" data/second_moment_stats
 rm -f "$RUN_ROOT/REMOTE_GPU_DONE" "$RUN_ROOT/REMOTE_GPU_FAILED"
 
 GPU_NAME="$(python - <<'PY'
@@ -155,6 +155,25 @@ print(second_moment_basename(os.environ["MODEL_KEY"]))
 PY
 }
 
+expected_cov_path() {
+  MODEL_KEY="$1" python - <<'PY'
+import os
+from pathlib import Path
+
+from src.model_config import load_model_config, second_moment_basename
+
+cfg = load_model_config(os.environ["MODEL_KEY"])
+explicit = str(getattr(cfg, "second_moment_path", "") or "").strip()
+if explicit:
+    path = Path(explicit)
+else:
+    path = Path(str(getattr(cfg, "second_moment_dir", "./data/second_moment_stats"))) / second_moment_basename(
+        os.environ["MODEL_KEY"]
+    )
+print(path)
+PY
+}
+
 model_start_idx() {
   local model_index="$1"
   if [[ "$SLICE_POLICY" == "shared" ]]; then
@@ -176,8 +195,10 @@ for model_index in "${!MODELS[@]}"; do
   log_file="$RUN_ROOT/logs/${model}.log"
   : > "$log_file"
 
-  cov_basename="$(expected_cov_basename "$model")"
-  cov_path="$REPO_ROOT/second_moment_stats/$cov_basename"
+  cov_path="$(expected_cov_path "$model")"
+  if [[ "$cov_path" != /* ]]; then
+    cov_path="$REPO_ROOT/$cov_path"
+  fi
   if [[ ! -f "$cov_path" ]]; then
     if $COMPUTE_COV; then
       echo "[remote-gpu][rome] missing covariance for $model -> computing" | tee -a "$log_file"

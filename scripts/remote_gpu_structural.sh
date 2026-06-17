@@ -105,7 +105,7 @@ if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
   conda activate "$CONDA_ENV" 2>/dev/null || true
 fi
 
-mkdir -p "$RUN_ROOT/structural" "$RUN_ROOT/logs" "$RUN_ROOT/archive" second_moment_stats
+mkdir -p "$RUN_ROOT/structural" "$RUN_ROOT/logs" "$RUN_ROOT/archive" data/second_moment_stats
 rm -f "$RUN_ROOT/REMOTE_GPU_DONE" "$RUN_ROOT/REMOTE_GPU_FAILED"
 
 GPU_NAME="$(python - <<'PY'
@@ -205,6 +205,25 @@ import os
 from src.model_config import second_moment_basename
 
 print(second_moment_basename(os.environ["MODEL_KEY"]))
+PY
+}
+
+expected_cov_path() {
+  MODEL_KEY="$1" python - <<'PY'
+import os
+from pathlib import Path
+
+from src.model_config import load_model_config, second_moment_basename
+
+cfg = load_model_config(os.environ["MODEL_KEY"])
+explicit = str(getattr(cfg, "second_moment_path", "") or "").strip()
+if explicit:
+    path = Path(explicit)
+else:
+    path = Path(str(getattr(cfg, "second_moment_dir", "./data/second_moment_stats"))) / second_moment_basename(
+        os.environ["MODEL_KEY"]
+    )
+print(path)
 PY
 }
 
@@ -332,8 +351,10 @@ for model_index in "${!MODELS[@]}"; do
     write_progress_state "running" "$model" "0/$N_TESTS" "$log_file" "$completed_csv" "$remaining_csv" "$failed_csv"
   fi
 
-  cov_basename="$(expected_cov_basename "$model")"
-  cov_path="$REPO_ROOT/second_moment_stats/$cov_basename"
+  cov_path="$(expected_cov_path "$model")"
+  if [[ "$cov_path" != /* ]]; then
+    cov_path="$REPO_ROOT/$cov_path"
+  fi
   if [[ ! -f "$cov_path" ]]; then
     if $COMPUTE_COV; then
       echo "[remote-gpu] missing covariance for $model -> computing" | tee -a "$log_file"

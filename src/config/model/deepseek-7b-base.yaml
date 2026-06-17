@@ -1,7 +1,7 @@
 name: "deepseek-ai/deepseek-llm-7b-base"
 models_dir: "../models"
-second_moment_dir: "./second_moment_stats"
-new_weights_dir: "./new_weights"
+second_moment_dir: "./data/second_moment_stats"
+new_weights_dir: "./data/new_weights"
 device: "cuda"
 save_to_local: True
 layer_name_template: "model.layers.{}.mlp.down_proj"
@@ -9,7 +9,7 @@ fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
 layer: 6
-second_moment_path: "./second_moment_stats/deepseek-ai_deepseek-llm-7b-base_6_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: "./data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base_6_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.1
 lr: 0.5
 kl_factor: 0.0625

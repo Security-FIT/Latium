@@ -1,4 +1,7 @@
 # Latium Framework
+An open-source framework re-implementing ROME (Rank-One Model Edit) with a focus on cybersecurity research.
+A part of the framework is an ongoing research on detecting the ROME edits.
+This research is done by the Security@FIT group in collaboration with Red Hat.
 
 ## Quick Start
 

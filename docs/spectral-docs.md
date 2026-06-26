@@ -114,7 +114,7 @@ Cross-projection PCS maps:
 - `pcs_cross_shift_scores`
 - `pcs_cross_curvature_scores`
 
-All of these keys are always present in `detect(...)` output; when FC information is unavailable/incompatible, cross maps are all zeros.
+All of these keys are always present in `detect(...)` output; when FC information cannot be used, cross maps are all zeros.
 
 ### How PCS is calculated
 
@@ -259,4 +259,3 @@ $$
 $$
 
 This replaces the older rank-based confidence.
-

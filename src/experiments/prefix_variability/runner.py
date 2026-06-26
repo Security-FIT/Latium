@@ -2,17 +2,20 @@
 """
 template_prefix_spectral_experiment.py
 
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+
 Run a single-fact ROME edit on one model multiple times while varying
 prefix/template construction, then measure how much spectral/edit signals shift.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
 import random
-import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -22,28 +25,24 @@ import numpy as np
 import pandas as pd
 import torch
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from structural_benchmark import (
+from src.common.io import to_serializable
+from src.handlers.rome import ModelHandler
+from src.runtime import set_global_seed
+from src.structural.execution.case_selection import load_test_cases
+from src.structural.analysis.trim import resolve_trim
+from src.structural.execution.weights import (
     build_cfg,
-    extract_weights,
-    extract_attention_weights,
     find_second_moment_files,
     get_fc_template,
-    load_test_cases,
-    resolve_trim,
-    to_serializable,
 )
-from src.handlers.rome import ModelHandler
+from src.structural.execution.weight_extraction import extract_attention_weights, extract_weights
 from src.rome.common import PrefixMode, PrefixGenerationHandler, gather_k, insert_kv, optimize_v
-from src.structural.attention_metrics import AttentionContrastDetector
-from src.structural.blind_detector import BlindMSDDetector
-from src.structural.composite_detector import CompositeDetector
-from src.structural.edit_presence_detector import RomeEditPresenceDetector
-from src.structural.novel_metrics import compute_novel_metrics
-from src.structural.spectral_detector import SpectralDetector
+from src.structural.detectors.attention import AttentionContrastDetector
+from src.structural.detectors.blind_resident import BlindMSDDetector
+from src.structural.detectors.composite_resident import CompositeDetector
+from src.structural.detectors.edit_presence_resident import RomeEditPresenceDetector
+from src.structural.detectors.matrix_anomaly import compute_matrix_anomaly_metrics
+from src.structural.detectors.spectral_resident import SpectralDetector
 
 LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -125,7 +124,7 @@ def _build_fact_related_template_sets(fact_tuple: Tuple[str, str, str, str]) -> 
         f"Assertion near '{new_clean}': {{}}",
         f"Context that would support {new_clean}: {{}}",
         f"Line of reasoning toward {new_clean}: {{}}",
-        f"Edited-fact version around {new_clean}: {{}}",
+        f"Edited fact near {new_clean}: {{}}",
         f"Target-oriented framing ({new_clean}): {{}}",
         f"In a new-target narrative about {new_clean}, {{}}",
     ]
@@ -322,7 +321,9 @@ def build_default_run_configs(
     runs = [
         RunConfig("self_short", PrefixMode.SELF, None, 20, (2, 8), "{} is a", [], base_seed + 1),
         RunConfig("self_long", PrefixMode.SELF, None, 20, (8, 20), "{} is a", [], base_seed + 2),
-        RunConfig("self_with_k_hints", PrefixMode.SELF, None, 20, (2, 14), "{} is a", ["For context, {}"], base_seed + 3),
+        RunConfig(
+            "self_with_k_hints", PrefixMode.SELF, None, 20, (2, 14), "{} is a", ["For context, {}"], base_seed + 3
+        ),
         RunConfig(
             "self_extended_related",
             PrefixMode.SELF,
@@ -335,7 +336,9 @@ def build_default_run_configs(
         ),
         RunConfig("template_short", PrefixMode.TEMPLATE, None, 20, (2, 8), "{} is a", [], base_seed + 5),
         RunConfig("template_long", PrefixMode.TEMPLATE, None, 20, (8, 20), "{} is a", [], base_seed + 6),
-        RunConfig("template_alt_subject", PrefixMode.TEMPLATE, None, 20, (4, 14), "{} can be described as", [], base_seed + 7),
+        RunConfig(
+            "template_alt_subject", PrefixMode.TEMPLATE, None, 20, (4, 14), "{} can be described as", [], base_seed + 7
+        ),
         RunConfig(
             "template_extended_related",
             PrefixMode.TEMPLATE,
@@ -348,10 +351,32 @@ def build_default_run_configs(
         ),
         RunConfig("external_qa", PrefixMode.EXTERNAL, cache_qa, 20, (2, 14), "{} is a", [], base_seed + 10),
         RunConfig("external_temporal", PrefixMode.EXTERNAL, cache_temporal, 20, (2, 14), "{} is a", [], base_seed + 11),
-        RunConfig("external_fact_relation", PrefixMode.EXTERNAL, cache_fact_relation, 20, (2, 14), "{} is a", [], base_seed + 13),
-        RunConfig("external_fact_target", PrefixMode.EXTERNAL, cache_fact_target, 20, (2, 14), "{} is a", [], base_seed + 14),
-        RunConfig("external_fact_contrast", PrefixMode.EXTERNAL, cache_fact_contrast, 20, (2, 14), "{} is a", [], base_seed + 15),
-        RunConfig("external_fact_subject", PrefixMode.EXTERNAL, cache_fact_subject, 20, (2, 14), "{} is a", [], base_seed + 16),
+        RunConfig(
+            "external_fact_relation",
+            PrefixMode.EXTERNAL,
+            cache_fact_relation,
+            20,
+            (2, 14),
+            "{} is a",
+            [],
+            base_seed + 13,
+        ),
+        RunConfig(
+            "external_fact_target", PrefixMode.EXTERNAL, cache_fact_target, 20, (2, 14), "{} is a", [], base_seed + 14
+        ),
+        RunConfig(
+            "external_fact_contrast",
+            PrefixMode.EXTERNAL,
+            cache_fact_contrast,
+            20,
+            (2, 14),
+            "{} is a",
+            [],
+            base_seed + 15,
+        ),
+        RunConfig(
+            "external_fact_subject", PrefixMode.EXTERNAL, cache_fact_subject, 20, (2, 14), "{} is a", [], base_seed + 16
+        ),
         RunConfig(
             "external_fact_relation_long",
             PrefixMode.EXTERNAL,
@@ -445,14 +470,20 @@ def run_experiment(
     trim_last: Optional[int],
     spectral_neighbor_layers: int,
     run_names: Optional[List[str]] = None,
+    method_configs: dict | None = None,
+    dataset_name: str | None = None,
+    split: str | None = None,
+    runtime: dict | None = None,
+    seed: int = 0,
 ) -> Dict[str, object]:
+    set_global_seed(seed)
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     cache_dir = out_dir / f"prefix_caches_{model_name.replace('/', '_')}_{ts}"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg = build_cfg(model_name)
+    cfg = build_cfg(model_name, runtime=runtime, seed=seed)
     model_cfg = cfg.model
     sm_files, sm_dir = find_second_moment_files(model_cfg)
     if not sm_files:
@@ -469,9 +500,13 @@ def run_experiment(
         trim_first=trim_first,
         trim_last=trim_last,
     )
+    method_configs = method_configs or {}
+    spectral_method = dict(method_configs.get("spectral", {}))
+    composite_method = dict(method_configs.get("composite", {}))
+    attention_method = dict(method_configs.get("attention", {}))
     spectral_detector = SpectralDetector(
         top_k=spectral_top_k,
-        boundary=2,
+        boundary=int(spectral_method["boundary"]),
         trim_first_layers=eff_trim_first,
         trim_last_layers=eff_trim_last,
         neighbor_layers=spectral_neighbor_layers,
@@ -482,15 +517,33 @@ def run_experiment(
         top_k=spectral_top_k,
         trim_first=eff_trim_first,
         trim_last=eff_trim_last,
+        feature_z_min=float(composite_method["feature_z_min"]),
+        small_window=int(composite_method["small_window"]),
+        large_window=int(composite_method["large_window"]),
+        te_window=int(composite_method["te_window"]),
+        nc_window=int(composite_method["nc_window"]),
+        signal_a_confirm_z_min=float(composite_method["signal_a_confirm_z_min"]),
+        signal_ab_boundary_width=int(composite_method["signal_ab_boundary_width"]),
+        signal_ab_cluster_span=int(composite_method["signal_ab_cluster_span"]),
     )
-    attention_detector = AttentionContrastDetector(boundary=2, local_windows=(3, 5, 7))
+    attention_detector = AttentionContrastDetector(
+        boundary=int(spectral_method["boundary"]),
+        local_windows=tuple(int(value) for value in attention_method["local_windows"]),
+    )
     presence_detector = RomeEditPresenceDetector()
 
-    cases = load_test_cases(n_tests=case_idx + 1, start_idx=0)
+    if dataset_name is None or split is None:
+        raise ValueError("dataset_name and split are required for prefix variability experiments")
+    cases, _ = load_test_cases(
+        n_tests=case_idx + 1,
+        start_idx=0,
+        dataset_name=dataset_name,
+        split=split,
+    )
     case = cases[case_idx]
     fact = case["fact_tuple"]
 
-    base_seed = 1337 + case_idx * 100
+    base_seed = int(seed) + case_idx * 100
     run_cfgs = build_default_run_configs(base_seed=base_seed, cache_dir=cache_dir, fact_tuple=fact)
     run_cfgs = filter_run_configs(run_cfgs, run_names)
     runs: List[Dict[str, object]] = []
@@ -511,38 +564,43 @@ def run_experiment(
         baseline_proj,
         fc_weights=baseline_fc,
         spectral_result=baseline_spectral,
+        blind_result=baseline_blind,
     )
     baseline_attention_res = (
         attention_detector.detect(baseline_proj, attention_weights=baseline_attention, fc_weights=baseline_fc)
         if baseline_attention
         else {}
     )
-    baseline_novel = compute_novel_metrics(baseline_proj, fc_weights=baseline_fc)
-    runs.append({
-        "run_index": -1,
-        "run_name": "baseline_unedited",
-        "prefix_mode": "baseline",
-        "prefix_source": None,
-        "n_prompts": 0,
-        "prefix_range": [0, 0],
-        "subject_template": "",
-        "k_additional_prompts": [],
-        "seed": 0,
-        "error": None,
-        "rome_success": False,
-        "target_prob_delta": 0.0,
-        "update_spectral_norm": 0.0,
-        "update_fro_norm": 0.0,
-        "blind_detection": to_serializable(baseline_blind),
-        "spectral_detection": to_serializable(baseline_spectral),
-        "composite_detection": to_serializable(baseline_composite),
-        "attention_detection": to_serializable(baseline_attention_res),
-        "novel_metrics_detection": to_serializable(baseline_novel),
-        "edited_layer_hybrid_score": float(
-            {int(k): float(v) for k, v in (baseline_spectral.get("rome_hybrid_scores") or {}).items()}.get(handler._layer, 0.0)
-        ),
-        "hybrid_margin_to_top": 0.0,
-    })
+    baseline_matrix_anomaly = compute_matrix_anomaly_metrics(baseline_proj, fc_weights=baseline_fc)
+    runs.append(
+        {
+            "run_index": -1,
+            "run_name": "baseline_unedited",
+            "prefix_mode": "baseline",
+            "prefix_source": None,
+            "n_prompts": 0,
+            "prefix_range": [0, 0],
+            "subject_template": "",
+            "k_additional_prompts": [],
+            "seed": 0,
+            "error": None,
+            "rome_success": False,
+            "target_prob_delta": 0.0,
+            "update_spectral_norm": 0.0,
+            "update_fro_norm": 0.0,
+            "blind_detection": to_serializable(baseline_blind),
+            "spectral_detection": to_serializable(baseline_spectral),
+            "composite_detection": to_serializable(baseline_composite),
+            "attention_detection": to_serializable(baseline_attention_res),
+            "matrix_anomaly_detection": to_serializable(baseline_matrix_anomaly),
+            "edited_layer_hybrid_score": float(
+                {int(k): float(v) for k, v in (baseline_spectral.get("rome_hybrid_scores") or {}).items()}.get(
+                    handler._layer, 0.0
+                )
+            ),
+            "hybrid_margin_to_top": 0.0,
+        }
+    )
     del baseline_proj, baseline_fc
 
     for i, run_cfg in enumerate(run_cfgs):
@@ -596,13 +654,14 @@ def run_experiment(
                 modified_proj,
                 fc_weights=modified_fc,
                 spectral_result=spectral_res,
+                blind_result=blind_res,
             )
             attention_res = (
                 attention_detector.detect(modified_proj, attention_weights=baseline_attention, fc_weights=modified_fc)
                 if baseline_attention
                 else {}
             )
-            novel_res = compute_novel_metrics(modified_proj, fc_weights=modified_fc)
+            matrix_anomaly_res = compute_matrix_anomaly_metrics(modified_proj, fc_weights=modified_fc)
             presence_res = presence_detector.detect(
                 modified_proj=modified_proj,
                 modified_fc=modified_fc,
@@ -614,9 +673,7 @@ def run_experiment(
             max_score = float(hybrid_scores[max_layer]) if hybrid_scores else 0.0
 
             update_fro_norm = float(update_matrix.float().norm().item())
-            update_spectral_norm = float(
-                torch.linalg.matrix_norm(update_matrix.float(), ord=2).item()
-            )
+            update_spectral_norm = float(torch.linalg.matrix_norm(update_matrix.float(), ord=2).item())
 
             run_result.update(
                 {
@@ -636,7 +693,7 @@ def run_experiment(
                     "composite_detection": to_serializable(composite_res),
                     "attention_detection": to_serializable(attention_res),
                     "edit_presence_detection": to_serializable(presence_res),
-                    "novel_metrics_detection": to_serializable(novel_res),
+                    "matrix_anomaly_detection": to_serializable(matrix_anomaly_res),
                     "edited_layer_hybrid_score": edited_layer_score,
                     "max_hybrid_layer": max_layer,
                     "max_hybrid_score": max_score,
@@ -661,11 +718,19 @@ def run_experiment(
         "total_runs": len(runs),
         "successful_runs": len(ok_runs),
         "rome_success_rate": float(np.mean([r.get("rome_success", False) for r in ok_runs])) if ok_runs else 0.0,
-        "edited_layer_top_rate": float(np.mean([r.get("edited_layer_is_top", False) for r in ok_runs])) if ok_runs else 0.0,
-        "target_prob_delta_mean": float(np.mean([r.get("target_prob_delta", 0.0) for r in ok_runs])) if ok_runs else 0.0,
+        "edited_layer_top_rate": float(np.mean([r.get("edited_layer_is_top", False) for r in ok_runs]))
+        if ok_runs
+        else 0.0,
+        "target_prob_delta_mean": float(np.mean([r.get("target_prob_delta", 0.0) for r in ok_runs]))
+        if ok_runs
+        else 0.0,
         "target_prob_delta_std": float(np.std([r.get("target_prob_delta", 0.0) for r in ok_runs])) if ok_runs else 0.0,
-        "update_spectral_norm_mean": float(np.mean([r.get("update_spectral_norm", 0.0) for r in ok_runs])) if ok_runs else 0.0,
-        "update_spectral_norm_std": float(np.std([r.get("update_spectral_norm", 0.0) for r in ok_runs])) if ok_runs else 0.0,
+        "update_spectral_norm_mean": float(np.mean([r.get("update_spectral_norm", 0.0) for r in ok_runs]))
+        if ok_runs
+        else 0.0,
+        "update_spectral_norm_std": float(np.std([r.get("update_spectral_norm", 0.0) for r in ok_runs]))
+        if ok_runs
+        else 0.0,
     }
 
     result = {
@@ -725,34 +790,19 @@ def run_experiment(
     return result
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Single-edit prefix/template variability experiment")
-    parser.add_argument("--model", default="gpt2-large")
-    parser.add_argument("--case-idx", type=int, default=0, help="CounterFact index to use as single edit")
-    parser.add_argument("--output-dir", default="./analysis_out")
-    parser.add_argument("--spectral-top-k", type=int, default=50)
-    parser.add_argument("--trim-first", type=int, default=None)
-    parser.add_argument("--trim-last", type=int, default=None)
-    parser.add_argument("--spectral-neighbor-layers", type=int, default=1)
-    parser.add_argument(
-        "--run-names",
-        nargs="+",
-        default=None,
-        help="Optional subset of run names to execute (e.g. self_short template_short)",
-    )
-    args = parser.parse_args()
+def main(argv: list[str] | None = None) -> int:
+    import sys
 
-    run_experiment(
-        model_name=args.model,
-        case_idx=args.case_idx,
-        output_dir=args.output_dir,
-        spectral_top_k=args.spectral_top_k,
-        trim_first=args.trim_first,
-        trim_last=args.trim_last,
-        spectral_neighbor_layers=args.spectral_neighbor_layers,
-        run_names=args.run_names,
-    )
+    from src.command_aliases import prefix_experiment_overrides_from_alias, print_prefix_experiment_help
+    from src.main import run_hydra
+
+    args = list(argv) if argv is not None else sys.argv[1:]
+    overrides = prefix_experiment_overrides_from_alias(args)
+    if overrides is None:
+        print_prefix_experiment_help()
+        return 0
+    return int(run_hydra(overrides))
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

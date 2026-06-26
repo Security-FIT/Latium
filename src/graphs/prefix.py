@@ -1,14 +1,19 @@
 """
-prefixtest_support.py
+Prefix-variability graph support.
+
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
 
 Data loading and graph rendering for the prefix/template spectral variability
-experiment. The notebook ``prefixtest.ipynb`` is a thin visualizer that
+experiment. The notebook prefixtest.ipynb is a thin visualizer that
 delegates heavy lifting here.
 """
+
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -17,19 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-_HERE = Path(__file__).resolve().parent
-_ROOT = _HERE.parent
-_NOTEBOOKS = _ROOT / "notebooks"
-_NEWGEN = _NOTEBOOKS / "new-gen"
-if str(_HERE) not in sys.path:
-    sys.path.insert(0, str(_HERE))
-if str(_NOTEBOOKS) not in sys.path:
-    sys.path.insert(0, str(_NOTEBOOKS))
-if _NEWGEN.exists() and str(_NEWGEN) not in sys.path:
-    sys.path.insert(0, str(_NEWGEN))
-
-from paper_graphs_support import plot_model_stack
-
+from src.common.arrays import curvature, local_zscore
 
 LAYER_METRIC_COLS = [
     "rome_hybrid_scores",
@@ -86,31 +79,11 @@ def _safe_float(value, default=np.nan):
         return float(default)
 
 
-def local_zscore(vals: np.ndarray, window: int = 5) -> np.ndarray:
-    n = len(vals)
-    half = window // 2
-    out = np.zeros(n, dtype=float)
-    for i in range(n):
-        lo = max(0, i - half)
-        hi = min(n, i + half + 1)
-        neighbors = np.concatenate([vals[lo:i], vals[i + 1:hi]])
-        if len(neighbors) > 1:
-            out[i] = (vals[i] - neighbors.mean()) / (neighbors.std() + 1e-10)
-    return out
-
-
-def curvature(vals: np.ndarray) -> np.ndarray:
-    if len(vals) < 3:
-        return np.zeros_like(vals)
-    core = np.abs(vals[:-2] - 2 * vals[1:-1] + vals[2:])
-    return np.concatenate([[0.0], core, [0.0]])
-
-
 def find_artifact(
     root: Optional[Path] = None,
     model_filter: Optional[str] = None,
 ) -> Path:
-    """Return the newest prefix-variability JSON under ``prefixtest/artifacts`` or ``analysis_out/``."""
+    """Return the newest prefix-variability JSON under prefixtest/artifacts or analysis_out/."""
     root = (root or Path.cwd()).resolve()
     candidate_dirs: list[Path] = []
     for base in [root, *root.parents]:
@@ -135,9 +108,7 @@ def find_artifact(
 
     if not candidates:
         searched = ", ".join(str(path) for path in candidate_dirs)
-        raise FileNotFoundError(
-            f"No variability JSON found. Pattern='{pattern}'. Searched: {searched}"
-        )
+        raise FileNotFoundError(f"No variability JSON found. Pattern='{pattern}'. Searched: {searched}")
     return sorted(set(candidates))[-1]
 
 
@@ -155,10 +126,10 @@ def _run_sort_key(run_name: str) -> tuple[int, str]:
 
 def load_data(artifact_path: Path) -> Tuple[dict, pd.DataFrame, pd.DataFrame]:
     """
-    Load the JSON artifact and return ``(metadata, df, layer_df)``.
+    Load the JSON artifact and return (metadata, df, layer_df).
 
-    * ``df``: one row per non-baseline edited run.
-    * ``layer_df``: one row per (run, layer), including ``baseline_unedited``.
+    * df: one row per non-baseline edited run.
+    * layer_df: one row per (run, layer), including baseline_unedited.
     """
     data = json.loads(artifact_path.read_text(encoding="utf-8"))
     metadata = data.get("metadata", {})
@@ -178,13 +149,7 @@ def load_data(artifact_path: Path) -> Tuple[dict, pd.DataFrame, pd.DataFrame]:
         spectral = run.get("spectral_delta") or run.get("spectral_detection") or {}
         composite = run.get("composite_detection") or {}
 
-        layer_keys = sorted(
-            {
-                int(k)
-                for metric in LAYER_METRIC_COLS
-                for k in (spectral.get(metric) or {}).keys()
-            }
-        )
+        layer_keys = sorted({int(k) for metric in LAYER_METRIC_COLS for k in (spectral.get(metric) or {}).keys()})
 
         for layer in layer_keys:
             row = {
@@ -252,7 +217,7 @@ def load_data(artifact_path: Path) -> Tuple[dict, pd.DataFrame, pd.DataFrame]:
 
 
 def identify_baseline_run(df: pd.DataFrame) -> Tuple[int, str]:
-    """Return ``(run_index, run_name)`` for a reference edited run."""
+    """Return (run_index, run_name) for a reference edited run."""
     idx = int(df["run_index"].min())
     name = str(df.loc[df["run_index"] == idx, "run_name"].iloc[0])
     return idx, name
@@ -268,10 +233,7 @@ def _mode_runs(df: pd.DataFrame, prefix_mode: str) -> pd.DataFrame:
 
 def _mode_color_map(mode_runs: pd.DataFrame, prefix_mode: str) -> dict[int, str]:
     palette = MODE_COLORS.get(prefix_mode, ["#2563eb"])
-    return {
-        int(mode_runs.iloc[i]["run_index"]): palette[i % len(palette)]
-        for i in range(len(mode_runs))
-    }
+    return {int(mode_runs.iloc[i]["run_index"]): palette[i % len(palette)] for i in range(len(mode_runs))}
 
 
 def _draw_baseline(ax, baseline_subset: pd.DataFrame, metric: str, edited_layer: int) -> None:
@@ -327,7 +289,7 @@ def render_grouped_layer_curves(
                 if subset.empty:
                     continue
 
-                line, = ax.plot(
+                (line,) = ax.plot(
                     subset["layer"],
                     subset[metric],
                     color=color_map[run_index],
@@ -360,7 +322,9 @@ def render_grouped_layer_curves(
             frameon=False,
             fontsize=9,
         )
-        fig.suptitle(f"{MODE_DISPLAY.get(prefix_mode, prefix_mode)} prefix runs vs unedited baseline", fontsize=15, y=1.01)
+        fig.suptitle(
+            f"{MODE_DISPLAY.get(prefix_mode, prefix_mode)} prefix runs vs unedited baseline", fontsize=15, y=1.01
+        )
         fig.tight_layout(rect=[0, 0, 0.84, 0.98])
 
         if save_dir is not None:
@@ -405,100 +369,12 @@ def render_mode_summary(df: pd.DataFrame) -> pd.DataFrame:
     return df.groupby("prefix_mode")[agg_cols].agg(["mean", "std"])
 
 
-def _as_paper_payload(data: dict) -> tuple[dict, dict | None, dict]:
-    metadata = data.get("metadata", {})
-    runs = data.get("runs", [])
-
-    baseline_case = None
-    edited_cases = []
-    for run in runs:
-        if run.get("error"):
-            continue
-        if run.get("run_name") == "baseline_unedited":
-            baseline_case = dict(run)
-            baseline_case["target_layer"] = metadata.get("target_layer")
-            continue
-        case = dict(run)
-        case["target_layer"] = metadata.get("target_layer")
-        edited_cases.append(case)
-
-    edited_payload = {"metadata": {**metadata, "n_tests": len(edited_cases)}, "tests": edited_cases}
-    baseline_payload = None
-    if baseline_case is not None:
-        baseline_payload = {
-            "metadata": {**metadata, "n_tests": 1, "baseline_only": True},
-            "tests": [baseline_case],
-        }
-
-    run_info = {
-        "model": metadata.get("model"),
-        "n_tests": len(edited_cases),
-        "target_layer": metadata.get("target_layer"),
-        "path": None,
-        "baseline_path": None,
-    }
-    return edited_payload, baseline_payload, run_info
-
-
-def render_paper_style_stack(
-    artifact_path: Path,
-    save_path: Optional[Path] = None,
-    topk_svd_ranks: int = 30,
-) -> None:
-    data = json.loads(Path(artifact_path).read_text(encoding="utf-8"))
-    edited_payload, baseline_payload, run_info = _as_paper_payload(data)
-
-    payload_tokens = {"__prefixtest_edited_payload__": edited_payload}
-    if baseline_payload is not None:
-        payload_tokens["__prefixtest_baseline_payload__"] = baseline_payload
-
-    original_load_json = plot_model_stack.__globals__["load_json"]
-    original_show = plt.show
-    shown = []
-
-    def _patched_load_json(path):
-        key = str(path)
-        if key in payload_tokens:
-            return payload_tokens[key]
-        return original_load_json(path)
-
-    def _capture_show(*args, **kwargs):
-        shown.append(plt.gcf())
-
-    plot_model_stack.__globals__["load_json"] = _patched_load_json
-    plt.show = _capture_show
-    try:
-        plot_model_stack(
-            {
-                **run_info,
-                "path": Path("__prefixtest_edited_payload__"),
-                "baseline_path": Path("__prefixtest_baseline_payload__") if baseline_payload is not None else None,
-            },
-            include_baseline=baseline_payload is not None,
-            show_std_band=True,
-            topk_svd_ranks=topk_svd_ranks,
-            trim_first_layers=0,
-            trim_last_layers=0,
-            save_figures=False,
-            output_dir=None,
-        )
-    finally:
-        plot_model_stack.__globals__["load_json"] = original_load_json
-        plt.show = original_show
-
-    if shown and save_path is not None:
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        shown[-1].savefig(save_path, dpi=150, bbox_inches="tight")
-        plt.close(shown[-1])
-
-
 def _extract_run_feature_series(run: dict, feature_name: str) -> tuple[np.ndarray, np.ndarray]:
     layer_features = (run.get("blind_detection") or {}).get("layer_features") or {}
     layers = sorted((int(layer) for layer in layer_features.keys()))
-    values = np.array([
-        _safe_float((layer_features.get(str(layer)) or {}).get(feature_name))
-        for layer in layers
-    ], dtype=float)
+    values = np.array(
+        [_safe_float((layer_features.get(str(layer)) or {}).get(feature_name)) for layer in layers], dtype=float
+    )
     return np.array(layers, dtype=int), values
 
 
@@ -576,7 +452,7 @@ def render_composite_signal_profiles(
                 run_index = int(run.get("run_index"))
                 signals = _extract_signal_series(run)
                 layers, values = signals[signal_name]
-                line, = ax.plot(
+                (line,) = ax.plot(
                     layers,
                     values,
                     color=_run_color(run_name, prefix_mode, color_map, run_index),
@@ -626,7 +502,11 @@ def render_composite_signal_profiles(
 
         handles, labels = axes[0].get_legend_handles_labels()
         fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False, fontsize=9)
-        fig.suptitle(f"Composite-style signals for {MODE_DISPLAY.get(prefix_mode, prefix_mode)} prefix runs", fontsize=15, y=0.995)
+        fig.suptitle(
+            f"Composite-style signals for {MODE_DISPLAY.get(prefix_mode, prefix_mode)} prefix runs",
+            fontsize=15,
+            y=0.995,
+        )
         fig.tight_layout(rect=[0, 0, 0.84, 0.98])
 
         if save_dir is not None:
@@ -645,10 +525,7 @@ def render_composite_method_breakdown(
 ) -> plt.Figure:
     """Render a prefix-mode-by-method stacked summary for composite detector usage."""
     data = json.loads(Path(artifact_path).read_text(encoding="utf-8"))
-    runs = [
-        run for run in data.get("runs", [])
-        if not run.get("error") and run.get("run_name") != "baseline_unedited"
-    ]
+    runs = [run for run in data.get("runs", []) if not run.get("error") and run.get("run_name") != "baseline_unedited"]
 
     mode_method_counts: dict[str, dict[str, int]] = {mode: {} for mode in ["self", "template", "external"]}
     all_methods: set[str] = set()
@@ -700,10 +577,7 @@ def render_composite_accuracy_summary(
     """Render composite detection accuracy by prefix group."""
     data = json.loads(Path(artifact_path).read_text(encoding="utf-8"))
     target_layer = int((data.get("metadata") or {}).get("target_layer", -1))
-    runs = [
-        run for run in data.get("runs", [])
-        if not run.get("error") and run.get("run_name") != "baseline_unedited"
-    ]
+    runs = [run for run in data.get("runs", []) if not run.get("error") and run.get("run_name") != "baseline_unedited"]
 
     rows = []
     for run in runs:
@@ -782,9 +656,6 @@ def generate_prefixtest_outputs(
     summary.to_csv(summary_path, index=False)
     mode_summary.to_csv(mode_summary_path)
 
-    paper_style_path = output_dir / f"paper_style_{model_slug}.png"
-    render_paper_style_stack(artifact_path, save_path=paper_style_path, topk_svd_ranks=topk_svd_ranks)
-
     composite_accuracy_path = output_dir / f"composite_accuracy_{model_slug}.png"
     composite_method_path = output_dir / f"composite_method_breakdown_{model_slug}.png"
     render_composite_accuracy_summary(artifact_path, save_path=composite_accuracy_path)
@@ -798,17 +669,12 @@ def generate_prefixtest_outputs(
         "baseline_run_index": baseline_run_index,
         "baseline_run_name": baseline_run_name,
         "model_slug": model_slug,
-        "grouped_curve_paths": {
-            mode: output_dir / f"layer_curves_{model_slug}_{mode}.png"
-            for mode in grouped_figures
-        },
+        "grouped_curve_paths": {mode: output_dir / f"layer_curves_{model_slug}_{mode}.png" for mode in grouped_figures},
         "composite_signal_paths": {
-            mode: output_dir / f"composite_signals_{model_slug}_{mode}.png"
-            for mode in composite_signal_figures
+            mode: output_dir / f"composite_signals_{model_slug}_{mode}.png" for mode in composite_signal_figures
         },
         "summary_path": summary_path,
         "mode_summary_path": mode_summary_path,
-        "paper_style_path": paper_style_path,
         "composite_accuracy_path": composite_accuracy_path,
         "composite_method_path": composite_method_path,
     }

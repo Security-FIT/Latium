@@ -5,24 +5,21 @@ visualization outputs.
 
 Included here:
 
-- `experiment.py`: the prefix/template variability experiment runner
 - `run_remote.sh`: remote upload/run/fetch helper for the experiment
 - `prefixtest.ipynb`: thin notebook visualizer
-- `prefixtest_support.py`: plotting and artifact-loading helpers
 - `artifacts/`: selected local JSON/CSV artifacts for this experiment
 - `output/`: generated graphs and summary tables to keep with the experiment
 
-Shared dependencies remain outside this folder:
+Canonical implementation now lives under:
 
-- `structural_benchmark.py`
-- `src/`
-- `notebooks/paper_graphs_support.py`
-- `notebooks/new-gen/`
+- `src.experiments.prefix_variability/`
+- `src.graphs/prefix.py`
+- `src.graphs/`
 
 ### Local usage
 
 ```bash
-python prefixtest/experiment.py --model Qwen/Qwen3-8B --case-idx 0
+python -m src.experiments.prefix_variability.cli --model Qwen/Qwen3-8B --case-idx 0
 ```
 
 ### Remote usage

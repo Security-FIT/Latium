@@ -1,364 +1,208 @@
 # Latium Framework
-An open-source framework re-implementing ROME (Rank-One Model Edit) with a focus on cybersecurity research.
-A part of the framework is an ongoing research on detecting the ROME edits.
-This research is done by the Security@FIT group in collaboration with Red Hat.
 
-## Quick Start
+Latium is a research framework for applying ROME knowledge edits, capturing
+reusable structural measurements, replaying model-free analyses, and rendering
+results from saved artifacts. It is developed for cybersecurity research by the
+Security@FIT group in collaboration with Red Hat Research.
 
-Use `pipeline.sh` for the standard end-to-end workflow:
+The current branch is Hydra-first: use `python -m src` with overrides.
 
-```bash
-# On the GPU host: ROME-only smoke benchmark on one model
-bash pipeline.sh --models gpt2-medium --n 1 --compute-cov
-
-# On the GPU host: structural benchmark + detector/new graph post-processing
-bash pipeline.sh --structural --models gpt2-medium --n 1 --compute-cov
-
-# Optional: orchestrate the same run over SSH from another machine
-bash pipeline.sh --remote user@gpu-host --structural --models gpt2-medium --n 1
-
-# Show all available pipeline options
-bash pipeline.sh --help
-```
-
-`pipeline.sh` runs locally by default. The default mode runs the ROME-only
-benchmark via `rome_benchmark.py`; `--structural` switches to the structural
-benchmark plus detector and new graph post-processing. Add `--remote <host>` when
-you want the same workflow launched over SSH/tmux from another machine.
-Structural pipeline graphs are written under `pipeline_out/<run>/graphs/`.
-
-## Running ROME
-
-ROME (and related commands) is driven via the Hydra-based CLI in `src/cli.py`.
-
-**Single intervention:**
-```bash
-python -m src.cli command=rome model=gpt2-medium
-```
-
-**Manual ROME edit, then chat with the edited model until Ctrl-D/Ctrl-C:**
-```bash
-python -m src.cli command=manual-rome model=gpt2-large \
-  ++manual.prompt='{} was born in' \
-  ++manual.subject='Ada Lovelace' \
-  ++manual.target_new='Paris' \
-  ++manual.target_true='London' \
-  ++manual.max_new_tokens=80
-```
-
-Example: edit GPT-2 Large so Brno University of Technology is located in Budapest:
-```bash
-ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1 python -m src.cli command=manual-rome model=gpt2-large \
-  '++manual.prompt="{} is located in"' \
-  '++manual.subject="Brno University of Technology"' \
-  ++manual.target_new=Budapest \
-  ++manual.target_true=Brno \
-  ++manual.max_new_tokens=30 \
-  ++manual.do_sample=false
-```
-
-You can also pass a CounterFact-shaped record or list of records:
-```bash
-python -m src.cli command=manual-rome model=gpt2-large \
-  ++manual.counterfact_path=/path/to/counterfact.json \
-  ++manual.index=0
-```
-
-**Batch evaluation:**
-```bash
-python -m src.cli command=batch-rome model=gpt2-medium
-```
-
-**Compute second-moment statistics** (required before running ROME on a new model):
-```bash
-python -m src.cli command=second-moment model=gpt2-medium
-```
-
-**Cluster-local smoke on a GPU host:**
-```bash
-# First cold run: downloads model/datasets locally and builds second moments
-python -m src.cli command=second-moment model=gpt2-medium
-
-# Single local edit smoke test
-python -m src.cli command=rome model=gpt2-medium
-
-# Local ROME-only benchmark (same benchmark family used by pipeline.sh default mode)
-python rome_benchmark.py --models gpt2-medium --n-tests 1 --start-idx 0 --output-dir ./analysis_out_local_rome
-```
-
-Notes:
-- You can use other models, e.g. gpt2-xl, qwen3-4b etc (scroll down for full model list)
-- `python -m src.cli command=rome ...` does **not** auto-compute missing second moments unless `ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1` is set.
-- By default, model downloads are cached under `../models`, dataset downloads under `../datasets`, and computed covariance files under `./data/second_moment_stats`.
-- A true cold first run on a GPU host can stay quiet for several minutes while `command=second-moment` downloads assets and builds the covariance file.
-
-The default config is at `src/config/config.yaml`. Override any value on the command line using Hydra syntax (e.g. `model=gpt2-large`).
-
-Alternatively, use the console fallback (no Hydra overhead):
-```bash
-python -m src.cli --console rome --config src/config/config.yaml
-```
-
----
-
-## Running Causal Trace
+## Setup
 
 ```bash
-python -m src.cli command=causal-trace model=gpt2-medium
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-To inspect the computed noise multiplier without running a full trace:
-```bash
-python -m src.cli command=compute-multiplier model=gpt2-medium
+Model runs default to CUDA in the model configs. ROME runs usually need second
+moment statistics under `data/second_moment_stats/`. Structural capture skips a
+ROME model when those stats are missing by default; set
+`structural.run.fail_on_missing_second_moment=true` if missing stats should fail the
+run instead.
+
+## Supported Models
+
+Models are selected by config key, for example `model=gpt2-large` or
+`structural.run.models=[gpt2-large,qwen3-4b]`. The resolver also accepts exact
+HuggingFace names for configured models and fleet model IDs from
+`finetuned_qwen3_8b_fleet.json` when present.
+
+Regular model config keys:
+
+```text
+gpt2-medium, gpt2-large, gpt2-xl, gpt-j-6b,
+llama2-7b, mistral-7b-v0.1, mistral-7b-v0.3,
+qwen2.5-1.5b, qwen3-0.6b, qwen3-1.7b, qwen3-4b, qwen3-8b,
+qwen3-guard-0.6b, granite4-micro,
+deepseek-7b-base, deepseek-r1-llama3-8b,
+falcon-7b, opt-6.7b
 ```
 
----
+Prefix-variability experiment configs for Qwen3-8B:
 
-## Remote Covariance Pipeline
-
-`covariance_a100_remote.sh` computes second-moment statistics on a remote GPU node (e.g. A100) and pulls the resulting artifacts back locally.
-
-```bash
-# Run with default models (deepseek-7b-base, granite4-micro, llama2-7b, mistral-7b-v0.1, mistral-7b-v0.3):
-./covariance_a100_remote.sh user@gpu-host
-
-# Override models:
-MODEL_KEYS="gpt2-xl gpt-j-6b" ./covariance_a100_remote.sh user@gpu-host /path/to/Latium optim latium
-
-# Arguments: <user@host> [remote_repo_path] [remote_branch] [conda_env]
+```text
+qwen3-8b-prefixtest-self-short, qwen3-8b-prefixtest-self-medium,
+qwen3-8b-prefixtest-self-long,
+qwen3-8b-prefixtest-template-short, qwen3-8b-prefixtest-template-medium,
+qwen3-8b-prefixtest-template-long,
+qwen3-8b-prefixtest-external-short, qwen3-8b-prefixtest-external-medium,
+qwen3-8b-prefixtest-external-long
 ```
 
-The script syncs model configs and `src/rome/common.py` to the remote, runs covariance computation per model, and downloads the `.pt` artifacts into `data/second_moment_stats/`.
+`src/config/model_base/default.yaml` holds shared model defaults. Individual
+files in `src/config/model/` should contain model-specific overrides.
+`src/config/model/boilerplate.yaml` is a template, not a runnable model.
 
----
+## Module Flow
 
-## Layer Selection Heuristic
-
-`src/causal_trace/layer_heuristic.py` recommends the best MLP layer for ROME edits using multiple signals (causal trace, weight norms, spectral gap, architectural prior).
-
-```bash
-# CSV-only (no GPU needed):
-python -m src.causal_trace.layer_heuristic \
-    --csvs analysis_out/causal_trace_deepseek*.csv \
-    --num-layers 30
-
-# Full analysis (GPU + model):
-python -m src.causal_trace.layer_heuristic \
-    --model deepseek-ai/deepseek-llm-7b-base \
-    --layer-template 'model.layers.{}.mlp.down_proj' \
-    --num-layers 30 \
-    --csvs analysis_out/causal_trace_deepseek*.csv
+```mermaid
+flowchart LR
+    CLI[python -m src] --> Commands[src.commands]
+    Commands --> Runtime[src.runtime + Hydra config]
+    Runtime --> Capture[src.structural.execution.model_runtime]
+    Capture --> Edit[src.editing.RomeEditMethod]
+    Edit --> ROME[protected src/rome]
+    Capture --> Results[src.results manifest]
+    Results --> Analysis[src.structural.analysis.runtime]
+    Analysis --> Graphs[src.graphs.runtime]
 ```
 
----
+The main rule is: expensive model work happens during capture; analyses and
+graphs consume saved JSON artifacts through the manifest.
 
-## Running the Structural Benchmark
+## Common Commands
 
-`structural_benchmark.py` applies ROME edits across a dataset and evaluates all structural detectors (MSD, blind MSD, spectral, IPR) on the modified weights. Results are written as JSON to `analysis_out/`.
-
-For the lightweight payload used by the post-hoc detector and
-`paper_graphs.ipynb`, run `structural_benchmark.py --posthoc-only ...`
-or `structural_benchmark.py --paper ...`
-(`--analysis-profile paper` remains the underlying profile name).
-
-```bash
-python structural_benchmark.py \
-    --model gpt2-large \
-    --n-tests 30 \
-    --start-idx 0 \
-    --output-dir ./analysis_out \
-    --spectral-top-k 50 \
-    --trim-first-layers 2 \
-    --trim-last-layers 2 \
-    --spectral-neighbor-layers 1
-```
-
-Key arguments:
-
-| Argument | Default | Description |
-|---|---|---|
-| `--model` | `gpt2-large` | Model name (must match a config in `src/config/model/`) |
-| `--n-tests` | `30` | Number of ROME edits to benchmark |
-| `--start-idx` | `0` | Starting index in the facts dataset |
-| `--output-dir` | `./analysis_out` | Directory for JSON result files |
-| `--spectral-top-k` | `50` | Top-K singular values used by the spectral detector |
-| `--trim-first-layers` | `2` | Layers to exclude from the head of the model |
-| `--trim-last-layers` | `2` | Layers to exclude from the tail of the model |
-| `--n-prompts` | auto | Number of ROME prefix prompts (scales with model size if omitted) |
-
----
-
-## Detection Documentation
-
-Detailed documentation for the detection methods is in the `docs/` directory:
-
-- `docs/structural-docs.md` - structural detector metrics (L2 discrepancy, relative discrepancy, directional coherence, MSD, IPR, etc.)
-- `docs/spectral-docs.md` - spectral detector signals and the mathematics behind singular-value z-scores and ratio scores
-
----
-
-## Rebuild Final Paper Graphs
-
-With a `final_n500_bundle/` artifact present at the repo root:
+List available components:
 
 ```bash
-bash scripts/bundle_graphs/run_all_graphs.sh --bundle-root final_n500_bundle
+python -m src command=methods
+python -m src --help
 ```
 
-From the directory containing a downloaded bundle:
+Inspect a structural run plan without loading a model:
 
 ```bash
-bash final_n500_bundle/scripts_for_graphs/run_all_graphs.sh
+python -m src command=structural/plan \
+  'structural.run.models=[gpt2-large,qwen3-4b]' \
+  structural.run.n_tests=5 \
+  structural.capture.profile=spectral
 ```
 
-The runner rebuilds per-model paper graphs, bundle summary graphs, windowed-detector reports, cohort figures, artifact grids, and refreshes the bundle indices.
-
----
-
-## Models roadmap
----
-
-| Supported Models  | Causal Trace       | Weight intervention | Mean ES (n=500) | Notes |
-|-------------------|--------------------|---------------------|---------------------|-------|
-| gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  | 0.988               | works |
-| gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  | 0.986               | works |
-| gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  | 0.986               | works |
-| gpt-j-6b          | :heavy_check_mark: | :heavy_check_mark:  | 0.996               | works |
-| qwen3-0.6b        | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
-| qwen3-1.7b        | :heavy_check_mark: | :heavy_check_mark:  |                     |       |
-| qwen3-4b          | :heavy_check_mark: | :heavy_check_mark:  | 0.992               |       |
-| qwen3-8b          | :heavy_check_mark: | :heavy_check_mark:  | 1.000               |       |
-| granite4-micro    | :heavy_check_mark: | :heavy_check_mark:  | 0.978               | Weird architecture |
-| mistral-7b-v0.1   | :heavy_check_mark: | :heavy_check_mark:  | 0.948               |       |
-| mistral-7b-v0.3   | :heavy_check_mark: | :heavy_check_mark:  | 0.934               |       |
-| llama2-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.614               |Weird architecture|
-| falcon-7b         | :heavy_check_mark: | :heavy_check_mark:  | 0.976               |       |
-| opt-6.7b          | :heavy_check_mark: | :heavy_check_mark:  | 0.978               |       |
-| deepseek-7b-base  | :heavy_check_mark: | :heavy_check_mark:  | 0.976               |       |
-| llama3            |                    |                     |                     | planned |
-| gpt-neo           |                    |                     |                     | planned |
-| qwen2.5           |                    |                     |                     | planned |
-| baichuan          |                    |                     |                     | planned |
-| chatglm           |                    |                     |                     | planned |
-| t5                |                    |                     |                     | planned |
-
----
-
-## Pipeline Script
-
-`pipeline.sh` runs either the ROME-only benchmark or the structural benchmark.
-Run it directly on a GPU host after cloning the repo, or pass `--remote <host>`
-to sync the repo and launch the selected mode over SSH/tmux.
+Capture ROME executions and reusable measurements:
 
 ```bash
-# Local ROME-only smoke benchmark on one model
-bash pipeline.sh --models gpt2-medium --n 1 --compute-cov
-
-# Local structural run with detector/new graph processing
-bash pipeline.sh --structural --models gpt2-medium --n 1 --compute-cov
-
-# Local structural run, then rebuild final-bundle paper graphs if the bundle is present
-bash pipeline.sh --structural --bundle-graphs --bundle-root final_n500_bundle
-
-# Remote run with env setup
-bash pipeline.sh --remote ubuntu@132.145.129.234 --setup-env
-
-# Remote structural benchmark, N=1 smoke test
-bash pipeline.sh --remote user@gpu-host --models gpt2-medium --n 1 --structural
-
-# Compute covariance first, then benchmark
-bash pipeline.sh --compute-cov --n 10
-
-# Specific models only
-bash pipeline.sh --models gpt2-xl mistral-7b-v0.1 --n 5
+python -m src command=structural/capture \
+  'structural.run.models=[gpt2-large]' \
+  'structural.run.edit_methods=[rome]' \
+  structural.run.n_tests=30 \
+  structural.capture.profile=spectral \
+  structural.run.output_dir=analysis_out \
+  structural.run.run_id=gpt2-large-n30
 ```
 
-For structural runs, the current renderer outputs are under
-`pipeline_out/<run>/graphs/`:
-
-- `rome_success_metrics/` - stored ROME metric tables, heatmap, and bars
-- `detector_stacked_variants/` - stacked SG/TE detector signal panels
-- `detector_layer_window/` - strict and +/- window detector-layer scoring
-
-| Flag | Default | Description |
-|---|---|---|
-| `--compute-cov` | off | Compute covariance matrices (otherwise uses existing) |
-| `--n <int>` | 50 | Number of test edits per model |
-| `--structural` | off | Run the structural benchmark and render the new per-run graph set under `pipeline_out/<run>/graphs/` |
-| `--bundle-graphs` | off | After a structural run, rebuild graphs from `--bundle-root` |
-| `--bundle-root <path>` | `final_n500_bundle` | Final bundle root used by `--bundle-graphs` |
-| `--setup-env` | off | Set up conda env + deps on the remote host |
-| `--remote <host>` | local current host | SSH target for remote execution |
-| `--models <m1 ..>` | final paper model set | Override model list |
-| `--output-dir <path>` | `./pipeline_out` | Output directory |
-
----
-
-## Prefix/Template Spectral Variability Test
-
-`prefixtest/experiment.py` measures how sensitive the spectral
-detection pipeline is to the prefix/template used during the ROME edit.  A
-single fact is edited 20 times under different prefix strategies (self-generated,
-template-based, external) while all other parameters remain fixed.  The spectral
-detector runs on each result, producing per-layer signal curves that reveal
-which prefixes amplify or suppress the edit's spectral footprint.
-
-An additional **baseline_unedited** run captures the spectral detector output on
-the original (unmodified) model weights, so that the edited curves can be
-compared against the clean noise floor.
-
-### Running the experiment
+Analyze an existing run without loading a model:
 
 ```bash
-# Default: Qwen/Qwen3-8B, case 0
-python prefixtest/experiment.py
-
-# Custom model / case
-python prefixtest/experiment.py --model gpt2-large --case-idx 3
+python -m src command=structural/analyze \
+  structural.analyze.run_root=analysis_out/gpt2-large-n30 \
+  structural.analysis.preset=paper
 ```
 
-### Running on a remote GPU via `prefixtest/run_remote.sh`
-
-`prefixtest/run_remote.sh` automates upload, environment setup, and tmux-based execution
-on a remote machine:
+Capture and analyze in one command:
 
 ```bash
-# Launch (uploads code + second-moment stats, installs deps, starts in tmux)
-./prefixtest/run_remote.sh                         # default: Qwen/Qwen3-8B, case 0
-./prefixtest/run_remote.sh gpt2-large 3            # custom model & case
-
-# Monitor progress
-./prefixtest/run_remote.sh --status
-
-# Download results when finished
-./prefixtest/run_remote.sh --fetch
+python -m src command=structural/run \
+  'structural.run.models=[gpt2-large]' \
+  structural.run.n_tests=30 \
+  structural.capture.profile=spectral \
+  structural.analysis.preset=paper \
+  structural.run.run_id=gpt2-large-complete
 ```
 
-### Visualisation
+Render graph artifacts from an analyzed run:
 
-The notebook `prefixtest/prefixtest.ipynb` is a thin wrapper around
-`prefixtest/prefixtest_support.py`. It auto-discovers the latest artifact in
-`prefixtest/artifacts/` or `analysis_out/`, writes outputs into
-`prefixtest/output/`, plots grouped layer-wise spectral curves with the
-unedited baseline, adds composite-detector graphs, and shows summary tables.
-
-```
-prefixtest/prefixtest.ipynb         # open in Jupyter
-prefixtest/prefixtest_support.py    # all data-loading and plotting logic
-prefixtest/output/                  # saved graphs and summary tables
-prefixtest/artifacts/               # selected local experiment artifacts
+```bash
+python -m src command=graphs/run \
+  graphs.run_root=analysis_out/gpt2-large-complete \
+  graphs.renderer_preset=paper
 ```
 
----
+Shortcut aliases are available, for example:
 
-## Error codes:
+```bash
+python -m src structural plan 'structural.run.models=[gpt2-large]' structural.run.n_tests=5
+python -m src graphs run analysis_out/gpt2-large-complete graphs.renderer_preset=paper
+python -m src prefix-experiment prefix_experiment.model=gpt2-large
+```
 
----
+Shortcut commands accept Hydra overrides for options. Argparse-style flags such
+as `--models` or `--renderer-preset` are no longer supported in `python -m src`;
+use overrides like `structural.run.models=[gpt2-large]` or
+`graphs.renderer_preset=paper`.
 
-| Error code    | Name of the error | Description                                                                         |
-|---------------|-------------------|-------------------------------------------------------------------------------------|
-| `1`           | Help              | Help invoked. Typically caused by incorrect script usage.                           |
-| `2`           | Resource already exists   | Trying to create a resource that already exists.                            |
-| `-1`          | Unknown           | An unknow error. Create GitHub issue with the reproduction steps                    |
+## Manual ROME
 
----
+Manual ROME applies one edit and then opens an interactive prompt against the
+edited model.
+
+Run with explicit fact fields:
+
+```bash
+python -m src command=manual_rome model=gpt2-large \
+  'manual.prompt="{} is located in"' \
+  'manual.subject="Brno University of Technology"' \
+  manual.target_new=Budapest \
+  manual.target_true=Brno \
+  manual.max_new_tokens=30 \
+  manual.do_sample=false
+```
+
+You can also use the direct command alias:
+
+```bash
+python -m src manual-rome model=gpt2-large \
+  'manual.prompt="{} is located in"' \
+  'manual.subject="Brno University of Technology"' \
+  manual.target_new=Budapest \
+  manual.target_true=Brno
+```
+
+Run from a CounterFact JSON file or manifest:
+
+```bash
+python -m src command=manual_rome model=gpt2-large \
+  manual.counterfact_path=manifests/counterfact_seed20260423_n500.json \
+  manual.index=0
+```
+
+Use `manual.case_id=<id>` instead of `manual.index=<n>` to select a specific
+CounterFact case ID. `manual.target_new` and `manual.target_true` may be written
+without a leading space; the manual ROME command normalizes them before applying
+the edit.
+
+## Artifacts And Reuse
+
+Structural runs write a manifest-backed run root:
+
+```text
+analysis_out/<run-id>/
+  manifest.json
+  plans/<model>/<plan-id>/...
+  graphs/<renderer>/...
+```
+
+The manifest tracks artifact IDs, paths, config hashes, content hashes, and input
+dependencies. Re-running skips current artifacts. Use `structural.run.force=true` or
+`graphs.force=true` to recompute explicitly.
+
+## Developer Checks
+
+```bash
+make check-rome
+make lint
+python -m compileall -q src rome_benchmark.py
+pytest
+```
+
+`make check-rome` verifies that protected ROME paths still match `main`.

@@ -1,0 +1,2 @@
+"""Reusable structural detector implementations."""
+

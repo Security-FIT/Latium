@@ -1,0 +1,11 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+n_tests: 10
+start_idx: 0
+slice_policy: iterating_per_model
+compute_cov: false
+conda_env: latium
+cov_source_note: local -> ../reimagined -> kubapc fallback

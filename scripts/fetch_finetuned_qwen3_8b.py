@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Fetch the top HuggingFace finetunes of Qwen/Qwen3-8B-Base.
-
-The output manifest is consumed by ``scripts/fleet_runner.py`` and by the
-manifest-backed resolver in ``src/model_config.py``.
 """
+Fetch the top HuggingFace finetunes for the configured base model.
+
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+
+The output manifest is consumed by the manifest-backed resolver in
+src/model_config.py.
+"""
+
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import urllib.parse
 import urllib.request
@@ -16,9 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_BASE_MODEL = "Qwen/Qwen3-8B-Base"
-DEFAULT_OUTPUT = "finetuned_qwen3_8b_fleet.json"
 HF_API_MODELS = "https://huggingface.co/api/models"
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "src" / "config" / "fleet_fetch" / "default.yaml"
 
 
 def _request_json(url: str, *, token: str | None = None) -> list[dict[str, Any]]:
@@ -60,11 +65,14 @@ def fetch_models(*, base_model: str, limit: int, token: str | None = None) -> li
 
 
 def main() -> None:
+    from omegaconf import OmegaConf
+
+    cfg = OmegaConf.load(CONFIG_PATH)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
-    parser.add_argument("--limit", type=int, default=100)
-    parser.add_argument("--output", default=DEFAULT_OUTPUT)
-    parser.add_argument("--token", default=os.environ.get("HF_TOKEN", ""))
+    parser.add_argument("--base-model", default=str(cfg.base_model))
+    parser.add_argument("--limit", type=int, default=int(cfg.limit))
+    parser.add_argument("--output", default=str(cfg.output))
+    parser.add_argument("--token", default="" if cfg.token is None else str(cfg.token))
     args = parser.parse_args()
 
     models = fetch_models(base_model=args.base_model, limit=args.limit, token=args.token or None)

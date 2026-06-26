@@ -1,3 +1,10 @@
+"""
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
+
 from __future__ import annotations
 
 import json
@@ -174,11 +181,14 @@ def test_build_sampled_templates_trims_generated_token_count(monkeypatch) -> Non
         def generate(self, **kwargs):
             self.last_max_new_tokens = kwargs["max_new_tokens"]
             input_ids = kwargs["input_ids"]
-            continuation = torch.tensor([
-                [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112],
-                [201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212],
-            ], dtype=torch.long)
-            return torch.cat([input_ids, continuation[:input_ids.shape[0]]], dim=1)
+            continuation = torch.tensor(
+                [
+                    [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112],
+                    [201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212],
+                ],
+                dtype=torch.long,
+            )
+            return torch.cat([input_ids, continuation[: input_ids.shape[0]]], dim=1)
 
     class FakeHandler:
         def __init__(self) -> None:

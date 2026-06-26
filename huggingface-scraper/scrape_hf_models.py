@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Scrape all public Hugging Face model IDs and detect likely typo variants."""
+"""
+Scrape all public Hugging Face model IDs and detect likely typo variants.
+
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
 
 from __future__ import annotations
 
@@ -96,12 +103,7 @@ def _record_from_json_item(item: Any) -> Dict[str, object] | None:
         }
 
     if isinstance(item, dict):
-        model_id = (
-            item.get("model_id")
-            or item.get("id")
-            or item.get("modelId")
-            or item.get("name")
-        )
+        model_id = item.get("model_id") or item.get("id") or item.get("modelId") or item.get("name")
         if not model_id:
             return None
         model_id = str(model_id).strip()
@@ -138,15 +140,19 @@ def _extract_json_items(payload: Any) -> List[Any]:
                 canonical = row.get("canonical")
                 suspected = row.get("suspected_typo")
                 if canonical:
-                    reconstructed.append({
-                        "model_id": canonical,
-                        "downloads": row.get("canonical_popularity", 0),
-                    })
+                    reconstructed.append(
+                        {
+                            "model_id": canonical,
+                            "downloads": row.get("canonical_popularity", 0),
+                        }
+                    )
                 if suspected:
-                    reconstructed.append({
-                        "model_id": suspected,
-                        "downloads": row.get("typo_popularity", 0),
-                    })
+                    reconstructed.append(
+                        {
+                            "model_id": suspected,
+                            "downloads": row.get("typo_popularity", 0),
+                        }
+                    )
             LOGGER.warning(
                 "Input JSON looks like a typo report; reconstructed %s model records from model_id_typos.",
                 f"{len(reconstructed):,}",
@@ -373,16 +379,16 @@ def parse_args() -> argparse.Namespace:
         help="Ignore model ID pairs that differ only by separators/case.",
     )
     parser.add_argument(
-        "--owner-ignore-numeric-variants",
+        "--owner-ignore-numeric-differences",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Ignore owner pairs that differ only by numeric tokens.",
     )
     parser.add_argument(
-        "--model-ignore-numeric-variants",
+        "--model-ignore-numeric-differences",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Ignore model ID pairs that differ only by numeric/version tokens.",
+        help="Ignore model ID pairs that differ only by numeric tokens.",
     )
     parser.add_argument(
         "--model-ignore-same-owner-variants",
@@ -465,7 +471,7 @@ def main() -> int:
             max_bucket_size=args.max_bucket_size,
             min_shared_signatures=args.min_shared_signatures,
             ignore_format_only=args.owner_ignore_format_only,
-            ignore_numeric_variants=args.owner_ignore_numeric_variants,
+            ignore_numeric_differences=args.owner_ignore_numeric_differences,
             min_popularity_ratio=args.owner_min_popularity_ratio,
         )
 
@@ -480,7 +486,7 @@ def main() -> int:
             max_bucket_size=args.max_bucket_size,
             min_shared_signatures=args.min_shared_signatures,
             ignore_format_only=args.model_ignore_format_only,
-            ignore_numeric_variants=args.model_ignore_numeric_variants,
+            ignore_numeric_differences=args.model_ignore_numeric_differences,
             ignore_same_owner_variants=args.model_ignore_same_owner_variants,
             min_popularity_ratio=args.model_min_popularity_ratio,
         )
@@ -488,7 +494,8 @@ def main() -> int:
         if args.model_slug_typo_only:
             before_count = len(model_typos)
             model_typos = [
-                row for row in model_typos
+                row
+                for row in model_typos
                 if _is_model_slug_typo_like(
                     row["suspected_typo"],
                     row["canonical"],
@@ -531,8 +538,8 @@ def main() -> int:
                 "min_shared_signatures": args.min_shared_signatures,
                 "owner_ignore_format_only": args.owner_ignore_format_only,
                 "model_ignore_format_only": args.model_ignore_format_only,
-                "owner_ignore_numeric_variants": args.owner_ignore_numeric_variants,
-                "model_ignore_numeric_variants": args.model_ignore_numeric_variants,
+                "owner_ignore_numeric_differences": args.owner_ignore_numeric_differences,
+                "model_ignore_numeric_differences": args.model_ignore_numeric_differences,
                 "model_ignore_same_owner_variants": args.model_ignore_same_owner_variants,
                 "model_slug_typo_only": args.model_slug_typo_only,
                 "model_slug_max_alpha_distance": args.model_slug_max_alpha_distance,

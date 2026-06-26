@@ -1,3 +1,10 @@
+"""
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
+
 import importlib.util
 import json
 from pathlib import Path
@@ -51,10 +58,7 @@ def test_detect_typos_finds_transposition_variant() -> None:
         min_shared_signatures=1,
     )
 
-    assert any(
-        row["canonical"] == "EleutherAI" and row["suspected_typo"] == "EluetherAI"
-        for row in findings
-    )
+    assert any(row["canonical"] == "EleutherAI" and row["suspected_typo"] == "EluetherAI" for row in findings)
 
 
 def test_detect_typos_uses_popularity_for_canonical_choice() -> None:
@@ -105,7 +109,7 @@ def test_detect_typos_ignores_format_only_differences_by_default() -> None:
     assert findings == []
 
 
-def test_detect_typos_ignores_numeric_version_variants_when_enabled() -> None:
+def test_detect_typos_ignores_numeric_differences_when_enabled() -> None:
     names = {
         "Qwen/Qwen3-14B": 1000,
         "Qwen/Qwen3-4B": 900,
@@ -115,7 +119,7 @@ def test_detect_typos_ignores_numeric_version_variants_when_enabled() -> None:
         max_distance=2,
         min_similarity=0.9,
         min_length=5,
-        ignore_numeric_variants=True,
+        ignore_numeric_differences=True,
     )
 
     assert findings == []

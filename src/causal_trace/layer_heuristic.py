@@ -1,4 +1,10 @@
-"""Multi-signal layer selection heuristic for ROME fact editing.
+"""
+Multi-signal layer selection heuristic for ROME fact editing.
+
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
 
 Uses several complementary signals to recommend the best MLP layer
 for ROME edits, because causal tracing alone is often unreliable:
@@ -44,9 +50,11 @@ LOGGER = logging.getLogger(__name__)
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class LayerScore:
     """Score breakdown for a single candidate layer."""
+
     layer: int
     composite: float
     causal_trace: float = 0.0
@@ -58,6 +66,7 @@ class LayerScore:
 @dataclass
 class LayerRecommendation:
     """Complete recommendation with ranked candidates."""
+
     best_layer: int
     confidence: float  # 0-1, how much signal agreement we have
     candidates: List[LayerScore] = field(default_factory=list)
@@ -65,8 +74,7 @@ class LayerRecommendation:
 
     def summary(self) -> str:
         lines = [
-            f"Recommended layer: {self.best_layer} "
-            f"(confidence: {self.confidence:.2f})",
+            f"Recommended layer: {self.best_layer} (confidence: {self.confidence:.2f})",
         ]
         lines.append("Top candidates:")
         for s in self.candidates[:5]:
@@ -84,12 +92,13 @@ class LayerRecommendation:
 # 1. Causal trace signal
 # ---------------------------------------------------------------------------
 
+
 def parse_causal_trace_csvs(
     csv_paths: Sequence[str | Path],
 ) -> np.ndarray | None:
     """Parse causal trace CSVs and return per-layer avg restoration prob.
 
-    Returns array of shape ``(num_layers,)`` or *None* if no usable data.
+    Returns array of shape (num_layers,) or None if no usable data.
     """
     all_probs: list[list[float]] = []
     for p in csv_paths:
@@ -184,6 +193,7 @@ def causal_trace_signal_quality(avg_probs: np.ndarray) -> float:
 # 2. MLP weight norm signal
 # ---------------------------------------------------------------------------
 
+
 def compute_weight_norms(
     model,
     layer_template: str,
@@ -195,12 +205,12 @@ def compute_weight_norms(
     ----------
     model : torch.nn.Module
     layer_template : str
-        e.g. ``"model.layers.{}.mlp.down_proj"``
+        e.g. "model.layers.{}.mlp.down_proj"
     num_layers : int
 
     Returns
     -------
-    np.ndarray of shape ``(num_layers,)``
+    np.ndarray of shape (num_layers,)
     """
     import torch
 
@@ -241,6 +251,7 @@ def _weight_norm_scores(norms: np.ndarray) -> np.ndarray:
 # 3. Spectral gap signal
 # ---------------------------------------------------------------------------
 
+
 def compute_spectral_gaps(
     model,
     layer_template: str,
@@ -255,7 +266,7 @@ def compute_spectral_gaps(
 
     A small gap means more "room" for a rank-1 edit.
 
-    Returns raw σ1/σ2 ratios, shape ``(num_layers,)``.
+    Returns raw σ1/σ2 ratios, shape (num_layers,).
     """
     import torch
 
@@ -312,8 +323,8 @@ def _spectral_gap_scores(gaps: np.ndarray) -> np.ndarray:
 # Instead of a narrow Gaussian, we use a plateau from 5% to 60%
 # with soft cosine roll-off at the edges.  Only layer 0 and the
 # very last layer are fully excluded.
-_PRIOR_LO = 0.02   # relative position where plateau starts rising
-_PRIOR_HI = 0.65   # relative position where plateau starts falling
+_PRIOR_LO = 0.02  # relative position where plateau starts rising
+_PRIOR_HI = 0.65  # relative position where plateau starts falling
 _PRIOR_ROLLOFF = 0.06  # width of cosine roll-off at edges
 
 
@@ -447,10 +458,7 @@ def recommend_layer(
 
     # ---- Composite ----
     composite = (
-        w_causal_trace * ct_scores
-        + w_weight_norm * wn_scores
-        + w_spectral_gap * sg_scores
-        + w_prior * prior_scores
+        w_causal_trace * ct_scores + w_weight_norm * wn_scores + w_spectral_gap * sg_scores + w_prior * prior_scores
     )
 
     notes.append(
@@ -462,14 +470,16 @@ def recommend_layer(
     ranking = np.argsort(composite)[::-1]
     candidates = []
     for idx in ranking:
-        candidates.append(LayerScore(
-            layer=int(idx),
-            composite=float(composite[idx]),
-            causal_trace=float(ct_scores[idx]),
-            weight_norm=float(wn_scores[idx]),
-            spectral_gap=float(sg_scores[idx]),
-            prior=float(prior_scores[idx]),
-        ))
+        candidates.append(
+            LayerScore(
+                layer=int(idx),
+                composite=float(composite[idx]),
+                causal_trace=float(ct_scores[idx]),
+                weight_norm=float(wn_scores[idx]),
+                spectral_gap=float(sg_scores[idx]),
+                prior=float(prior_scores[idx]),
+            )
+        )
 
     best = int(ranking[0])
 
@@ -493,6 +503,7 @@ def recommend_layer(
 # ---------------------------------------------------------------------------
 # Full analysis entry point
 # ---------------------------------------------------------------------------
+
 
 def analyze_model(
     model,
@@ -539,8 +550,9 @@ def analyze_from_csvs_only(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _resolve_module(model, dotted_name: str):
-    """Resolve ``"a.b.c"`` to ``model.a.b.c``."""
+    """Resolve "a.b.c" to model.a.b.c."""
     parts = dotted_name.split(".")
     mod = model
     for part in parts:
@@ -556,6 +568,7 @@ def _resolve_module(model, dotted_name: str):
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _cli():
     """Run layer heuristic from the command line.
@@ -578,7 +591,9 @@ def _cli():
     parser.add_argument("--csvs", nargs="*", help="Causal trace CSV files")
     parser.add_argument("--num-layers", type=int, required=True)
     parser.add_argument("--model", type=str, help="HF model name/path (for weight analysis)")
-    parser.add_argument("--layer-template", type=str, help="MLP down-proj template (e.g. 'model.layers.{}.mlp.down_proj')")
+    parser.add_argument(
+        "--layer-template", type=str, help="MLP down-proj template (e.g. 'model.layers.{}.mlp.down_proj')"
+    )
     parser.add_argument("--dtype", type=str, default="bf16", choices=["bf16", "fp16", "fp32"])
     args = parser.parse_args()
 

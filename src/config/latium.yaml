@@ -1,0 +1,15 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+defaults:
+  - _self_
+  - command: help
+  - runtime: default
+  - linalg: default
+  - model_fleet: default
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+seed: 0

@@ -1,9 +1,9 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
 name: "deepseek-ai/deepseek-llm-7b-base"
-models_dir: "../models"
-second_moment_dir: "./data/second_moment_stats"
-new_weights_dir: "./data/new_weights"
-device: "cuda"
-save_to_local: True
 layer_name_template: "model.layers.{}.mlp.down_proj"
 fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
@@ -11,14 +11,7 @@ corrupt_layer_name_template: "model.embed_tokens"
 layer: 6
 second_moment_path: "./data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base_6_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.1
-lr: 0.5
-kl_factor: 0.0625
-weight_decay: 0.5
 epochs: 25
-k_N: 50
-v_N: 50
-prefix_range: [2, 10]
-epsilon: 0.0
 dtype: "bf16"
 prefix_mode: "external"
 prefix_source: "mistral-7b-v0.3"

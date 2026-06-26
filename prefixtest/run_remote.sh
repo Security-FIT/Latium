@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
 set -euo pipefail
 
-# Remote runner for prefixtest/experiment.py.
+# Remote runner for the canonical prefix-variability CLI.
 #
 # Defaults:
 #   REMOTE_HOST=ubuntu@154.54.100.221
@@ -114,8 +119,6 @@ echo "==> Uploading source files ..."
 rsync -az --info=progress2 \
     -e "ssh ${SSH_OPTS}" \
     --include='src/***' \
-    --include='structural_benchmark.py' \
-    --include='prefixtest/experiment.py' \
     --include='requirements.txt' \
     --exclude='*' \
     "$REPO_DIR/" "${REMOTE_HOST}:${REMOTE_DIR}/"
@@ -174,7 +177,7 @@ cd "$REMOTE_DIR"
 source .venv/bin/activate
 echo "Starting prefixtest at \\$(date)"
 echo "Model: $MODEL  Case: $CASE_IDX"
-cmd=(python prefixtest/experiment.py --model "$MODEL" --case-idx $CASE_IDX --output-dir ./analysis_out --spectral-top-k 50 --spectral-neighbor-layers 1)
+cmd=(python -m src.experiments.prefix_variability.cli --model "$MODEL" --case-idx $CASE_IDX --output-dir ./analysis_out --spectral-top-k 50 --spectral-neighbor-layers 1)
 if [ -n "$RUN_NAMES" ]; then
     cmd+=(--run-names)
     for name in $RUN_NAMES; do

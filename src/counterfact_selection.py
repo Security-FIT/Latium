@@ -1,3 +1,10 @@
+"""
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -8,11 +15,8 @@ from typing import Any, Mapping, MutableMapping, Sequence
 
 import datasets
 
-DEFAULT_DATASET = "azhx/counterfact"
-DEFAULT_SPLIT = "train"
 
-
-def load_counterfact_split(dataset_name: str = DEFAULT_DATASET, split: str = DEFAULT_SPLIT):
+def load_counterfact_split(dataset_name: str, split: str):
     return datasets.load_dataset(dataset_name, split=split)
 
 
@@ -30,8 +34,8 @@ def _normalize_index_list(indices: Sequence[int | str]) -> list[int]:
 
 def manifest_digest(payload: Mapping[str, Any]) -> str:
     canonical = {
-        "dataset": str(payload.get("dataset", DEFAULT_DATASET)),
-        "split": str(payload.get("split", DEFAULT_SPLIT)),
+        "dataset": str(payload["dataset"]),
+        "split": str(payload["split"]),
         "seed": payload.get("seed"),
         "count": int(payload.get("count", 0) or 0),
         "indices": [int(v) for v in payload.get("indices", [])],
@@ -63,8 +67,8 @@ def counterfact_item_to_case(item: Mapping[str, Any], dataset_index: int) -> dic
 def load_cases_by_indices(
     indices: Sequence[int | str],
     *,
-    dataset_name: str = DEFAULT_DATASET,
-    split: str = DEFAULT_SPLIT,
+    dataset_name: str,
+    split: str,
     dataset: Any = None,
 ) -> list[dict[str, Any]]:
     normalized = _normalize_index_list(indices)
@@ -75,9 +79,9 @@ def load_cases_by_indices(
 def load_cases_by_range(
     n_tests: int,
     *,
+    dataset_name: str,
+    split: str,
     start_idx: int = 0,
-    dataset_name: str = DEFAULT_DATASET,
-    split: str = DEFAULT_SPLIT,
     dataset: Any = None,
 ) -> list[dict[str, Any]]:
     if n_tests < 0:
@@ -96,17 +100,15 @@ def load_cases_by_range(
 def build_case_manifest(
     indices: Sequence[int | str],
     *,
-    dataset_name: str = DEFAULT_DATASET,
-    split: str = DEFAULT_SPLIT,
+    dataset_name: str,
+    split: str,
     seed: int | None = None,
     dataset: Any = None,
 ) -> dict[str, Any]:
     normalized = _normalize_index_list(indices)
     ds = dataset if dataset is not None else load_counterfact_split(dataset_name=dataset_name, split=split)
     if normalized and max(normalized) >= len(ds):
-        raise IndexError(
-            f"CounterFact row index {max(normalized)} is out of bounds for split size {len(ds)}."
-        )
+        raise IndexError(f"CounterFact row index {max(normalized)} is out of bounds for split size {len(ds)}.")
     case_ids = [int(ds[idx].get("case_id", idx)) for idx in normalized]
     payload: dict[str, Any] = {
         "dataset": str(dataset_name),
@@ -124,8 +126,8 @@ def generate_random_case_manifest(
     *,
     count: int,
     seed: int,
-    dataset_name: str = DEFAULT_DATASET,
-    split: str = DEFAULT_SPLIT,
+    dataset_name: str,
+    split: str,
     dataset: Any = None,
 ) -> dict[str, Any]:
     count = int(count)
@@ -167,8 +169,7 @@ def load_case_manifest(path: str | Path) -> dict[str, Any]:
     payload["manifest_hash"] = str(payload.get("manifest_hash") or expected_hash)
     if payload["manifest_hash"] != expected_hash:
         raise ValueError(
-            f"Case manifest {manifest_path} has manifest_hash={payload['manifest_hash']}, "
-            f"expected {expected_hash}."
+            f"Case manifest {manifest_path} has manifest_hash={payload['manifest_hash']}, expected {expected_hash}."
         )
     payload["dataset"] = str(payload["dataset"])
     payload["split"] = str(payload["split"])
@@ -199,9 +200,7 @@ def load_cases_from_manifest(
     if limit < 0:
         raise ValueError(f"n_tests must be non-negative, got {limit}")
     if limit > manifest["count"]:
-        raise ValueError(
-            f"Requested n_tests={limit} but manifest only contains {manifest['count']} indices."
-        )
+        raise ValueError(f"Requested n_tests={limit} but manifest only contains {manifest['count']} indices.")
     selected_indices = manifest["indices"][:limit]
     cases = load_cases_by_indices(
         selected_indices,
@@ -217,17 +216,23 @@ def build_case_selection_metadata(
     manifest: Mapping[str, Any] | None = None,
     manifest_path: str | Path | None = None,
     selected_cases: Sequence[Mapping[str, Any]] | None = None,
+    dataset_name: str | None = None,
+    split: str | None = None,
     start_idx: int | None = None,
     n_cases: int | None = None,
 ) -> dict[str, Any]:
     if manifest is not None:
         selected_cases = list(selected_cases or [])
-        selected_indices = [int(case["dataset_index"]) for case in selected_cases] if selected_cases else [
-            int(v) for v in manifest.get("indices", [])
-        ]
-        selected_case_ids = [int(case["case_id"]) for case in selected_cases] if selected_cases else [
-            int(v) for v in manifest.get("case_ids", [])
-        ]
+        selected_indices = (
+            [int(case["dataset_index"]) for case in selected_cases]
+            if selected_cases
+            else [int(v) for v in manifest.get("indices", [])]
+        )
+        selected_case_ids = (
+            [int(case["case_id"]) for case in selected_cases]
+            if selected_cases
+            else [int(v) for v in manifest.get("case_ids", [])]
+        )
         rel_manifest = ""
         if manifest_path is not None:
             try:
@@ -236,8 +241,8 @@ def build_case_selection_metadata(
                 rel_manifest = Path(manifest_path).name
         return {
             "mode": "explicit_indices",
-            "dataset": str(manifest.get("dataset", DEFAULT_DATASET)),
-            "split": str(manifest.get("split", DEFAULT_SPLIT)),
+            "dataset": str(manifest["dataset"]),
+            "split": str(manifest["split"]),
             "seed": manifest.get("seed"),
             "manifest_path": rel_manifest,
             "manifest_hash": str(manifest.get("manifest_hash", "")),
@@ -246,12 +251,14 @@ def build_case_selection_metadata(
             "selected_case_ids": selected_case_ids,
         }
 
+    if dataset_name is None or split is None:
+        raise ValueError("dataset_name and split are required for contiguous CounterFact case selection metadata")
     start = int(start_idx or 0)
     count = int(n_cases or 0)
     return {
         "mode": "contiguous_slice",
-        "dataset": DEFAULT_DATASET,
-        "split": DEFAULT_SPLIT,
+        "dataset": str(dataset_name),
+        "split": str(split),
         "start_idx": start,
         "end_idx": start + max(0, count - 1),
         "count": count,

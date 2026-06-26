@@ -1,37 +1,21 @@
-name: "MODEL_NAME"
-models_dir: "../models"
-dtype: "auto" # auto/bf16/f16/f32
-save_new_weights: False
-new_weights_dir: "./data/new_weights"
-second_moment_dir: "./data/second_moment_stats"
-second_moment_path: None
-second_moment_batch_size_mode: "auto" # auto/dynamic/manual
-second_moment_batch_size: null # used by manual mode, or by auto when explicitly set
-device: "cuda" # cuda/cpu
-save_to_local: True # Keep this True until you specifically do not want the model cached locally
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
 
-# use the 'print-arch' to determine the layer name templates for your model
-# the {} will be replaced by the layer number during the intervention
+# Common defaults such as device, cache dirs, ROME optimizer defaults, and
+# prefix generation defaults live in ../model_base/default.yaml.
+name: "MODEL_NAME"
+
+# Use print-arch to determine the layer name templates for your model.
+# The {} placeholder is replaced by the layer number during intervention.
 layer_name_template: "transformer.h.{}.mlp.fc_out"
+fc_layer_name_template: "transformer.h.{}.mlp.fc_in"
 restore_layer_name_template: "transformer.h.{}"
 corrupt_layer_name_template: "transformer.wte"
 layer: LAYER_NUMBER
 corruption_noise_multiplier: MULTIPLIER_VALUE
 
-# V optimization hyperparameters
-lr: 0.5
-kl_factor: 0.0625
-weight_decay: 0.5
-epochs: 20
-k_N: 50
-v_N: 50
-prefix_range: [2, 10]
-optimize_v_clear_cache_every: 0 # 0 disables per-epoch CUDA cache clears
-
-# Prefix generation controls
-prefix_mode: "self" # self/template/external
-prefix_source: null # for external mode: model key/name or JSON cache path
-prefix_cache_path: null # optional persisted JSON cache for external model-generated prefixes
-prefix_cache_size: 256 # target number of templates to keep cached for external model generation
-prefix_enforce_latin: True
-prefix_min_words: 2
+# Model-specific overrides only; omit fields that match model_base/default.yaml.
+dtype: "bf16"
+second_moment_path: "./data/second_moment_stats/MODEL_NAME_LAYER_SM_Method.WIKIPEDIA_100000.pt"

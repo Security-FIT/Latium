@@ -1,0 +1,12 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+run_root: null
+artifact: null
+output_dir: null
+renderer_preset: paper
+enable_renderers: []
+disable_renderers: []
+force: false

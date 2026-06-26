@@ -14,3 +14,5 @@ tensorboard
 tqdm
 scikit-learn
 nltk
+ruff
+pytest

@@ -32,6 +32,7 @@ def _write_artifact(
     model: str = "gpt2-large",
     status: str = "complete",
     metadata: dict | None = None,
+    force: bool = False,
 ) -> None:
     payload = build_artifact(
         artifact_id=artifact_id,
@@ -51,7 +52,7 @@ def _write_artifact(
     )
     if metadata is not None:
         payload["record_metadata"] = metadata
-    writer.write(path, payload)
+    writer.write(path, payload, force=force)
 
 
 def test_analysis_variants_create_distinct_artifacts_without_new_capture_plans(
@@ -200,6 +201,7 @@ def test_analysis_variants_create_distinct_artifacts_without_new_capture_plans(
         config={"capture": "matrix-features"},
         cases=changed_method_cases,
         edit_method=method,
+        force=True,
     )
 
     third = run_analyses(

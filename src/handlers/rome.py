@@ -19,6 +19,8 @@ Typical usage example::
     output = handler.predict_next_token(...)
 """
 
+from pathlib import Path
+
 from src.handlers.base import BaseHandler
 from omegaconf import DictConfig
 import torch
@@ -27,6 +29,7 @@ from typing import List
 from tqdm import tqdm
 from src.common.linalg import CUDAMode, DeviceManager
 from src.common.loading import load_pretrained
+from src.common.paths import resolve_project_path
 from src.rome.common import PrefixGenerationHandler
 
 
@@ -79,9 +82,14 @@ class ModelHandler(BaseHandler):
         self.emb_shape = min(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
         self.hidden_dim = max(self._get_module(self._layer_name_template.format(self._layer)).weight.shape)
 
-        self.second_moment_dir = getattr(cfg.model, "second_moment_dir", "./second_moment_stats")
+        self.second_moment_dir = str(
+            resolve_project_path(getattr(cfg.model, "second_moment_dir", "./second_moment_stats"))
+        )
+        Path(self.second_moment_dir).mkdir(parents=True, exist_ok=True)
         self.save_new_weights = getattr(cfg.model, "save_new_weights", False)
-        self.new_weights_dir = getattr(cfg.model, "new_weights_dir", "./new_weights")
+        self.new_weights_dir = str(resolve_project_path(getattr(cfg.model, "new_weights_dir", "./new_weights")))
+        if self.save_new_weights:
+            Path(self.new_weights_dir).mkdir(parents=True, exist_ok=True)
 
         self.epochs = getattr(cfg.model, "epochs", 10)
         self.lr = getattr(cfg.model, "lr", None)
@@ -110,7 +118,10 @@ class ModelHandler(BaseHandler):
         self.delta = torch.zeros((self.emb_shape), dtype=self.dtype)
         self.delta = self.device_manager.safe_to_device(self.delta, device=self.device).requires_grad_(True)
 
-        self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
+        second_moment_path = getattr(cfg.model, "second_moment_path", None)
+        self.second_moment_path = (
+            None if second_moment_path in (None, "") else str(resolve_project_path(second_moment_path))
+        )
 
         # Embeddings
         self._emb_accumulator = []

@@ -39,12 +39,27 @@ RENDERERS = NamedRegistry(
             "Run-level aggregate summaries.",
             "src.graphs.renderers:render_run_summary",
         ),
+        RendererSpec(
+            "rome-success",
+            "ROME execution success rates and score summaries.",
+            "src.graphs.renderers:render_rome_success",
+        ),
+        RendererSpec(
+            "detector-window",
+            "Detector layer-window accuracy and distance summaries.",
+            "src.graphs.renderers:render_detector_window",
+        ),
+        RendererSpec(
+            "detector-signals",
+            "Per-analysis detector signal profile plots.",
+            "src.graphs.renderers:render_detector_signals",
+        ),
     ]
 )
 
 RENDERER_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
-    "paper": ("paper", "detector"),
+    "paper": ("paper", "detector", "rome-success", "detector-window"),
     "full": RENDERERS.identifiers(),
 }
 

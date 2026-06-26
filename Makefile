@@ -6,7 +6,7 @@
 CONDA_ENV="llms"
 PYTHON_FILES=src tests scripts huggingface-scraper rome_benchmark.py
 
-.PHONY: install setup mkdir check-rome lint format
+.PHONY: install setup mkdir dirs check-rome lint format
 
 check-rome:
 	git diff --exit-code main -- src/rome src/handlers/rome.py src/config/config.yaml src/config/model
@@ -27,11 +27,15 @@ install:
 		echo "Conda environment $(CONDA_ENV) already exists"; \
 	fi
 
-# Make dirrectories
+# Make directories
+dirs: mkdir
+
 mkdir:
 	mkdir -p models
 	mkdir -p datasets
 	mkdir -p notebooks
+	mkdir -p analysis_out
+	mkdir -p prefix_cache
 	mkdir -p data
 	mkdir -p data/evals
 	mkdir -p data/second_moment_stats

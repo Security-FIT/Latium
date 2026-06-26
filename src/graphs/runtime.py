@@ -32,9 +32,15 @@ def render_run(
         enabled=enabled,
         disabled=disabled,
     )
-    analysis_records = list(reader.records(kind="analysis"))
-    analyses = [reader.load(str(record["artifact_id"])) for record in analysis_records]
-    inputs = [reader.ref(str(record["artifact_id"])) for record in analysis_records]
+    input_records = (
+        list(reader.records(kind="execution"))
+        + list(reader.records(kind="capture"))
+        + list(reader.records(kind="analysis"))
+    )
+    analyses = [reader.load(str(record["artifact_id"])) for record in reader.records(kind="analysis")]
+    executions = [reader.load(str(record["artifact_id"])) for record in reader.records(kind="execution")]
+    captures = [reader.load(str(record["artifact_id"])) for record in reader.records(kind="capture")]
+    inputs = [reader.ref(str(record["artifact_id"])) for record in input_records]
     written: list[str] = []
     skipped: list[str] = []
 
@@ -58,6 +64,9 @@ def render_run(
                     "run_root": root,
                     "output_dir": output_dir,
                     "analyses": analyses,
+                    "executions": executions,
+                    "captures": captures,
+                    "manifest": reader.manifest,
                 }
             )
             status = "complete" if outputs else "unavailable"

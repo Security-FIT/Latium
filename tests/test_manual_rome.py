@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import hydra
 from omegaconf import OmegaConf
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,3 +75,15 @@ def test_missing_manual_fields_raise_clear_error() -> None:
 
     with pytest.raises(ValueError, match="manual.subject, manual.target_new"):
         fact_tuple_from_manual_config(cfg)
+
+
+def test_hydra_manual_rome_defaults_provide_a_fact() -> None:
+    with hydra.initialize_config_dir(config_dir=str(ROOT / "src" / "config"), version_base=None):
+        cfg = hydra.compose(config_name="latium", overrides=["command=manual_rome", "model=gpt2-large"])
+
+    assert fact_tuple_from_manual_config(cfg) == (
+        "{} is located in",
+        "The Eiffel Tower",
+        " Rome",
+        " Paris",
+    )

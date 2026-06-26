@@ -23,6 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from enum import Enum
 import numpy as np
+from src.common.paths import non_conflicting_path
 from src.runtime import runtime_from_cfg
 
 if TYPE_CHECKING:
@@ -1213,33 +1214,38 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
             except Exception as e:
                 LOGGER.warning(e)
 
-    with torch.no_grad():
-        for sample in tqdm(ds, desc="Computing covariance", total=n_samples, mininterval=1.0):
-            if processed >= n_samples:
-                break
+    try:
+        with torch.no_grad(), tqdm(total=n_samples, desc="Computing covariance", mininterval=1.0) as pbar:
+            for sample in ds:
+                if processed >= n_samples:
+                    break
 
-            text = sample.get("text", "")
-            if len(text.strip()) < min_text_length:
-                continue
+                text = sample.get("text", "")
+                if len(text.strip()) < min_text_length:
+                    continue
 
-            batch_texts.append(text)
+                batch_texts.append(text)
 
-            remaining = n_samples - processed
-            if remaining <= 0:
-                break
+                remaining = n_samples - processed
+                if remaining <= 0:
+                    break
 
-            # Process when full or when we have gathered exactly the remainder.
-            if len(batch_texts) >= batch_size or len(batch_texts) >= remaining:
-                take_n = min(len(batch_texts), remaining)
-                process_text_batch(batch_texts[:take_n])
-                batch_texts = []
+                # Process when full or when we have gathered exactly the remainder.
+                if len(batch_texts) >= batch_size or len(batch_texts) >= remaining:
+                    take_n = min(len(batch_texts), remaining)
+                    old_processed = processed
+                    process_text_batch(batch_texts[:take_n])
+                    pbar.update(max(0, processed - old_processed))
+                    batch_texts = []
 
-        # Process remaining texts
-        if batch_texts and processed < n_samples:
-            remaining = n_samples - processed
-            process_text_batch(batch_texts[:remaining])
-
-    handle.remove()
+            # Process remaining texts
+            if batch_texts and processed < n_samples:
+                remaining = n_samples - processed
+                old_processed = processed
+                process_text_batch(batch_texts[:remaining])
+                pbar.update(max(0, processed - old_processed))
+    finally:
+        handle.remove()
 
     if processed < n_samples:
         raise RuntimeError(f"Covariance sampling incomplete: processed {processed} samples out of target {n_samples}.")
@@ -1362,7 +1368,9 @@ def get_second_moment(handler) -> torch.Tensor:
         save_dir = Path(handler.second_moment_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        save_path = save_dir / f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
+        save_path = non_conflicting_path(
+            save_dir / f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
+        )
         torch.save(inv_cov, save_path)
         LOGGER.info(f"Saved second moment to {save_path}")
         return inv_cov

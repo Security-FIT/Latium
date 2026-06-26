@@ -267,7 +267,7 @@ def run_edit_method(
         cases=execution_cases,
         target_layer=int(handler._layer),
         num_layers=int(handler.num_of_layers),
-        force=config.force or (execution_current and not captures_current),
+        force=config.force,
         metadata={"analysis_variants": analysis_variant_metadata(config)},
     )
     for capture_name in capture_names:

@@ -24,17 +24,22 @@ package README files under `src/`.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+make mkdir
 ```
 
 Model configs default to CUDA. Model downloads are cached under `../models`,
 datasets under `../datasets`, and second-moment statistics under
 `data/second_moment_stats/`.
 
+`make setup` is also available for the conda-based setup path; it creates the
+`llms` environment and then runs the same directory setup as `make mkdir`.
+
 ROME edits usually need second-moment statistics. Compute them before running a
 new model:
 
 ```bash
 python3 -m src second-moment model=gpt2-large
+python3 -m src second-moment model=gpt2-large model.second_moment_target_samples=5000
 ```
 
 ## Quick Start
@@ -48,13 +53,7 @@ python3 -m src methods
 Run one manual ROME edit and chat with the edited model:
 
 ```bash
-python3 -m src manual-rome model=gpt2-large \
-  'manual.prompt="{} is located in"' \
-  'manual.subject="Brno University of Technology"' \
-  manual.target_new=Budapest \
-  manual.target_true=Brno \
-  manual.max_new_tokens=30 \
-  manual.do_sample=false
+python3 -m src manual-rome model=gpt2-large
 ```
 
 Plan a structural run without loading a model:
@@ -88,6 +87,11 @@ python3 -m src structural analyze \
 
 python3 -m src graphs run analysis_out/gpt2-large-paper graphs.renderer_preset=paper
 ```
+
+The graph renderer registry includes paper summaries, detector accuracy,
+ROME-success metrics, layer-window accuracy, and detector signal-profile plots.
+Use `graphs.renderer_preset=full` or enable individual renderers such as
+`graphs.enable_renderers=[detector-signals]`.
 
 Hydra overrides are the supported option style. Argparse flags such as
 `--models` are no longer supported by the main CLI.

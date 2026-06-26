@@ -238,7 +238,6 @@ class ArtifactWriter:
                     artifact_id,
                     expected_config_hash=str(payload["config_hash"]),
                     inputs=inputs,
-                    expected_content_hash=artifact_digest,
                 )
                 if current is not None:
                     if serializable_metadata is not None:

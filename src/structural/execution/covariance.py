@@ -10,10 +10,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence
 
+from src.common.paths import resolve_project_path
+
 if TYPE_CHECKING:  # pragma: no cover
     from omegaconf import OmegaConf
 
-CONFIG_DIR = Path(__file__).resolve().parents[1] / 'config'
+CONFIG_DIR = Path(__file__).resolve().parents[2] / 'config'
 MODEL_CONFIG_DIR = CONFIG_DIR / 'model'
 
 
@@ -29,13 +31,11 @@ def available_model_names() -> list[str]:
 
 def find_second_moment_files(model_cfg: Any) -> tuple[list[Path], Path]:
     raw_dir = Path(getattr(model_cfg, 'second_moment_dir', './second_moment_stats'))
-    sm_dir = raw_dir if raw_dir.is_absolute() else (Path(__file__).resolve().parents[2] / raw_dir).resolve()
+    sm_dir = resolve_project_path(raw_dir)
 
     explicit = str(getattr(model_cfg, 'second_moment_path', '') or '').strip()
     if explicit:
-        path = Path(explicit)
-        if not path.is_absolute():
-            path = (Path(__file__).resolve().parents[2] / path).resolve()
+        path = resolve_project_path(explicit)
         return ([path] if path.exists() else []), sm_dir
 
     model_id = str(getattr(model_cfg, 'name', '')).replace('/', '_')

@@ -6,6 +6,7 @@ results from saved artifacts. It is developed for cybersecurity research by the
 Security@FIT group in collaboration with Red Hat Research.
 
 The current branch is Hydra-first: use `python -m src` with overrides.
+For contributor structure and extension points, see `docs/project.md`.
 
 ## Setup
 

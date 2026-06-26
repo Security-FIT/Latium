@@ -195,6 +195,7 @@ class ArtifactWriter:
         *,
         expected_config_hash: str,
         inputs: Iterable[dict[str, str]],
+        expected_content_hash: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         record = self.manifest["artifacts"].get(str(artifact_id))
         if not isinstance(record, dict):
@@ -204,6 +205,8 @@ class ArtifactWriter:
         if record.get("config_hash") != expected_config_hash:
             return None
         if record.get("inputs", []) != _normalize_inputs(inputs):
+            return None
+        if expected_content_hash is not None and record.get("content_hash") != expected_content_hash:
             return None
         try:
             path = _path_inside(self.root, str(record["path"]))
@@ -235,6 +238,7 @@ class ArtifactWriter:
                     artifact_id,
                     expected_config_hash=str(payload["config_hash"]),
                     inputs=inputs,
+                    expected_content_hash=artifact_digest,
                 )
                 if current is not None:
                     if serializable_metadata is not None:

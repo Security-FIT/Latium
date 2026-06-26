@@ -40,7 +40,7 @@ class AnalysisUnavailableError(RuntimeError):
     """Raised when saved captures cannot satisfy an analysis configuration."""
 
 
-STRUCTURAL_DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "structural" / "default.yaml"
+STRUCTURAL_DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "structural" / "default.yaml"
 
 
 def _default_method_configs() -> dict[str, dict[str, Any]]:

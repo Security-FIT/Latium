@@ -49,6 +49,32 @@ python -m src structural plan \
 | `src/graphs/` | Renderer registry, runtime, and renderers. |
 | `src/config/` | Hydra app, command, runtime, model, dataset, and method configs. |
 
+Package-local README files live under the main extension points:
+
+- `src/README.md`: source tree and command wiring.
+- `src/config/README.md`: Hydra config groups and override rules.
+- `src/editing/README.md`: edit method contract and registration.
+- `src/structural/README.md`: structural capture, analysis, and detector flow.
+- `src/graphs/README.md`: renderer contract.
+- `src/results/README.md`: artifact manifest rules.
+- `src/causal_trace/README.md`: standard vs alt causal tracing.
+
+## Notebooks
+
+Notebooks are for visual inspection, not production runs.
+
+- `notebooks/causal_tracing.ipynb`: standard causal tracing from
+  `src/causal_trace/causal_trace.py`; plots subject-token/layer heatmaps,
+  per-prompt curves, and an aggregate layer curve.
+- `notebooks/causal_tracing_alt.ipynb`: alternative causal tracing from
+  `src/causal_trace/alt_trace.py`; plots per-prompt layer curves, a
+  prompt/layer heatmap, and the aggregate selection curve.
+- `notebooks/analysis.ipynb`: thin wrapper around graph rendering for an
+  existing run root.
+
+Use the same `MODEL_CONFIG`, `NUM_PROMPTS`, and dataset settings in both
+causal tracing notebooks when comparing standard and alt behavior.
+
 ## Config Layout
 
 Hydra starts from `src/config/latium.yaml`.

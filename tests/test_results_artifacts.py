@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
@@ -83,6 +84,34 @@ def test_replacing_input_invalidates_all_descendants_and_render_outputs(tmp_path
     assert not (tmp_path / "analysis.json").exists()
     assert not (tmp_path / "graphs" / "detector" / "artifact.json").exists()
     assert not graph.exists()
+
+
+def test_write_rewrites_same_config_when_content_changes(tmp_path: Path) -> None:
+    writer = ArtifactWriter(tmp_path, run_id="run")
+    original_payload = _payload("capture")
+    first = writer.write(tmp_path / "capture.json", original_payload)
+    writer.write(
+        tmp_path / "analysis.json",
+        _payload("analysis", kind="analysis", inputs=[_ref(first)]),
+    )
+
+    changed_payload = deepcopy(original_payload)
+    changed_payload["summary"]["value"] = 99
+    changed_payload["cases"] = [
+        {
+            "case_id": "case",
+            "status": "complete",
+            "data": {"value": 99},
+            "error": None,
+        }
+    ]
+    second = writer.write(tmp_path / "capture.json", changed_payload)
+
+    reader = RunArtifactReader(tmp_path)
+    assert second["content_hash"] != first["content_hash"]
+    assert set(reader.manifest["artifacts"]) == {"capture"}
+    assert reader.load("capture")["summary"]["value"] == 99
+    assert not (tmp_path / "analysis.json").exists()
 
 
 def test_current_requires_matching_config_inputs_and_file(tmp_path: Path) -> None:

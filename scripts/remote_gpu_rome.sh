@@ -1,13 +1,40 @@
 #!/usr/bin/env bash
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REMOTE_GPU_CONFIG="$REPO_ROOT/src/config/remote_gpu_rome/default.yaml"
+
+remote_default() {
+  python - "$REMOTE_GPU_CONFIG" "$1" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+for line in path.read_text(encoding="utf-8").splitlines():
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or ":" not in stripped:
+        continue
+    name, value = stripped.split(":", 1)
+    if name.strip() == key:
+        print(value.strip().strip('"').strip("'"))
+        raise SystemExit(0)
+raise SystemExit(f"Missing {key} in {path}")
+PY
+}
+
 RUN_ROOT=""
-N_TESTS=10
-START_IDX=0
-SLICE_POLICY="iterating_per_model"
-COMPUTE_COV=false
-CONDA_ENV="${CONDA_ENV:-latium}"
-COV_SOURCE_NOTE="${COV_SOURCE_NOTE:-local -> ../reimagined -> kubapc fallback}"
+N_TESTS="$(remote_default n_tests)"
+START_IDX="$(remote_default start_idx)"
+SLICE_POLICY="$(remote_default slice_policy)"
+COMPUTE_COV="$(remote_default compute_cov)"
+CONDA_ENV="$(remote_default conda_env)"
+COV_SOURCE_NOTE="$(remote_default cov_source_note)"
 MODELS=()
 
 usage() {
@@ -16,11 +43,11 @@ Usage: scripts/remote_gpu_rome.sh --run-root <path> [options] --models <m1 m2 ..
 
 Options:
   --run-root <path>     Remote run root, e.g. ./pipeline_out/n1_s0
-  --n-tests <int>       Number of CounterFact cases per model (default: 10)
-  --start-idx <int>     CounterFact starting index (default: 0)
-  --slice-policy <mode> CounterFact assignment: iterating_per_model or shared (default: iterating_per_model)
+  --n-tests <int>       Number of CounterFact cases per model
+  --start-idx <int>     CounterFact starting index
+  --slice-policy <mode> CounterFact assignment: iterating_per_model or shared
   --compute-cov         Compute missing covariance on this runner before benchmarking
-  --conda-env <name>    Conda env to activate if available (default: latium)
+  --conda-env <name>    Conda env to activate if available
   --models <...>        Model config keys
 EOF
 }
@@ -67,7 +94,6 @@ if [[ "$SLICE_POLICY" != "iterating_per_model" && "$SLICE_POLICY" != "shared" ]]
   exit 1
 fi
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
@@ -94,27 +120,41 @@ write_status_json() {
   local phase="$1"
   local failed="$2"
   local finished_at="$3"
-  STATUS_PHASE="$phase" \
-  STATUS_FAILED="$failed" \
-  STATUS_FINISHED_AT="$finished_at" \
-  RUN_ROOT="$RUN_ROOT" \
-  MODELS_CSV="$MODELS_CSV" \
-  GPU_NAME="$GPU_NAME" \
-  STARTED_AT="$STARTED_AT" \
-  N_TESTS="$N_TESTS" \
-  START_IDX="$START_IDX" \
-  SLICE_POLICY="$SLICE_POLICY" \
-  COMPUTE_COV="$COMPUTE_COV" \
-  COV_SOURCE_NOTE="$COV_SOURCE_NOTE" \
-  python - <<'PY'
+  python - \
+    "$RUN_ROOT" \
+    "$MODELS_CSV" \
+    "$GPU_NAME" \
+    "$STARTED_AT" \
+    "$N_TESTS" \
+    "$START_IDX" \
+    "$SLICE_POLICY" \
+    "$COMPUTE_COV" \
+    "$COV_SOURCE_NOTE" \
+    "$phase" \
+    "$failed" \
+    "$finished_at" <<'PY'
 import json
-import os
+import socket
+import sys
 from pathlib import Path
 
-models = [item for item in os.environ.get("MODELS_CSV", "").split(",") if item]
-n_tests = int(os.environ.get("N_TESTS", "0") or 0)
-start_idx = int(os.environ.get("START_IDX", "0") or 0)
-slice_policy = os.environ.get("SLICE_POLICY", "")
+(
+    run_root,
+    models_csv,
+    gpu_name,
+    started_at,
+    n_tests_raw,
+    start_idx_raw,
+    slice_policy,
+    compute_cov_raw,
+    cov_source_note,
+    phase,
+    failed_raw,
+    finished_at,
+) = sys.argv[1:]
+models = [item for item in models_csv.split(",") if item]
+n_tests = int(n_tests_raw)
+start_idx = int(start_idx_raw)
 model_assignments = []
 for index, model in enumerate(models):
     model_start = start_idx if slice_policy == "shared" else start_idx + index * n_tests
@@ -127,49 +167,48 @@ for index, model in enumerate(models):
     )
 
 payload = {
-    "hostname": os.uname().nodename,
-    "gpu_name": os.environ.get("GPU_NAME", ""),
+    "hostname": socket.gethostname(),
+    "gpu_name": gpu_name,
     "mode": "rome_only",
     "models": models,
     "n_tests": n_tests,
     "start_idx": start_idx,
     "slice_policy": slice_policy,
     "model_assignments": model_assignments,
-    "compute_cov": os.environ.get("COMPUTE_COV", "").lower() == "true",
-    "cov_source": os.environ.get("COV_SOURCE_NOTE", ""),
-    "started_at": os.environ.get("STARTED_AT", ""),
-    "finished_at": os.environ.get("STATUS_FINISHED_AT", ""),
-    "phase": os.environ.get("STATUS_PHASE", ""),
-    "failed": os.environ.get("STATUS_FAILED", "").lower() == "true",
+    "compute_cov": compute_cov_raw.lower() == "true",
+    "cov_source": cov_source_note,
+    "started_at": started_at,
+    "finished_at": finished_at,
+    "phase": phase,
+    "failed": failed_raw.lower() == "true",
 }
-Path(os.environ["RUN_ROOT"], "remote_status.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+Path(run_root, "remote_status.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 PY
 }
 
 expected_cov_basename() {
-  MODEL_KEY="$1" python - <<'PY'
-import os
-from src.model_config import second_moment_basename
+  python - "$1" <<'PY'
+import sys
+from src.common.model_config import second_moment_basename
 
-print(second_moment_basename(os.environ["MODEL_KEY"]))
+print(second_moment_basename(sys.argv[1]))
 PY
 }
 
 expected_cov_path() {
-  MODEL_KEY="$1" python - <<'PY'
-import os
+  python - "$1" <<'PY'
+import sys
 from pathlib import Path
 
-from src.model_config import load_model_config, second_moment_basename
+from src.common.model_config import load_model_config, second_moment_basename
 
-cfg = load_model_config(os.environ["MODEL_KEY"])
+model_key = sys.argv[1]
+cfg = load_model_config(model_key)
 explicit = str(getattr(cfg, "second_moment_path", "") or "").strip()
 if explicit:
     path = Path(explicit)
 else:
-    path = Path(str(getattr(cfg, "second_moment_dir", "./data/second_moment_stats"))) / second_moment_basename(
-        os.environ["MODEL_KEY"]
-    )
+    path = Path(str(getattr(cfg, "second_moment_dir"))) / second_moment_basename(model_key)
 print(path)
 PY
 }
@@ -202,7 +241,7 @@ for model_index in "${!MODELS[@]}"; do
   if [[ ! -f "$cov_path" ]]; then
     if $COMPUTE_COV; then
       echo "[remote-gpu][rome] missing covariance for $model -> computing" | tee -a "$log_file"
-      if ! PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -m src.cli command=second-moment model="$model" model.device=cuda ++model.cuda_mode=strict 2>&1 | tee -a "$log_file"; then
+      if ! PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -m src command=second-moment model="$model" model.device=cuda ++model.cuda_mode=strict 2>&1 | tee -a "$log_file"; then
         echo "[remote-gpu][rome] covariance computation failed for $model" | tee -a "$log_file"
         overall_failed=1
         continue
@@ -216,10 +255,10 @@ for model_index in "${!MODELS[@]}"; do
 
   cmd=(
     python rome_benchmark.py
-    --models "$model"
-    --n-tests "$N_TESTS"
-    --start-idx "$model_start"
-    --output-dir "$RUN_ROOT/rome"
+    "rome_benchmark.models=[$model]"
+    "rome_benchmark.n_tests=$N_TESTS"
+    "rome_benchmark.start_idx=$model_start"
+    "rome_benchmark.output_dir=$RUN_ROOT/rome"
   )
 
   printf '[remote-gpu][rome] command:' | tee -a "$log_file"

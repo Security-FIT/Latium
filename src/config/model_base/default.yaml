@@ -1,0 +1,33 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+models_dir: "../models"
+save_new_weights: false
+new_weights_dir: "./data/new_weights"
+second_moment_dir: "./data/second_moment_stats"
+second_moment_path: null
+second_moment_batch_size_mode: "auto"
+second_moment_batch_size: null
+device: "cuda"
+dtype: "auto"
+save_to_local: true
+
+# ROME optimization defaults.
+lr: 0.5
+kl_factor: 0.0625
+weight_decay: 0.5
+epochs: 20
+k_N: 50
+v_N: 50
+prefix_range: [2, 10]
+epsilon: 0.0
+optimize_pcs: false
+optimize_v_clear_cache_every: 0
+
+# Prefix generation defaults.
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null
+prefix_cache_size: 256

@@ -1,3 +1,10 @@
+"""
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -57,7 +64,7 @@ def _is_format_only_difference(name_a: str, name_b: str) -> bool:
     return normalize_token(name_a) == normalize_token(name_b)
 
 
-def _is_numeric_variant_only(name_a: str, name_b: str) -> bool:
+def _differs_only_by_numbers(name_a: str, name_b: str) -> bool:
     nums_a = _numeric_tokens(name_a)
     nums_b = _numeric_tokens(name_b)
     if not nums_a and not nums_b:
@@ -65,8 +72,8 @@ def _is_numeric_variant_only(name_a: str, name_b: str) -> bool:
     if nums_a == nums_b:
         return False
 
-    # Same alphabetic skeleton but different numeric profile is usually
-    # a model-size/version variant rather than a typo.
+    # The same alphabetic skeleton with different numbers is usually a model
+    # size distinction rather than a typo.
     return _alpha_skeleton(name_a) == _alpha_skeleton(name_b)
 
 
@@ -160,7 +167,7 @@ def detect_typo_pairs(
     max_bucket_size: int = 250,
     min_shared_signatures: int = 1,
     ignore_format_only: bool = True,
-    ignore_numeric_variants: bool = False,
+    ignore_numeric_differences: bool = False,
     ignore_same_owner_variants: bool = False,
     min_popularity_ratio: float = 1.0,
 ) -> List[Dict[str, float]]:
@@ -211,7 +218,7 @@ def detect_typo_pairs(
                 continue
             if ignore_format_only and _is_format_only_difference(name_a, name_b):
                 continue
-            if ignore_numeric_variants and _is_numeric_variant_only(name_a, name_b):
+            if ignore_numeric_differences and _differs_only_by_numbers(name_a, name_b):
                 continue
 
             larger = max(pop_a, pop_b)

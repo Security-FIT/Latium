@@ -4,8 +4,10 @@ handlers
 
 Handler submodule for Latium framework. Provides handler classes for extensible support.
 
-:copyright: 2026 Jakub Res
+:copyright: 2025 Jakub Res
 :license: MIT
+:author: Jakub Res <iresj@fit.vut.cz>
+:author: Matej Olexa <olexa.matej@gmail.com>
 """
 
 import importlib

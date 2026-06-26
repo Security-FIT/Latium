@@ -1,0 +1,140 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+run:
+  models:
+    - gpt2-large
+  edit_methods:
+    - rome
+  n_tests: 30
+  start_idx: 0
+  case_index_file: null
+  run_start_idx_step: 0
+  runs_per_model: 1
+  output_dir: ./analysis_out
+  run_id: null
+  progress_file: null
+  progress_interval: 10
+  worker_id: null
+  fail_on_missing_second_moment: false
+  force: false
+
+capture:
+  profile: spectral
+  enable: []
+  disable: []
+
+analysis:
+  enabled: true
+  preset: paper
+  enable: []
+  disable: []
+  variants:
+    spectral_top_k: 50
+    trim_first: null
+    trim_last: null
+    spectral_neighbor_layers: 1
+    spectral_rolling_window: 5
+    local_windows:
+      - 3
+      - 5
+      - 7
+    sweep:
+      mode: zip
+      max_configs: null
+      spectral_top_k: null
+      trim_first: null
+      trim_last: null
+      spectral_neighbor_layers: null
+      spectral_rolling_window: null
+      local_window_sets: null
+  methods:
+    spectral:
+      top_k: 50
+      trim_first: 2
+      trim_last: 2
+      neighbor_layers: 1
+      rolling_window: 5
+      local_windows:
+        - 3
+        - 5
+        - 7
+      boundary: 2
+    composite:
+      top_k: 50
+      trim_first: 2
+      trim_last: 2
+      neighbor_layers: 1
+      rolling_window: 5
+      local_windows:
+        - 3
+        - 5
+        - 7
+      boundary: 2
+      small_window: 5
+      large_window: 7
+      te_window: 5
+      nc_window: 5
+      feature_z_min: 1.5
+      signal_a_confirm_z_min: 2.0
+      signal_ab_boundary_width: 4
+      signal_ab_cluster_span: 2
+    gpt-norm-cv:
+      trim_first: 5
+      trim_last: 5
+    rank1-blind:
+      trim_first: 2
+      trim_last: 2
+      local_windows:
+        - 3
+        - 5
+        - 7
+    edit-presence:
+      detection_threshold: 0.58
+      min_peak_robust_z: 2.0
+      min_margin: 0.08
+      local_windows:
+        - 3
+        - 5
+        - 7
+    bottom-rank-svd:
+      trim_first: 2
+      trim_last: 2
+    ipr:
+      trim_first: 2
+      trim_last: 2
+    symmetry:
+      local_windows:
+        - 3
+        - 5
+        - 7
+    attention:
+      local_windows:
+        - 3
+        - 5
+        - 7
+  bottom_rank:
+    sweep_ranks:
+      - 4
+      - 8
+      - 16
+      - 32
+    top_svd_rank: 64
+    boundary: 2
+
+render:
+  enabled: false
+  renderer_preset: none
+  enable: []
+  disable: []
+
+output:
+  json_out: null
+
+analyze:
+  run_root: null
+
+validate_cov:
+  fail_missing: false

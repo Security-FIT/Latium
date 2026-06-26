@@ -1,0 +1,7 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+manifest: ../../finetuned_qwen3_8b_fleet.json
+base_model: qwen3-8b

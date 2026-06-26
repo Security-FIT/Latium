@@ -7,6 +7,8 @@ Provides a registry and base class for implementing token-by-token generation fo
 
 :copyright: 2025 Jakub Res
 :license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
 
 This module defines the model handler registry and base class for LLMs.
 Handlers provide decomposed token prediction, as well as support for interventions and restoration experiments.
@@ -15,7 +17,6 @@ Typical usage example::
 
     handler = MODEL_REGISTRY["gpt2"](cfg)
     output = handler.predict_next_token(...)
-
 """
 
 from src.handlers.base import BaseHandler
@@ -24,12 +25,15 @@ import torch
 from typing import List
 
 from tqdm import tqdm
-from src.utils import load_pretrained, DeviceManager, CUDAMode
+from src.common.linalg import CUDAMode, DeviceManager
+from src.common.loading import load_pretrained
 from src.rome.common import PrefixGenerationHandler
 
 
 import logging
+
 LOGGER = logging.getLogger(__name__)
+
 
 class ModelHandler(BaseHandler):
     """
@@ -40,6 +44,7 @@ class ModelHandler(BaseHandler):
     :param cfg: The configuration object containing model and generation parameters.
     :type cfg: DictConfig
     """
+
     def __init__(self, cfg: DictConfig) -> None:
         """
         Initialize the model handler by loading the model and tokenizer according to the config.
@@ -49,7 +54,7 @@ class ModelHandler(BaseHandler):
         """
         self.cfg = cfg
         self.model, self.tokenizer = load_pretrained(cfg)
-        
+
         self.dtype = self.model.dtype
         self.num_of_layers = self.model.config.num_hidden_layers
 
@@ -65,7 +70,7 @@ class ModelHandler(BaseHandler):
             self.device = next(self.model.parameters()).device
         else:
             self.device = self.device_manager.get_device()
-        
+
         self.batch_size = getattr(self.cfg.generation, "batch_size", 1) if hasattr(self.cfg, "generation") else 1
 
         self._layer_name_template = getattr(cfg.model, "layer_name_template", None)
@@ -104,7 +109,7 @@ class ModelHandler(BaseHandler):
         # Use device_manager for safe device placement
         self.delta = torch.zeros((self.emb_shape), dtype=self.dtype)
         self.delta = self.device_manager.safe_to_device(self.delta, device=self.device).requires_grad_(True)
-        
+
         self.second_moment_path = getattr(cfg.model, "second_moment_path", None)
 
         # Embeddings
@@ -184,10 +189,9 @@ class ModelHandler(BaseHandler):
         self.is_delta_hook = True
 
         # Register the corruption hook
-        delta_module = self._get_module(self._layer_name_template.format(self._layer))        
+        delta_module = self._get_module(self._layer_name_template.format(self._layer))
         handle = delta_module.register_forward_hook(delta_hook)
         self._hooks.append(handle)
-
 
     def set_emb_hook(self):
         # Register the corruption hook
@@ -202,21 +206,20 @@ class ModelHandler(BaseHandler):
         self._noise = None
         self._k_accumulator = []
         self._emb_accumulator = []
-        
+
         self.delta = torch.zeros((self.emb_shape))
         self.delta = self.device_manager.safe_to_device(self.delta, device=self.device).requires_grad_(True)
         for handle in self._hooks:
             handle.remove()
-        
+
         for handle in self._restore_hooks:
             handle.remove()
 
     def _get_module(self, module_name: str) -> torch.nn.Module:
-        """
-        """
+        """ """
         for name, module in self.model.named_modules():
             if name == module_name:
-                return  module
+                return module
 
         raise KeyError(f"{module_name} not found")
 
@@ -234,8 +237,7 @@ class ModelHandler(BaseHandler):
             return torch.device(self.device)
 
     def register_casual_hooks(self) -> None:
-        """
-        """
+        """ """
         self.set_corrupt_hook()
         self.set_restore_hook()
 
@@ -248,17 +250,17 @@ class ModelHandler(BaseHandler):
 
     def _restore_hook(self, module, input, output):
         try:
-            output[0][self._restore_idx,:] = self._restore_point
+            output[0][self._restore_idx, :] = self._restore_point
         except:
             try:
-                output[0][:,self._restore_idx] = self._restore_point
+                output[0][:, self._restore_idx] = self._restore_point
             except Exception as e:
                 LOGGER.warning(f"Hidden state restore failed. {e}")
         return output
 
     def _gather_k_hook(self, module, input):
         # This needs to be adapted for the multiprompt
-        #self._k_accumulator.append(input[0][-1, -1].detach())
+        # self._k_accumulator.append(input[0][-1, -1].detach())
         self._k_accumulator = input[0].detach()
         return input
 
@@ -272,7 +274,7 @@ class ModelHandler(BaseHandler):
 
     def _emb_hook(self, module, input, output):
         # self._emb_accumulator.append(output[0])
-        self._emb_accumulator.append(output.reshape(-1,output.shape[2]))
+        self._emb_accumulator.append(output.reshape(-1, output.shape[2]))
         return None
 
     def compute_embedding_std(self, subjects: List[torch.Tensor]) -> torch.Tensor:
@@ -289,7 +291,7 @@ class ModelHandler(BaseHandler):
 
         merged_emb = torch.cat(self._emb_accumulator, dim=0)
         std = merged_emb.std()
-        
-        self._noise_multiplier = std.item()*3
+
+        self._noise_multiplier = std.item() * 3
         self.remove_hooks()
         return std

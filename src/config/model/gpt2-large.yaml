@@ -1,23 +1,14 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
 name: "gpt2-large"
-models_dir: "../models"
-second_moment_dir: "./data/second_moment_stats"
 second_moment_path: "./data/second_moment_stats/gpt2-large_12_SM_Method.WIKIPEDIA_100000.pt"
-new_weights_dir: "./data/new_weights"
-device: "cuda"
-save_to_local: True # Keep this True until you specifically do not want the model cached locally
 layer_name_template: "transformer.h.{}.mlp.c_proj"
 fc_layer_name_template: "transformer.h.{}.mlp.c_fc"
 restore_layer_name_template: "transformer.h.{}"
 corrupt_layer_name_template: "transformer.wte"
 layer: 12
 corruption_noise_multiplier: 0.1380615234375
-lr: 0.5
-kl_factor: 0.0625
-weight_decay: 0.5
-epochs: 20
-k_N: 50
-v_N: 50
-prefix_range: [2, 10]
-epsilon: 0.0
-optimize_pcs: False
 dtype: "bf16"

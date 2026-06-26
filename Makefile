@@ -1,6 +1,21 @@
-CONDA_ENV="llms"
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
 
-.PHONY: install activate causal_trace
+CONDA_ENV="llms"
+PYTHON_FILES=src tests scripts huggingface-scraper rome_benchmark.py
+
+.PHONY: install setup mkdir check-rome lint format
+
+check-rome:
+	git diff --exit-code main -- src/rome src/handlers/rome.py src/config/config.yaml src/config/model
+
+lint:
+	ruff check $(PYTHON_FILES)
+
+format:
+	ruff format $(PYTHON_FILES)
 
 # Run setup scripts to install the toolset
 install:

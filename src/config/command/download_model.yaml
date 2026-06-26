@@ -1,0 +1,11 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+defaults:
+  - /model_base@_global_.model: default
+  - /model@_global_.model: gpt-j-6b
+  - _self_
+
+name: download-model

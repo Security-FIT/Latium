@@ -8,6 +8,7 @@ Provides the framework for running causal tracing and token-by-token generation 
 :copyright: 2025 Jakub Res
 :license: MIT
 :author: Jakub Res <iresj@fit.vut.cz>
+:author: Matej Olexa <olexa.matej@gmail.com>
 
 This module provides the main logic for running causal tracing experiments on large language models (LLMs).
 It supports token-by-token generation, layer and token-level interventions, and restoration experiments.
@@ -15,7 +16,6 @@ It supports token-by-token generation, layer and token-level interventions, and 
 Typical usage example::
 
     $ python causal_trace.py generation.prompt="Hello world" generation.corrupted_layer_idx=5
-
 """
 
 import pandas
@@ -30,14 +30,17 @@ import csv
 from tqdm import tqdm
 
 from src.handlers.rome import ModelHandler
-from src.utils import load_dataset, logits_to_probs, sample
+from src.common.loading import load_dataset, logits_to_probs, sample
 
 
 # Globals
 import logging
+
 LOGGER = logging.getLogger(__name__)
 # Timestamp format to match to he hydra output folder structure and naming convention
-TIMESTAMP: str = f"{str(datetime.datetime.now().date())}_{str(datetime.datetime.now().time()).replace(':', '-').split('.')[0]}"
+TIMESTAMP: str = (
+    f"{str(datetime.datetime.now().date())}_{str(datetime.datetime.now().time()).replace(':', '-').split('.')[0]}"
+)
 
 
 def save_results_to_csv(filename, header, data, mode='a'):
@@ -58,14 +61,16 @@ def save_results_to_csv(filename, header, data, mode='a'):
 
         csv_writer.writerows(data)
 
+
 def compute_multiplier(cfg: DictConfig) -> float:
     """
     Compute the noise multiplier using loaded dataset.
 
-    :param cfg: The configuration object containing static hyperparameters
-    :type cfg: DictConfig
-    :return: The computed multiplier
-    :rtype: float
+    Args:
+        cfg: Configuration object containing static hyperparameters.
+
+    Returns:
+        The computed multiplier.
     """
     handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
@@ -77,37 +82,32 @@ def compute_multiplier(cfg: DictConfig) -> float:
         if prompt_dict.Index == handler.cfg.generation.num_of_runs:
             break
         prompts.append(prompt_dict.prompt.format(prompt_dict.subject))
-    
+
     total = len(prompts)
     start_idx = 0
-        
-    while total-handler.batch_size > 0:
-        input_ids.append(handler.tokenize_prompt(prompts[start_idx:start_idx+handler.batch_size]))
+
+    while total - handler.batch_size > 0:
+        input_ids.append(handler.tokenize_prompt(prompts[start_idx : start_idx + handler.batch_size]))
         total -= handler.batch_size
         start_idx += handler.batch_size
-    
+
     handler.compute_embedding_std(input_ids)
-    return handler._noise_multiplier # TODO: move constant into the model config
+    return handler._noise_multiplier  # TODO: move constant into the model config
+
 
 def causal_trace_single_run(
-        run_number: int,
-        prompt_number: int,
-        handler: ModelHandler, 
-        input_ids: torch.Tensor, 
-        input_ids_subject,
-        target: str
-    ) -> None:
+    run_number: int, prompt_number: int, handler: ModelHandler, input_ids: torch.Tensor, input_ids_subject, target: str
+) -> None:
     """
     TODO
     """
     results = []
     tokenized_target = handler.tokenize_prompt(target)
-    target_length = len(tokenized_target["input_ids"]) # Add support for multitoken targets
+    target_length = len(tokenized_target["input_ids"])  # Add support for multitoken targets
 
     # Clean run: no corruption
     outputs_clean = handler.model(**input_ids, output_hidden_states=True, use_cache=False)
-    next_token_id_clean = sample(outputs_clean["logits"][:,-1,:])
-
+    next_token_id_clean = sample(outputs_clean["logits"][:, -1, :])
 
     if handler.tokenizer.batch_decode(next_token_id_clean, skip_special_tokens=True)[0].strip() != target:
         # Did not generate the assumed token
@@ -117,7 +117,7 @@ def causal_trace_single_run(
     handler.set_corrupt_idx(input_ids_subject)
     handler.set_corrupt_hook()
     outputs_corupt = handler.model(**input_ids, use_cache=False)
-    next_token_id_corupt = sample(outputs_corupt["logits"][:,-1,:])
+    next_token_id_corupt = sample(outputs_corupt["logits"][:, -1, :])
     handler.remove_hooks()
 
     # Restoration runs: restore clean activations at each layer after corruption
@@ -133,16 +133,16 @@ def causal_trace_single_run(
         for restore_layer in range(num_of_layers):
             handler.set_restore_idx(restore_token_idx)
             handler.set_restore_layer(restore_layer)
-            handler.set_restore_point(outputs_clean["hidden_states"][restore_layer+1][0][restore_token_idx,:])
+            handler.set_restore_point(outputs_clean["hidden_states"][restore_layer + 1][0][restore_token_idx, :])
             handler.set_restore_hook()
 
             outputs_restore = handler.model(**input_ids, use_cache=False)
-            next_token_id_restore = sample(outputs_restore["logits"][:,-1,:])
+            next_token_id_restore = sample(outputs_restore["logits"][:, -1, :])
 
             results_restoration[restore_token_idx].append(
                 (
-                    handler.tokenizer.decode(next_token_id_restore), 
-                    logits_to_probs(outputs_restore["logits"], next_token_id_clean).item()
+                    handler.tokenizer.decode(next_token_id_restore),
+                    logits_to_probs(outputs_restore["logits"], next_token_id_clean).item(),
                 )
             )
 
@@ -155,20 +155,25 @@ def causal_trace_single_run(
                 run_number,
                 prompt_number,
                 (
-                    handler.tokenizer.decode(next_token_id_clean), 
-                    logits_to_probs(outputs_clean["logits"], next_token_id_clean).item()
+                    handler.tokenizer.decode(next_token_id_clean),
+                    logits_to_probs(outputs_clean["logits"], next_token_id_clean).item(),
                 ),
                 (
-                    handler.tokenizer.decode(next_token_id_corupt), 
-                    logits_to_probs(outputs_corupt["logits"], next_token_id_clean).item()
+                    handler.tokenizer.decode(next_token_id_corupt),
+                    logits_to_probs(outputs_corupt["logits"], next_token_id_clean).item(),
                 ),
                 token_idx,
-                results_restoration[token_idx]
+                results_restoration[token_idx],
             )
         )
 
-    save_results_to_csv(handler.cfg.generation.filename.format(handler.cfg.model.name.replace("/", "-")), ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"], results)
+    save_results_to_csv(
+        handler.cfg.generation.filename.format(handler.cfg.model.name.replace("/", "-")),
+        ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"],
+        results,
+    )
     return 0
+
 
 def filter_dataset(dataset: Any) -> pandas.DataFrame:
     """
@@ -198,6 +203,7 @@ def _find_subject_token_positions(input_ids_prompt: torch.Tensor, input_ids_subj
         token_positions.extend(range(int(start), int(start) + subject_len))
 
     return sorted(set(token_positions))
+
 
 def _find_subject_token_positions_by_offsets(handler: ModelHandler, prompt: str, subject: str) -> list[int]:
     """Fallback: map subject character span to token indices via tokenizer offsets."""
@@ -234,6 +240,7 @@ def _find_subject_token_positions_by_offsets(handler: ModelHandler, prompt: str,
             token_positions.append(int(idx))
 
     return sorted(set(token_positions))
+
 
 def preprocess_prompt(handler, prompt_dict):
     """
@@ -272,6 +279,7 @@ def preprocess_prompt(handler, prompt_dict):
     # print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
     return input_ids, subject_position
 
+
 def causal_trace(cfg: DictConfig) -> None:
     """
     Run the causal tracing experiment using the provided configuration.
@@ -281,10 +289,8 @@ def causal_trace(cfg: DictConfig) -> None:
     2. Corrupted run (injects noise at a specified layer/token)
     3. Restoration runs (restores clean activations at each layer after corruption)
 
-    :param cfg: The configuration object containing static hyperparameters
-    :type cfg: DictConfig
-    :return: None
-    :rtype: None
+    Args:
+        cfg: Configuration object containing static hyperparameters.
     """
     handler = ModelHandler(cfg)
     dataset = load_dataset(cfg)
@@ -304,24 +310,27 @@ def causal_trace(cfg: DictConfig) -> None:
             continue
 
         prompt_ids, subject_position = preprocessed
-        res = causal_trace_single_run(total-failed, prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"])
-        
+        res = causal_trace_single_run(
+            total - failed, prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"]
+        )
+
         # Clean run generated wrong token
         if res == 1:
             failed += 1
 
     print(f"Total prompts processed: {total} failed attempts: {failed}")
 
+
 if __name__ == "__main__":
+
     @hydra.main(version_base=None, config_path="config", config_name="config")
     def main(cfg: DictConfig) -> None:
         """
         Hydra entry point for the causal tracing script.
 
-        :param cfg: The configuration object containing static hyperparameters
-        :type cfg: DictConfig
-        :return: None
-        :rtype: None
+        Args:
+            cfg: Configuration object containing static hyperparameters.
         """
         causal_trace(cfg)
+
     main()

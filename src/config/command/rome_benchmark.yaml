@@ -1,0 +1,10 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+defaults:
+  - /rome_benchmark@_global_.rome_benchmark: default
+  - _self_
+
+name: rome-benchmark

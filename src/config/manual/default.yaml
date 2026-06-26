@@ -1,0 +1,15 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+prompt: null
+subject: null
+target_new: null
+target_true: ""
+counterfact_path: null
+counterfact_json: null
+case_id: null
+index: 0
+max_new_tokens: 30
+do_sample: false

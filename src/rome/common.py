@@ -7,11 +7,11 @@ File containing implementation for common functions used in weight intervention.
 :copyright: 2025 Jakub Res
 :license: MIT
 :author: Jakub Res <iresj@fit.vut.cz>
+:author: Matej Olexa <olexa.matej@gmail.com>
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import copy
 import re
@@ -23,12 +23,14 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from enum import Enum
 import numpy as np
+from src.runtime import runtime_from_cfg
 
 if TYPE_CHECKING:
     from src.handlers.rome import ModelHandler
 
 
 import logging
+
 LOGGER = logging.getLogger(__name__)
 
 writer = SummaryWriter()
@@ -43,6 +45,7 @@ class PrefixMode(str, Enum):
     EXTERNAL - templates come from a JSON cache file or a separate helper model
                specified via ``prefix_source`` in the model YAML.
     """
+
     SELF = "self"
     TEMPLATE = "template"
     EXTERNAL = "external"
@@ -87,12 +90,8 @@ _MANUAL_ENGLISH_SEEDS = [
 ]
 
 # Regex: Latin script + basic ASCII punctuation/digits/whitespace only
-_LATIN_ONLY_RE = re.compile(
-    r'^[\x20-\x7E\u00C0-\u024F\u1E00-\u1EFF]*$'
-)
+_LATIN_ONLY_RE = re.compile(r'^[\x20-\x7E\u00C0-\u024F\u1E00-\u1EFF]*$')
 _MODEL_NAME_RE = re.compile(r'^\s*name:\s*["\']?([^"\']+)["\']?\s*$', re.MULTILINE)
-_DEFAULT_PROMPT_COUNT = 50
-_DEFAULT_PREFIX_RANGE = (2, 10)
 
 
 def _is_english_clean(text: str) -> bool:
@@ -182,17 +181,18 @@ def _get_rome_config_value(config_owner, key: str):
     return value
 
 
-def resolve_rome_sample_count(config_owner, key: str, default: int = _DEFAULT_PROMPT_COUNT) -> int:
+def resolve_rome_sample_count(config_owner, key: str) -> int:
     value = _get_rome_config_value(config_owner, key)
-    return max(1, int(value if value is not None else default))
+    if value is None:
+        raise ValueError(f"Missing ROME prompt-count config: model.{key} or generation.{key}")
+    return max(1, int(value))
 
 
 def _coerce_prefix_range(
-        prefix_range: Tuple[int, int] | list[int] | None,
-        fallback: Tuple[int, int] = _DEFAULT_PREFIX_RANGE,
-    ) -> tuple[int, int]:
+    prefix_range: Tuple[int, int] | list[int] | None,
+) -> tuple[int, int]:
     if prefix_range is None:
-        return fallback
+        raise ValueError("Missing ROME prefix_range config: model.prefix_range or generation.prefix_range")
 
     try:
         if len(prefix_range) != 2:
@@ -206,9 +206,9 @@ def _coerce_prefix_range(
 
 
 def resolve_prefix_range(
-        config_owner,
-        prefix_range: Tuple[int, int] | list[int] | None = None,
-    ) -> tuple[int, int]:
+    config_owner,
+    prefix_range: Tuple[int, int] | list[int] | None = None,
+) -> tuple[int, int]:
     if prefix_range is not None:
         return _coerce_prefix_range(prefix_range)
 
@@ -216,10 +216,10 @@ def resolve_prefix_range(
 
 
 def _trim_generated_template(
-        handler,
-        continuation_ids: torch.Tensor,
-        prefix_range: Tuple[int, int],
-    ) -> str | None:
+    handler,
+    continuation_ids: torch.Tensor,
+    prefix_range: Tuple[int, int],
+) -> str | None:
     min_tokens, max_tokens = prefix_range
     token_values = continuation_ids.detach().to("cpu").tolist()
     special_token_ids = {
@@ -231,11 +231,7 @@ def _trim_generated_template(
         )
         if token_id is not None
     }
-    usable_token_ids = [
-        int(token_id)
-        for token_id in token_values
-        if int(token_id) not in special_token_ids
-    ]
+    usable_token_ids = [int(token_id) for token_id in token_values if int(token_id) not in special_token_ids]
 
     if len(usable_token_ids) < min_tokens:
         return None
@@ -247,13 +243,13 @@ def _trim_generated_template(
 
 
 def _build_sampled_templates(
-        handler,
-        count: int,
-        prefix_range: Tuple[int, int],
-        seeds: List[str] | None = None,
-        temperature: float = 1.0,
-        top_p: float = 1.0,
-    ) -> List[str]:
+    handler,
+    count: int,
+    prefix_range: Tuple[int, int],
+    seeds: List[str] | None = None,
+    temperature: float = 1.0,
+    top_p: float = 1.0,
+) -> List[str]:
     if count <= 0:
         return []
 
@@ -266,17 +262,17 @@ def _build_sampled_templates(
             seed_texts.extend(seeds)
         seed_texts = seed_texts[:count]
     else:
-        seed_text = getattr(handler.tokenizer, "eos_token", None) or getattr(handler.tokenizer, "bos_token", None) or "The"
+        seed_text = (
+            getattr(handler.tokenizer, "eos_token", None) or getattr(handler.tokenizer, "bos_token", None) or "The"
+        )
         seed_texts = [str(seed_text)] * count
 
     prompts = handler.tokenize_prompt(seed_texts)
 
     if prompts.input_ids.dim() < 2 or int(prompts.input_ids.shape[1]) == 0:
-        LOGGER.warning(
-            "Prefix sampling tokenization produced empty prompts. Falling back to static templates."
-        )
+        LOGGER.warning("Prefix sampling tokenization produced empty prompts. Falling back to static templates.")
         static = _build_static_templates(count + 1, shuffle=True)
-        return static[1:count + 1]
+        return static[1 : count + 1]
 
     max_new_tokens = prefix_range[1]
 
@@ -313,7 +309,7 @@ def _build_sampled_templates(
                     second_err,
                 )
                 static = _build_static_templates(count + 1, shuffle=True)
-                return static[1:count + 1]
+                return static[1 : count + 1]
         elif "has_previous_state" in msg or "LinearAttention" in msg:
             LOGGER.warning(
                 "Prefix sampling generation hit cache incompatibility (%s). Retrying with use_cache=False.",
@@ -327,14 +323,14 @@ def _build_sampled_templates(
                     second_err,
                 )
                 static = _build_static_templates(count + 1, shuffle=True)
-                return static[1:count + 1]
+                return static[1 : count + 1]
         else:
             LOGGER.warning(
                 "Prefix sampling generation failed (%s). Falling back to static templates.",
                 msg,
             )
             static = _build_static_templates(count + 1, shuffle=True)
-            return static[1:count + 1]
+            return static[1 : count + 1]
 
     prompt_len = int(prompts.input_ids.shape[1])
     continuation_ids = outputs[:, prompt_len:]
@@ -352,16 +348,16 @@ def _build_sampled_templates(
             prefix_range,
         )
         static = _build_static_templates(count + 1, shuffle=True)
-        templates.extend(static[1:1 + (count - len(templates))])
+        templates.extend(static[1 : 1 + (count - len(templates))])
 
     return templates[:count]
 
 
 def _build_manual_sampled_templates(
-        handler,
-        count: int,
-        prefix_range: Tuple[int, int],
-    ) -> List[str]:
+    handler,
+    count: int,
+    prefix_range: Tuple[int, int],
+) -> List[str]:
     if count <= 0:
         return []
 
@@ -411,13 +407,13 @@ class PrefixGenerationHandler:
     """
 
     def __init__(
-            self,
-            cfg_model=None,
-            mode: PrefixMode | str | None = None,
-            prefix_source: str | None = None,
-            prefix_cache_path: str | None = None,
-            prefix_cache_size: int | None = None,
-        ) -> None:
+        self,
+        cfg_model=None,
+        mode: PrefixMode | str | None = None,
+        prefix_source: str | None = None,
+        prefix_cache_path: str | None = None,
+        prefix_cache_size: int | None = None,
+    ) -> None:
         cfg_mode = getattr(cfg_model, "prefix_mode", None) if cfg_model is not None else None
         resolved_mode = mode if mode is not None else (cfg_mode if cfg_mode is not None else PrefixMode.SELF)
 
@@ -431,10 +427,16 @@ class PrefixGenerationHandler:
         self.prefix_source: str | None = prefix_source
         self.prefix_cache_path: str | None = prefix_cache_path
         self.prefix_cache_size = max(1, int(resolved_cache_size or 256))
-        self.prefix_template_static_only = bool(getattr(cfg_model, "prefix_template_static_only", False)) if cfg_model is not None else False
-        self.prefix_enforce_latin = bool(getattr(cfg_model, "prefix_enforce_latin", False)) if cfg_model is not None else False
+        self.prefix_template_static_only = (
+            bool(getattr(cfg_model, "prefix_template_static_only", False)) if cfg_model is not None else False
+        )
+        self.prefix_enforce_latin = (
+            bool(getattr(cfg_model, "prefix_enforce_latin", False)) if cfg_model is not None else False
+        )
         self.prefix_min_words = int(getattr(cfg_model, "prefix_min_words", 0) or 0) if cfg_model is not None else 0
-        self.target_model_name: str | None = str(getattr(cfg_model, "name", "")).strip() if cfg_model is not None else None
+        self.target_model_name: str | None = (
+            str(getattr(cfg_model, "name", "")).strip() if cfg_model is not None else None
+        )
         self._ext_handler = None
         self._ext_model_name: str | None = None
         self._rome_model_names: dict[str, str] | None = None
@@ -647,11 +649,11 @@ class PrefixGenerationHandler:
 
 
 def generate_prefixes(
-        handler,
-        N: int,
-        prefix_range: Tuple[int, int] | list[int] | None = None,
-        additional_prompts: List[str] | None = None
-    ) -> List[str]:
+    handler,
+    N: int,
+    prefix_range: Tuple[int, int] | list[int] | None = None,
+    additional_prompts: List[str] | None = None,
+) -> List[str]:
     """Generate template prefixes for key-gathering.
 
     Dispatches to the handler's :class:`PrefixGenerationHandler` when available,
@@ -689,13 +691,14 @@ def _reshape_hidden_states(hidden_states: torch.Tensor, batch_size: int, seq_len
 
     raise RuntimeError(f"Unsupported activation rank for hooks: {hidden_states.dim()}")
 
+
 def gather_k(
-        handler,
-        fact_tuple: Tuple[str, str, str], 
-        N: int = 50, 
-        prefix_range: Tuple[int, int] | list[int] | None = None,
-        additional_prompts: List[str] | None = None
-    ) -> torch.Tensor | None:
+    handler,
+    fact_tuple: Tuple[str, str, str],
+    N: int = 50,
+    prefix_range: Tuple[int, int] | list[int] | None = None,
+    additional_prompts: List[str] | None = None,
+) -> torch.Tensor | None:
     templates = generate_prefixes(handler, N, prefix_range, additional_prompts=additional_prompts)
     for i in range(len(templates)):
         templates[i] = templates[i].format(fact_tuple[1])
@@ -707,6 +710,7 @@ def gather_k(
 
     # TODO: Add support for dynamic batch size
     k = None
+
     def k_hook(_, input):
         nonlocal k
         hidden_states = input[0]
@@ -748,6 +752,7 @@ def _strip_bos(handler, token_ids: torch.Tensor) -> torch.Tensor:
         elif token_ids.dim() == 1 and token_ids.size(0) > 1 and token_ids[0].item() == bos_id:
             return token_ids[1:]
     return token_ids
+
 
 def get_subject_position(handler, prompt, subject):
     """
@@ -802,6 +807,7 @@ def get_subject_position(handler, prompt, subject):
     subject_position[0] += input_ids_subject.size(1) - 1
     return subject_position[0]
 
+
 def get_subject_index(handler, prompts, fact_tuple, subject_understanding_template) -> torch.Tensor | None:
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
     batch_idx = torch.arange(prompts.input_ids.shape[0], device=prompts.attention_mask.device)
@@ -810,35 +816,34 @@ def get_subject_index(handler, prompts, fact_tuple, subject_understanding_templa
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
 
-
     # Last subject token index computation
     pos = get_subject_position(handler, fact_tuple[0].format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
         return None
 
     subject_reverse_pos = len(fact_prompt["input_ids"][0]) - pos
-    last_subject_index[:prompts.input_ids.shape[0]-1] -= subject_reverse_pos + len(new_target_ids) - 1
-
+    last_subject_index[: prompts.input_ids.shape[0] - 1] -= subject_reverse_pos + len(new_target_ids) - 1
 
     # Last subject token index computation for understanding prompt
     pos = get_subject_position(handler, subject_understanding_template.format(fact_tuple[1]), fact_tuple[1])
     if pos == -1:
         return None
-    
+
     u_sub_reverse_pos = len(u_fact_prompt["input_ids"][0]) - pos
     last_subject_index[-1] -= u_sub_reverse_pos
 
     return last_subject_index.long().cpu()
 
+
 def optimize_v(
-        handler,
-        fact_tuple: Tuple[str, str, str, str],
-        N_prompts: int,
-        N_optim_steps: int,
-        subject_understanding_template: str = "{} is a",
+    handler,
+    fact_tuple: Tuple[str, str, str, str],
+    N_prompts: int,
+    N_optim_steps: int,
+    subject_understanding_template: str = "{} is a",
     prefix_range: Tuple[int, int] | list[int] | None = None,
-        verbose: bool = True
-    ) -> torch.Tensor | None:
+    verbose: bool = True,
+) -> torch.Tensor | None:
     # Initialization
     v_init = None
     dkl_orig = None
@@ -855,8 +860,7 @@ def optimize_v(
         additional_prompts=additional_prompts,
     )
     prefix_mode = getattr(getattr(handler, "prefix_handler", None), "mode", PrefixMode.SELF)
-    log_all_prefixes_env = os.getenv("ROME_LOG_ALL_PREFIXES", "").strip().lower()
-    log_all_prefixes = log_all_prefixes_env in {"1", "true", "yes", "on", "all", "full"}
+    log_all_prefixes = runtime_from_cfg(handler.cfg).prefix_log_all
     if log_all_prefixes:
         LOGGER.info(
             "Templates for v-step (prefix_mode=%s, total=%d, prefixes=%s)",
@@ -869,14 +873,14 @@ def optimize_v(
             "Templates for v-step (prefix_mode=%s, total=%d, preview=%s)",
             prefix_mode,
             len(templates),
-            templates[:min(5, len(templates))],
+            templates[: min(5, len(templates))],
         )
     for i in range(len(templates)):
         templates[i] = templates[i].format(fact_tuple[0].format(fact_tuple[1]))
 
     if new_target_ids.size(0) > 1:
         templates = [template + handler.tokenizer.decode(new_target_ids[:-1]) for template in templates]
-    
+
     prompts = handler.tokenize_prompt(templates)
     prompt_count = int(prompts.input_ids.shape[0])
     prompt_seq_len = int(prompts.input_ids.shape[1])
@@ -923,7 +927,9 @@ def optimize_v(
                 v_init = hidden[0, last_subject_index_list[0]].detach().clone()
             scaled_delta = delta * _delta_scale
             for i, idx in enumerate(last_subject_index_list):
-                new_output[i, idx, :] = new_output[i, idx, :] + scaled_delta.to(device=raw_hidden.device, dtype=raw_hidden.dtype)
+                new_output[i, idx, :] = new_output[i, idx, :] + scaled_delta.to(
+                    device=raw_hidden.device, dtype=raw_hidden.dtype
+                )
 
             restored = new_output.reshape_as(raw_hidden) if was_flat else new_output
             if tuple_output:
@@ -933,7 +939,6 @@ def optimize_v(
             return restored
 
         return output
-
 
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
@@ -977,11 +982,13 @@ def optimize_v(
         dkl_log_probs = torch.nn.functional.log_softmax(dkl_logits, dim=1)
 
         if dkl_orig is None:
-            dkl_orig = dkl_log_probs.detach().clone() # Reusing this accross multiple epochs
+            dkl_orig = dkl_log_probs.detach().clone()  # Reusing this accross multiple epochs
 
-        dkl = handler.kl_factor * torch.nn.functional.kl_div(dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean")
+        dkl = handler.kl_factor * torch.nn.functional.kl_div(
+            dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean"
+        )
         weight_decay = handler.weight_decay * (torch.norm(delta) / (torch.norm(v_init) ** 2))
-        
+
         pred_loss = (-1 * log_probs).mean()
         loss = pred_loss + dkl + weight_decay
 
@@ -990,7 +997,7 @@ def optimize_v(
 
         if i == N_optim_steps - 1:
             break
-        
+
         loss.backward()
         opt.step()
 
@@ -1008,7 +1015,10 @@ def optimize_v(
 
     return delta
 
-def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+def insert_kv(
+    handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     layer_name = handler._layer_name_template.format(handler._layer)
     # For multi-GPU, use the device where this layer actually lives
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
@@ -1021,7 +1031,7 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> Tu
     # Fix the transposed models
     old_W_transposed = False
     if old_W.shape[0] != k.shape[0]:
-        old_W = torch.transpose(old_W,0,1)
+        old_W = torch.transpose(old_W, 0, 1)
         old_W_transposed = True
 
     # Compensate for residual_multiplier: during optimize_v the delta hook
@@ -1041,7 +1051,6 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> Tu
     left = left / left.norm()
     right = scaled_delta / torch.dot(k, left)
 
-
     LOGGER.info(f"Delta norm: {delta.norm().item()}")
     LOGGER.info(f"Delta scale (1/residual_mult): {_delta_scale}")
     LOGGER.info(f"Division Factor: {torch.dot(k, left).item()}")
@@ -1053,40 +1062,44 @@ def insert_kv(handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor) -> Tu
     except:
         new_W = old_W + update_matrix.T
     if old_W_transposed:
-        new_W = torch.transpose(new_W,0,1)
+        new_W = torch.transpose(new_W, 0, 1)
 
     # Insert new weights back to the model
     handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
     return new_W.to(handler.dtype), old_W, update_matrix  # Cast to model dtype
 
+
 class SM_Method(Enum):
     RANDOM = 1
     WIKIPEDIA = 2
 
+
 def second_moment_wikipedia(handler, N_rounds, N_k):
     """
     Compute inverse covariance C^-1 where C = E[k @ k^T] using Wikipedia data.
-    
+
     Math:
         C = (1/N) * sum_i(k_i^T @ k_i)  where k_i are layer inputs
         Returns C^-1 (needed for ROME weight update formula)
-    
+
     """
-    from src.utils import load_dataset, estimate_covariance_batch_size
+    from src.common.linalg import estimate_covariance_batch_size
+    from src.common.loading import load_dataset
 
     layer_name = handler._layer_name_template.format(handler._layer)
     module = handler._get_module(layer_name)
     hidden_dim = handler.hidden_dim
 
     # Get model's max context length. By default use full model context.
-    model_max_length = getattr(handler.model.config, 'n_positions', 
-                        getattr(handler.model.config, 'max_position_embeddings', 1024))
+    model_max_length = getattr(
+        handler.model.config, 'n_positions', getattr(handler.model.config, 'max_position_embeddings', 1024)
+    )
     max_length_cap = getattr(handler.cfg.model, "second_moment_max_length", None)
     if max_length_cap is None:
         max_length = model_max_length
     else:
         max_length = min(int(max_length_cap), model_max_length)
-    
+
     # For multi-GPU models, determine the device of the target module
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
         module_device = handler.get_module_device(layer_name)
@@ -1109,9 +1122,9 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         C.addmm_(k.T, k)
         del k
         return out
-    
+
     handle = module.register_forward_hook(hook)
-    
+
     n_samples = N_rounds * N_k if N_rounds and N_k else 5000
 
     # Dynamic batch size based on available VRAM
@@ -1127,9 +1140,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     manual_batch_size = getattr(handler.cfg.model, "second_moment_batch_size", None)
     if batch_mode in ("manual", "fixed", "static"):
         if manual_batch_size is None:
-            raise ValueError(
-                "second_moment_batch_size must be set when second_moment_batch_size_mode is 'manual'"
-            )
+            raise ValueError("second_moment_batch_size must be set when second_moment_batch_size_mode is 'manual'")
         batch_size = max(1, int(manual_batch_size))
         LOGGER.info("Using manual covariance batch size override: %d", batch_size)
     elif batch_mode in ("dynamic", "auto"):
@@ -1140,11 +1151,12 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
             LOGGER.info("Using dynamic covariance batch size estimate: %d", batch_size)
     else:
         raise ValueError(
-            "Invalid second_moment_batch_size_mode: "
-            f"{batch_mode_raw!r}. Expected one of: auto, dynamic, manual."
+            f"Invalid second_moment_batch_size_mode: {batch_mode_raw!r}. Expected one of: auto, dynamic, manual."
         )
-    
-    LOGGER.info(f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}")
+
+    LOGGER.info(
+        f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}"
+    )
     ds = load_dataset(handler.cfg, sm=True)
 
     # For multi-GPU models, place token inputs on the embedding module device.
@@ -1158,7 +1170,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
             input_device = next(handler.model.parameters()).device
     else:
         input_device = handler.device
-    
+
     min_text_length = int(getattr(handler.cfg.model, "second_moment_min_text_length", 50))
     processed = 0
     processed_batches = 0
@@ -1175,15 +1187,13 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
             chunk = queue.pop(0)
             try:
                 tokens = handler.tokenizer(
-                    chunk,
-                    return_tensors='pt',
-                    truncation=True,
-                    max_length=max_length,
-                    padding=True
+                    chunk, return_tensors='pt', truncation=True, max_length=max_length, padding=True
                 )
-                handler.model(tokens.input_ids.to(input_device),
-                              attention_mask=tokens.attention_mask.to(input_device),
-                              use_cache=False)
+                handler.model(
+                    tokens.input_ids.to(input_device),
+                    attention_mask=tokens.attention_mask.to(input_device),
+                    use_cache=False,
+                )
                 del tokens
                 processed += len(chunk)
                 processed_batches += 1
@@ -1202,18 +1212,18 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
                 queue.insert(0, chunk[:midpoint])
             except Exception as e:
                 LOGGER.warning(e)
-    
+
     with torch.no_grad():
         for sample in tqdm(ds, desc="Computing covariance", total=n_samples, mininterval=1.0):
             if processed >= n_samples:
                 break
-            
+
             text = sample.get("text", "")
             if len(text.strip()) < min_text_length:
                 continue
-            
+
             batch_texts.append(text)
-            
+
             remaining = n_samples - processed
             if remaining <= 0:
                 break
@@ -1228,19 +1238,17 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
         if batch_texts and processed < n_samples:
             remaining = n_samples - processed
             process_text_batch(batch_texts[:remaining])
-    
+
     handle.remove()
 
     if processed < n_samples:
-        raise RuntimeError(
-            f"Covariance sampling incomplete: processed {processed} samples out of target {n_samples}."
-        )
-    
+        raise RuntimeError(f"Covariance sampling incomplete: processed {processed} samples out of target {n_samples}.")
+
     if total_tokens == 0:
         raise ValueError("No samples processed for covariance!")
-    
+
     LOGGER.info(f"Processed {processed} samples and {total_tokens} tokens, computing inverse covariance...")
-    
+
     # Normalize and regularize on the same device used for accumulation.
     cov = C / total_tokens
     cov += 1e-5 * torch.eye(hidden_dim, device=cov.device)  # Regularization for stability
@@ -1248,6 +1256,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     LOGGER.info(f"Inverting {hidden_dim}x{hidden_dim} covariance matrix on device {cov.device}...")
     inv_cov = torch.linalg.inv(cov)
     return inv_cov.to("cpu")
+
 
 def second_moment_random(handler, N_rounds, N_k):
     K_list = []
@@ -1265,6 +1274,7 @@ def second_moment_random(handler, N_rounds, N_k):
     mat = K * torch.transpose(K, 0, 1)
     return mat / mat.norm()
 
+
 def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method: SM_Method = SM_Method.WIKIPEDIA):
     """
     Compute the second moment statistics for input of certain mlp layer
@@ -1272,11 +1282,12 @@ def compute_second_moment(handler, N_rounds: int = 100, N_k: int = 1000, method:
     if method == SM_Method.RANDOM:
         # Attempt to estimate the covariance matrix by random prompt sampling
         # Iterative approach due to cuda memory limitations
-        return second_moment_random(handler, N_rounds, N_k), N_rounds*N_k, method
+        return second_moment_random(handler, N_rounds, N_k), N_rounds * N_k, method
     elif method == SM_Method.WIKIPEDIA:
-        return second_moment_wikipedia(handler, N_rounds, N_k), N_rounds*N_k, method
+        return second_moment_wikipedia(handler, N_rounds, N_k), N_rounds * N_k, method
     else:
         raise NotImplementedError
+
 
 def get_second_moment(handler) -> torch.Tensor:
     """
@@ -1293,18 +1304,24 @@ def get_second_moment(handler) -> torch.Tensor:
 
     if not file_paths:
         # Check for both .pt and .npz files
-        file_paths = list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.pt"))
-        file_paths += list(Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.npz"))
+        file_paths = list(
+            Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.pt")
+        )
+        file_paths += list(
+            Path(handler.second_moment_dir).glob(f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_*_*.npz")
+        )
 
     if len(file_paths):
         LOGGER.info(f"Auto-detected precached second moments: {file_paths}")
         LOGGER.info(f"{file_paths[0]} selected")
         try:
             if file_paths[0].name.split(".")[-1] == "npz":
-                matrix = torch.tensor(np.load(file_paths[0])["mom2.mom2"]).inverse() # IMPORTANT: the originial matrix is not inverted.
+                matrix = torch.tensor(
+                    np.load(file_paths[0])["mom2.mom2"]
+                ).inverse()  # IMPORTANT: the originial matrix is not inverted.
             else:
                 matrix = torch.load(file_paths[0])
-            
+
             matrix = handler.device_manager.safe_to_device(matrix).to(torch.float32)
             return matrix
         except Exception as e:
@@ -1312,25 +1329,20 @@ def get_second_moment(handler) -> torch.Tensor:
             raise e
     else:
         LOGGER.info(f"Precached second moments not found")
-        LOGGER.info(f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}")
-        allow_autocompute = os.getenv("ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE", "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "y",
-        }
+        LOGGER.info(
+            f"Computing second moment statistics for model {handler.cfg.model.name} Module {handler._layer_name_template.format(handler._layer)}"
+        )
+        allow_autocompute = runtime_from_cfg(handler.cfg).second_moment_allow_autocompute
         if not allow_autocompute:
             raise FileNotFoundError(
                 "Missing second moment statistics for "
                 f"model={handler.cfg.model.name} layer={handler._layer}. "
                 "Auto-computation is disabled by default to avoid long runs. "
-                "Precompute with 'python -m src.cli command=second-moment model=<model-config>' "
-                "or set ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1 to force automatic computation."
+                "Precompute with 'python -m src command=second-moment model=<model-config>' "
+                "or set runtime.second_moment_allow_autocompute=true to force automatic computation."
             )
 
-        LOGGER.warning(
-            "Auto-computing missing second moment because ROME_ALLOW_SECOND_MOMENT_AUTOCOMPUTE=1"
-        )
+        LOGGER.warning("Auto-computing missing second moment because runtime.second_moment_allow_autocompute=true")
         target_samples = getattr(handler.cfg.model, "second_moment_target_samples", None)
         if target_samples is not None:
             target_samples = int(target_samples)
@@ -1345,11 +1357,11 @@ def get_second_moment(handler) -> torch.Tensor:
             )
         else:
             inv_cov, count, method = compute_second_moment(handler, method=SM_Method.WIKIPEDIA)
-        
+
         # Ensure directory exists
         save_dir = Path(handler.second_moment_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
-        
+
         save_path = save_dir / f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
         torch.save(inv_cov, save_path)
         LOGGER.info(f"Saved second moment to {save_path}")

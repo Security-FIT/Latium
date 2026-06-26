@@ -1,0 +1,12 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+defaults:
+  - /prefix_experiment@_global_.prefix_experiment: default
+  - /dataset_facts@_global_.dataset_facts: counterfact
+  - /structural@_global_.structural: default
+  - _self_
+
+name: prefix-experiment

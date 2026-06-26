@@ -1,3 +1,10 @@
+"""
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
+
 from __future__ import annotations
 
 import sys
@@ -7,7 +14,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src import utils
+from src.common import linalg as utils
 
 
 def test_gpu_svdvals_cache_distinguishes_value_changes_when_storage_key_collides(monkeypatch) -> None:
@@ -37,3 +44,26 @@ def test_fingerprint_sample_indices_stay_in_bounds_for_large_numel() -> None:
     assert int(indices.min().item()) == 0
     assert int(indices.max().item()) == numel - 1
     assert torch.all(indices[1:] >= indices[:-1])
+
+
+def test_linalg_cache_sizes_are_configurable_without_env() -> None:
+    utils.clear_linalg_caches()
+    utils.configure_linalg_cache(
+        svdvals_maxsize=1,
+        svdtopk_maxsize=1,
+        svdfull_maxsize=1,
+    )
+
+    first = torch.diag(torch.tensor([4.0, 1.0], dtype=torch.float32))
+    second = torch.diag(torch.tensor([3.0, 1.0], dtype=torch.float32))
+
+    utils.gpu_svdvals(first)
+    utils.gpu_svdvals(second)
+
+    assert len(utils._SVDVALS_CACHE) == 1
+    utils.configure_linalg_cache(
+        svdvals_maxsize=4096,
+        svdtopk_maxsize=1024,
+        svdfull_maxsize=32,
+    )
+    utils.clear_linalg_caches()

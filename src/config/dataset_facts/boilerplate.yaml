@@ -1,5 +1,11 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
 name: "NAME"
 config_name: "CONFIG"
+split: "train"
 concat_splits: ["train", "test"]
 datasets_dir: "./datasets"
 save_to_local: True

@@ -1,17 +1,22 @@
+"""
+:copyright: 2025 Jakub Res
+:license: MIT
+:author: Matej Olexa <olexa.matej@gmail.com>
+:author: Jakub Res <iresj@fit.vut.cz>
+"""
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.structural.blind_detector import BlindMSDDetector
-from src.structural.spectral_detector import SpectralDetector
+from src.structural.detectors.spectral_resident import SpectralDetector
 
 
 def _proj_weights() -> dict[int, torch.Tensor]:
@@ -87,40 +92,3 @@ def test_spectral_detector_sv_only_payload_excludes_pairwise_raw_tensors() -> No
     assert "pcs_pairwise_dot_weight_cumsum" not in raw
     assert "pcs_flip_pairwise_weight_cumsum" not in raw
     assert "pcs_pairwise_weight_cumsum" not in raw
-
-
-def test_fast_exact_blind_features_match_reference_path() -> None:
-    detector = BlindMSDDetector()
-    weights = _proj_weights()
-
-    reference = detector.compute_layer_features(weights, fast_exact=False)
-    fast = detector.compute_layer_features(weights, fast_exact=True)
-
-    assert reference.keys() == fast.keys()
-    for layer in reference:
-        assert reference[layer].keys() == fast[layer].keys()
-        for metric in reference[layer]:
-            assert np.isclose(
-                reference[layer][metric],
-                fast[layer][metric],
-                rtol=1e-5,
-                atol=1e-6,
-            ), f"layer={layer} metric={metric}"
-
-
-def test_detect_layer_features_only_uses_fast_exact_bundle_shape() -> None:
-    detector = BlindMSDDetector()
-
-    result = detector.detect_layer_features_only(_proj_weights())
-    layer_features = result["layer_features"]
-
-    assert set(layer_features.keys()) == {"0", "1", "2", "3"}
-    assert set(layer_features["0"].keys()) == {
-        "effective_rank",
-        "spectral_gap",
-        "top1_energy",
-        "pcs",
-        "norm_cv",
-        "row_alignment",
-        "spectral_entropy",
-    }

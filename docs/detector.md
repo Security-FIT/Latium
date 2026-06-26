@@ -1,440 +1,70 @@
-# ROME Layer Detectors
+# Artifact-Only Structural Analyses
 
-This document describes the detectors as they are implemented in:
+Structural analyses consume saved captures through `AnalysisContext`; they are
+not part of model execution.
 
-- `detector/composite_detector_v2.py`
-- `detector/gpt_detector.py`
-
-It is intended to match the current code, not older notebook summaries or historical benchmark claims.
-
----
-
-## Overview
-
-The repository has two post-hoc layer detectors that operate on
-`blind_detection.layer_features` saved by `structural_benchmark.py`.
-
-| Detector | Intended scope | Main idea |
-|----------|----------------|-----------|
-| `composite_detector_v2.py` | Non-GPT architectures | Blind-feature chain with optional full-profile Signal A / Signal B support |
-| `gpt_detector.py` | GPT-2 family and GPT-J | 3-way `norm_cv` vote with multi-trim fallback |
-
-Important:
-
-- The composite script does **not** automatically exclude GPT-family JSON files.
-- The GPT script **does** filter to GPT-family files by default.
-- In practice, GPT-family runs should be evaluated with `gpt_detector.py`, not with the composite detector.
-
-Pipeline routing:
-
-- `pipeline_posthoc.py` dispatches by canonical model key, not by filename.
-- GPT-2 and GPT-J models go through `gpt_detector.process_file(..., trim=5)`.
-- Non-GPT models go through `composite_detector_v2.process_file(..., trim=2)`.
-
----
-
-## Source Data
-
-Both detectors read:
-
-- `test["blind_detection"]["layer_features"]`
-
-The composite detector can also read:
-
-- `test["spectral_detection"]`
-
-when the structural JSON was produced with a spectral-capable payload. The
-default `paper` profile now includes the Signal A / Signal B and PCS series
-needed by the post-hoc detector, while blind-only payloads still fall back to
-the blind-feature chain automatically.
-
-Those features are produced by `BlindMSDDetector.detect_layer_features_only()`
-in `src/structural/blind_detector.py`, and are written into structural JSON
-outputs by `structural_benchmark.py`.
-
-For standard post-hoc detector usage, a structural run must have:
-
-- no test-level error
-- successful ROME edit (`test["rome"]["success"] == True`) for layer detection
-- non-empty `blind_detection.layer_features`
-
-Baseline-only binary edit detection relaxes the ROME-success requirement for
-baseline files.
-
----
-
-## Per-Layer Feature Bundle
-
-The current implementation computes these per-layer features:
-
-| Feature | Key | Current implementation |
-|---------|-----|------------------------|
-| Spectral gap | `spectral_gap` | `sigma_1 / sigma_2` |
-| Top-1 energy | `top1_energy` | `sigma_1^2 / sum_j sigma_j^2` |
-| Effective rank | `effective_rank` | `exp(H(p))`, where `p_i = sigma_i / sum_j sigma_j` |
-| Norm CV | `norm_cv` | `std(row_norms) / mean(row_norms)` |
-| Row alignment | `row_alignment` | `max(abs(U[:,0])) / mean(abs(U[:,0]))` |
-| Spectral entropy | `spectral_entropy` | `-sum_i q_i log q_i / log(r)`, where `q_i = sigma_i^2 / sum_j sigma_j^2` and `r = len(S)` |
-| PCS | `pcs` | Pairwise row-cosine summary from `src.rome.common.pcs()` |
-
-Notes:
-
-- `effective_rank` uses normalized singular values `S / sum(S)`, not squared energy.
-- `spectral_entropy` is normalized by `log(r)`.
-- The post-hoc detectors described below primarily use `spectral_gap`,
-  `top1_energy`, `norm_cv`, `effective_rank`, and `row_alignment`.
-
----
-
-## Shared Signal Transforms
-
-The detectors derive peaks from transformed per-layer feature series.
-
-### Raw
-
-Use the feature values directly.
-
-### Local z-score
-
-For each layer, compare that layer against its local neighborhood:
-
-`z_i = (x_i - mean(neighbors)) / (std(neighbors) + eps)`
-
-The detectors use the absolute value of that score.
-
-Default windows used by the composite detector:
-
-- SG small window: `5`
-- SG large window: `7`
-- TE window: `5`
-- NC window: `5`
-
-These are configurable inside `detect_layer()` and via composite window-sweep mode.
-
-### Curvature
-
-Absolute second finite difference:
-
-`abs(x_{i-1} - 2x_i + x_{i+1})`
-
-### Peak selection
-
-For each transformed series, the detector takes:
-
-- `argmax(series)` as the peak layer
-- a simple global z-score for reporting/debug info
-
----
-
-## Composite Detector v2
-
-File:
-
-- `detector/composite_detector_v2.py`
-
-Primary entry points:
-
-- `detect_layer()`
-- `process_file()`
-- `detect_edit_binary()`
-- `sweep_file()`
-
-Default trim:
-
-- `2` layers from each end
-
-### Intended scope
-
-This detector is intended for non-GPT architectures.
-
-It will still run on GPT-family JSONs if you pass them in, but that is not the
-recommended workflow. GPT-family runs should use `gpt_detector.py`.
-
-### Signals used by the composite detector
-
-Blind-feature signals:
-
-- `SG`: raw `spectral_gap`
-- `TE`: local-z `top1_energy`
-- `SG_small`: local-z `spectral_gap` with the small window
-- `SG_large`: local-z `spectral_gap` with the large window
-
-Full-profile support signals:
-
-- `Signal A`: `spectral_detection.sv_z_scores`
-- `Signal B`: `spectral_detection.sv_ratio_scores`
-
-Debug-only structural signals:
-
-- `NC`: local-z `norm_cv`
-- `ER`: curvature of `effective_rank`
-- `RA`: raw `row_alignment`
-
-`NC`, `ER`, and `RA` are still recorded in detector metadata for debugging, but
-the current decision path does not branch on them.
-
-### Core decision chain
-
-Let:
-
-- `sg_l` be the raw spectral-gap peak layer
-- `te_l` be the top-1-energy local-z peak layer
-- `s5_l` be the small-window spectral-gap local-z peak layer
-- `s7_l` be the large-window spectral-gap local-z peak layer
-
-The detector first runs the blind-feature cascade:
-
-1. If `SG == TE`, return `agree`.
-2. If `SG_small` is within `+-1` index of `SG` but not `TE`, return `sg(lz{small_window})`.
-3. If `SG_small` is within `+-1` index of `TE` but not `SG`, return `te(lz{te_window})`.
-4. If `SG_large` is within `+-1` index of `SG` but not `TE`, return `sg(lz{large_window})`.
-5. If `SG_large` is within `+-1` index of `TE` but not `SG`, return `te(lz{large_window})`.
-6. Otherwise compute Spearman trend `rho` of raw `spectral_gap` over the evaluated layers.
-
-If `abs(rho) > 0.3`:
-
-- If `SG_small` and `SG_large` are within `+-1` index, use the stronger of the two and return `lz_cons(k)` where `k` is the winning window.
-- Else if `SG_large` is within `+-1` index of `TE`, return `te(trend)`.
-- Else return `s7(trend)`.
-
-If `abs(rho) <= 0.3`:
-
-- Return `sg(fb)`.
-
-After that, full-profile runs can apply two spectral-support rules:
-
-1. **Signal A confirmation**
-
-If Signal A has a strong peak and that peak matches the `TE` branch, the
-detector returns:
-
-- `signal_a`
-
-This is the path that now explains the validated OPT-6.7B full-profile runs.
-
-2. **Signal A/B boundary support**
-
-If raw `SG`, Signal A, and Signal B all cluster inside the same boundary band,
-the detector keeps the raw `SG` layer and returns:
-
-- `signal_ab_boundary`
-
-This replaces the older need for detector-side edge-specific rescue rules in
-the documented behavior for early-boundary models such as Falcon.
-
-The earlier documented `te(edge_lz5)` and `er_ra(edge)` rescue branches are no
-longer part of the implemented detector.
-
-### Returned metadata
-
-For each test, the detector records debug info including:
-
-- window settings
-- per-signal peak layer/index/z-score
-- evaluated layer range
-- Spearman `rho` when the trend fallback is used
-- any full-profile support metadata in `info["spectral_support"]`
-
-### Binary edit detection
-
-`detect_edit_binary()` answers a different question:
-
-- "Was this model edited at all?"
-
-Per test, it computes an anomaly score:
-
-- `max(max(abs(local_zscore(spectral_gap, 5))), max(abs(local_zscore(top1_energy, 5))))`
-
-with the same edge trim.
-
-Then:
-
-- if a baseline file is provided, it compares the edited mean anomaly score to
-  the baseline score distribution
-- if the baseline has fewer than 2 usable samples or near-zero variance, the
-  result is reported as inconclusive
-- otherwise the edited model is labeled as edited when separation exceeds `2.0`
-  baseline standard deviations
-- if no baseline is provided, it uses an absolute threshold, default `3.0`
-
-### Window sweep mode
-
-The composite detector also supports hyperparameter sweeps over:
-
-- trim
-- small local-z window
-- large local-z window
-
-In sweep mode, `TE` and `NC` use the same window as the chosen small window.
-
-This is exposed through:
-
-- `--window-sweep`
-- `--sweep-trims`
-- `--sweep-small-windows`
-- `--sweep-large-windows`
-- `--sweep-top-k`
-
----
-
-## GPT Detector v6
-
-File:
-
-- `detector/gpt_detector.py`
-
-Primary entry points:
-
-- `detect()`
-- `process_file()`
-
-Default trim:
-
-- `5` layers from each end
-
-### Scope and file selection
-
-By default, the GPT detector only collects files whose names match GPT-family
-slugs:
-
-- `gpt-j`
-- `gpt2-medium`
-- `gpt2-large`
-- `gpt2-xl`
-
-Passing `--all-models` disables that filename filter, but the intended use is
-still GPT-family runs only.
-
-### Signals used by the GPT detector
-
-The GPT detector uses only `norm_cv`, under three transforms:
-
-- raw `norm_cv`
-- local-z `norm_cv` with window `5`
-- curvature of `norm_cv`
-
-### Voting rule
-
-At the requested trim, each transform votes for its peak layer.
-
-If any layer gets at least two votes:
-
-- return that layer
-- method tag: `nc3_t{trim}`
-
-### Multi-trim fallback
-
-If there is no majority at the requested trim, the detector pools votes across:
-
-- trim `4`
-- trim `5`
-- trim `6`
-
-The winner of those pooled votes is returned with:
-
-- method tag: `nc3_mt4-6`
-
-If no votes are available at all, it returns:
-
-- `nc3_fail`
-
-### Why GPT has its own detector
-
-The GPT-specific detector exists because the spectral signals used by the
-composite detector are not reliable enough for GPT-family runs in this repo's
-post-hoc setting. The GPT detector instead leans entirely on `norm_cv`.
-
----
-
-## Running
-
-### Composite detector
-
-Use this for non-GPT model outputs:
+Capture reusable measurements:
 
 ```bash
-python detector/composite_detector_v2.py pipeline_out/n50_s30/structural
+python -m src command=structural/capture \
+  structural.run.models='[gpt2-large]' \
+  structural.run.edit_methods='[rome]' \
+  structural.capture.profile=spectral \
+  structural.run.run_id=detector-input
 ```
 
-Generate graphs:
+Run the default detector preset:
 
 ```bash
-python detector/composite_detector_v2.py \
-  pipeline_out/n50_s30/structural \
-  --graphs \
-  --graph-dir detector/graphs
+python -m src command=structural/analyze \
+  structural.analyze.run_root=analysis_out/detector-input \
+  structural.analysis.preset=paper
 ```
 
-Run binary edit detection against matching baselines:
+Run only the composite detector:
 
 ```bash
-python detector/composite_detector_v2.py \
-  --binary \
-  pipeline_out/n50_s30/structural \
-  --baseline-dir ultrasupertest
+python -m src command=structural/analyze \
+  structural.analyze.run_root=analysis_out/detector-input \
+  structural.analysis.preset=none \
+  structural.analysis.enable='[composite]'
 ```
 
-Sweep detector windows:
-
-```bash
-python detector/composite_detector_v2.py \
-  pipeline_out/n50_s30/structural/rome_structural_qwen3-8b_tk50_tfauto_tlauto_nl1_rw5_lw3-5-7_s01_r01_2026-04-21_11-06-40.json \
-  --window-sweep \
-  --sweep-top-k 5
-```
-
-### GPT detector
-
-Use this for GPT-family outputs:
-
-```bash
-python detector/gpt_detector.py pipeline_out/n50_s30/structural
-```
-
-Generate GPT detector graphs:
-
-```bash
-python detector/gpt_detector.py \
-  pipeline_out/n50_s30/structural \
-  --graphs \
-  --graph-dir detector/graphs/gpt
-```
-
----
-
-## Output Artifacts
-
-Typical graph outputs include:
+Analyses are stored under:
 
 ```text
-detector/graphs/
-  runs/
-    signals_*.png
-    gpt_signals_*.png
-  averages/
-    signals_*_average.png
-  summary_accuracy_all_runs.png
-  summary_accuracy_model_average.png
-  method_breakdown_all_runs.png
-  method_breakdown_model_average.png
+plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-hash>.json
 ```
 
-For run-scoped visualization across pipeline outputs, `detector/visualize_detector.py`
-can aggregate multiple runs and produce per-run plus per-model-average plots.
+| Analysis | Required captures |
+|---|---|
+| `spectral` | `spectral` |
+| `blind` | `matrix-features` |
+| `composite` | `matrix-features`, `spectral` |
+| `gpt-norm-cv` | `matrix-features` |
+| `rank1-blind` | `matrix-features` |
+| `edit-presence` | `matrix-features` |
+| `bottom-rank-svd` | `bottom-rank-tokens` |
 
----
+Artifact studies (`ipr`, `symmetry`, `interlayer`, `attention`, and `matrix-anomaly`)
+use the same contract and are stored under `analysis/artifact-study/`.
 
-## Accuracy Notes
+`gpt-norm-cv` is selected for GPT model families. `composite` is selected for
+other model families. Unsupported selections produce an `unavailable`
+artifact.
 
-This document intentionally does not hard-code a single accuracy number.
+The composite and GPT norm-CV calculations live in:
 
-Detector accuracy depends on:
+- `src/structural/detectors/composite.py`
+- `src/structural/detectors/gpt_norm_cv.py`
 
-- model family
-- run slice
-- benchmark size
-- detector window settings
-- whether you are using the intended detector for that model family
+An analysis never recomputes a missing measurement from a model. For example,
+`bottom-rank-svd` requires a `full` capture profile or an explicitly enabled
+capture:
 
-Use the current script outputs on your current structural JSON files as the
-source of truth.
+```bash
+python -m src command=structural/capture \
+  structural.run.models='[gpt2-large]' \
+  structural.capture.profile=spectral \
+  structural.capture.enable='[bottom-rank-tokens]'
+```

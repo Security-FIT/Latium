@@ -1,118 +1,77 @@
-# Remote H100 Structural Runbook
+# Remote GPU Capture Runbook
 
-This pipeline splits the run into:
+The staged pipeline keeps model-dependent work on the GPU host and allows
+artifact-only analysis on any machine with the repository environment.
 
-- remote H100 GPU work: `structural_benchmark.py --posthoc-only`
-- local CPU work: post-hoc detector summaries, paper graphs, `success.txt`
+## GPU Host
 
-`--posthoc-only` is a clearer alias for `--analysis-profile paper`: it keeps only
-the spectral-lite structural JSON payload needed by the post-hoc detector and
-paper graphs, without the heavyweight full-profile analytics.
-`structural_benchmark.py --paper` is also accepted as a compatibility alias.
-
-Defaults:
-
-- models: `gpt2-large`, `gpt2-xl`, `qwen3-4b`, `qwen3-8b`, `mistral-7b-v0.1`, `mistral-7b-v0.3`, `falcon-7b`, `opt-6.7b`, `gpt-j-6b`, `deepseek-7b-base`
-- `N=50`
-- `start_idx=30`
-- CounterFact slices iterate by model: `30-79`, `80-129`, `130-179`, ...
-
-To run the same CounterFact slice for every model instead, pass:
+Check second moments:
 
 ```bash
-bash pipeline.sh \
-  --remote user@your-h100-host \
-  --slice-policy shared
+python -m src command=structural/validate_cov \
+  structural.run.models='[gpt2-large,qwen3-4b]' \
+  structural.validate_cov.fail_missing=true
 ```
 
-With `--slice-policy shared`, every selected model uses the same `start_idx`
-through `start_idx + N - 1` range.
-
-## Prerequisites
-
-- SSH access to the H100 node
-- local `tmux`, `ssh`, `rsync`, `python`
-- covariance files available in one of:
-  - `./second_moment_stats/`
-  - `./data/second_moment_stats/`
-  - `../reimagined/second_moment_stats/`
-  - `../reimagined/data/second_moment_stats/`
-  - `metju@kubapc:~/data/covariance_matrices/`
-- optional `HF_TOKEN` if the remote node needs to download model weights
-
-## Launch
-
-Bootstrap the remote env, stage covariance, and start both tmux sessions:
+Capture one or more methods:
 
 ```bash
-bash pipeline.sh \
-  --remote user@your-h100-host \
-  --setup-env
+python -m src command=structural/capture \
+  structural.run.models='[gpt2-large,qwen3-4b]' \
+  structural.run.edit_methods='[rome]' \
+  structural.run.n_tests=50 \
+  structural.run.start_idx=30 \
+  structural.capture.profile=spectral \
+  structural.run.output_dir=analysis_out \
+  structural.run.run_id=n50-s30
 ```
 
-Lightweight shared-slice example:
+This stage performs ROME evaluation and saves the primitives needed by the
+common detectors. It does not run artifact-only detection.
+
+Use `structural.capture.profile=none` when only Edit Execution and evaluation JSON are
+required. Use `full` only when later analyses need attention, matrix-anomaly, or
+bottom-rank primitives.
+
+## Transfer
+
+Copy the entire Run Root so `manifest.json` and all relative paths remain
+together:
 
 ```bash
-bash pipeline.sh \
-  --remote user@your-h100-host \
-  --setup-env \
-  --posthoc-only \
-  --slice-policy shared \
-  --n 3 \
-  --start-idx 30
+rsync -av user@gpu-host:/path/to/Latium/analysis_out/n50-s30/ \
+  analysis_out/n50-s30/
 ```
 
-If a covariance file is missing from the search path, allow the remote runner to compute only the missing one:
+Do not copy selected JSON files without the manifest.
+
+## Analysis Host
+
+Run artifact-only analyses:
 
 ```bash
-bash pipeline.sh \
-  --remote user@your-h100-host \
-  --setup-env \
-  --compute-cov
+python -m src command=structural/analyze \
+  structural.analyze.run_root=analysis_out/n50-s30 \
+  structural.analysis.preset=paper
 ```
 
-## Monitor
-
-Show the latest pane output from both tmux sessions:
+Render selected outputs:
 
 ```bash
-bash pipeline.sh \
-  --remote user@your-h100-host \
-  --status
+python -m src command=graphs/run \
+  graphs.run_root=analysis_out/n50-s30 \
+  graphs.renderer_preset=paper
 ```
 
-Attach directly:
+To rerun one detector after changing its Implementation:
 
 ```bash
-ssh user@your-h100-host -t tmux attach -t latium_gpu_n50_s30
-tmux attach -t latium_local_n50_s30
+python -m src command=structural/analyze \
+  structural.analyze.run_root=analysis_out/n50-s30 \
+  structural.analysis.preset=none \
+  structural.analysis.enable='[spectral]' \
+  structural.run.force=true
 ```
 
-## Outputs
-
-Local run root:
-
-```text
-pipeline_out/n50_s30/
-```
-
-Main artifacts:
-
-- `structural/` latest structural JSONs
-- `logs/` remote benchmark logs
-- `detector/<model>_detector_summary.json`
-- `paper_graphs/*.png`
-- `run_summary_latest.json`
-- `run_summary_latest.csv`
-- `run_summary_<timestamp>.json`
-- `run_summary_<timestamp>.csv`
-- `archive/success_<timestamp>.txt`
-- repo-root `success.txt`
-
-Remote completion sentinel:
-
-- `REMOTE_GPU_DONE`
-
-Local completion sentinel:
-
-- `LOCAL_POSTHOC_DONE`
+No model checkpoint or safetensors file is required for analysis. Only the run
+root is transferred.

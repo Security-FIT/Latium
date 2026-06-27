@@ -16,7 +16,14 @@ from src.common.io import write_json
 from src.results.naming import safe_slug
 
 
-def _analysis_rows(context: dict[str, Any]) -> list[dict[str, Any]]:
+def _context_mapping(context: Any) -> dict[str, Any]:
+    if hasattr(context, "as_mapping"):
+        return context.as_mapping()
+    return context
+
+
+def _analysis_rows(context: Any) -> list[dict[str, Any]]:
+    context = _context_mapping(context)
     rows: list[dict[str, Any]] = []
     for payload in context.get("analyses", []):
         if not isinstance(payload, dict):
@@ -72,7 +79,8 @@ def _case_metric(case: dict[str, Any], *names: str) -> Any:
     return None
 
 
-def _execution_rows(context: dict[str, Any]) -> list[dict[str, Any]]:
+def _execution_rows(context: Any) -> list[dict[str, Any]]:
+    context = _context_mapping(context)
     rows: list[dict[str, Any]] = []
     for payload in context.get("executions", []):
         if not isinstance(payload, dict):
@@ -98,15 +106,9 @@ def _execution_rows(context: dict[str, Any]) -> list[dict[str, Any]]:
                     summary.get("edit_success_rate"),
                     len(success) / len(complete) if complete else 0.0,
                 ),
-                "overall_score": _mean(
-                    _case_metric(case, "overall_score", "overall") for case in complete
-                ),
-                "efficacy_score": _mean(
-                    _case_metric(case, "efficacy_score", "efficacy") for case in complete
-                ),
-                "paraphrase_score": _mean(
-                    _case_metric(case, "paraphrase_score", "paraphrase") for case in complete
-                ),
+                "overall_score": _mean(_case_metric(case, "overall_score", "overall") for case in complete),
+                "efficacy_score": _mean(_case_metric(case, "efficacy_score", "efficacy") for case in complete),
+                "paraphrase_score": _mean(_case_metric(case, "paraphrase_score", "paraphrase") for case in complete),
                 "neighborhood_score": _mean(
                     _case_metric(case, "neighborhood_score", "neighborhood") for case in complete
                 ),
@@ -115,7 +117,8 @@ def _execution_rows(context: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _detection_case_rows(context: dict[str, Any]) -> list[dict[str, Any]]:
+def _detection_case_rows(context: Any) -> list[dict[str, Any]]:
+    context = _context_mapping(context)
     rows: list[dict[str, Any]] = []
     for payload in context.get("analyses", []):
         if not isinstance(payload, dict) or payload.get("category") != "detection":
@@ -194,7 +197,8 @@ def _find_series(data: dict[str, Any], *, prefix: str = "") -> list[tuple[str, d
     return deduped
 
 
-def render_run_summary(context: dict[str, Any]) -> list[str]:
+def render_run_summary(context: Any) -> list[str]:
+    context = _context_mapping(context)
     output_dir = Path(context["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     path = write_json(
@@ -204,7 +208,8 @@ def render_run_summary(context: dict[str, Any]) -> list[str]:
     return [str(path)]
 
 
-def render_detector(context: dict[str, Any]) -> list[str]:
+def render_detector(context: Any) -> list[str]:
+    context = _context_mapping(context)
     rows = [row for row in _analysis_rows(context) if row["category"] == "detection" and row["status"] == "complete"]
     output_dir = Path(context["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -232,7 +237,8 @@ def render_detector(context: dict[str, Any]) -> list[str]:
     return outputs
 
 
-def render_paper(context: dict[str, Any]) -> list[str]:
+def render_paper(context: Any) -> list[str]:
+    context = _context_mapping(context)
     rows = [row for row in _analysis_rows(context) if row["status"] == "complete"]
     output_dir = Path(context["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -246,7 +252,8 @@ def render_paper(context: dict[str, Any]) -> list[str]:
     ]
 
 
-def render_rome_success(context: dict[str, Any]) -> list[str]:
+def render_rome_success(context: Any) -> list[str]:
+    context = _context_mapping(context)
     rows = _execution_rows(context)
     output_dir = Path(context["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -301,7 +308,8 @@ def render_rome_success(context: dict[str, Any]) -> list[str]:
     return outputs
 
 
-def render_detector_window(context: dict[str, Any]) -> list[str]:
+def render_detector_window(context: Any) -> list[str]:
+    context = _context_mapping(context)
     rows = _detection_case_rows(context)
     output_dir = Path(context["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -357,7 +365,8 @@ def render_detector_window(context: dict[str, Any]) -> list[str]:
     return outputs
 
 
-def render_detector_signals(context: dict[str, Any]) -> list[str]:
+def render_detector_signals(context: Any) -> list[str]:
+    context = _context_mapping(context)
     output_dir = Path(context["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     index: list[dict[str, Any]] = []
@@ -394,7 +403,9 @@ def render_detector_signals(context: dict[str, Any]) -> list[str]:
                 ax.axvline(int(detected), color="#e63946", linestyle=":", linewidth=1.4, label="detected")
             ax.set_xlabel("Layer")
             ax.set_ylabel("Signal")
-            ax.set_title(f"{run.get('model')} {run.get('edit_method')} {payload.get('producer')} case {case.get('case_id')}")
+            ax.set_title(
+                f"{run.get('model')} {run.get('edit_method')} {payload.get('producer')} case {case.get('case_id')}"
+            )
             ax.grid(alpha=0.22)
             ax.legend(fontsize=8, loc="best")
             fig.tight_layout()

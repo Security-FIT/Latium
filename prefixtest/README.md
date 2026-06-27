@@ -7,8 +7,11 @@ Included here:
 
 - `run_remote.sh`: remote upload/run/fetch helper for the experiment
 - `prefixtest.ipynb`: thin notebook visualizer
-- `artifacts/`: selected local JSON/CSV artifacts for this experiment
-- `output/`: generated graphs and summary tables to keep with the experiment
+
+Created on demand:
+
+- `artifacts/`: local JSON/CSV artifacts fetched from the remote run (written by `run_remote.sh --fetch`)
+- `output/`: generated graphs and summary tables produced by the notebook
 
 Canonical implementation now lives under:
 
@@ -19,7 +22,7 @@ Canonical implementation now lives under:
 ### Local usage
 
 ```bash
-python -m src.experiments.prefix_variability.cli --model Qwen/Qwen3-8B --case-idx 0
+python -m src prefix-experiment prefix_experiment.model=Qwen/Qwen3-8B prefix_experiment.case_idx=0
 ```
 
 ### Remote usage

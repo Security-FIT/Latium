@@ -168,9 +168,14 @@ Rules:
 
 - Return JSON-serializable data.
 - Baseline captures should include all reusable layers.
-- Method captures should usually write only changed layers.
+- Method captures may write patches or full profiles depending on downstream
+  consumers. `matrix-features` writes all layers for edited cases because
+  composite and paper graphs compare the full post-edit depth profile.
 - Use `context.changed_layers(family, layers)` for patch selection.
 - Declare `requires_probe=True` if the capture needs an edit probe vector.
+- Hydra-owned capture options belong under `structural.capture`. Matrix feature
+  columns are selected with `structural.capture.matrix_features.feature_set` or
+  `structural.capture.matrix_features.features`.
 
 ## Adding An Analysis Or Artifact Study
 
@@ -182,9 +187,11 @@ the artifact is stored.
    `src/structural/analysis/studies.py`.
 2. Register it in `src/structural/analysis/registry.py`.
 3. List required capture IDs in `required_captures`.
-4. Add default config under `structural.analysis.methods.<analysis-id>` if the
+4. Validate required matrix feature columns with `require_matrix_features` when
+   consuming `matrix-features`.
+5. Add default config under `structural.analysis.methods.<analysis-id>` if the
    analysis has config fields.
-5. Add tests for unavailable inputs and happy-path outputs.
+6. Add tests for unavailable inputs and happy-path outputs.
 
 Simple study shape:
 
@@ -214,24 +221,30 @@ capture is insufficient and recapture is required.
 Renderers consume completed analysis artifacts and write files under
 `<run-root>/graphs/<renderer-id>/`.
 
-1. Add a renderer function in `src/graphs/renderers.py`.
-2. Register it in `src/graphs/registry.py`.
+1. Add a renderer function in `src/graphs/renderers.py` or a focused module
+   under `src/graphs/structural/`.
+2. Register it in `src/graphs/registry.py` with declared executions, captures,
+   and analyses.
 3. Add it to a renderer preset if useful.
 4. Test it in `tests/test_graph_renderers.py`.
 
 Renderer shape:
 
 ```python
-def render_my_output(context: dict[str, Any]) -> list[str]:
-    output_dir = Path(context["output_dir"])
-    analyses = context["analyses"]
+from src.graphs.context import RenderContext
+
+
+def render_my_output(context: RenderContext) -> list[str]:
+    output_dir = context.output_dir
+    analyses = context.flat_analyses
     output_dir.mkdir(parents=True, exist_ok=True)
     path = write_json(output_dir / "my-output.json", {"analyses": analyses})
     return [str(path)]
 ```
 
-The graph runtime records returned paths in a render artifact and hashes all
-analysis artifacts as inputs.
+The graph runtime records returned paths in a render artifact and hashes the
+declared input artifacts as inputs. New renderer options are configured through
+Hydra under `graphs.renderers.<renderer-id>`.
 
 ## Artifact Rules
 

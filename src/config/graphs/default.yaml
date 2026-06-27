@@ -7,6 +7,24 @@ run_root: null
 artifact: null
 output_dir: null
 renderer_preset: paper
+style_preset: default
 enable_renderers: []
 disable_renderers: []
+renderers:
+  structural-artifact-grid:
+    features:
+      - spectral_gap
+      - top1_energy
+      - row_alignment
+      - norm_cv
+      - effective_rank
+    transforms:
+      - raw
+      - lz5
+      - lz7
+      - curv
+    formats:
+      - png
+      - pdf
+      - json
 force: false

@@ -62,7 +62,7 @@ Plan a structural run without loading a model:
 python3 -m src structural plan \
   'structural.run.models=[gpt2-large,qwen3-4b]' \
   structural.run.n_tests=5 \
-  structural.capture.profile=spectral
+  structural.capture.profile=paper
 ```
 
 Capture edits, run model-free analyses, and render graph artifacts:
@@ -71,10 +71,11 @@ Capture edits, run model-free analyses, and render graph artifacts:
 python3 -m src structural run \
   'structural.run.models=[gpt2-large]' \
   structural.run.n_tests=30 \
-  structural.capture.profile=spectral \
+  structural.capture.profile=paper \
+  structural.capture.matrix_features.feature_set=paper \
   structural.analysis.preset=paper \
   structural.render.enabled=true \
-  structural.render.renderer_preset=paper \
+  structural.render.renderer_preset=structural-paper \
   structural.run.run_id=gpt2-large-paper
 ```
 
@@ -85,13 +86,19 @@ python3 -m src structural analyze \
   structural.analyze.run_root=analysis_out/gpt2-large-paper \
   structural.analysis.preset=paper
 
-python3 -m src graphs run analysis_out/gpt2-large-paper graphs.renderer_preset=paper
+python3 -m src graphs run analysis_out/gpt2-large-paper graphs.renderer_preset=structural-paper
 ```
 
 The graph renderer registry includes paper summaries, detector accuracy,
-ROME-success metrics, layer-window accuracy, and detector signal-profile plots.
-Use `graphs.renderer_preset=full` or enable individual renderers such as
-`graphs.enable_renderers=[detector-signals]`.
+ROME-success metrics, layer-window accuracy, detector signal-profile plots, and
+the structural artifact grid. Use `graphs.renderer_preset=full` or enable
+individual renderers such as `graphs.enable_renderers=[detector-signals]`.
+
+`matrix-features` is configurable. The default paper path captures only the
+scalar columns needed by paper graphs and the composite matrix branch:
+`spectral_gap`, `top1_energy`, `row_alignment`, `norm_cv`, and
+`effective_rank`. Blind/rank1/studies feature sets are opt-in through
+`structural.capture.matrix_features.feature_set`.
 
 Hydra overrides are the supported option style. Argparse flags such as
 `--models` are no longer supported by the main CLI.
@@ -255,7 +262,6 @@ python3 -m src structural plan 'structural.run.models=[gpt2-large]' structural.r
 
 | Code | Meaning |
 |---|---|
-| `0` | Success. |
-| `1` | Help or expected early exit. |
-| `2` | Invalid CLI usage or resource conflict. |
-| `-1` | Unknown error; open an issue with reproduction steps. |
+| `0` | Success (including help and expected early exit). |
+| `1` | `structural-validate-cov` failure with `structural.validate_cov.fail_missing=true`, or an uncaught exception. |
+| `2` | Invalid CLI usage (unknown command or argparse-style `--` flag). |

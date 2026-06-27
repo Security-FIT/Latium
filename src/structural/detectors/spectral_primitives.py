@@ -301,11 +301,7 @@ def pcs_signals_from_pairwise_cumsums(
     dot_cumulative = np.asarray(dot_cumulative, dtype=np.float64)
     flip_cumulative = np.asarray(flip_cumulative, dtype=np.float64)
     weight_cumulative = np.asarray(weight_cumulative, dtype=np.float64)
-    if (
-        dot_cumulative.ndim != 3
-        or weight_cumulative.shape != dot_cumulative.shape
-        or dot_cumulative.shape[0] == 0
-    ):
+    if dot_cumulative.ndim != 3 or weight_cumulative.shape != dot_cumulative.shape or dot_cumulative.shape[0] == 0:
         return empty, np.zeros((n_expected, n_expected), dtype=np.float64)
 
     rank = min(max(1, int(top_k)), dot_cumulative.shape[0]) - 1

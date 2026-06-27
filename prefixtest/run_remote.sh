@@ -170,6 +170,12 @@ RUN_SCRIPT="$REMOTE_DIR/run_prefixtest_tmux.sh"
 
 tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
+RUN_NAMES_OVERRIDE=""
+if [ -n "$RUN_NAMES" ]; then
+    _csv="$(printf '%s,' $RUN_NAMES)"
+    RUN_NAMES_OVERRIDE="prefix_experiment.run_names=${_csv%,}"
+fi
+
 cat > "$RUN_SCRIPT" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -177,13 +183,7 @@ cd "$REMOTE_DIR"
 source .venv/bin/activate
 echo "Starting prefixtest at \\$(date)"
 echo "Model: $MODEL  Case: $CASE_IDX"
-cmd=(python -m src.experiments.prefix_variability.cli --model "$MODEL" --case-idx $CASE_IDX --output-dir ./analysis_out --spectral-top-k 50 --spectral-neighbor-layers 1)
-if [ -n "$RUN_NAMES" ]; then
-    cmd+=(--run-names)
-    for name in $RUN_NAMES; do
-        cmd+=("\$name")
-    done
-fi
+cmd=(python -m src prefix-experiment prefix_experiment.model="$MODEL" prefix_experiment.case_idx=$CASE_IDX prefix_experiment.output_dir=./analysis_out prefix_experiment.spectral_top_k=50 prefix_experiment.spectral_neighbor_layers=1 $RUN_NAMES_OVERRIDE)
 printf 'Command: '
 printf '%q ' "\${cmd[@]}"
 echo

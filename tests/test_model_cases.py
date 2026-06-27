@@ -29,9 +29,26 @@ class _FailingMethod:
         return {}
 
 
+class _Tokenizer:
+    def decode(self, token_ids) -> str:
+        return str(token_ids)
+
+
+class _Model:
+    def __init__(self) -> None:
+        self.head = torch.nn.Linear(2, 2, bias=False)
+
+    def get_output_embeddings(self):
+        return self.head
+
+
 class _Handler:
     _layer = 0
     num_of_layers = 1
+
+    def __init__(self) -> None:
+        self.model = _Model()
+        self.tokenizer = _Tokenizer()
 
     def remove_hooks(self) -> None:
         pass
@@ -151,7 +168,7 @@ def _write_baseline_capture(
     )
 
 
-def test_missing_method_capture_force_writes_fresh_execution(
+def test_missing_method_capture_preserves_complete_execution(
     tmp_path: Path,
 ) -> None:
     method = _CountingMethod()
@@ -204,7 +221,7 @@ def test_missing_method_capture_force_writes_fresh_execution(
     capture_ref = reader.ref(capture_artifact_id)
     capture_record = reader.manifest["artifacts"][capture_artifact_id]
 
-    assert execution_ref["content_hash"] != first_execution_hash
+    assert execution_ref["content_hash"] == first_execution_hash
     assert capture_record["inputs"][0] == execution_ref
     assert capture_ref["content_hash"]
 

@@ -78,7 +78,7 @@ def test_blind_analysis_matches_model_resident_detector() -> None:
             probe_vector=None,
             token_predictor=None,
             changed_weights={},
-            options={},
+            options={"matrix_feature_set": "blind", "matrix_svd_top_k": 8},
         )
     )
     resident = BlindMSDDetector().detect(weights)
@@ -100,7 +100,7 @@ def test_edit_presence_analysis_matches_model_resident_detector() -> None:
             probe_vector=None,
             token_predictor=None,
             changed_weights={},
-            options={},
+            options={"matrix_feature_set": "edit-presence", "matrix_svd_top_k": 8},
         )
     )
     resident = RomeEditPresenceDetector().detect(weights)

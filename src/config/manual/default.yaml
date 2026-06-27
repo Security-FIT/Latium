@@ -3,10 +3,10 @@
 # :author: Matej Olexa <olexa.matej@gmail.com>
 # :author: Jakub Res <iresj@fit.vut.cz>
 
-prompt: null
-subject: null
-target_new: null
-target_true: ""
+prompt: "{} is located in"
+subject: "The Eiffel Tower"
+target_new: "Rome"
+target_true: "Paris"
 counterfact_path: null
 counterfact_json: null
 case_id: null

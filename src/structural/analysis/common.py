@@ -149,6 +149,39 @@ def matrix_families(data: dict[str, Any]) -> dict[str, dict[str, dict[str, float
     return value if isinstance(value, dict) else {}
 
 
+def require_matrix_features(
+    data: dict[str, Any],
+    required_features: tuple[str, ...],
+    *,
+    family: str = "proj",
+) -> dict[str, dict[str, float]]:
+    families = matrix_families(data)
+    profiles = families.get(family, {})
+    if not profiles:
+        raise AnalysisUnavailableError(f"matrix-features capture has no {family} profiles")
+    available = set(data.get("features", ()))
+    if not available:
+        available = {name for profile in profiles.values() if isinstance(profile, dict) for name in profile}
+    missing = [feature for feature in required_features if feature not in available]
+    if missing:
+        raise AnalysisUnavailableError(
+            "matrix-features capture is missing required features "
+            f"{', '.join(missing)}; recapture with a compatible feature_set is required"
+        )
+    incomplete_layers = [
+        str(layer)
+        for layer, profile in profiles.items()
+        if not isinstance(profile, dict) or any(feature not in profile for feature in required_features)
+    ]
+    if incomplete_layers:
+        preview = ", ".join(incomplete_layers[:8])
+        suffix = "..." if len(incomplete_layers) > 8 else ""
+        raise AnalysisUnavailableError(
+            f"matrix-features capture is missing required features on layers {preview}{suffix}; recapture is required"
+        )
+    return profiles
+
+
 def feature_z_scores(
     profiles: dict[str, dict[str, float]],
     names: tuple[str, ...],

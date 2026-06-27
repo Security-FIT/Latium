@@ -17,8 +17,15 @@ from src.registry import NamedRegistry, RegistryEntry, load_object, resolve_pres
 class RendererSpec(RegistryEntry):
     runner: str = ""
     model_families: tuple[str, ...] = ("all",)
+    requires_execution: bool = False
+    required_captures: tuple[str, ...] = ()
+    optional_captures: tuple[str, ...] = ()
+    required_analyses: tuple[str, ...] = ()
+    optional_analyses: tuple[str, ...] = ()
+    option_keys: tuple[str, ...] = ()
+    schema_version: str = "1"
 
-    def load(self) -> Callable[[dict[str, Any]], list[str]]:
+    def load(self) -> Callable[[Any], list[str]]:
         return load_object(self.runner)
 
 
@@ -39,12 +46,38 @@ RENDERERS = NamedRegistry(
             "Run-level aggregate summaries.",
             "src.graphs.renderers:render_run_summary",
         ),
+        RendererSpec(
+            "rome-success",
+            "ROME execution success rates and score summaries.",
+            "src.graphs.renderers:render_rome_success",
+        ),
+        RendererSpec(
+            "detector-window",
+            "Detector layer-window accuracy and distance summaries.",
+            "src.graphs.renderers:render_detector_window",
+        ),
+        RendererSpec(
+            "detector-signals",
+            "Per-analysis detector signal profile plots.",
+            "src.graphs.renderers:render_detector_signals",
+        ),
+        RendererSpec(
+            "structural-artifact-grid",
+            "Legacy-compatible 5x4 per-layer artifact grid from matrix features.",
+            "src.graphs.structural.artifact_grid:render_structural_artifact_grid",
+            requires_execution=True,
+            required_captures=("matrix-features",),
+            option_keys=("features", "transforms", "formats"),
+            schema_version="1",
+        ),
     ]
 )
 
 RENDERER_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
-    "paper": ("paper", "detector"),
+    "paper": ("paper", "detector", "rome-success", "detector-window"),
+    "structural-paper": ("structural-artifact-grid",),
+    "structural-full": ("structural-artifact-grid",),
     "full": RENDERERS.identifiers(),
 }
 

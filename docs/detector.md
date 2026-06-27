@@ -9,7 +9,8 @@ Capture reusable measurements:
 python -m src command=structural/capture \
   structural.run.models='[gpt2-large]' \
   structural.run.edit_methods='[rome]' \
-  structural.capture.profile=spectral \
+  structural.capture.profile=paper \
+  structural.capture.matrix_features.feature_set=paper \
   structural.run.run_id=detector-input
 ```
 
@@ -39,11 +40,11 @@ plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-
 | Analysis | Required captures |
 |---|---|
 | `spectral` | `spectral` |
-| `blind` | `matrix-features` |
-| `composite` | `matrix-features`, `spectral` |
-| `gpt-norm-cv` | `matrix-features` |
-| `rank1-blind` | `matrix-features` |
-| `edit-presence` | `matrix-features` |
+| `blind` | `matrix-features` with `feature_set=blind` |
+| `composite` | `matrix-features` with paper features, `spectral` |
+| `gpt-norm-cv` | `matrix-features` with `norm_cv` |
+| `rank1-blind` | `matrix-features` with `feature_set=rank1` |
+| `edit-presence` | `matrix-features` with `feature_set=edit-presence` |
 | `bottom-rank-svd` | `bottom-rank-tokens` |
 
 Artifact studies (`ipr`, `symmetry`, `interlayer`, `attention`, and `matrix-anomaly`)
@@ -58,13 +59,17 @@ The composite and GPT norm-CV calculations live in:
 - `src/structural/detectors/composite.py`
 - `src/structural/detectors/gpt_norm_cv.py`
 
+`matrix-features` is a scalar feature capture with Hydra-selected feature sets.
+The `paper` set stores only `spectral_gap`, `top1_energy`, `row_alignment`,
+`norm_cv`, and `effective_rank`. Bottom-rank SVD/token sweeps are not part of
+`matrix-features`; they live in `bottom-rank-tokens`.
+
 An analysis never recomputes a missing measurement from a model. For example,
-`bottom-rank-svd` requires a `full` capture profile or an explicitly enabled
-capture:
+`bottom-rank-svd` requires an explicitly enabled capture unless using `full`:
 
 ```bash
 python -m src command=structural/capture \
   structural.run.models='[gpt2-large]' \
-  structural.capture.profile=spectral \
+  structural.capture.profile=paper \
   structural.capture.enable='[bottom-rank-tokens]'
 ```

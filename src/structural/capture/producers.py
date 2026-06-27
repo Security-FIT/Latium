@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 from src.common.io import to_serializable
+from src.structural.capture.matrix_features import resolve_matrix_features
 from src.structural.detectors.bottom_rank_svd import BottomRankSVDDetector
 from src.structural.detectors.matrix_anomaly import (
     condition_number,
@@ -190,27 +191,31 @@ def capture_spectral(context: CaptureContext) -> dict[str, Any]:
 def capture_matrix_features(context: CaptureContext) -> dict[str, Any]:
     from src.structural.detectors.blind_resident import BlindMSDDetector
 
+    feature_set = str(context.options.get("matrix_feature_set", "paper"))
+    features = resolve_matrix_features(feature_set, context.options.get("matrix_features", ()))
+    top_k = int(context.options.get("matrix_svd_top_k", 50))
     families: dict[str, dict[int, torch.Tensor]] = {"proj": context.proj_weights}
     if context.fc_weights:
         families["fc"] = context.fc_weights
     output: dict[str, Any] = {
         "mode": "baseline" if context.is_baseline else "patch",
+        "feature_set": feature_set,
+        "features": list(features),
+        "stored_top_k": int(top_k),
         "families": {},
         "changed_layers": {},
     }
     for family, weights in families.items():
         layers = sorted(weights)
         included = context.changed_layers(family, layers)
-        selected_weights = {layer: weights[layer] for layer in included}
-        blind_features = BlindMSDDetector().compute_layer_features(selected_weights) if selected_weights else {}
         output["changed_layers"][family] = included
-        output["families"][family] = {
-            str(layer): {
-                **matrix_profile(weights[layer]),
-                **blind_features.get(layer, {}),
-            }
-            for layer in included
-        }
+        blind_features = BlindMSDDetector().compute_layer_features(
+            weights,
+            top_k=top_k,
+            features=features,
+            niter=2,
+        )
+        output["families"][family] = {str(layer): blind_features.get(layer, {}) for layer in layers}
     return to_serializable(output)
 
 

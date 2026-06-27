@@ -10,6 +10,10 @@ second_moment_dir: "./data/second_moment_stats"
 second_moment_path: null
 second_moment_batch_size_mode: "auto"
 second_moment_batch_size: null
+second_moment_target_samples: null
+second_moment_max_length: null
+second_moment_min_text_length: 50
+second_moment_clear_cache_every: 0
 device: "cuda"
 dtype: "auto"
 save_to_local: true

@@ -15,14 +15,28 @@ python3 -m src structural plan \
 | Group | Purpose |
 |---|---|
 | `command/` | Command entry configs. |
-| `runtime/` | Seed, HF token, logging, cache behavior. |
+| `runtime/` | HF token and logging toggles. |
 | `model_base/` | Shared model defaults. |
 | `model/` | Concrete model definitions and layer templates. |
 | `model_fleet/` | Named model collections. |
 | `dataset_facts/`, `dataset_sm/` | Dataset configs. |
 | `edit_method/` | Editing method registry entries. |
 | `structural/` | Structural run/capture/analysis/render config. |
-| `graphs/` | Renderer presets. |
+| `graphs/` | Graph render command config (preset, style, renderer options). |
+
+Common structural overrides:
+
+```bash
+structural.capture.profile=paper
+structural.capture.matrix_features.feature_set=paper
+structural.render.renderer_preset=structural-paper
+graphs.renderer_preset=structural-paper
+graphs.renderers.structural-artifact-grid.formats='[png,pdf,json]'
+```
+
+Use `structural.capture.profile=spectral` for spectral-only primitives,
+`structural.capture.profile=matrix` for matrix-features only, and
+`structural.capture.profile=paper` for the paper graph/analysis path.
 
 ## Adding Config
 

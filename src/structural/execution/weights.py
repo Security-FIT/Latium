@@ -15,7 +15,7 @@ from src.structural.execution.covariance import available_model_names, find_seco
 if TYPE_CHECKING:  # pragma: no cover
     from omegaconf import OmegaConf
 
-CONFIG_DIR = Path(__file__).resolve().parents[1] / 'config'
+CONFIG_DIR = Path(__file__).resolve().parents[2] / 'config'
 MODEL_CONFIG_DIR = CONFIG_DIR / 'model'
 
 FC_TEMPLATE_MAP = {

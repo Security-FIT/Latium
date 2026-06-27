@@ -22,9 +22,13 @@ run:
   force: false
 
 capture:
-  profile: spectral
+  profile: paper
   enable: []
   disable: []
+  matrix_features:
+    feature_set: paper
+    features: []
+    svd_top_k: 50
 
 analysis:
   enabled: true

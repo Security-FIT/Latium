@@ -91,6 +91,7 @@ class CompositeDetector:
             large_window=self.large_window,
             te_window=self.te_window,
             nc_window=self.nc_window,
+            feature_z_min=self.feature_z_min,
             signal_a_confirm_z_min=self.signal_a_confirm_z_min,
             signal_ab_boundary_width=self.signal_ab_boundary_width,
             signal_ab_cluster_span=self.signal_ab_cluster_span,

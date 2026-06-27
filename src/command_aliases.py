@@ -35,7 +35,9 @@ def _reject_argparse_flags(args: Sequence[str], *, surface: str, example: str) -
     flags = [arg for arg in args if arg.startswith("--")]
     if flags:
         flag = flags[0]
-        raise ValueError(f"{surface} argparse flags are no longer supported ({flag}). Use Hydra overrides, e.g. {example}.")
+        raise ValueError(
+            f"{surface} argparse flags are no longer supported ({flag}). Use Hydra overrides, e.g. {example}."
+        )
 
 
 def _with_optional_path(args: list[str], *, key: str, label: str) -> list[str]:
@@ -47,7 +49,9 @@ def _with_optional_path(args: list[str], *, key: str, label: str) -> list[str]:
     rest = args[1:]
     extra_positionals = [arg for arg in rest if not _is_override(arg)]
     if extra_positionals:
-        raise ValueError(f"Unexpected positional {label} argument {extra_positionals[0]!r}. Use Hydra overrides for additional options.")
+        raise ValueError(
+            f"Unexpected positional {label} argument {extra_positionals[0]!r}. Use Hydra overrides for additional options."
+        )
     return [f"{key}={first}", *rest]
 
 

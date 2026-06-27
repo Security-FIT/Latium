@@ -33,6 +33,7 @@ import pandas
 from src.handlers.rome import ModelHandler
 from src.rome.common import gather_k, optimize_v, insert_kv, resolve_rome_sample_count
 from src.common.loading import get_cuda_usage, load_dataset, sample
+from src.common.paths import non_conflicting_path
 from src.evaluation.counterfact import (
     AttributeSnippets,
     compute_rewrite_quality_counterfact,
@@ -43,6 +44,14 @@ from src.evaluation.counterfact import (
 import logging
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _save_tensor_without_overwrite(tensor: torch.Tensor, path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    target = non_conflicting_path(path)
+    torch.save(tensor, target)
+    LOGGER.info("Saved tensor to %s", target)
+    return target
 
 
 def batch_intervention_generator(bs: ModelHandler | DictConfig) -> Iterable[Tuple[torch.Tensor, torch.Tensor]]:
@@ -95,11 +104,10 @@ def _batch_intervention_generator_handler(handler: ModelHandler) -> Iterable[Tup
             )
 
         if handler.save_new_weights:
-            torch.save(
+            _save_tensor_without_overwrite(
                 new_W,
-                Path(
-                    f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt"
-                ),
+                Path(handler.new_weights_dir)
+                / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt",
             )
 
         counter += 1
@@ -148,11 +156,10 @@ def _batch_intervention_generator_dictconfig(cfg: DictConfig) -> Iterable[Tuple[
             )
 
         if handler.save_new_weights:
-            torch.save(
+            _save_tensor_without_overwrite(
                 new_W,
-                Path(
-                    f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt"
-                ),
+                Path(handler.new_weights_dir)
+                / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}_{prompt_dict.requested_rewrite['relation_id']}_{prompt_dict.Index}.pt",
             )
 
         counter += 1
@@ -204,8 +211,7 @@ def single_intervention(handler: ModelHandler, fact_tuple: Tuple[str, str, str, 
 
     if handler.save_new_weights:
         out_path = Path(handler.new_weights_dir) / f"{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"
-        torch.save(new_W, out_path)
-        LOGGER.info("Saved new weights to %s", out_path)
+        _save_tensor_without_overwrite(new_W, out_path)
 
     return new_W, old_W
 
@@ -248,7 +254,7 @@ if __name__ == "__main__":
             LOGGER.info(f"New weights computed")
 
             if handler.save_new_weights:
-                torch.save(
+                _save_tensor_without_overwrite(
                     new_W,
                     Path(f"{handler.new_weights_dir}/{handler.cfg.model.name.replace('/', '-')}_{handler._layer}.pt"),
                 )

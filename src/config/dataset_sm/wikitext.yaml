@@ -3,7 +3,7 @@
 # :author: Matej Olexa <olexa.matej@gmail.com>
 # :author: Jakub Res <iresj@fit.vut.cz>
 
-name: "wikitext"
+name: "Salesforce/wikitext"
 config_name: "wikitext-103-raw-v1"
 concat_splits: ["train", "test", "validation"]
 datasets_dir: "../datasets"

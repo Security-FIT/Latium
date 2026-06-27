@@ -15,12 +15,14 @@ from src.structural.analysis.common import (
     feature_z_scores,
     execution_cases,
     matrix_families,
+    require_matrix_features,
     required_capture_cases,
     result_case,
     run_case_analysis,
     summary,
 )
-from src.structural.analysis.runtime import AnalysisContext
+from src.structural.analysis.runtime import AnalysisContext, AnalysisUnavailableError
+from src.structural.capture.matrix_features import PAPER_FEATURES
 
 
 EPS = 1e-10
@@ -28,6 +30,7 @@ EPS = 1e-10
 
 def analyze_ipr(context: AnalysisContext) -> dict[str, Any]:
     def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        require_matrix_features(data, ("global_ipr", "row_ipr_mean", "row_ipr_std"))
         families = matrix_families(data)
         proj = families.get("proj", {})
         layers, scores, arrays = feature_z_scores(
@@ -50,7 +53,7 @@ def analyze_ipr(context: AnalysisContext) -> dict[str, Any]:
 
 def analyze_symmetry(context: AnalysisContext) -> dict[str, Any]:
     def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
-        profiles = matrix_families(data).get("proj", {})
+        profiles = require_matrix_features(data, ("top1_energy", "effective_rank", "stable_rank"))
         layers = sorted(int(layer) for layer in profiles)
         scores: dict[int, float] = {}
         for index, layer in enumerate(layers):
@@ -78,7 +81,7 @@ def analyze_symmetry(context: AnalysisContext) -> dict[str, Any]:
 
 def analyze_interlayer(context: AnalysisContext) -> dict[str, Any]:
     def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
-        profiles = matrix_families(data).get("proj", {})
+        profiles = require_matrix_features(data, ("top1_energy", "spectral_gap", "effective_rank", "norm_cv"))
         layers = sorted(int(layer) for layer in profiles)
         transitions: dict[str, float] = {}
         metrics = ("top1_energy", "spectral_gap", "effective_rank", "norm_cv")
@@ -120,7 +123,18 @@ def analyze_attention(context: AnalysisContext) -> dict[str, Any]:
             continue
         matrix_case = required["matrix-features"]
         attention_case = required["attention-features"]
-        proj = matrix_families(matrix_case["data"]).get("proj", {})
+        try:
+            proj = require_matrix_features(matrix_case["data"], PAPER_FEATURES)
+        except AnalysisUnavailableError as exc:
+            cases.append(
+                {
+                    "case_id": case_id,
+                    "status": "unavailable",
+                    "data": {},
+                    "error": str(exc),
+                }
+            )
+            continue
         attention = matrix_families(attention_case["data"])
         layers = sorted(int(layer) for layer in proj)
         scores: dict[int, float] = {}

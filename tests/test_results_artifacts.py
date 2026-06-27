@@ -86,7 +86,7 @@ def test_replacing_input_invalidates_all_descendants_and_render_outputs(tmp_path
     assert not graph.exists()
 
 
-def test_write_rewrites_same_config_when_content_changes(tmp_path: Path) -> None:
+def test_write_preserves_complete_artifact_until_force(tmp_path: Path) -> None:
     writer = ArtifactWriter(tmp_path, run_id="run")
     original_payload = _payload("capture")
     first = writer.write(tmp_path / "capture.json", original_payload)
@@ -108,7 +108,15 @@ def test_write_rewrites_same_config_when_content_changes(tmp_path: Path) -> None
     second = writer.write(tmp_path / "capture.json", changed_payload)
 
     reader = RunArtifactReader(tmp_path)
-    assert second["content_hash"] != first["content_hash"]
+    assert second["content_hash"] == first["content_hash"]
+    assert set(reader.manifest["artifacts"]) == {"capture", "analysis"}
+    assert reader.load("capture")["summary"]["value"] == 1
+    assert (tmp_path / "analysis.json").exists()
+
+    forced = writer.write(tmp_path / "capture.json", changed_payload, force=True)
+    reader = RunArtifactReader(tmp_path)
+
+    assert forced["content_hash"] != first["content_hash"]
     assert set(reader.manifest["artifacts"]) == {"capture"}
     assert reader.load("capture")["summary"]["value"] == 99
     assert not (tmp_path / "analysis.json").exists()

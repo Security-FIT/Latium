@@ -5,14 +5,24 @@
 :author: Jakub Res <iresj@fit.vut.cz>
 """
 
-import torch
 from typing import Any, Dict
+
 import numpy as np
+import torch
 from sklearn.ensemble import IsolationForest
 
 from .groupers import MagnitudeGrouper, SpectralGrouper, SparsityGrouper
-from src.structural.detectors.profiles import matrix_profile
-from src.common.linalg import gpu_svd, gpu_svd_topk, gpu_svdvals
+from src.structural.detectors.profiles import matrix_basic_profile, matrix_profile, matrix_svd_profile
+from src.common.linalg import gpu_svd_topk, gpu_svdvals
+from src.structural.capture.matrix_features import (
+    PCS_FEATURES,
+    SVD_DERIVED_FEATURES,
+    STUDY_FEATURES,
+    normalize_feature_list,
+)
+
+
+EPS = 1e-10
 
 
 class BlindMSDDetector:
@@ -52,35 +62,46 @@ class BlindMSDDetector:
     def compute_layer_features(
         self,
         weights: Dict[int, torch.Tensor],
+        top_k: int = 50,
+        features: tuple[str, ...] | None = None,
+        niter: int = 2,
     ) -> Dict[int, Dict[str, float]]:
-        """Compute the minimal per-layer blind feature bundle."""
+        """Compute requested per-layer scalar matrix features."""
+        requested = normalize_feature_list(features or STUDY_FEATURES)
+        requested_set = set(requested)
+        needs_svd = bool(requested_set & set(SVD_DERIVED_FEATURES))
+        needs_pcs = bool(requested_set & set(PCS_FEATURES))
         layer_features = {}
         for idx, W in weights.items():
             W_float = W.float()
-            U, S, _ = gpu_svd(W, full_matrices=False)
-            profile = matrix_profile(
-                W_float,
-                singular_values=S.detach().cpu().numpy(),
-            )
+            profile = matrix_basic_profile(W_float)
+            U = None
+            if needs_svd:
+                q = max(1, min(int(top_k), int(min(W_float.shape))))
+                U, S, _ = gpu_svd_topk(W_float, k=q, niter=int(niter))
+                profile.update(
+                    matrix_svd_profile(
+                        W_float,
+                        singular_values=S.detach().cpu().numpy(),
+                        frob_sq=float(profile["frob_norm"]) ** 2,
+                    )
+                )
 
-            from src.rome.common import pcs
+            if needs_pcs:
+                row_norms = W_float.norm(dim=1, keepdim=True).clamp_min(EPS)
+                normalized_row_sum = (W_float / row_norms).sum(dim=0)
+                similarity_sum = torch.dot(normalized_row_sum, normalized_row_sum)
+                sm_count = W_float.shape[0] * W_float.shape[0]
+                profile["pcs"] = float((similarity_sum / (sm_count**2 - sm_count)).item())
 
-            pcs_value = pcs(W)
-            if hasattr(pcs_value, "item"):
-                pcs_value = pcs_value.item()
+            if "row_alignment" in requested_set:
+                if U is None:
+                    q = max(1, min(int(top_k), int(min(W_float.shape))))
+                    U, _S, _ = gpu_svd_topk(W_float, k=q, niter=int(niter))
+                U_top = U[:, 0].abs()
+                profile["row_alignment"] = float((U_top.max() / (U_top.mean() + EPS)).item())
 
-            U_top = U[:, 0].abs()
-            row_alignment = (U_top.max() / (U_top.mean() + 1e-10)).item()
-
-            layer_features[idx] = {
-                "effective_rank": profile["effective_rank"],
-                "spectral_gap": profile["spectral_gap"],
-                "top1_energy": profile["top1_energy"],
-                "pcs": pcs_value,
-                "norm_cv": profile["norm_cv"],
-                "row_alignment": row_alignment,
-                "spectral_entropy": profile["spectral_entropy"],
-            }
+            layer_features[idx] = {name: float(profile[name]) for name in requested if name in profile}
 
         return layer_features
 

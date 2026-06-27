@@ -174,6 +174,35 @@ def test_detect_layer_keeps_blind_fallback_when_signal_a_disagrees(monkeypatch) 
     assert "spectral_support" not in info
 
 
+def test_detect_layer_returns_no_signal_when_peaks_are_below_threshold(monkeypatch) -> None:
+    arrays = {
+        "spectral_gap": np.ones(10),
+        "top1_energy": np.ones(10),
+        "norm_cv": np.ones(10),
+        "effective_rank": np.ones(10),
+        "row_alignment": np.ones(10),
+    }
+    local_scores = {
+        ("top1_energy", 5): np.zeros(10),
+        ("spectral_gap", 5): np.zeros(10),
+        ("spectral_gap", 7): np.zeros(10),
+        ("norm_cv", 5): np.zeros(10),
+    }
+    _patch_detector_signals(monkeypatch, arrays=arrays, local_scores=local_scores, spearman=(0.0, 1.0))
+
+    detected, method, info = detector.detect_layer(
+        _build_test_payload(10),
+        trim_first=1,
+        trim_last=1,
+        feature_z_min=1.5,
+        **COMPOSITE_DETECT_KWARGS,
+    )
+
+    assert detected is None
+    assert method == "no_signal"
+    assert info["no_signal_reason"] == "all_candidate_peaks_below_feature_z_min"
+
+
 def test_model_resident_composite_adapter_uses_shared_detector() -> None:
     layer_features = {
         str(layer): {

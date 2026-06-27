@@ -14,28 +14,98 @@ import numpy as np
 EPS = 1e-10
 
 
-def local_zscore(vals: np.ndarray, window: int = 5, *, eps: float = EPS) -> np.ndarray:
-    """Center-excluded local z-score used across detector/graph code."""
+def _local_zscore_1d(
+    vals: np.ndarray,
+    window: int,
+    *,
+    eps: float,
+    fill_value: float,
+    absolute: bool,
+    nan_safe: bool,
+) -> np.ndarray:
     arr = np.asarray(vals, dtype=float)
     n = len(arr)
     half = max(0, int(window)) // 2
-    out = np.zeros(n, dtype=float)
+    out = np.full(n, fill_value, dtype=float)
     for i in range(n):
         lo = max(0, i - half)
         hi = min(n, i + half + 1)
         neighbors = np.concatenate([arr[lo:i], arr[i + 1 : hi]])
         if len(neighbors) > 1:
-            out[i] = (arr[i] - neighbors.mean()) / (neighbors.std() + eps)
+            if nan_safe:
+                mu = np.nanmean(neighbors)
+                sd = np.nanstd(neighbors)
+            else:
+                mu = neighbors.mean()
+                sd = neighbors.std()
+            value = (arr[i] - mu) / (sd + eps)
+            out[i] = abs(value) if absolute else value
     return out
 
 
-def curvature(vals: np.ndarray) -> np.ndarray:
-    """Absolute second-order finite-difference curvature."""
+def local_zscore(
+    vals: np.ndarray,
+    window: int = 5,
+    *,
+    eps: float = EPS,
+    axis: int | None = None,
+    fill_value: float = 0.0,
+    absolute: bool = False,
+    nan_safe: bool = False,
+) -> np.ndarray:
+    """Center-excluded local z-score used across detector/graph code."""
+    arr = np.asarray(vals, dtype=float)
+    if axis is None or arr.ndim == 1:
+        return _local_zscore_1d(
+            arr,
+            window,
+            eps=eps,
+            fill_value=fill_value,
+            absolute=absolute,
+            nan_safe=nan_safe,
+        )
+
+    moved = np.moveaxis(arr, axis, -1)
+    out = np.empty_like(moved, dtype=float)
+    for prefix in np.ndindex(moved.shape[:-1]):
+        out[prefix] = _local_zscore_1d(
+            moved[prefix],
+            window,
+            eps=eps,
+            fill_value=fill_value,
+            absolute=absolute,
+            nan_safe=nan_safe,
+        )
+    return np.moveaxis(out, -1, axis)
+
+
+def _curvature_1d(vals: np.ndarray, *, pad_value: float, absolute: bool) -> np.ndarray:
     arr = np.asarray(vals, dtype=float)
     if len(arr) < 3:
-        return np.zeros_like(arr)
-    core = np.abs(arr[:-2] - 2.0 * arr[1:-1] + arr[2:])
-    return np.concatenate([[0.0], core, [0.0]])
+        return np.full_like(arr, pad_value, dtype=float)
+    core = arr[:-2] - 2.0 * arr[1:-1] + arr[2:]
+    if absolute:
+        core = np.abs(core)
+    return np.concatenate([[pad_value], core, [pad_value]])
+
+
+def curvature(
+    vals: np.ndarray,
+    *,
+    axis: int | None = None,
+    pad_value: float = 0.0,
+    absolute: bool = True,
+) -> np.ndarray:
+    """Absolute second-order finite-difference curvature."""
+    arr = np.asarray(vals, dtype=float)
+    if axis is None or arr.ndim == 1:
+        return _curvature_1d(arr, pad_value=pad_value, absolute=absolute)
+
+    moved = np.moveaxis(arr, axis, -1)
+    out = np.empty_like(moved, dtype=float)
+    for prefix in np.ndindex(moved.shape[:-1]):
+        out[prefix] = _curvature_1d(moved[prefix], pad_value=pad_value, absolute=absolute)
+    return np.moveaxis(out, -1, axis)
 
 
 def rank01(vals: np.ndarray) -> np.ndarray:

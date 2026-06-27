@@ -367,7 +367,20 @@ def test_analyze_composite_passes_variant_spectral_config(monkeypatch: pytest.Mo
                 {
                     "case_id": "case",
                     "status": "complete",
-                    "data": {"families": {"proj": {"3": {"top1_energy": 0.5}}}},
+                    "data": {
+                        "families": {
+                            "proj": {
+                                str(layer): {
+                                    "spectral_gap": 1.0,
+                                    "top1_energy": 0.5,
+                                    "row_alignment": 1.0,
+                                    "norm_cv": 0.1,
+                                    "effective_rank": 4.0,
+                                }
+                                for layer in range(4)
+                            }
+                        }
+                    },
                 }
             ],
             "spectral": [

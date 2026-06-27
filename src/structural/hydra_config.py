@@ -108,6 +108,15 @@ def _bottom_rank_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _matrix_feature_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
+    matrix_features = _section(_section(structural, "capture"), "matrix_features")
+    return {
+        "matrix_feature_set": str(matrix_features.get("feature_set", "paper")),
+        "matrix_features": tuple(_string_list(matrix_features.get("features"))),
+        "matrix_svd_top_k": max(1, int(matrix_features.get("svd_top_k", 50))),
+    }
+
+
 def _runtime_settings(cfg: DictConfig) -> dict[str, Any]:
     runtime = cfg.runtime
     return {
@@ -135,6 +144,7 @@ def structural_config_from_hydra(
         case_dataset_name=str(dataset_facts["name"]),
         case_dataset_split=str(dataset_facts["split"]),
         **analysis_variant_settings(structural),
+        **_matrix_feature_settings(structural),
         **_bottom_rank_settings(structural),
         analysis_method_configs=_dict_section(analysis, "methods"),
         run_analysis=run_analysis,

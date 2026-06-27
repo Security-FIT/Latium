@@ -63,6 +63,7 @@ def detect_layer(
     signal_a_confirm_z_min: float,
     signal_ab_boundary_width: int,
     signal_ab_cluster_span: int,
+    feature_z_min: float = 0.0,
 ) -> Tuple[Optional[int], str, Dict]:
     features = test["blind_detection"]["layer_features"]
     layers = sorted(features, key=int)
@@ -186,6 +187,13 @@ def detect_layer(
                 "cluster_span": cluster_span,
             }
             return sg_layer, "signal_ab_boundary", info
+
+    peak_strength = max(sg_z, te_z, small_z, large_z, nc_z, rank_z, align_z, a_z, b_z)
+    info["peak_strength"] = round(float(peak_strength), 2)
+    info["feature_z_min"] = float(feature_z_min)
+    if peak_strength < float(feature_z_min):
+        info["no_signal_reason"] = "all_candidate_peaks_below_feature_z_min"
+        return None, "no_signal", info
 
     if detected_index is not None:
         info["detected_index"] = detected_index

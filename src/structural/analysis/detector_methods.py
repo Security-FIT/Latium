@@ -14,10 +14,17 @@ import numpy as np
 from src.structural.analysis.common import (
     execution_cases,
     matrix_families,
+    require_matrix_features,
     required_capture_cases,
     result_case,
     run_case_analysis,
     summary,
+)
+from src.structural.capture.matrix_features import (
+    BLIND_FEATURES,
+    EDIT_PRESENCE_FEATURES,
+    PAPER_FEATURES,
+    RANK1_FEATURES,
 )
 from src.structural.analysis.runtime import AnalysisContext, AnalysisUnavailableError
 from src.structural.detectors.spectral import replay_spectral
@@ -35,7 +42,7 @@ def analyze_blind(context: AnalysisContext) -> dict[str, Any]:
     from src.structural.detectors.blind import detect_from_profiles
 
     def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
-        profiles = matrix_families(data).get("proj", {})
+        profiles = require_matrix_features(data, BLIND_FEATURES)
         result = detect_from_profiles(profiles)
         result["detection_score"] = result["layer_anomaly_score"]
         return result
@@ -78,7 +85,18 @@ def analyze_composite(context: AnalysisContext) -> dict[str, Any]:
             continue
         matrix_case = required["matrix-features"]
         spectral_case = required["spectral"]
-        profiles = matrix_families(matrix_case["data"]).get("proj", {})
+        try:
+            profiles = require_matrix_features(matrix_case["data"], PAPER_FEATURES)
+        except AnalysisUnavailableError as exc:
+            cases.append(
+                {
+                    "case_id": case_id,
+                    "status": "unavailable",
+                    "data": {},
+                    "error": str(exc),
+                }
+            )
+            continue
         try:
             spectral = replay_spectral(spectral_case["data"], replay_config)
         except AnalysisUnavailableError as exc:
@@ -102,6 +120,7 @@ def analyze_composite(context: AnalysisContext) -> dict[str, Any]:
             large_window=int(_required(context.config, "large_window")),
             te_window=int(_required(context.config, "te_window")),
             nc_window=int(_required(context.config, "nc_window")),
+            feature_z_min=float(_required(context.config, "feature_z_min")),
             signal_a_confirm_z_min=float(_required(context.config, "signal_a_confirm_z_min")),
             signal_ab_boundary_width=int(_required(context.config, "signal_ab_boundary_width")),
             signal_ab_cluster_span=int(_required(context.config, "signal_ab_cluster_span")),
@@ -127,7 +146,7 @@ def analyze_gpt_norm_cv(context: AnalysisContext) -> dict[str, Any]:
     trim_last = int(_required(context.config, "trim_last"))
 
     def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
-        profiles = matrix_families(data).get("proj", {})
+        profiles = require_matrix_features(data, ("norm_cv",))
         detected, method, info = detect(
             {"blind_detection": {"layer_features": profiles}},
             trim_first=trim_first,
@@ -184,7 +203,7 @@ def analyze_rank1(context: AnalysisContext) -> dict[str, Any]:
         context,
         "matrix-features",
         lambda data, _: _rank1_score(
-            matrix_families(data).get("proj", {}),
+            require_matrix_features(data, RANK1_FEATURES),
             trim_first,
             trim_last,
             local_windows,
@@ -201,9 +220,10 @@ def analyze_edit_presence(context: AnalysisContext) -> dict[str, Any]:
     min_margin = float(_required(context.config, "min_margin"))
 
     def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        profiles = require_matrix_features(data, EDIT_PRESENCE_FEATURES)
         families = matrix_families(data)
         return detect_edit_presence_from_profiles(
-            families.get("proj", {}),
+            profiles,
             fc_metrics=families.get("fc"),
             detection_threshold=detection_threshold,
             min_peak_robust_z=min_peak_robust_z,

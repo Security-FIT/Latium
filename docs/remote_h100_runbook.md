@@ -21,7 +21,8 @@ python -m src command=structural/capture \
   structural.run.edit_methods='[rome]' \
   structural.run.n_tests=50 \
   structural.run.start_idx=30 \
-  structural.capture.profile=spectral \
+  structural.capture.profile=paper \
+  structural.capture.matrix_features.feature_set=paper \
   structural.run.output_dir=analysis_out \
   structural.run.run_id=n50-s30
 ```
@@ -29,9 +30,10 @@ python -m src command=structural/capture \
 This stage performs ROME evaluation and saves the primitives needed by the
 common detectors. It does not run artifact-only detection.
 
-Use `structural.capture.profile=none` when only Edit Execution and evaluation JSON are
-required. Use `full` only when later analyses need attention, matrix-anomaly, or
-bottom-rank primitives.
+Use `structural.capture.profile=spectral` when only spectral replay is needed,
+`matrix` when only scalar matrix features are needed, and `none` when only edit
+execution/evaluation JSON is required. Use `full` only when later analyses need
+attention, matrix-anomaly, or bottom-rank primitives.
 
 ## Transfer
 
@@ -60,7 +62,7 @@ Render selected outputs:
 ```bash
 python -m src command=graphs/run \
   graphs.run_root=analysis_out/n50-s30 \
-  graphs.renderer_preset=paper
+  graphs.renderer_preset=structural-paper
 ```
 
 To rerun one detector after changing its Implementation:

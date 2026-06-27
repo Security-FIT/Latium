@@ -129,9 +129,7 @@ ANALYSES = _validated_registry(
             "src.structural.analysis.detector_methods:analyze_edit_presence",
             ("matrix-features",),
             ("detection_threshold", "min_peak_robust_z", "min_margin", "local_windows"),
-            (
-                ("local_windows", "local_windows"),
-            ),
+            (("local_windows", "local_windows"),),
         ),
         AnalysisSpec(
             "bottom-rank-svd",
@@ -188,7 +186,8 @@ ANALYSES = _validated_registry(
 
 ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
-    "paper": ("composite", "gpt-norm-cv", "spectral", "blind"),
+    "paper": ("composite", "gpt-norm-cv", "spectral"),
+    "blind": ("blind",),
     "full": ANALYSES.identifiers(),
 }
 

@@ -58,7 +58,9 @@ CAPTURES = NamedRegistry(
 
 CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "none": (),
-    "spectral": ("spectral", "matrix-features"),
+    "spectral": ("spectral",),
+    "matrix": ("matrix-features",),
+    "paper": ("spectral", "matrix-features"),
     "full": CAPTURES.identifiers(),
 }
 

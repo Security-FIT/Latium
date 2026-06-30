@@ -9,6 +9,7 @@ defaults:
   - /generation@_global_.generation: generation
   - /dataset_facts@_global_.dataset_facts: counterfact
   - /dataset_sm@_global_.dataset_sm: wikitext
+  - /tracing@_global_.tracing: alt
   - _self_
 
 name: alt-trace

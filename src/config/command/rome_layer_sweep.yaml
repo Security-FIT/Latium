@@ -5,11 +5,11 @@
 
 defaults:
   - /model_base@_global_.model: default
-  - /model@_global_.model: gpt-j-6b
+  - /model@_global_.model: gpt2-large
   - /generation@_global_.generation: generation
   - /dataset_facts@_global_.dataset_facts: counterfact
   - /dataset_sm@_global_.dataset_sm: wikitext
-  - /tracing@_global_.tracing: standard
+  - /tracing@_global_.tracing: aquin
   - _self_
 
-name: causal-trace
+name: rome-layer-sweep

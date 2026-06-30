@@ -1,31 +1,46 @@
 # Causal Trace
 
-This package has two causal tracing workflows.
+This package keeps the two existing causal tracing workflows and adds three
+prototype workflows through `prototype.py`.
 
-| File | Workflow |
+| Command | Workflow |
 |---|---|
-| `causal_trace.py` | Standard trace: corrupt subject embeddings, restore each subject token at each layer, write CSV rows. |
-| `alt_trace.py` | Alternative trace: restore the last subject token, average repeated noise runs, rank layers with middle-third fallback. |
-| `layer_heuristic.py` | Layer scoring helpers that can consume causal trace CSVs. |
+| `causal-trace` | Existing standard-style trace: restore subject-token positions across layers. |
+| `alt-trace` | Existing alternative-style trace: one restore position, ranking, optional middle-third fallback. |
+| `aquin-trace` | Pragmatic ROME candidate trace with optional ROME validation. |
+| `canonical-trace` | Token-by-layer ROME-style causal tracing, including residual/MLP/attention modes. |
+| `fast-trace` | Short paired-noise trace, one restore position, no middle-third fallback. |
+
+All five modes use paired fixed noise samples, explicit first-token target
+probabilities, safe hook cleanup, and structured outputs under
+`analysis_out/causal_trace/`.
 
 Visual notebooks:
 
-- `notebooks/causal_tracing.ipynb` for the standard workflow.
-- `notebooks/causal_tracing_alt.ipynb` for the alternative workflow.
+- `notebooks/causal_trace_standard.ipynb`
+- `notebooks/causal_trace_alt.ipynb`
+- `notebooks/causal_trace_aquin.ipynb`
+- `notebooks/causal_trace_canonical.ipynb`
+- `notebooks/causal_trace_fast.ipynb`
 
-Use matching `MODEL_CONFIG`, prompt counts, and dataset settings when comparing
-the two notebooks.
+Legacy notebooks `notebooks/causal_tracing.ipynb` and
+`notebooks/causal_tracing_alt.ipynb` are still present for comparison.
 
 ## CLI
 
 ```bash
 python3 -m src causal-trace model=gpt2-large generation.num_of_runs=5
-python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5 generation.num_trace_runs=10
+python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5
+python3 -m src aquin-trace model=gpt2-large generation.num_of_runs=5
+python3 -m src canonical-trace model=gpt2-large generation.num_of_runs=5
+python3 -m src fast-trace model=gpt2-large generation.num_of_runs=5
 ```
 
-## Adding A Variant
+Useful overrides:
 
-Keep shared prompt preprocessing in `causal_trace.py`. Put variant-specific
-tracing and persistence in a new module, add a command handler in
-`command_handlers/operations.py`, and add a command config under
-`src/config/command/`.
+```bash
+python3 -m src canonical-trace model=gpt2-large tracing.component=mlp tracing.position_scope=subject_last tracing.window_size=10
+python3 -m src canonical-trace model=gpt2-large tracing.component=attention tracing.position_scope=prompt_last tracing.window_size=10
+python3 -m src fast-trace model=gpt2-large tracing.restore_position=subject_last
+python3 -m src aquin-trace model=gpt2-large tracing.validate_with_rome=false
+```

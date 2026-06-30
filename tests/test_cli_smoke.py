@@ -46,6 +46,10 @@ def test_top_level_cli_help_shows_current_surface() -> None:
     assert 'Top-level aliases' in result.stdout
     assert 'manual-rome' in result.stdout
     assert 'alt-trace' in result.stdout
+    assert 'aquin-trace' in result.stdout
+    assert 'canonical-trace' in result.stdout
+    assert 'fast-trace' in result.stdout
+    assert 'rome-layer-sweep' in result.stdout
     assert 'rome-benchmark' in result.stdout
 
 
@@ -62,9 +66,15 @@ def test_top_level_cli_direct_alias_runs_through_hydra(monkeypatch) -> None:
 
     assert src_main.main(['manual-rome', 'model=gpt2-large']) == 0
     assert src_main.main(['alt-trace', 'model=gpt2-large']) == 0
+    assert src_main.main(['fast-trace', 'model=gpt2-large']) == 0
+    assert src_main.main(['canonical-trace', 'model=gpt2-large']) == 0
+    assert src_main.main(['aquin-trace', 'model=gpt2-large']) == 0
     assert calls == [
         ['command=manual_rome', 'model=gpt2-large'],
         ['command=alt_trace', 'model=gpt2-large'],
+        ['command=fast_trace', 'model=gpt2-large'],
+        ['command=canonical_trace', 'model=gpt2-large'],
+        ['command=aquin_trace', 'model=gpt2-large'],
     ]
 
 

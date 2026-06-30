@@ -297,7 +297,7 @@ def estimate_covariance_batch_size(
     max_length: int,
     dtype_bytes: int = 2,
     device: int | str = 0,
-    vram_fraction: float = 0.25,
+    vram_fraction: float = 0.15,
     min_batch: int = 1,
     max_batch: int = 64,
 ) -> int:
@@ -307,16 +307,18 @@ def estimate_covariance_batch_size(
         return min_batch
 
     expected_seq_len = min(max_length, 1024)
-    per_sample = expected_seq_len * hidden_dim * dtype_bytes * 3
+    per_sample = expected_seq_len * hidden_dim * dtype_bytes * 8
     cov_overhead = hidden_dim * hidden_dim * 4
     available = int(free * vram_fraction) - cov_overhead
     available = max(per_sample, available)
     bs = max(min_batch, min(max_batch, available // max(per_sample, 1)))
     LOGGER.info(
-        "Dynamic covariance batch size: %d  (free_vram=%.1fGB, per_sample=%.1fMB, expected_seq=%d, max_length=%d)",
+        "Dynamic covariance batch size: %d  "
+        "(free_vram=%.1fGB, per_sample=%.1fMB, cov_overhead=%.1fMB, expected_seq=%d, max_length=%d)",
         bs,
         free / 1e9,
         per_sample / 1e6,
+        cov_overhead / 1e6,
         expected_seq_len,
         max_length,
     )

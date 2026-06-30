@@ -693,6 +693,69 @@ def _reshape_hidden_states(hidden_states: torch.Tensor, batch_size: int, seq_len
     raise RuntimeError(f"Unsupported activation rank for hooks: {hidden_states.dim()}")
 
 
+def _real_token_rows(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    if attention_mask.dim() != 2:
+        raise RuntimeError(f"Expected 2D attention_mask, got rank {attention_mask.dim()}")
+
+    batch_size = int(attention_mask.size(0))
+    seq_len = int(attention_mask.size(1))
+    hidden_states, _ = _reshape_hidden_states(hidden_states, batch_size, seq_len)
+
+    if tuple(hidden_states.shape[:2]) != tuple(attention_mask.shape):
+        raise RuntimeError(
+            "Activation and attention mask shape mismatch: "
+            f"hidden={tuple(hidden_states.shape[:2])}, mask={tuple(attention_mask.shape)}"
+        )
+
+    mask = attention_mask.to(device=hidden_states.device, dtype=torch.bool)
+    return hidden_states[mask]
+
+
+def _accumulate_second_moment_tokens(
+    C: torch.Tensor,
+    hidden_states: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> int:
+    rows = _real_token_rows(hidden_states.detach(), attention_mask)
+    if rows.numel() == 0:
+        return 0
+
+    rows = rows.to(device=C.device, dtype=torch.float32)
+    C.addmm_(rows.T, rows)
+    return int(rows.size(0))
+
+
+class _AdaptiveCovarianceBatchSizer:
+    def __init__(self, initial_batch_size: int, min_batch: int = 1, growth_interval: int = 8):
+        self.min_batch = max(1, int(min_batch))
+        self.initial_batch_size = max(self.min_batch, int(initial_batch_size))
+        self.current_batch_size = self.initial_batch_size
+        self.growth_interval = max(1, int(growth_interval))
+        self._successful_batches = 0
+
+    def record_oom(self, failed_batch_size: int) -> int:
+        failed_batch_size = max(self.min_batch, int(failed_batch_size))
+        reduced_size = max(self.min_batch, failed_batch_size // 2)
+        self.current_batch_size = min(self.current_batch_size, reduced_size)
+        self._successful_batches = 0
+        return self.current_batch_size
+
+    def record_success(self) -> int:
+        if self.current_batch_size >= self.initial_batch_size:
+            self._successful_batches = 0
+            return self.current_batch_size
+
+        self._successful_batches += 1
+        if self._successful_batches >= self.growth_interval:
+            self.current_batch_size = min(
+                self.initial_batch_size,
+                max(self.current_batch_size + 1, self.current_batch_size * 2),
+            )
+            self._successful_batches = 0
+
+        return self.current_batch_size
+
+
 def gather_k(
     handler,
     fact_tuple: Tuple[str, str, str],
@@ -1110,18 +1173,15 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     # Accumulate second moment directly on GPU instead of storing all k vectors
     C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=module_device)
     total_tokens = 0
+    current_attention_mask = None
 
     def hook(_, inp, out):
-        nonlocal C, total_tokens
-        k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
-        if len(k.shape) == 3:
-            k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
-        k = k.to(C.device)
-        total_tokens += k.shape[0]
-        # Use addmm_ to accumulate k^T @ k into C without allocating a
-        # hidden_dim x hidden_dim temporary (can be >1 GB for large models).
-        C.addmm_(k.T, k)
-        del k
+        nonlocal C, total_tokens, current_attention_mask
+        if current_attention_mask is None:
+            raise RuntimeError("Missing attention mask while accumulating covariance")
+
+        hidden_states = inp[0] if isinstance(inp, tuple) else inp
+        total_tokens += _accumulate_second_moment_tokens(C, hidden_states, current_attention_mask)
         return out
 
     handle = module.register_forward_hook(hook)
@@ -1139,6 +1199,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_mode_raw = getattr(handler.cfg.model, "second_moment_batch_size_mode", "auto")
     batch_mode = str(batch_mode_raw).strip().lower()
     manual_batch_size = getattr(handler.cfg.model, "second_moment_batch_size", None)
+    adaptive_batch_enabled = False
     if batch_mode in ("manual", "fixed", "static"):
         if manual_batch_size is None:
             raise ValueError("second_moment_batch_size must be set when second_moment_batch_size_mode is 'manual'")
@@ -1149,11 +1210,13 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
             batch_size = max(1, int(manual_batch_size))
             LOGGER.info("Using manual covariance batch size override: %d (mode=auto)", batch_size)
         else:
+            adaptive_batch_enabled = True
             LOGGER.info("Using dynamic covariance batch size estimate: %d", batch_size)
     else:
         raise ValueError(
             f"Invalid second_moment_batch_size_mode: {batch_mode_raw!r}. Expected one of: auto, dynamic, manual."
         )
+    batch_sizer = _AdaptiveCovarianceBatchSizer(batch_size)
 
     LOGGER.info(
         f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}"
@@ -1179,40 +1242,60 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_texts = []
 
     def process_text_batch(text_batch):
-        nonlocal processed, batch_size, processed_batches
+        nonlocal processed, batch_size, processed_batches, current_attention_mask
         if not text_batch:
             return
         # Non-recursive OOM handling: split batch and retry without recursion
         queue = [text_batch]
         while queue:
             chunk = queue.pop(0)
+            tokens = None
             try:
                 tokens = handler.tokenizer(
                     chunk, return_tensors='pt', truncation=True, max_length=max_length, padding=True
                 )
+                current_attention_mask = tokens.attention_mask
                 handler.model(
                     tokens.input_ids.to(input_device),
                     attention_mask=tokens.attention_mask.to(input_device),
                     use_cache=False,
                 )
-                del tokens
                 processed += len(chunk)
                 processed_batches += 1
+                if adaptive_batch_enabled:
+                    old_batch_size = batch_size
+                    batch_size = batch_sizer.record_success()
+                    if batch_size != old_batch_size:
+                        LOGGER.info(
+                            "Increasing covariance batch size after successful batches: %d -> %d",
+                            old_batch_size,
+                            batch_size,
+                        )
                 if clear_cache_every > 0 and processed_batches % clear_cache_every == 0 and torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except torch.cuda.OutOfMemoryError:
-                LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(chunk))
+                LOGGER.warning("OOM during covariance computation (chunk=%d)", len(chunk))
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 if len(chunk) <= 1:
                     LOGGER.warning("Skipping sample that causes OOM even at batch_size=1")
                     continue
-                batch_size = max(1, batch_size // 2)
+                if adaptive_batch_enabled:
+                    old_batch_size = batch_size
+                    batch_size = batch_sizer.record_oom(len(chunk))
+                    if batch_size != old_batch_size:
+                        LOGGER.warning("Reduced covariance batch size: %d -> %d", old_batch_size, batch_size)
+                else:
+                    LOGGER.warning("Splitting covariance chunk while fixed batch size remains %d", batch_size)
                 midpoint = max(1, len(chunk) // 2)
                 queue.insert(0, chunk[midpoint:])
                 queue.insert(0, chunk[:midpoint])
             except Exception as e:
                 LOGGER.warning(e)
+            finally:
+                current_attention_mask = None
+                if tokens is not None:
+                    del tokens
 
     try:
         with torch.no_grad(), tqdm(total=n_samples, desc="Computing covariance", mininterval=1.0) as pbar:

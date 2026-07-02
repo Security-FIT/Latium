@@ -113,8 +113,7 @@ Hydra overrides are the supported option style. Argparse flags such as
 | Structural capture/analyze | `python3 -m src structural run ...` |
 | Analysis-only replay | `python3 -m src structural analyze ...` |
 | Graph rendering | `python3 -m src graphs run <run-root>` |
-| Standard causal trace | `python3 -m src causal-trace model=gpt2-large` |
-| Alternative causal trace | `python3 -m src alt-trace model=gpt2-large` |
+| Early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
 
 ## Causal Trace
@@ -122,18 +121,14 @@ Hydra overrides are the supported option style. Argparse flags such as
 CLI runs write trace outputs under `analysis_out/`:
 
 ```bash
-python3 -m src causal-trace model=gpt2-large generation.num_of_runs=5
-python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5 generation.num_trace_runs=10
+python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100
 ```
 
-Use the notebooks for visual inspection:
-
-- `notebooks/causal_tracing.ipynb`: standard trace, subject-token/layer
-  heatmaps, per-prompt curves, aggregate layer curve.
-- `notebooks/causal_tracing_alt.ipynb`: alternative trace, prompt curves,
-  prompt/layer heatmap, aggregate selection curve.
-
-Layer recommendation helpers are in `src/causal_trace/layer_heuristic.py`.
+The current trace is the subject-last MLP-window workflow used by
+`notebooks/causal-tracing-auto.ipynb`: corrupt subject embeddings, restore
+clean MLP outputs over overlapping windows, aggregate indirect effects across
+facts, and write a graph plus CSV/JSON diagnostics. The configured model layer
+is shown only as a reference marker; it does not affect trace selection.
 
 ## Structural Artifacts
 
@@ -200,26 +195,31 @@ Models are selected by config key, for example `model=gpt2-large` or
 `structural.run.models=[gpt2-large,qwen3-4b]`. Exact HuggingFace names are also
 accepted when they match a configured model.
 
-| Model key | Causal Trace | Weight intervention | Mean ES (n=500) | Notes |
-|---|---|---|---|---|
-| `gpt2-medium` | yes | yes | 0.988 | works |
-| `gpt2-large` | yes | yes | 0.986 | works |
-| `gpt2-xl` | yes | yes | 0.986 | works |
-| `gpt-j-6b` | yes | yes | 0.996 | works |
-| `qwen3-0.6b` | yes | yes |  | configured |
-| `qwen3-1.7b` | yes | yes |  | configured |
-| `qwen3-4b` | yes | yes | 0.992 | configured |
-| `qwen3-8b` | yes | yes | 1.000 | configured |
-| `qwen2.5-1.5b` | yes | yes |  | configured |
-| `qwen3-guard-0.6b` | yes | yes |  | configured |
-| `granite4-micro` | yes | yes | 0.978 | unusual architecture |
-| `mistral-7b-v0.1` | yes | yes | 0.948 | configured |
-| `mistral-7b-v0.3` | yes | yes | 0.934 | configured |
-| `llama2-7b` | yes | yes | 0.614 | unusual architecture |
-| `falcon-7b` | yes | yes | 0.976 | configured |
-| `opt-6.7b` | yes | yes | 0.978 | configured |
-| `deepseek-7b-base` | yes | yes | 0.976 | configured |
-| `deepseek-r1-llama3-8b` | yes | yes |  | configured |
+Latest full-pipeline report metrics use 100 requested ROME benchmark edits
+unless noted. `Trace layer` is the early-site causal-trace representative
+center from the report; `Config layer` is the layer currently used by the model
+config for ROME.
+
+| Model key | Causal Trace | Weight intervention | Config layer | Trace layer | ROME n | ES | PS | NS | Overall | Notes |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `gpt2-medium` | yes | yes | 8 |  |  |  |  |  |  | configured; not in latest reports |
+| `gpt2-large` | yes | yes | 12 |  |  |  |  |  |  | configured; not in latest reports |
+| `gpt2-xl` | yes | yes | 17 | 17 | 100 | 0.9800 | 0.9400 | 0.7740 | 0.8268 | updated from report `20260701_183606` |
+| `gpt-j-6b` | yes | yes | 5 | 5 | 0 |  |  |  |  | trace matched existing config; downstream skipped |
+| `qwen3-0.6b` | yes | yes | 5 |  |  |  |  |  |  | configured; not in latest reports |
+| `qwen3-1.7b` | yes | yes | 9 |  |  |  |  |  |  | configured; not in latest reports |
+| `qwen3-4b` | yes | yes | 6 | 6 | 100 | 1.0000 | 0.9700 | 0.8150 | 0.8738 | updated from report `20260701_183606` |
+| `qwen3-8b` | yes | yes | 7 | 7 | 100 | 1.0000 | 0.9850 | 0.8240 | 0.8999 | updated from report `20260701_183606` |
+| `qwen2.5-1.5b` | yes | yes | 7 |  |  |  |  |  |  | configured; not in latest reports |
+| `qwen3-guard-0.6b` | yes | yes | 5 |  |  |  |  |  |  | configured; not in latest reports |
+| `granite4-micro` | yes | yes | 35 | 35 | 100 | 1.0000 | 0.9950 | 0.5450 | 0.6665 | updated from report `20260702_094737` |
+| `mistral-7b-v0.1` | yes | yes | 5 | 5 | 0 |  |  |  |  | trace matched existing config; downstream skipped |
+| `mistral-7b-v0.3` | yes | yes | 17 | 5 | 0 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | trace center 5 produced zero evaluated ROME cases; config retained at 17 |
+| `llama2-7b` | yes | yes | 6 | 6 | 100 | 0.9500 | 0.9250 | 0.7950 | 0.8122 | updated from report `20260701_183606` |
+| `falcon-7b` | yes | yes | 5 | 5 | 100 | 1.0000 | 0.9950 | 0.8330 | 0.9013 | updated from report `20260702_094737` |
+| `opt-6.7b` | yes | yes | 15 | 15 | 0 |  |  |  |  | trace matched existing config; downstream skipped |
+| `deepseek-7b-base` | yes | yes | 20 | 20 | 98 | 0.9796 | 1.0000 | 0.6245 | 0.7079 | updated from report `20260701_183606`; 98 evaluated edits |
+| `deepseek-r1-llama3-8b` | yes | yes | 0 |  |  |  |  |  |  | configured; not in latest reports |
 | `llama3` | planned | planned |  | roadmap |
 | `gpt-neo` | planned | planned |  | roadmap |
 | `baichuan` | planned | planned |  | roadmap |
@@ -238,7 +238,7 @@ Prefix-variability configs for Qwen3-8B are available under
 - `src/structural/README.md`: capture, analysis, and detector flow.
 - `src/results/README.md`: artifact manifest and cache rules.
 - `src/graphs/README.md`: renderer contract.
-- `src/causal_trace/README.md`: standard vs alt causal tracing.
+- `src/causal_trace/README.md`: early-site causal tracing.
 
 ## Developer Checks
 

@@ -111,18 +111,10 @@ def test_temporary_hooks_cleanup_after_exception() -> None:
     assert len(module._forward_hooks) == 0
 
 
-@pytest.mark.parametrize(
-    ("command", "mode"),
-    [
-        ("causal_trace", "standard"),
-        ("alt_trace", "alt"),
-        ("aquin_trace", "aquin"),
-        ("canonical_trace", "canonical"),
-        ("fast_trace", "fast"),
-    ],
-)
-def test_trace_command_configs_compose(command: str, mode: str) -> None:
+def test_trace_command_config_composes() -> None:
     with hydra.initialize_config_dir(config_dir=str(ROOT / "src" / "config"), version_base=None):
-        cfg = hydra.compose(config_name="latium", overrides=[f"command={command}"])
+        cfg = hydra.compose(config_name="latium", overrides=["command=causal_trace"])
 
-    assert cfg.tracing.mode == mode
+    assert cfg.command.name == "causal-trace"
+    assert cfg.command.causal_trace.window_size == 10
+    assert cfg.command.causal_trace.require_correct_clean_prediction is True

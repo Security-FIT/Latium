@@ -29,7 +29,7 @@ from src.handlers.rome import ModelHandler
 
 LOGGER = logging.getLogger(__name__)
 
-TraceMode = Literal["standard", "alt", "aquin", "canonical", "fast"]
+TraceMode = Literal["standard", "alt", "aquin", "canonical", "fast", "early_site", "late_site"]
 TraceComponent = Literal["residual", "mlp", "attention"]
 
 
@@ -73,11 +73,19 @@ class PromptTraceResult:
     target_token: str
     target_token_mode: str
     subject_positions: list[int]
+    subject_tokens: list[str]
+    subject_last_position: int
+    subject_last_token: str
+    prompt_last_position: int
+    prompt_last_token: str
     restore_position_type: str | None
     restore_position: int | None
+    actual_restore_position: int | None
+    actual_restore_token: str | None
     position_scope: str | None
     component: str
     clean_probability: float
+    clean_top_token_id: int
     clean_top_token: str
     clean_top_probability: float
     corrupt_probabilities: list[float]
@@ -91,6 +99,18 @@ class PromptTraceResult:
     fallback_reason: str | None = None
     best_trace_layer: int | None = None
     candidate_layers: list[int] = field(default_factory=list)
+    candidate_source: str | None = None
+    early_site_candidate_layers: list[int] = field(default_factory=list)
+    early_site_trace_reliable: bool | None = None
+    peak_early_site_layer: int | None = None
+    peak_late_site_layer: int | None = None
+    best_late_recovery_layer: int | None = None
+    peak_subject_last_residual_layer: int | None = None
+    peak_subject_last_mlp_window_layer: int | None = None
+    peak_prompt_last_residual_layer: int | None = None
+    peak_prompt_last_attention_window_layer: int | None = None
+    early_site_scores: list[LayerTraceScore] = field(default_factory=list)
+    late_site_scores: list[LayerTraceScore] = field(default_factory=list)
     best_validated_rome_edit_layer: int | None = None
     layer_scores: list[LayerTraceScore] = field(default_factory=list)
     token_layer_scores: dict[int, list[LayerTraceScore]] = field(default_factory=dict)
@@ -208,19 +228,17 @@ def find_subject_span(tokenizer: Any, prompt: str, subject: str) -> TokenSpan:
     return TokenSpan(start=start, end=end, positions=positions, last_position=end - 1)
 
 
-def _trace_examples(cfg: DictConfig) -> list[TraceExample]:
+def _trace_examples(cfg: DictConfig, *, limit: int | None = None) -> list[TraceExample]:
     dataset = load_dataset(cfg)
-    if isinstance(dataset, dict) and "requested_rewrite" in dataset:
-        records = dataset["requested_rewrite"]
-    elif hasattr(dataset, "to_list"):
-        records = dataset.to_list()
-    else:
-        records = list(dataset)
 
     examples: list[TraceExample] = []
-    limit = int(getattr(getattr(cfg, "generation", object()), "num_of_runs", 1))
+    if isinstance(dataset, dict) and "requested_rewrite" in dataset:
+        records: Iterable[Any] = ({"requested_rewrite": item} for item in dataset["requested_rewrite"])
+    else:
+        records = dataset
+
     for idx, record in enumerate(records):
-        if len(examples) >= limit:
+        if limit is not None and len(examples) >= int(limit):
             break
         raw = dict(record)
         rewrite = raw.get("requested_rewrite", raw)
@@ -377,11 +395,20 @@ def _token_metadata(tokenizer: Any, input_ids: torch.Tensor, span: TokenSpan) ->
     return metadata
 
 
+def _decode_token_at(tokenizer: Any, input_ids: torch.Tensor, position: int) -> str:
+    token_id = int(input_ids[0, int(position)].detach().cpu().item())
+    return tokenizer.decode([token_id])
+
+
+def _tokens_at(tokenizer: Any, input_ids: torch.Tensor, positions: Sequence[int]) -> list[str]:
+    return [_decode_token_at(tokenizer, input_ids, int(position)) for position in positions]
+
+
 def _probabilities_from_logits(logits: torch.Tensor, target_token_id: int) -> torch.Tensor:
     return torch.softmax(logits[:, -1, :], dim=-1)[:, int(target_token_id)].detach().float().cpu()
 
 
-def _clean_pass(handler: ModelHandler, inputs: Any, target_token_id: int) -> tuple[Any, float, str, float]:
+def _clean_pass(handler: ModelHandler, inputs: Any, target_token_id: int) -> tuple[Any, float, int, str, float]:
     handler.model.eval()
     outputs = handler.model(**inputs, output_hidden_states=True, use_cache=False)
     probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
@@ -389,7 +416,7 @@ def _clean_pass(handler: ModelHandler, inputs: Any, target_token_id: int) -> tup
     top_id = int(torch.argmax(probs[0]).detach().cpu().item())
     top_prob = float(probs[0, top_id].detach().float().cpu().item())
     top_token = handler.tokenizer.decode([top_id]).strip()
-    return outputs, target_prob, top_token, top_prob
+    return outputs, target_prob, top_id, top_token, top_prob
 
 
 def _quality_from_scores(
@@ -461,6 +488,21 @@ def _candidate_layers(scores: Sequence[LayerTraceScore], tracing_cfg: Any) -> li
     return [int(score.layer) for score in ranked[:top_k]]
 
 
+def _peak_layer(scores: Sequence[LayerTraceScore], metric: str = "mean_indirect_effect") -> int | None:
+    if not scores:
+        return None
+    key = (lambda s: s.normalized_recovery) if metric == "normalized_recovery" else (lambda s: s.mean_indirect_effect)
+    return int(max(scores, key=key).layer)
+
+
+def _is_subject_last_mlp_trace(component: str, positions: Sequence[int], span: TokenSpan) -> bool:
+    return component == "mlp" and len(positions) == 1 and int(positions[0]) == int(span.last_position)
+
+
+def _is_late_site_trace(component: str, positions: Sequence[int], prompt_last_position: int) -> bool:
+    return component in {"residual", "attention"} and len(positions) == 1 and int(positions[0]) == int(prompt_last_position)
+
+
 def _select_restore_position(input_ids: torch.Tensor, span: TokenSpan, restore_position: str) -> int:
     if restore_position == "subject_last":
         return int(span.last_position)
@@ -491,12 +533,17 @@ def _run_position_layer_trace(
     epsilon = 1e-9
 
     with torch.inference_mode():
-        clean_outputs, clean_prob, clean_top, clean_top_prob = _clean_pass(handler, inputs, target_token_id)
+        clean_outputs, clean_prob, clean_top_id, clean_top, clean_top_prob = _clean_pass(
+            handler,
+            inputs,
+            target_token_id,
+        )
 
-        if require_correct and clean_top != handler.tokenizer.decode([target_token_id]).strip():
+        if require_correct and int(clean_top_id) != int(target_token_id):
             raise TraceValidationError(
-                f"Clean top token {clean_top!r} did not match target token "
-                f"{handler.tokenizer.decode([target_token_id]).strip()!r}"
+                f"Clean top token {clean_top!r} (id={clean_top_id}, p={clean_top_prob:.6g}) did not match "
+                f"target token {handler.tokenizer.decode([target_token_id])!r} "
+                f"(id={target_token_id}, p={clean_prob:.6g})"
             )
 
         hidden_size = int(clean_outputs.hidden_states[-1].shape[-1])
@@ -518,29 +565,24 @@ def _run_position_layer_trace(
         p_corrupt = _probabilities_from_logits(corrupt_outputs.logits, target_token_id).numpy()
 
         clean_component_cache: dict[tuple[int, int], torch.Tensor] = {}
-        if component == "residual":
-            for layer in range(num_layers):
-                for pos in positions:
-                    clean_component_cache[(layer, int(pos))] = clean_outputs.hidden_states[layer + 1][0, int(pos)].detach().clone()
-        else:
-            cache_hooks = []
-            captured: dict[int, torch.Tensor] = {}
+        cache_hooks = []
+        captured: dict[int, torch.Tensor] = {}
 
-            def make_cache_hook(layer_idx: int):
-                def hook(_module, _input, output):
-                    captured[layer_idx] = _hidden_from_output(output)[0].detach().clone()
-                    return output
+        def make_cache_hook(layer_idx: int):
+            def hook(_module, _input, output):
+                captured[layer_idx] = _hidden_from_output(output)[0].detach().clone()
+                return output
 
-                return hook
+            return hook
 
-            for layer in range(num_layers):
-                module = _resolve_module(handler.model, _module_name(handler.cfg, component, layer))
-                cache_hooks.append((module, make_cache_hook(layer)))
-            with temporary_hooks(cache_hooks):
-                handler.model(**inputs, use_cache=False)
-            for layer, hidden in captured.items():
-                for pos in positions:
-                    clean_component_cache[(layer, int(pos))] = hidden[int(pos)].detach().clone()
+        for layer in range(num_layers):
+            module = _resolve_module(handler.model, _module_name(handler.cfg, component, layer))
+            cache_hooks.append((module, make_cache_hook(layer)))
+        with temporary_hooks(cache_hooks):
+            handler.model(**inputs, use_cache=False)
+        for layer, hidden in captured.items():
+            for pos in positions:
+                clean_component_cache[(layer, int(pos))] = hidden[int(pos)].detach().clone()
 
         if component == "residual":
             raw = np.zeros((len(positions), num_layers, num_noise), dtype=np.float32)
@@ -589,6 +631,9 @@ def _run_position_layer_trace(
     token_scores: dict[int, list[LayerTraceScore]] = {}
     for pos_idx, pos in enumerate(positions):
         token_scores[int(pos)] = _layer_scores_from_probs(raw[pos_idx], p_corrupt, total_effect)
+    subject_last_scores = token_scores.get(int(span.last_position), [])
+    prompt_last_position = int(inputs["input_ids"].shape[1] - 1)
+    prompt_last_scores = token_scores.get(prompt_last_position, [])
 
     if len(positions) == 1:
         layer_scores = token_scores[int(positions[0])]
@@ -596,8 +641,19 @@ def _run_position_layer_trace(
         averaged_raw = raw.mean(axis=0)
         layer_scores = _layer_scores_from_probs(averaged_raw, p_corrupt, total_effect)
 
-    candidate_layers = _candidate_layers(layer_scores, tracing_cfg) if reliable or mode in {"aquin", "alt"} else []
-    best_trace_layer = candidate_layers[0] if candidate_layers else None
+    actual_restore_position = int(positions[0]) if len(positions) == 1 else None
+    early_site_scores = layer_scores if _is_subject_last_mlp_trace(component, positions, span) else []
+    late_site_scores = layer_scores if _is_late_site_trace(component, positions, prompt_last_position) else []
+    peak_early_site_layer = _peak_layer(early_site_scores)
+    peak_late_site_layer = _peak_layer(late_site_scores)
+    best_late_recovery_layer = peak_late_site_layer
+    early_site_candidate_layers = _candidate_layers(early_site_scores, tracing_cfg) if reliable and early_site_scores else []
+    candidate_source = "subject_last_mlp_window" if early_site_candidate_layers else None
+
+    # Backward-compatible generic candidates are populated only for the explicit
+    # early-site workflow. Aquin may still fill this later as a heuristic.
+    candidate_layers = list(early_site_candidate_layers)
+    best_trace_layer = peak_early_site_layer if early_site_candidate_layers else None
 
     result = PromptTraceResult(
         prompt_id=example.prompt_id,
@@ -609,11 +665,23 @@ def _run_position_layer_trace(
         target_token=handler.tokenizer.decode([target_token_id]),
         target_token_mode="first_token_only",
         subject_positions=list(span.positions),
+        subject_tokens=_tokens_at(handler.tokenizer, inputs["input_ids"], span.positions),
+        subject_last_position=int(span.last_position),
+        subject_last_token=_decode_token_at(handler.tokenizer, inputs["input_ids"], span.last_position),
+        prompt_last_position=prompt_last_position,
+        prompt_last_token=_decode_token_at(handler.tokenizer, inputs["input_ids"], prompt_last_position),
         restore_position_type=restore_position_type,
-        restore_position=int(positions[0]) if len(positions) == 1 else None,
+        restore_position=actual_restore_position,
+        actual_restore_position=actual_restore_position,
+        actual_restore_token=(
+            _decode_token_at(handler.tokenizer, inputs["input_ids"], actual_restore_position)
+            if actual_restore_position is not None
+            else None
+        ),
         position_scope=str(_get(tracing_cfg, "position_scope", None)) if mode == "canonical" else None,
         component=component,
         clean_probability=clean_prob,
+        clean_top_token_id=clean_top_id,
         clean_top_token=clean_top,
         clean_top_probability=clean_top_prob,
         corrupt_probabilities=[float(x) for x in p_corrupt.tolist()],
@@ -625,6 +693,18 @@ def _run_position_layer_trace(
         signal_quality=signal_quality,
         best_trace_layer=best_trace_layer,
         candidate_layers=candidate_layers,
+        candidate_source=candidate_source,
+        early_site_candidate_layers=early_site_candidate_layers,
+        early_site_trace_reliable=reliable if early_site_scores else None,
+        peak_early_site_layer=peak_early_site_layer if reliable else None,
+        peak_late_site_layer=peak_late_site_layer,
+        best_late_recovery_layer=best_late_recovery_layer,
+        peak_subject_last_residual_layer=(_peak_layer(subject_last_scores) if component == "residual" else None),
+        peak_subject_last_mlp_window_layer=peak_early_site_layer if reliable and early_site_scores else None,
+        peak_prompt_last_residual_layer=(_peak_layer(prompt_last_scores) if component == "residual" else None),
+        peak_prompt_last_attention_window_layer=(_peak_layer(prompt_last_scores) if component == "attention" else None),
+        early_site_scores=early_site_scores,
+        late_site_scores=late_site_scores,
         layer_scores=layer_scores,
         token_layer_scores=token_scores,
         tokens=_token_metadata(handler.tokenizer, inputs["input_ids"], span),
@@ -648,6 +728,7 @@ def _apply_aquin_fallback(result: PromptTraceResult, num_layers: int, tracing_cf
     result.candidate_layers = [int(score.layer) for score in ranked[:count]]
     result.best_trace_layer = result.candidate_layers[0] if result.candidate_layers else None
     result.fallback_used = True
+    result.candidate_source = "middle_third_heuristic"
     result.fallback_reason = (
         "The causal signal was unreliable. Candidate layers were selected from the middle region of the network "
         "using the configured fallback heuristic."
@@ -772,6 +853,12 @@ def trace_one_example(
         else:
             raise ValueError(f"Unsupported position_scope: {scope}")
         restore_position_type = scope
+    elif mode == "early_site":
+        positions = [span.last_position]
+        restore_position_type = "subject_last"
+    elif mode == "late_site":
+        positions = [int(inputs.input_ids.shape[1] - 1)]
+        restore_position_type = "prompt_last"
     else:
         restore_type = str(_get(tracing_cfg, "restore_position", "prompt_last" if mode in {"aquin", "fast"} else "subject_last"))
         positions = [_select_restore_position(inputs.input_ids, span, restore_type)]
@@ -791,6 +878,12 @@ def trace_one_example(
     )
 
     if mode in {"aquin", "alt"}:
+        if not result.candidate_layers:
+            result.candidate_layers = _candidate_layers(result.layer_scores, tracing_cfg)
+            result.best_trace_layer = result.candidate_layers[0] if result.candidate_layers else None
+            result.candidate_source = (
+                "aquin_heuristic" if mode == "aquin" else "late_site_recovery_compatibility"
+            )
         result = _apply_aquin_fallback(result, int(handler.num_of_layers), tracing_cfg)
     if mode == "aquin":
         validation, best = _validate_rome_layers(handler, example, result.candidate_layers, tracing_cfg)
@@ -837,6 +930,85 @@ def _write_heatmaps(out_dir: Path, results: Sequence[PromptTraceResult]) -> None
         ax.set_title(f"{result.mode} IE: {result.prompt_id}")
         fig.tight_layout()
         fig.savefig(heatmap_dir / f"{result.prompt_id}.png", dpi=160)
+        plt.close(fig)
+
+
+def _write_line_graphs(out_dir: Path, results: Sequence[PromptTraceResult]) -> None:
+    try:
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Skipping line graphs because plotting imports failed: %s", exc)
+        return
+
+    graph_dir = out_dir / "line_graphs"
+    graph_dir.mkdir(exist_ok=True)
+
+    aggregate: list[np.ndarray] = []
+    for result in results:
+        if not result.layer_scores:
+            continue
+        layers = np.array([score.layer for score in result.layer_scores], dtype=np.int32)
+        effects = np.array([score.mean_indirect_effect for score in result.layer_scores], dtype=np.float32)
+        normalized = np.array([score.normalized_recovery for score in result.layer_scores], dtype=np.float32)
+        aggregate.append(effects)
+
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        ax.plot(layers, effects, marker="o", linewidth=1.8, label="mean indirect effect")
+        ax.axhline(0.0, color="black", linewidth=0.8, alpha=0.5)
+        for layer in result.candidate_layers:
+            ax.axvline(int(layer), color="tab:red", linestyle="--", linewidth=1.0, alpha=0.7)
+        if result.best_trace_layer is not None:
+            ax.scatter(
+                [int(result.best_trace_layer)],
+                [effects[int(result.best_trace_layer)]],
+                color="tab:red",
+                zorder=4,
+                label="best trace candidate",
+            )
+        ax.set_xlabel("Layer")
+        ax.set_ylabel("P(target | restored) - P(target | corrupted)")
+        ax.set_title(
+            f"{result.mode} trace: {result.subject} -> {result.target} "
+            f"({'reliable' if result.trace_reliable else result.trace_failure_reason})"
+        )
+        ax.legend(loc="best")
+        fig.tight_layout()
+        fig.savefig(graph_dir / f"{result.prompt_id}_indirect_effect.png", dpi=160)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        ax.plot(layers, normalized, marker="o", linewidth=1.8, color="tab:green", label="normalized recovery")
+        ax.axhline(0.0, color="black", linewidth=0.8, alpha=0.5)
+        ax.axhline(1.0, color="tab:gray", linewidth=0.8, linestyle=":", alpha=0.7)
+        for layer in result.candidate_layers:
+            ax.axvline(int(layer), color="tab:red", linestyle="--", linewidth=1.0, alpha=0.7)
+        ax.set_xlabel("Layer")
+        ax.set_ylabel("Normalized recovery")
+        ax.set_title(f"{result.mode} normalized recovery: {result.subject} -> {result.target}")
+        ax.legend(loc="best")
+        fig.tight_layout()
+        fig.savefig(graph_dir / f"{result.prompt_id}_normalized_recovery.png", dpi=160)
+        plt.close(fig)
+
+    if aggregate:
+        max_len = max(len(values) for values in aggregate)
+        aligned = np.full((len(aggregate), max_len), np.nan, dtype=np.float32)
+        for row, values in enumerate(aggregate):
+            aligned[row, : len(values)] = values
+        mean = np.nanmean(aligned, axis=0)
+        std = np.nanstd(aligned, axis=0)
+        layers = np.arange(max_len)
+
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        ax.plot(layers, mean, marker="o", linewidth=1.8, label="mean indirect effect")
+        ax.fill_between(layers, mean - std, mean + std, alpha=0.2, label="1 std")
+        ax.axhline(0.0, color="black", linewidth=0.8, alpha=0.5)
+        ax.set_xlabel("Layer")
+        ax.set_ylabel("Mean indirect effect")
+        ax.set_title("Aggregate causal trace layer curve")
+        ax.legend(loc="best")
+        fig.tight_layout()
+        fig.savefig(graph_dir / "aggregate_indirect_effect.png", dpi=160)
         plt.close(fig)
 
 
@@ -927,6 +1099,8 @@ def _write_outputs(out_dir: Path, mode: str, cfg: DictConfig, results: Sequence[
         )
         if bool(_get(_cfg_section(cfg, "tracing"), "generate_heatmaps", True)):
             _write_heatmaps(out_dir, results)
+    if bool(_get(_cfg_section(cfg, "tracing"), "generate_line_graphs", True)):
+        _write_line_graphs(out_dir, results)
 
 
 def _aggregate_peak_layer(results: Sequence[PromptTraceResult]) -> int | None:
@@ -946,12 +1120,17 @@ def run_trace_mode(cfg: DictConfig, mode: TraceMode) -> Path | None:
     if "mode" not in tracing_cfg:
         tracing_cfg.mode = mode
     handler = ModelHandler(cfg)
-    examples = _trace_examples(cfg)
+    requested = int(getattr(getattr(cfg, "generation", object()), "num_of_runs", 1))
+    max_scan_default = max(requested, requested * 20)
+    max_scan = int(_get(tracing_cfg, "max_examples_to_scan", max_scan_default))
+    examples = _trace_examples(cfg, limit=max_scan)
     out_dir = _run_dir(mode, cfg)
     results: list[PromptTraceResult] = []
     skipped: list[dict[str, str]] = []
 
     for example in tqdm(examples, desc=f"{mode} trace"):
+        if len(results) >= requested:
+            break
         try:
             results.append(trace_one_example(handler, example, mode=mode, tracing_cfg=tracing_cfg))
         except TraceValidationError as exc:

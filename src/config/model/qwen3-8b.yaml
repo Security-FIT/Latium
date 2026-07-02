@@ -4,12 +4,12 @@
 # :author: Jakub Res <iresj@fit.vut.cz>
 
 name: "Qwen/Qwen3-8B"
-second_moment_path: "./data/second_moment_stats/Qwen_Qwen3-8B_10_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: "./data/second_moment_stats/Qwen_Qwen3-8B_7_SM_Method.WIKIPEDIA_100000.pt"
 layer_name_template: "model.layers.{}.mlp.down_proj"
 fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 10
+layer: 7
 corruption_noise_multiplier: 0.0777740478515625
 dtype: "bf16"
 prefix_mode: "external"

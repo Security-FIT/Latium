@@ -9,7 +9,28 @@ defaults:
   - /generation@_global_.generation: generation
   - /dataset_facts@_global_.dataset_facts: counterfact
   - /dataset_sm@_global_.dataset_sm: wikitext
-  - /tracing@_global_.tracing: aquin
   - _self_
 
 name: rome-layer-sweep
+
+tracing:
+  mode: aquin
+  output_dir: analysis_out/causal_trace
+  num_noise_samples: 10
+  noise_multiplier: 3.0
+  restore_position: prompt_last
+  ranking_metric: normalized_recovery
+  top_k_layers: 10000
+  validate_with_rome: true
+  min_total_effect: 0.05
+  signal_quality:
+    min_total_effect: 0.05
+    min_peak_normalized_recovery: 0.10
+    max_peak_relative_std: 1.0
+  middle_third_fallback:
+    enabled: false
+    candidate_count: 3
+  rome_validation:
+    rewrite_weight: 0.4
+    paraphrase_weight: 0.3
+    locality_weight: 0.3

@@ -9,7 +9,23 @@ defaults:
   - /generation@_global_.generation: generation
   - /dataset_facts@_global_.dataset_facts: counterfact
   - /dataset_sm@_global_.dataset_sm: wikitext
-  - /tracing@_global_.tracing: standard
   - _self_
 
 name: causal-trace
+
+causal_trace:
+  output_dir: analysis_out/causal_trace
+  num_valid_facts: 100
+  max_dataset_examples_to_scan: 10000
+  num_noise_samples: 10
+  noise_multiplier: 3.0
+  window_size: 10
+  require_correct_clean_prediction: true
+  min_total_effect: 0.03
+  bootstrap_samples: 1000
+  confidence_level: 0.95
+  trim_fraction: 0.10
+  minimum_supported_centers: 3
+  middle_center_min_fraction: 0.25
+  middle_center_max_fraction: 0.75
+  seed: 42

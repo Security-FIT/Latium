@@ -28,10 +28,6 @@ def print_help() -> None:
     print("  python -m src prefix-experiment prefix_experiment.model=gpt2-large")
     print("  python -m src manual-rome model=gpt2-large ...")
     print("  python -m src causal-trace model=gpt2-large generation.num_of_runs=5")
-    print("  python -m src alt-trace model=gpt2-large generation.num_of_runs=5")
-    print("  python -m src aquin-trace model=gpt2-large generation.num_of_runs=5")
-    print("  python -m src canonical-trace model=gpt2-large generation.num_of_runs=5")
-    print("  python -m src fast-trace model=gpt2-large generation.num_of_runs=5")
 
 
 def print_methods() -> int:

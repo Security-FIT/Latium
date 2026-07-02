@@ -8,8 +8,8 @@ layer_name_template: "transformer.h.{}.mlp.dense_4h_to_h"
 fc_layer_name_template: "transformer.h.{}.mlp.dense_h_to_4h"
 restore_layer_name_template: "transformer.h.{}"
 corrupt_layer_name_template: "transformer.word_embeddings"
-layer: 3
-second_moment_path: "./data/second_moment_stats/tiiuae_falcon-7b_3_SM_Method.WIKIPEDIA_100000.pt"
+layer: 5
+second_moment_path: "./data/second_moment_stats/tiiuae_falcon-7b_5_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.1
 epochs: 10
 dtype: "bf16"

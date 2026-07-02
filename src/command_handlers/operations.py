@@ -39,44 +39,9 @@ def run_print_arch(cfg: DictConfig) -> int:
 
 
 def run_causal_trace(cfg: DictConfig) -> int:
-    from src.causal_trace.prototype import run_standard_trace
+    from src.causal_trace.causal_trace import causal_trace
 
-    run_standard_trace(cfg)
-    return 0
-
-
-def run_alt_trace(cfg: DictConfig) -> int:
-    from src.causal_trace.prototype import run_alt_trace as run
-
-    run(cfg)
-    return 0
-
-
-def run_aquin_trace(cfg: DictConfig) -> int:
-    from src.causal_trace.prototype import run_aquin_trace as run
-
-    run(cfg)
-    return 0
-
-
-def run_canonical_trace(cfg: DictConfig) -> int:
-    from src.causal_trace.prototype import run_canonical_trace as run
-
-    run(cfg)
-    return 0
-
-
-def run_fast_trace(cfg: DictConfig) -> int:
-    from src.causal_trace.prototype import run_fast_trace as run
-
-    run(cfg)
-    return 0
-
-
-def run_rome_layer_sweep(cfg: DictConfig) -> int:
-    from src.causal_trace.prototype import run_rome_layer_sweep as run
-
-    run(cfg)
+    causal_trace(cfg)
     return 0
 
 
@@ -143,11 +108,6 @@ OPERATIONS: dict[str, Callable[[DictConfig], int]] = {
     "manual-rome": run_manual_rome,
     "print-arch": run_print_arch,
     "causal-trace": run_causal_trace,
-    "alt-trace": run_alt_trace,
-    "aquin-trace": run_aquin_trace,
-    "canonical-trace": run_canonical_trace,
-    "fast-trace": run_fast_trace,
-    "rome-layer-sweep": run_rome_layer_sweep,
     "compute-multiplier": run_compute_multiplier,
     "second-moment": run_second_moment,
     "batch-rome": run_batch_rome,

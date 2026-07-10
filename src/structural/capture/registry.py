@@ -31,6 +31,11 @@ CAPTURES = NamedRegistry(
             "src.structural.capture.producers:capture_spectral",
         ),
         CaptureSpec(
+            "weighted-spectrum",
+            "Affine-relative weighted-spectrum geometry across hidden layers.",
+            "src.structural.capture.producers:capture_weighted_spectrum",
+        ),
+        CaptureSpec(
             "matrix-features",
             "Reusable per-layer matrix, rank, norm, and IPR profiles.",
             "src.structural.capture.producers:capture_matrix_features",
@@ -58,6 +63,7 @@ CAPTURES = NamedRegistry(
 CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "none": (),
     "spectral": ("spectral",),
+    "weighted-spectrum": ("weighted-spectrum",),
     "matrix": ("matrix-features",),
     "paper": ("spectral", "matrix-features"),
     "full": CAPTURES.identifiers(),

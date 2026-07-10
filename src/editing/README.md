@@ -16,3 +16,7 @@ the structural runtime to restore the model after each case.
 
 The registry loads factories from `factory: module:ClassName`; keep constructors
 argument-free unless the registry is changed deliberately.
+
+Lazy `module:attribute` paths are the registry extension contract. They keep
+command discovery from importing model and plotting stacks; in-tree capture,
+analysis, and renderer entries use the same contract as external additions.

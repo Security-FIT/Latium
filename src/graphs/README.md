@@ -10,6 +10,10 @@ render artifact with a reason. Render artifacts depend on their selected inputs,
 so re-rendering skips current outputs and stale graphs are invalidated when
 upstream artifacts change.
 
+Every renderer must declare its artifact inputs. Analysis configuration hashes
+are preserved in summary rows, plot labels, CSV columns, and per-case output
+paths, so multiple variants never overwrite or aggregate into one another.
+
 Built-in renderers:
 
 - `paper`: machine-readable paper analysis data.
@@ -31,10 +35,12 @@ Built-in renderers:
 
 Renderer functions receive `src.graphs.context.RenderContext` with typed access
 to `output_dir`, `manifest`, `executions`, captures/analyses grouped by
-producer, renderer `options`, and `style_preset`. Return the list of files
-written; the graph runtime stores those paths in the render artifact summary.
-Older generic renderers may still call `context.as_mapping()` internally as a
-compatibility bridge, but new graph makers should use `RenderContext` directly.
+producer, and renderer `options`. Return the list of files written; the graph
+runtime stores those paths in the render artifact summary.
+
+Unexpected renderer exceptions are saved as `status=error` artifacts and then
+raised by default so CLI automation receives a non-zero exit. Set
+`graphs.continue_on_error=true` only for an explicitly best-effort batch.
 
 Renderer options are configured through Hydra under
 `graphs.renderers.<renderer-id>`. For example:
@@ -42,7 +48,6 @@ Renderer options are configured through Hydra under
 ```bash
 python -m src graphs run analysis_out/run-id \
   graphs.renderer_preset=structural-paper \
-  graphs.style_preset=default \
   graphs.renderers.structural-artifact-grid.formats='[png,pdf,json]'
 ```
 

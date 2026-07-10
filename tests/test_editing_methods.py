@@ -54,10 +54,10 @@ def test_rome_method_uses_handler_sample_counts_and_returns_restoration(monkeypa
         calls.append(("insert", owner, k.clone(), delta.clone()))
         owner.module.weight = torch.nn.Parameter(owner.module.weight + 1)
 
-    monkeypatch.setattr("src.rome.common.resolve_rome_sample_count", resolve)
-    monkeypatch.setattr("src.rome.common.gather_k", gather)
-    monkeypatch.setattr("src.rome.common.optimize_v", optimize)
-    monkeypatch.setattr("src.rome.common.insert_kv", insert)
+    monkeypatch.setattr("src.rome.prefixes.resolve_rome_sample_count", resolve)
+    monkeypatch.setattr("src.rome.optimization.gather_k", gather)
+    monkeypatch.setattr("src.rome.optimization.optimize_v", optimize)
+    monkeypatch.setattr("src.rome.optimization.insert_kv", insert)
 
     outcome = RomeEditMethod().apply(
         handler,

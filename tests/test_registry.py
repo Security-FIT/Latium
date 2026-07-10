@@ -11,6 +11,7 @@ import pytest
 
 from src.registry import NamedRegistry, RegistryEntry, load_object, resolve_preset_selection
 from src.editing.registry import EDIT_METHODS
+from src.graphs.registry import RENDERERS, RendererSpec
 from src.structural.analysis.registry import AnalysisSpec, _validated_registry
 from src.structural.analysis.registry import ANALYSES, ANALYSIS_PRESETS
 from src.structural.capture.registry import CAPTURES, CAPTURE_PROFILES
@@ -96,7 +97,6 @@ def test_analysis_registry_rejects_invalid_variant_fields() -> None:
                 )
             ]
         )
-
     with pytest.raises(ValueError, match="unknown config field"):
         _validated_registry(
             [
@@ -111,3 +111,9 @@ def test_analysis_registry_rejects_invalid_variant_fields() -> None:
                 )
             ]
         )
+
+
+def test_every_renderer_declares_inputs() -> None:
+    assert RENDERERS.identifiers()
+    with pytest.raises(ValueError, match="declare its artifact inputs"):
+        RendererSpec("invalid", "missing contract", "module:runner")

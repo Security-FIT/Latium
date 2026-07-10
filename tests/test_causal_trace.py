@@ -58,6 +58,24 @@ class _ToyTokenizer:
         return " ".join(str(int(x)) for x in ids)
 
 
+class _NoOffsetBosTokenizer:
+    bos_token_id = 0
+
+    def __init__(self) -> None:
+        self.vocabulary: dict[str, int] = {}
+
+    def __call__(self, text, add_special_tokens=True, return_offsets_mapping=False, return_tensors=None):
+        if return_offsets_mapping:
+            raise NotImplementedError("offset mappings are unavailable")
+        ids = [self.vocabulary.setdefault(token, len(self.vocabulary) + 1) for token in text.split()]
+        if add_special_tokens:
+            ids.insert(0, self.bos_token_id)
+        payload = {"input_ids": ids}
+        if return_tensors == "pt":
+            payload["input_ids"] = torch.tensor([ids])
+        return _Encoding(payload)
+
+
 def test_find_subject_span_multi_token_subject_with_offsets() -> None:
     span = find_subject_span(_ToyTokenizer(), "Ada Lovelace was born in London", "Ada Lovelace")
 
@@ -70,6 +88,13 @@ def test_find_subject_span_multi_token_subject_with_offsets() -> None:
 def test_find_subject_span_repeated_subject_raises() -> None:
     with pytest.raises(TraceValidationError, match="appears 2 times"):
         find_subject_span(_ToyTokenizer(), "Paris is not Paris", "Paris")
+
+
+def test_find_subject_span_without_offsets_keeps_model_bos_position() -> None:
+    span = find_subject_span(_NoOffsetBosTokenizer(), "Ada Lovelace wrote code", "Ada Lovelace")
+
+    assert span.positions == [1, 2]
+    assert span.last_position == 2
 
 
 def test_target_first_token_id_returns_first_token() -> None:

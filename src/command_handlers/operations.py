@@ -56,7 +56,7 @@ def run_second_moment(cfg: DictConfig) -> int:
     import torch
 
     from src.handlers.rome import ModelHandler
-    from src.rome.common import compute_second_moment
+    from src.rome.covariance import compute_second_moment
 
     handler = ModelHandler(cfg)
     target_samples = getattr(cfg.model, "second_moment_target_samples", None)
@@ -82,7 +82,7 @@ def run_batch_rome(cfg: DictConfig) -> int:
 
 def run_generate_prefixes(cfg: DictConfig) -> int:
     from src.handlers.rome import ModelHandler
-    from src.rome.common import generate_prefixes
+    from src.rome.prefixes import generate_prefixes
 
     handler = ModelHandler(cfg)
     print(generate_prefixes(handler, 50))

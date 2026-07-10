@@ -18,7 +18,6 @@ class CaptureSpec(RegistryEntry):
     producer: str = ""
     requires_probe: bool = False
     requires_baseline: bool = True
-    model_families: tuple[str, ...] = ("all",)
 
     def load(self) -> Callable[..., dict[str, Any]]:
         return load_object(self.producer)

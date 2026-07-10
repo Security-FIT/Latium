@@ -3,6 +3,10 @@
 Structural runs are split into model-dependent capture, model-free analysis, and
 manifest-backed rendering.
 
+Structural configuration uses native Hydra/YAML lists. Invalid numeric bounds,
+even local windows, and legacy comma/semicolon sweep strings fail immediately;
+the runtime does not silently clamp or rewrite experiment settings.
+
 ```text
 runner.py
   -> execution/  load model, select cases, run edits

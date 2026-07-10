@@ -13,6 +13,7 @@ from omegaconf import DictConfig
 
 from src.command_handlers.common import path_or_none
 from src.common.config import plain as _plain
+from src.common.config import strict_bool
 from src.common.config import string_list as _string_list
 
 
@@ -29,9 +30,12 @@ def run_graphs_command(cfg: DictConfig, name: str) -> int:
             preset=str(graphs.renderer_preset),
             enabled=tuple(_string_list(graphs.enable_renderers)),
             disabled=tuple(_string_list(graphs.disable_renderers)),
-            style_preset=str(getattr(graphs, "style_preset", "default")),
             renderer_options=_plain(getattr(graphs, "renderers", {})) or {},
-            force=bool(graphs.force),
+            force=strict_bool(graphs.force, name="graphs.force"),
+            continue_on_error=strict_bool(
+                getattr(graphs, "continue_on_error", False),
+                name="graphs.continue_on_error",
+            ),
         )
         return 0
     if name == "graphs-prefix":

@@ -13,19 +13,13 @@ from numbers import Real
 from typing import Any, Iterable
 
 from src.common.io import write_json
+from src.graphs.context import RenderContext
 from src.results.naming import safe_slug
 
 
-def _context_mapping(context: Any) -> dict[str, Any]:
-    if hasattr(context, "as_mapping"):
-        return context.as_mapping()
-    return context
-
-
-def _analysis_rows(context: Any) -> list[dict[str, Any]]:
-    context = _context_mapping(context)
+def _analysis_rows(context: RenderContext) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for payload in context.get("analyses", []):
+    for payload in context.flat_analyses:
         if not isinstance(payload, dict):
             continue
         run = payload.get("run", {})
@@ -36,6 +30,7 @@ def _analysis_rows(context: Any) -> list[dict[str, Any]]:
                 "plan_id": run.get("plan_id"),
                 "edit_method": run.get("edit_method"),
                 "analysis": payload.get("producer"),
+                "config_hash": payload.get("config_hash"),
                 "category": payload.get("category"),
                 "status": payload.get("status"),
                 "accuracy": float(summary.get("accuracy", 0.0) or 0.0),
@@ -79,10 +74,9 @@ def _case_metric(case: dict[str, Any], *names: str) -> Any:
     return None
 
 
-def _execution_rows(context: Any) -> list[dict[str, Any]]:
-    context = _context_mapping(context)
+def _execution_rows(context: RenderContext) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for payload in context.get("executions", []):
+    for payload in context.executions:
         if not isinstance(payload, dict):
             continue
         run = payload.get("run", {})
@@ -117,10 +111,9 @@ def _execution_rows(context: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def _detection_case_rows(context: Any) -> list[dict[str, Any]]:
-    context = _context_mapping(context)
+def _detection_case_rows(context: RenderContext) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for payload in context.get("analyses", []):
+    for payload in context.flat_analyses:
         if not isinstance(payload, dict) or payload.get("category") != "detection":
             continue
         run = payload.get("run", {})
@@ -152,7 +145,11 @@ def _detection_case_rows(context: Any) -> list[dict[str, Any]]:
 
 
 def _analysis_label(row: dict[str, Any]) -> str:
-    return f"{safe_slug(str(row.get('model')))}\n{row.get('edit_method')}:{row.get('analysis')}"
+    digest = str(row.get("config_hash") or "unknown")[:8]
+    return (
+        f"{safe_slug(str(row.get('model')))} / {safe_slug(str(row.get('plan_id')))}\n"
+        f"{row.get('edit_method')}:{row.get('analysis')}@{digest}"
+    )
 
 
 def _numeric_layer_series(value: Any) -> dict[int, float] | None:
@@ -197,9 +194,8 @@ def _find_series(data: dict[str, Any], *, prefix: str = "") -> list[tuple[str, d
     return deduped
 
 
-def render_run_summary(context: Any) -> list[str]:
-    context = _context_mapping(context)
-    output_dir = Path(context["output_dir"])
+def render_run_summary(context: RenderContext) -> list[str]:
+    output_dir = context.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     path = write_json(
         output_dir / "analysis-summary.json",
@@ -208,10 +204,9 @@ def render_run_summary(context: Any) -> list[str]:
     return [str(path)]
 
 
-def render_detector(context: Any) -> list[str]:
-    context = _context_mapping(context)
+def render_detector(context: RenderContext) -> list[str]:
     rows = [row for row in _analysis_rows(context) if row["category"] == "detection" and row["status"] == "complete"]
-    output_dir = Path(context["output_dir"])
+    output_dir = context.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = write_json(output_dir / "detection-summary.json", {"analyses": rows})
     outputs = [str(json_path)]
@@ -220,7 +215,7 @@ def render_detector(context: Any) -> list[str]:
 
     import matplotlib.pyplot as plt
 
-    labels = [f"{safe_slug(row['model'])}\n{row['edit_method']}:{row['analysis']}" for row in rows]
+    labels = [_analysis_label(row) for row in rows]
     accuracies = [row["accuracy"] for row in rows]
     fig, ax = plt.subplots(figsize=(max(8, len(rows) * 1.25), 4.8))
     ax.bar(labels, accuracies, color="#1f77b4")
@@ -237,10 +232,9 @@ def render_detector(context: Any) -> list[str]:
     return outputs
 
 
-def render_paper(context: Any) -> list[str]:
-    context = _context_mapping(context)
+def render_paper(context: RenderContext) -> list[str]:
     rows = [row for row in _analysis_rows(context) if row["status"] == "complete"]
-    output_dir = Path(context["output_dir"])
+    output_dir = context.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     return [
         str(
@@ -252,10 +246,9 @@ def render_paper(context: Any) -> list[str]:
     ]
 
 
-def render_rome_success(context: Any) -> list[str]:
-    context = _context_mapping(context)
+def render_rome_success(context: RenderContext) -> list[str]:
     rows = _execution_rows(context)
-    output_dir = Path(context["output_dir"])
+    output_dir = context.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = write_json(output_dir / "rome-success-metrics.json", {"executions": rows})
     csv_path = _write_csv(
@@ -308,10 +301,9 @@ def render_rome_success(context: Any) -> list[str]:
     return outputs
 
 
-def render_detector_window(context: Any) -> list[str]:
-    context = _context_mapping(context)
+def render_detector_window(context: RenderContext) -> list[str]:
     rows = _detection_case_rows(context)
-    output_dir = Path(context["output_dir"])
+    output_dir = context.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = write_json(output_dir / "detector-layer-window.json", {"cases": rows})
     csv_path = _write_csv(
@@ -322,6 +314,7 @@ def render_detector_window(context: Any) -> list[str]:
             "plan_id",
             "edit_method",
             "analysis",
+            "config_hash",
             "case_id",
             "target_layer",
             "detected_layer",
@@ -365,16 +358,15 @@ def render_detector_window(context: Any) -> list[str]:
     return outputs
 
 
-def render_detector_signals(context: Any) -> list[str]:
-    context = _context_mapping(context)
-    output_dir = Path(context["output_dir"])
+def render_detector_signals(context: RenderContext) -> list[str]:
+    output_dir = context.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     index: list[dict[str, Any]] = []
     outputs: list[str] = []
 
     import matplotlib.pyplot as plt
 
-    for payload in context.get("analyses", []):
+    for payload in context.flat_analyses:
         if not isinstance(payload, dict) or payload.get("category") != "detection":
             continue
         run = payload.get("run", {})
@@ -382,6 +374,8 @@ def render_detector_signals(context: Any) -> list[str]:
         plan_id = safe_slug(str(run.get("plan_id", "plan")))
         method = safe_slug(str(run.get("edit_method", "method")))
         analysis = safe_slug(str(payload.get("producer", "analysis")))
+        config_hash = str(payload.get("config_hash") or "unknown")
+        variant = safe_slug(config_hash)
         plotted = 0
         for case in payload.get("cases", []):
             if plotted >= 8 or not isinstance(case, dict) or case.get("status") != "complete":
@@ -410,7 +404,7 @@ def render_detector_signals(context: Any) -> list[str]:
             ax.legend(fontsize=8, loc="best")
             fig.tight_layout()
             case_slug = safe_slug(str(case.get("case_id", plotted)))
-            graph_path = output_dir / model / plan_id / method / analysis / f"{case_slug}.png"
+            graph_path = output_dir / model / plan_id / method / analysis / variant / f"{case_slug}.png"
             graph_path.parent.mkdir(parents=True, exist_ok=True)
             fig.savefig(graph_path, dpi=180, bbox_inches="tight")
             plt.close(fig)
@@ -421,6 +415,7 @@ def render_detector_signals(context: Any) -> list[str]:
                     "plan_id": run.get("plan_id"),
                     "edit_method": run.get("edit_method"),
                     "analysis": payload.get("producer"),
+                    "config_hash": config_hash,
                     "case_id": case.get("case_id"),
                     "output": str(graph_path.relative_to(output_dir)),
                     "series": [name for name, _ in series_items[:6]],

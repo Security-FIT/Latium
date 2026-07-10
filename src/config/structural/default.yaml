@@ -32,6 +32,7 @@ capture:
 
 analysis:
   enabled: true
+  continue_on_error: false
   preset: paper
   enable: []
   disable: []
@@ -130,6 +131,7 @@ analysis:
 
 render:
   enabled: false
+  continue_on_error: false
   renderer_preset: none
   enable: []
   disable: []

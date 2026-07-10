@@ -15,65 +15,51 @@ from typing import Any, Optional, Sequence
 from src.common.config import (
     is_sequence as _is_sequence,
     mapping_section as _section,
-    optional_int as _optional_int,
 )
 from src.structural.config import AnalysisVariantConfig, ModelRunPlan, StructuralBenchmarkConfig
 
 
-def _comma_tokens(raw: object) -> list[object]:
-    if raw is None:
-        return [None]
-    if _is_sequence(raw):
-        tokens: list[object] = []
-        for item in raw:
-            tokens.extend(_comma_tokens(item))
-        return tokens
-    if isinstance(raw, str):
-        return [part.strip() for part in raw.split(',') if part.strip()]
-    return [raw]
-
-
-def _looks_like_window_scalar(value: object) -> bool:
-    if isinstance(value, int):
-        return True
-    if isinstance(value, str):
-        text = value.strip()
-        return bool(text) and ',' not in text and ';' not in text
-    return False
+def _native_values(raw: Any, default: Sequence[Any], *, name: str) -> list[Any]:
+    source = default if raw is None else raw
+    if not _is_sequence(source):
+        raise TypeError(f"{name} must be a YAML list")
+    return list(source)
 
 
 def normalize_models_arg(models: Sequence[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for entry in models:
-        for part in str(entry).split(','):
-            name = part.strip()
-            if name and name not in seen:
-                seen.add(name)
-                normalized.append(name)
+        name = str(entry).strip()
+        if "," in name or ";" in name:
+            raise ValueError("models must be a YAML list; comma/semicolon strings are not supported")
+        if name and name not in seen:
+            seen.add(name)
+            normalized.append(name)
     return normalized
 
 
-def parse_local_windows(raw: Any, default: Sequence[int] = (3, 5, 7)) -> list[int]:
-    if raw is None:
-        return [int(w) for w in default]
-    parts = _comma_tokens(raw)
-    if not parts:
-        return [int(w) for w in default]
+def _strict_int(value: Any, *, name: str, minimum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} values must be integers")
+    resolved = int(value)
+    if resolved < minimum:
+        raise ValueError(f"{name} values must be at least {minimum}")
+    return resolved
 
-    out: list[int] = []
-    seen: set[int] = set()
-    for part in parts:
-        try:
-            value = max(1, int(part))
-        except (TypeError, ValueError):
-            continue
-        if value % 2 == 0:
-            value += 1
-        if value not in seen:
-            seen.add(value)
-            out.append(value)
-    return out or [int(w) for w in default]
+
+def parse_local_windows(raw: Any, default: Sequence[int] = (3, 5, 7)) -> list[int]:
+    values = _native_values(raw, default, name="local_windows")
+    output: list[int] = []
+    for item in values:
+        window = _strict_int(item, name="local_windows", minimum=1)
+        if window % 2 == 0:
+            raise ValueError("local_windows values must be odd")
+        if window not in output:
+            output.append(window)
+    if not output:
+        raise ValueError("local_windows must not be empty")
+    return output
 
 
 def parse_int_values(
@@ -83,93 +69,46 @@ def parse_int_values(
     min_value: int = 0,
     force_odd: bool = False,
 ) -> list[int]:
-    parts = [str(v) for v in default] if raw is None else _comma_tokens(raw)
-
-    out: list[int] = []
-    seen: set[int] = set()
-    for part in parts:
-        try:
-            value = int(part)
-        except (TypeError, ValueError):
-            continue
-        if value < min_value:
-            value = min_value
+    values = _native_values(raw, default, name="integer sweep")
+    output: list[int] = []
+    for item in values:
+        value = _strict_int(item, name="integer sweep", minimum=min_value)
         if force_odd and value % 2 == 0:
-            value += 1
-        if value not in seen:
-            seen.add(value)
-            out.append(value)
-
-    if out:
-        return out
-
-    fallback: list[int] = []
-    for value in default:
-        normalized = max(min_value, int(value))
-        if force_odd and normalized % 2 == 0:
-            normalized += 1
-        fallback.append(normalized)
-    return fallback or ([1] if min_value <= 1 else [min_value])
+            raise ValueError("integer sweep values must be odd")
+        if value not in output:
+            output.append(value)
+    if not output:
+        raise ValueError("integer sweep must not be empty")
+    return output
 
 
 def parse_trim_values(raw: Any, default: Sequence[Optional[int]]) -> list[Optional[int]]:
-    source = (
-        [None if value is None else str(value) for value in default]
-        if raw is None
-        else [item for item in _comma_tokens(raw)]
-    )
-
-    out: list[Optional[int]] = []
-    seen: set[str] = set()
-    for item in source:
-        if item is None:
-            value: Optional[int] = None
-        else:
-            token = str(item).strip().lower()
-            if token in {'auto', 'none', 'default'}:
-                value = None
-            else:
-                try:
-                    value = max(0, int(token))
-                except ValueError:
-                    continue
-
-        key = 'auto' if value is None else str(value)
-        if key not in seen:
-            seen.add(key)
-            out.append(value)
-    return out or [None]
+    values = _native_values(raw, default, name="trim sweep")
+    output: list[Optional[int]] = []
+    for item in values:
+        value = None if item is None else _strict_int(item, name="trim sweep", minimum=0)
+        if value not in output:
+            output.append(value)
+    if not output:
+        raise ValueError("trim sweep must not be empty")
+    return output
 
 
 def parse_local_window_sets(
     raw: Any,
     default: Sequence[Sequence[int]] = ((3, 5, 7),),
 ) -> list[tuple[int, ...]]:
-    default_base = tuple(default[0]) if default else (3, 5, 7)
-    if raw is None:
-        chunks: list[object] = [tuple(seq) for seq in default]
-    elif _is_sequence(raw):
-        raw_items = list(raw)
-        if raw_items and all(_looks_like_window_scalar(item) for item in raw_items):
-            chunks = [raw_items]
-        else:
-            chunks = []
-            for item in raw_items:
-                if isinstance(item, str):
-                    chunks.extend(chunk.strip() for chunk in item.split(';') if chunk.strip())
-                else:
-                    chunks.append(item)
-    else:
-        chunks = [chunk.strip() for chunk in str(raw).split(';') if chunk.strip()]
-
-    out: list[tuple[int, ...]] = []
-    seen: set[tuple[int, ...]] = set()
-    for chunk in chunks:
-        values = tuple(parse_local_windows(chunk, default=default_base))
-        if values and values not in seen:
-            seen.add(values)
-            out.append(values)
-    return out or [tuple(parse_local_windows(None, default=default_base))]
+    values = _native_values(raw, default, name="local_window_sets")
+    output: list[tuple[int, ...]] = []
+    for item in values:
+        if not _is_sequence(item):
+            raise TypeError("local_window_sets must be a YAML list of lists")
+        windows = tuple(parse_local_windows(item))
+        if windows not in output:
+            output.append(windows)
+    if not output:
+        raise ValueError("local_window_sets must not be empty")
+    return output
 
 
 def _expand_for_zip(values: Sequence[object], target_len: int, arg_name: str) -> list[object]:
@@ -191,11 +130,11 @@ def build_analysis_variants(
     mode: str = 'zip',
     max_configs: Optional[int] = None,
 ) -> list[AnalysisVariantConfig]:
-    topks = [max(1, int(v)) for v in spectral_top_k_values] or [50]
-    trim_firsts = [None if v is None else max(0, int(v)) for v in trim_first_values] or [None]
-    trim_lasts = [None if v is None else max(0, int(v)) for v in trim_last_values] or [None]
-    neighbors = [max(1, int(v)) for v in spectral_neighbor_layers_values] or [1]
-    rollings = [max(1, int(v)) for v in spectral_rolling_window_values] or [5]
+    topks = parse_int_values(spectral_top_k_values, default=(50,), min_value=1)
+    trim_firsts = parse_trim_values(trim_first_values, default=(None,))
+    trim_lasts = parse_trim_values(trim_last_values, default=(None,))
+    neighbors = parse_int_values(spectral_neighbor_layers_values, default=(1,), min_value=1)
+    rollings = parse_int_values(spectral_rolling_window_values, default=(5,), min_value=1, force_odd=True)
 
     window_sets: list[tuple[int, ...]] = []
     seen_windows: set[tuple[int, ...]] = set()
@@ -225,7 +164,9 @@ def build_analysis_variants(
 
     configs: list[AnalysisVariantConfig] = []
     seen: set[tuple[object, ...]] = set()
-    limit = None if max_configs is None else max(1, int(max_configs))
+    if max_configs is not None and int(max_configs) < 1:
+        raise ValueError("max_configs must be at least 1 or null")
+    limit = None if max_configs is None else int(max_configs)
     for top_k, trim_first, trim_last, neighbor_layers, rolling_window, window_set in iterable:
         config = AnalysisVariantConfig(
             spectral_top_k=int(top_k),
@@ -254,28 +195,29 @@ def build_analysis_variants(
 
 
 def analysis_variant_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
+    defaults = AnalysisVariantConfig()
     analysis = _section(structural, "analysis")
     variants = _section(analysis, "variants")
     sweep = _section(variants, "sweep")
 
     local_windows = tuple(
         parse_local_windows(
-            variants.get("local_windows", (3, 5, 7)),
-            default=(3, 5, 7),
+            variants.get("local_windows", defaults.local_windows),
+            default=defaults.local_windows,
         )
     )
-    spectral_top_k = variants.get("spectral_top_k", 50)
-    trim_first = variants.get("trim_first")
-    trim_last = variants.get("trim_last")
-    neighbor_layers = variants.get("spectral_neighbor_layers", 1)
-    rolling_window = variants.get("spectral_rolling_window", 5)
+    spectral_top_k = variants.get("spectral_top_k", defaults.spectral_top_k)
+    trim_first = variants.get("trim_first", defaults.trim_first)
+    trim_last = variants.get("trim_last", defaults.trim_last)
+    neighbor_layers = variants.get("spectral_neighbor_layers", defaults.spectral_neighbor_layers)
+    rolling_window = variants.get("spectral_rolling_window", defaults.spectral_rolling_window)
 
     return {
-        "spectral_top_k": max(1, int(spectral_top_k)),
-        "trim_first": _optional_int(trim_first),
-        "trim_last": _optional_int(trim_last),
-        "spectral_neighbor_layers": max(1, int(neighbor_layers)),
-        "spectral_rolling_window": max(1, int(rolling_window)),
+        "spectral_top_k": int(spectral_top_k),
+        "trim_first": None if trim_first is None else int(trim_first),
+        "trim_last": None if trim_last is None else int(trim_last),
+        "spectral_neighbor_layers": int(neighbor_layers),
+        "spectral_rolling_window": int(rolling_window),
         "local_windows": local_windows,
         "analysis_variants": tuple(
             build_analysis_variants(
@@ -286,11 +228,11 @@ def analysis_variant_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
                 ),
                 trim_first_values=parse_trim_values(
                     sweep.get("trim_first"),
-                    default=[_optional_int(trim_first)],
+                    default=[None if trim_first is None else int(trim_first)],
                 ),
                 trim_last_values=parse_trim_values(
                     sweep.get("trim_last"),
-                    default=[_optional_int(trim_last)],
+                    default=[None if trim_last is None else int(trim_last)],
                 ),
                 spectral_neighbor_layers_values=parse_int_values(
                     sweep.get("spectral_neighbor_layers"),
@@ -308,7 +250,7 @@ def analysis_variant_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
                     default=[local_windows],
                 ),
                 mode=str(sweep.get("mode", "zip")),
-                max_configs=_optional_int(sweep.get("max_configs")),
+                max_configs=(None if sweep.get("max_configs") is None else int(sweep["max_configs"])),
             )
         ),
     }
@@ -332,7 +274,7 @@ def analysis_variant_slug(cfg: AnalysisVariantConfig | dict[str, object]) -> str
         neighbor_layers = cfg.spectral_neighbor_layers
         rolling_window = cfg.spectral_rolling_window
     else:
-        local_windows = parse_local_windows(cfg.get('local_windows', '3,5,7'), default=(3, 5, 7))
+        local_windows = parse_local_windows(cfg.get('local_windows', (3, 5, 7)), default=(3, 5, 7))
         spectral_top_k = int(cfg.get('spectral_top_k', 50))
         trim_first = cfg.get('trim_first')
         trim_last = cfg.get('trim_last')
@@ -359,7 +301,7 @@ def build_model_run_plans(
     plans: list[ModelRunPlan] = []
 
     for model_key in config.models:
-        for run_idx in range(1, max(1, int(config.runs_per_model)) + 1):
+        for run_idx in range(1, int(config.runs_per_model) + 1):
             start_idx = int(config.start_idx) + int(config.run_start_idx_step) * (run_idx - 1)
             end_idx = start_idx + max(0, int(config.n_tests) - 1)
             plan_id = f'cases{start_idx}-{end_idx}_r{run_idx:02d}'

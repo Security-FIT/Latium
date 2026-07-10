@@ -31,21 +31,23 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 from src.common.loading import load_dataset
+from src.common.config import strict_bool
+from src.causal_trace.selection import (
+    Window,
+    build_window,
+    select_window as _select_window,
+    summarize_windows as _summarize_windows,
+)
+from src.causal_trace.tokenization import (
+    TokenSpan,
+    TraceValidationError,
+    find_subject_span,
+    target_first_token_id,
+    target_token_ids,
+)
 from src.handlers.rome import ModelHandler
 
 LOGGER = logging.getLogger(__name__)
-
-
-class TraceValidationError(ValueError):
-    """Raised when a trace example is ambiguous or unusable."""
-
-
-@dataclass
-class TokenSpan:
-    start: int
-    end: int
-    positions: list[int]
-    last_position: int
 
 
 @dataclass
@@ -54,19 +56,6 @@ class TraceExample:
     prompt: str
     subject: str
     target: str
-    raw: dict[str, Any]
-
-
-@dataclass
-class Window:
-    center: int
-    start: int
-    end: int
-    layers: list[int]
-
-    @property
-    def size(self) -> int:
-        return len(self.layers)
 
 
 def _json_default(value: Any) -> Any:
@@ -93,107 +82,6 @@ def _get(section: Any, name: str, default: Any) -> Any:
     return getattr(section, name, default)
 
 
-def _strip_bos(tokenizer: Any, token_ids: Sequence[int]) -> list[int]:
-    ids = [int(x) for x in token_ids]
-    bos_id = getattr(tokenizer, "bos_token_id", None)
-    if bos_id is not None and len(ids) > 1 and ids[0] == bos_id:
-        return ids[1:]
-    return ids
-
-
-def _token_ids(tokenizer: Any, text: str, *, add_special_tokens: bool = True) -> list[int]:
-    try:
-        raw = tokenizer(text, add_special_tokens=add_special_tokens)["input_ids"]
-    except TypeError:
-        raw = tokenizer(text)["input_ids"]
-    if torch.is_tensor(raw):
-        raw = raw.detach().cpu().tolist()
-    if raw and isinstance(raw[0], list):
-        raw = raw[0]
-    return [int(x) for x in raw]
-
-
-def target_token_ids(tokenizer: Any, target: str) -> list[int]:
-    """Return target IDs using the continuation convention used by CounterFact."""
-    cleaned = str(target).strip()
-    if not cleaned:
-        raise TraceValidationError("Target is empty")
-    for text, special in ((f" {cleaned}", False), (cleaned, False), (f" {cleaned}", True), (cleaned, True)):
-        ids = _strip_bos(tokenizer, _token_ids(tokenizer, text, add_special_tokens=special))
-        if ids:
-            return ids
-    raise TraceValidationError(f"Could not tokenize target {target!r}")
-
-
-def target_first_token_id(tokenizer: Any, target: str) -> int:
-    """Return the first next-token target ID used by this trace."""
-    return int(target_token_ids(tokenizer, target)[0])
-
-
-def find_subject_span(tokenizer: Any, prompt: str, subject: str) -> TokenSpan:
-    """Find the unique prompt token span overlapping the subject string."""
-    if not subject:
-        raise TraceValidationError("Subject is empty")
-
-    starts: list[int] = []
-    cursor = 0
-    while True:
-        idx = prompt.find(subject, cursor)
-        if idx == -1:
-            break
-        starts.append(idx)
-        cursor = idx + max(1, len(subject))
-
-    if not starts:
-        raise TraceValidationError(f"Subject {subject!r} is not present in prompt")
-    if len(starts) > 1:
-        raise TraceValidationError(f"Subject {subject!r} appears {len(starts)} times in prompt")
-
-    char_start = starts[0]
-    char_end = char_start + len(subject)
-
-    try:
-        encoded = tokenizer(prompt, return_offsets_mapping=True, return_tensors="pt")
-        offsets = encoded.get("offset_mapping")
-    except Exception:
-        offsets = None
-
-    if offsets is not None:
-        positions: list[int] = []
-        for idx, (start, end) in enumerate(offsets[0].detach().cpu().tolist()):
-            if end <= start:
-                continue
-            if end > char_start and start < char_end:
-                positions.append(int(idx))
-        if positions:
-            return TokenSpan(positions[0], positions[-1] + 1, positions, positions[-1])
-
-    # Keep prompt special tokens here because the returned positions index the
-    # actual model input. Subject candidates do not include their own BOS token.
-    prompt_ids = _token_ids(tokenizer, prompt)
-    candidates = [
-        _strip_bos(tokenizer, _token_ids(tokenizer, subject, add_special_tokens=False)),
-        _strip_bos(tokenizer, _token_ids(tokenizer, f" {subject}", add_special_tokens=False)),
-        _strip_bos(tokenizer, _token_ids(tokenizer, subject)),
-        _strip_bos(tokenizer, _token_ids(tokenizer, f" {subject}")),
-    ]
-    matches: list[tuple[int, int]] = []
-    for subject_ids in candidates:
-        if not subject_ids:
-            continue
-        n = len(subject_ids)
-        for start in range(0, len(prompt_ids) - n + 1):
-            if prompt_ids[start : start + n] == subject_ids:
-                matches.append((start, start + n))
-
-    matches = sorted(set(matches))
-    if len(matches) != 1:
-        raise TraceValidationError(f"Could not identify a unique subject span for {subject!r}")
-    start, end = matches[0]
-    positions = list(range(start, end))
-    return TokenSpan(start, end, positions, end - 1)
-
-
 def _dataset_examples(cfg: DictConfig, *, max_scan: int | None = None) -> Iterator[TraceExample]:
     dataset = load_dataset(cfg)
     records: Iterable[Any]
@@ -216,7 +104,6 @@ def _dataset_examples(cfg: DictConfig, *, max_scan: int | None = None) -> Iterat
             prompt=prompt_template.format(subject),
             subject=subject,
             target=str(target).strip(),
-            raw=raw,
         )
 
 
@@ -405,35 +292,6 @@ def _repeat_inputs(inputs: Any, repeats: int) -> dict[str, torch.Tensor]:
     }
 
 
-def build_window(center: int, window_size: int, num_layers: int) -> Window:
-    left_width = int(window_size) // 2
-    right_width = int(window_size) - left_width
-    start = max(0, int(center) - left_width)
-    end = min(int(num_layers), int(center) + right_width)
-    return Window(center=int(center), start=start, end=end, layers=list(range(start, end)))
-
-
-def _bootstrap_mean_ci(
-    values: np.ndarray,
-    *,
-    samples: int,
-    confidence_level: float,
-    seed: int,
-) -> tuple[float, float]:
-    arr = np.asarray(values, dtype=float)
-    arr = arr[np.isfinite(arr)]
-    if arr.size == 0:
-        return float("nan"), float("nan")
-    if arr.size == 1 or int(samples) <= 0:
-        value = float(np.mean(arr))
-        return value, value
-    rng = np.random.default_rng(int(seed))
-    indices = rng.integers(0, arr.size, size=(int(samples), arr.size))
-    means = arr[indices].mean(axis=1)
-    alpha = 1.0 - float(confidence_level)
-    return float(np.quantile(means, alpha / 2.0)), float(np.quantile(means, 1.0 - alpha / 2.0))
-
-
 def _clean_cache(
     handler: ModelHandler,
     modules: dict[str, torch.nn.Module],
@@ -581,118 +439,6 @@ def _trace_example(
     return result
 
 
-def _summarize_windows(
-    fact_results: list[dict[str, Any]],
-    windows: list[Window],
-    *,
-    window_size: int,
-    bootstrap_samples: int,
-    confidence_level: float,
-    seed: int,
-) -> pd.DataFrame:
-    rows = []
-    if not fact_results:
-        return pd.DataFrame()
-
-    fact_ie = np.asarray([row["window_mean_ie"] for row in fact_results], dtype=np.float64)
-
-    for idx, window in enumerate(windows):
-        values = fact_ie[:, idx]
-        ci_lower, ci_upper = _bootstrap_mean_ci(
-            values,
-            samples=int(bootstrap_samples),
-            confidence_level=float(confidence_level),
-            seed=int(seed) + idx,
-        )
-        rows.append(
-            {
-                "window_center": int(window.center),
-                "window_start": int(window.start),
-                "window_end": int(window.end),
-                "window_layers": ",".join(str(layer) for layer in window.layers),
-                "window_size_actual": int(window.size),
-                "window_is_full_width": bool(window.size == int(window_size)),
-                "num_facts": int(values.size),
-                "mean_ie": float(np.mean(values)),
-                "std_ie": float(np.std(values)),
-                "sem_ie": float(np.std(values) / max(math.sqrt(values.size), 1.0)),
-                "mean_ie_ci_lower": ci_lower,
-                "mean_ie_ci_upper": ci_upper,
-            }
-        )
-    return pd.DataFrame(rows)
-
-
-def _parse_window_layers(value: Any) -> list[int]:
-    return [int(item) for item in str(value).split(",") if item != ""]
-
-
-def _select_window(
-    discovery: pd.DataFrame,
-    confirmation: pd.DataFrame,
-    *,
-    minimum_confirmation_facts: int,
-) -> dict[str, Any]:
-    """Choose once on discovery facts, then test that exact window on held-out facts."""
-    if discovery.empty or confirmation.empty:
-        return {
-            "selection_method": "discovery_argmax_then_held_out_confirmation",
-            "eligible_window_rule": "full_width_only",
-            "selected_trace_center": None,
-            "discovery_trace_center": None,
-            "confirmation_passed": False,
-            "failure_reason": "insufficient_split_facts",
-        }
-
-    eligible = discovery[discovery["window_is_full_width"]].copy()
-    if eligible.empty:
-        return {
-            "selection_method": "discovery_argmax_then_held_out_confirmation",
-            "eligible_window_rule": "full_width_only",
-            "selected_trace_center": None,
-            "discovery_trace_center": None,
-            "confirmation_passed": False,
-            "failure_reason": "no_full_width_windows",
-        }
-
-    discovery_row = eligible.sort_values(
-        ["mean_ie", "window_center"],
-        ascending=[False, True],
-    ).iloc[0]
-    center = int(discovery_row.window_center)
-    confirmation_rows = confirmation[confirmation["window_center"] == center]
-    if confirmation_rows.empty:
-        raise RuntimeError(f"Confirmation summary is missing discovery center {center}")
-    confirmation_row = confirmation_rows.iloc[0]
-    num_confirmation = int(confirmation_row.num_facts)
-    ci_lower = float(confirmation_row.mean_ie_ci_lower)
-    enough_facts = num_confirmation >= int(minimum_confirmation_facts)
-    passed = bool(enough_facts and math.isfinite(ci_lower) and ci_lower > 0)
-    failure_reason = None
-    if not enough_facts:
-        failure_reason = "insufficient_confirmation_facts"
-    elif not passed:
-        failure_reason = "confirmation_ci_not_positive"
-
-    return {
-        "selection_method": "discovery_argmax_then_held_out_confirmation",
-        "eligible_window_rule": "full_width_only",
-        "selected_trace_center": center if passed else None,
-        "discovery_trace_center": center,
-        "trace_window_start": int(discovery_row.window_start),
-        "trace_window_end": int(discovery_row.window_end),
-        "trace_window_layers": _parse_window_layers(discovery_row.window_layers),
-        "discovery_mean_ie": float(discovery_row.mean_ie),
-        "confirmation_mean_ie": float(confirmation_row.mean_ie),
-        "confirmation_ci_lower": ci_lower,
-        "confirmation_ci_upper": float(confirmation_row.mean_ie_ci_upper),
-        "num_discovery_facts": int(discovery_row.num_facts),
-        "num_confirmation_facts": num_confirmation,
-        "confirmation_passed": passed,
-        "failure_reason": failure_reason,
-    }
-
-
 def _plot_trace(
     discovery: pd.DataFrame,
     confirmation: pd.DataFrame,
@@ -761,7 +507,7 @@ def _plot_trace(
     plt.close(fig)
 
 
-def causal_trace(cfg: DictConfig) -> Path:
+def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
     trace_cfg = _section(cfg, "causal_trace")
     output_root = Path(str(_get(trace_cfg, "output_dir", "analysis_out/causal_trace")))
     model_slug = str(cfg.model.name).replace("/", "_")
@@ -772,7 +518,6 @@ def causal_trace(cfg: DictConfig) -> Path:
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    handler = ModelHandler(cfg)
     handler.model.eval()
     modules = _module_dict(handler.model)
     embedding_name = _embedding_module_name(cfg)
@@ -792,7 +537,10 @@ def causal_trace(cfg: DictConfig) -> Path:
     num_noise = int(_get(trace_cfg, "num_noise_samples", 10))
     noise_batch_size = int(_get(trace_cfg, "noise_batch_size", 2))
     noise_multiplier = float(_get(trace_cfg, "noise_multiplier", 3.0))
-    require_correct_clean = bool(_get(trace_cfg, "require_correct_clean_prediction", True))
+    require_correct_clean = strict_bool(
+        _get(trace_cfg, "require_correct_clean_prediction", True),
+        name="causal_trace.require_correct_clean_prediction",
+    )
     min_total_effect = float(_get(trace_cfg, "min_total_effect", 0.03))
     bootstrap_samples = int(_get(trace_cfg, "bootstrap_samples", 1000))
     confidence_level = float(_get(trace_cfg, "confidence_level", 0.95))
@@ -965,6 +713,14 @@ def causal_trace(cfg: DictConfig) -> Path:
     return out_dir
 
 
+def causal_trace(cfg: DictConfig) -> Path:
+    handler = ModelHandler(cfg)
+    try:
+        return _run_causal_trace(cfg, handler)
+    finally:
+        handler.remove_hooks()
+
+
 def compute_multiplier(cfg: DictConfig) -> float:
     """Return the default subject-embedding noise scale for the configured model."""
     handler = ModelHandler(cfg)
@@ -974,3 +730,18 @@ def compute_multiplier(cfg: DictConfig) -> float:
         return float(std * float(_get(trace_cfg, "noise_multiplier", 3.0)))
     finally:
         handler.remove_hooks()
+
+
+__all__ = [
+    "TokenSpan",
+    "TraceValidationError",
+    "Window",
+    "build_window",
+    "causal_trace",
+    "compute_multiplier",
+    "find_subject_span",
+    "make_noise_samples",
+    "target_first_token_id",
+    "target_token_ids",
+    "temporary_hooks",
+]

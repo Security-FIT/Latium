@@ -36,7 +36,8 @@ from src.structural.execution.weights import (
     get_fc_template,
 )
 from src.structural.execution.weight_extraction import extract_attention_weights, extract_weights
-from src.rome.common import PrefixMode, PrefixGenerationHandler, gather_k, insert_kv, optimize_v
+from src.rome.optimization import gather_k, insert_kv, optimize_v
+from src.rome.prefixes import PrefixGenerationHandler, PrefixMode
 from src.structural.detectors.attention import AttentionContrastDetector
 from src.structural.detectors.blind_resident import BlindMSDDetector
 from src.structural.detectors.composite_resident import CompositeDetector

@@ -86,6 +86,35 @@ class _FakeTokenizer:
         )
 
 
+class _TransactionalTokenizer:
+    def __call__(self, texts, *, return_tensors, truncation, max_length, padding):
+        del return_tensors, truncation, max_length, padding
+        values = [1 if "first" in text else 2 for text in texts]
+        return SimpleNamespace(
+            input_ids=torch.tensor(values, dtype=torch.long).unsqueeze(1),
+            attention_mask=torch.ones(len(texts), 1, dtype=torch.long),
+        )
+
+
+class _LateOOMModel(torch.nn.Module):
+    def __init__(self, layer: torch.nn.Module) -> None:
+        super().__init__()
+        self.config = SimpleNamespace(n_positions=1)
+        self.layer = layer
+
+    def forward(self, input_ids, *, attention_mask, use_cache):
+        del attention_mask, use_cache
+        if input_ids.shape[0] > 1:
+            hidden = torch.tensor([[[10.0, 0.0]]] * input_ids.shape[0])
+        else:
+            token = int(input_ids[0, 0])
+            hidden = torch.tensor([[[1.0, 0.0] if token == 1 else [0.0, 1.0]]])
+        self.layer(hidden)
+        if input_ids.shape[0] > 1:
+            raise torch.cuda.OutOfMemoryError("forced late OOM")
+        return hidden
+
+
 class _AlwaysOOMModel(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -119,9 +148,40 @@ class _FakeHandler:
         return self._module
 
 
+class _LateOOMHandler(_FakeHandler):
+    def __init__(self) -> None:
+        super().__init__()
+        self._module = torch.nn.Identity()
+        self.model = _LateOOMModel(self._module)
+        self.tokenizer = _TransactionalTokenizer()
+        self.cfg.model.second_moment_batch_size_mode = "manual"
+        self.cfg.model.second_moment_batch_size = 2
+        self.cfg.model.second_moment_max_length = 1
+
+
 def test_second_moment_oom_at_batch_size_one_raises_incomplete_sampling(monkeypatch) -> None:
     monkeypatch.setattr("src.common.linalg.estimate_covariance_batch_size", lambda **_: 1)
     monkeypatch.setattr("src.common.loading.load_dataset", lambda _cfg, sm=False: [{"text": "long enough"}])
 
     with pytest.raises(RuntimeError, match="processed 0 samples out of target 1"):
         common.second_moment_wikipedia(_FakeHandler(), N_rounds=1, N_k=1)
+
+
+def test_late_oom_does_not_commit_failed_covariance_attempt(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.common.loading.load_dataset",
+        lambda _cfg, sm=False: [{"text": "first sample"}, {"text": "second sample"}],
+    )
+    seen: dict[str, torch.Tensor] = {}
+    original_inv = torch.linalg.inv
+
+    def capture_inv(matrix: torch.Tensor) -> torch.Tensor:
+        seen["covariance"] = matrix.detach().clone()
+        return original_inv(matrix)
+
+    monkeypatch.setattr(torch.linalg, "inv", capture_inv)
+
+    common.second_moment_wikipedia(_LateOOMHandler(), N_rounds=1, N_k=2)
+
+    expected = torch.eye(2) * (0.5 + 1e-5)
+    assert torch.allclose(seen["covariance"], expected)

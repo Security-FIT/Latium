@@ -40,6 +40,10 @@ class AnalysisUnavailableError(RuntimeError):
     """Raised when saved captures cannot satisfy an analysis configuration."""
 
 
+class AnalysisExecutionError(RuntimeError):
+    """Raised after analysis failures have been persisted as artifacts."""
+
+
 STRUCTURAL_DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "structural" / "default.yaml"
 
 
@@ -227,6 +231,7 @@ def run_analyses(
     method_configs: Optional[Mapping[str, Mapping[str, Any]]] = None,
     config_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
     force: bool = False,
+    continue_on_error: bool = False,
 ) -> dict[str, Any]:
     root = Path(run_root)
     reader = RunArtifactReader(root)
@@ -240,6 +245,7 @@ def run_analyses(
     overrides = dict(config_overrides or {})
     written: list[str] = []
     skipped: list[str] = []
+    failures: list[str] = []
 
     executions = list(reader.records(kind="execution"))
     for execution_record in executions:
@@ -386,9 +392,15 @@ def run_analyses(
                 )
                 writer.write(path, payload, force=force)
                 written.append(artifact_id)
+                if status == "error":
+                    failures.append(f"{artifact_id}: {error or 'analysis failed'}")
+
+    if failures and not continue_on_error:
+        raise AnalysisExecutionError("analysis failures: " + "; ".join(failures))
 
     return {
         "run_id": reader.manifest["run_id"],
         "written": written,
         "skipped": skipped,
+        "errors": failures,
     }

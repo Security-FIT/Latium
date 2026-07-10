@@ -15,6 +15,7 @@ from src.command_handlers.common import path_or_none, write_or_print
 from src.common.config import mapping_section as _section
 from src.common.config import plain as _plain
 from src.common.config import string_list as _string_list
+from src.common.config import strict_bool
 from src.structural.hydra_config import structural_config_from_hydra
 
 
@@ -39,7 +40,7 @@ def run_structural_command(cfg: DictConfig, name: str) -> int:
     if name == "structural-validate-cov":
         payload = summarize_covariance(normalize_models_arg(_string_list(run.get("models"))))
         write_or_print(payload, json_out)
-        fail_missing = bool(validate_cov.get("fail_missing", False))
+        fail_missing = strict_bool(validate_cov.get("fail_missing", False), name="structural.validate_cov.fail_missing")
         return 1 if fail_missing and not payload["ok"] else 0
     if name == "structural-analyze":
         run_root = path_or_none(analyze.get("run_root"))
@@ -51,7 +52,11 @@ def run_structural_command(cfg: DictConfig, name: str) -> int:
             enabled=tuple(_string_list(analysis.get("enable"))),
             disabled=tuple(_string_list(analysis.get("disable"))),
             method_configs=_section(analysis, "methods"),
-            force=bool(run.get("force", False)),
+            force=strict_bool(run.get("force", False), name="structural.run.force"),
+            continue_on_error=strict_bool(
+                analysis.get("continue_on_error", False),
+                name="structural.analysis.continue_on_error",
+            ),
         )
         write_or_print(payload, json_out)
         return 0
@@ -67,7 +72,7 @@ def run_structural_command(cfg: DictConfig, name: str) -> int:
     if name == "structural-run":
         config = structural_config_from_hydra(
             cfg,
-            run_analysis=bool(analysis.get("enabled", True)),
+            run_analysis=strict_bool(analysis.get("enabled", True), name="structural.analysis.enabled"),
         )
         write_or_print(run_structural_benchmark(config), json_out)
         return 0

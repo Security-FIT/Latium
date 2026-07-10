@@ -2,6 +2,10 @@
 
 This package has one causal tracing workflow: `causal-trace`.
 
+The implementation is split by responsibility: `tokenization.py` maps exact
+model-input token positions, `selection.py` owns window statistics and held-out
+selection, and `causal_trace.py` owns model execution and output artifacts.
+
 It corrupts every subject-token embedding, restores clean MLP projection
 outputs at the last subject token over overlapping layer windows, and measures
 the paired change in first-target-token probability. Noise samples are paired

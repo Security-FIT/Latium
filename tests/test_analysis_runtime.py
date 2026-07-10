@@ -15,8 +15,8 @@ import pytest
 from src.results import ArtifactWriter, RunArtifactReader, RunLayout, build_artifact, config_hash
 from src.results.ids import capture_id, execution_id
 from src.structural.analysis.detector_methods import analyze_composite
-from src.structural.analysis.runtime import AnalysisContext
-from src.structural.analysis.runtime import run_analyses
+from src.structural.analysis.registry import AnalysisSpec
+from src.structural.analysis.runtime import AnalysisContext, AnalysisExecutionError, run_analyses
 
 
 def _write_artifact(
@@ -256,6 +256,75 @@ def test_run_analyses_writes_unavailable_for_missing_required_captures(
     assert payload["status"] == "unavailable"
     assert payload["cases"][0]["status"] == "unavailable"
     assert "missing captures" in payload["error"]
+
+
+def test_analysis_errors_are_persisted_and_fail_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writer = ArtifactWriter(tmp_path, run_id="run")
+    layout = RunLayout(tmp_path)
+    model = "gpt2-large"
+    plan_id = "cases0-0_r01"
+    method = "rome"
+    variants = [
+        {
+            "spectral_top_k": 50,
+            "trim_first": 1,
+            "trim_last": 1,
+            "spectral_neighbor_layers": 1,
+            "spectral_rolling_window": 5,
+            "local_windows": [3],
+        }
+    ]
+    _write_artifact(
+        writer,
+        layout.execution_path(model, plan_id, edit_method=method),
+        artifact_id=execution_id(model, plan_id, method),
+        kind="execution",
+        producer=method,
+        config={"edit_method": method},
+        cases=[{"case_id": "case", "status": "complete", "edit": {"success": True}}],
+        edit_method=method,
+        metadata={"analysis_variants": variants},
+    )
+    for edit_method in (None, method):
+        _write_artifact(
+            writer,
+            layout.capture_path(model, plan_id, "matrix-features", edit_method=edit_method),
+            artifact_id=capture_id(model, plan_id, "matrix-features", edit_method),
+            kind="capture",
+            producer="matrix-features",
+            config={"capture": "matrix-features"},
+            cases=[{"case_id": "case", "status": "complete", "data": {}}],
+            edit_method=edit_method,
+        )
+
+    def broken_load(self):
+        def fail(_context):
+            raise RuntimeError("broken analysis")
+
+        return fail
+
+    monkeypatch.setattr(AnalysisSpec, "load", broken_load)
+
+    with pytest.raises(AnalysisExecutionError, match="broken analysis"):
+        run_analyses(tmp_path, selected=("rank1-blind",), preset="none")
+
+    payload = RunArtifactReader(tmp_path).load(
+        next(iter(RunArtifactReader(tmp_path).records(kind="analysis")))["artifact_id"]
+    )
+    assert payload["status"] == "error"
+
+    result = run_analyses(
+        tmp_path,
+        selected=("rank1-blind",),
+        preset="none",
+        force=True,
+        continue_on_error=True,
+    )
+    assert len(result["errors"]) == 1
+    assert "broken analysis" in result["errors"][0]
 
 
 def test_bottom_rank_svd_consumes_method_only_capture(

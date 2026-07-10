@@ -125,8 +125,6 @@ Then add `src/config/edit_method/my-method.yaml`:
 identifier: my-method
 description: My edit method.
 factory: src.editing.my_method:MyMethod
-model_families:
-  - all
 ```
 
 Important contracts:

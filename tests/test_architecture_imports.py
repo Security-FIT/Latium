@@ -46,3 +46,16 @@ def test_production_code_imports_common_model_config_instead_of_facade() -> None
                 offenders.append(str(path.relative_to(ROOT)))
 
     assert offenders == []
+
+
+def test_production_code_imports_responsibility_specific_rome_modules() -> None:
+    offenders = []
+    for base in PRODUCTION_PATHS:
+        for path in _python_files(base):
+            if path == ROOT / "src" / "rome" / "common.py":
+                continue
+            text = path.read_text(encoding="utf-8")
+            if "from src.rome.common import" in text or "import src.rome.common" in text:
+                offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []

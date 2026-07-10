@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from src.graphs.context import RenderContext, RendererUnavailableError
+from src.graphs.context import RenderContext, RenderExecutionError, RendererUnavailableError
 from src.graphs.registry import RENDERERS, resolve_renderers
 from src.results import ArtifactWriter, RunArtifactReader, build_artifact, config_hash
 from src.results.ids import render_id
@@ -23,9 +23,9 @@ def render_run(
     preset: str = "paper",
     enabled: Sequence[str] = (),
     disabled: Sequence[str] = (),
-    style_preset: str = "default",
     renderer_options: Mapping[str, Mapping[str, Any]] | None = None,
     force: bool = False,
+    continue_on_error: bool = False,
 ) -> dict[str, Any]:
     root = Path(run_root)
     reader = RunArtifactReader(root)
@@ -40,6 +40,7 @@ def render_run(
     all_capture_records = list(reader.records(kind="capture"))
     written: list[str] = []
     skipped: list[str] = []
+    failures: list[str] = []
     configured_options = dict(renderer_options or {})
 
     for renderer_id in renderer_ids:
@@ -52,7 +53,6 @@ def render_run(
         }
         config = {
             "renderer": renderer_id,
-            "style_preset": style_preset,
             "schema_version": spec.schema_version,
             "options": selected_options,
         }
@@ -85,7 +85,6 @@ def render_run(
                     output_dir=output_dir,
                     input_records=input_records,
                     options=selected_options,
-                    style_preset=style_preset,
                     warnings=tuple(warnings),
                 )
                 outputs = spec.load()(context)
@@ -99,6 +98,7 @@ def render_run(
                 outputs = []
                 status = "error"
                 error = str(exc)
+                failures.append(f"{renderer_id}: {exc}")
         payload = build_artifact(
             artifact_id=artifact_id,
             kind="render",
@@ -121,10 +121,14 @@ def render_run(
         writer.write(output_dir / "artifact.json", payload, force=force)
         written.append(artifact_id)
 
+    if failures and not continue_on_error:
+        raise RenderExecutionError("renderer failures: " + "; ".join(failures))
+
     return {
         "run_id": reader.manifest["run_id"],
         "written": written,
         "skipped": skipped,
+        "errors": failures,
     }
 
 
@@ -135,16 +139,6 @@ def _renderer_input_records(
     captures: list[dict[str, Any]],
     analyses: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-    has_declarations = bool(
-        spec.requires_execution
-        or spec.required_captures
-        or spec.optional_captures
-        or spec.required_analyses
-        or spec.optional_analyses
-    )
-    if not has_declarations:
-        return [*executions, *captures, *analyses], [], []
-
     selected: list[dict[str, Any]] = []
     missing: list[str] = []
     warnings: list[str] = []
@@ -153,6 +147,11 @@ def _renderer_input_records(
             selected.extend(executions)
         else:
             missing.append("execution")
+    if spec.requires_analyses:
+        if analyses:
+            selected.extend(analyses)
+        else:
+            missing.append("analysis")
 
     for producer in spec.required_captures:
         found = [record for record in captures if record.get("producer") == producer]
@@ -198,7 +197,6 @@ def _make_context(
     output_dir: Path,
     input_records: list[dict[str, Any]],
     options: Mapping[str, Any],
-    style_preset: str,
     warnings: tuple[str, ...],
 ) -> RenderContext:
     executions: list[dict[str, Any]] = []
@@ -222,7 +220,6 @@ def _make_context(
         captures={key: tuple(value) for key, value in captures.items()},
         analyses={key: tuple(value) for key, value in analyses.items()},
         options=dict(options),
-        style_preset=style_preset,
         warnings=warnings,
     )
 

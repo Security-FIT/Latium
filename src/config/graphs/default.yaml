@@ -7,9 +7,9 @@ run_root: null
 artifact: null
 output_dir: null
 renderer_preset: paper
-style_preset: default
 enable_renderers: []
 disable_renderers: []
+continue_on_error: false
 renderers:
   structural-artifact-grid:
     features:

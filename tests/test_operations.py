@@ -31,7 +31,7 @@ def test_run_second_moment_uses_configured_sample_count(tmp_path: Path, monkeypa
         return torch.eye(1), N_rounds * N_k, "SM_Method.WIKIPEDIA"
 
     monkeypatch.setattr("src.handlers.rome.ModelHandler", Handler)
-    monkeypatch.setattr("src.rome.common.compute_second_moment", fake_compute_second_moment)
+    monkeypatch.setattr("src.rome.covariance.compute_second_moment", fake_compute_second_moment)
 
     cfg = OmegaConf.create(
         {

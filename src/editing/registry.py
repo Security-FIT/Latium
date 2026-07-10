@@ -19,7 +19,6 @@ from src.registry import NamedRegistry, RegistryEntry, load_object
 @dataclass(frozen=True)
 class EditMethodSpec(RegistryEntry):
     factory: str = ""
-    model_families: tuple[str, ...] = ("all",)
 
 
 EDIT_METHOD_CONFIG_DIR = Path(__file__).resolve().parents[1] / "config" / "edit_method"
@@ -34,7 +33,6 @@ def _load_edit_method_specs(config_dir: Path = EDIT_METHOD_CONFIG_DIR) -> list[E
                 identifier=str(cfg.identifier),
                 description=str(cfg.description),
                 factory=str(cfg.factory),
-                model_families=tuple(str(value) for value in getattr(cfg, "model_families", ("all",))),
             )
         )
     return specs

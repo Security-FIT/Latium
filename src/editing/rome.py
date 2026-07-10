@@ -20,12 +20,8 @@ class RomeEditMethod:
     description = "Apply the repository's existing ROME implementation."
 
     def apply(self, handler: Any, case: dict[str, Any]) -> EditOutcome:
-        from src.rome.common import (
-            gather_k,
-            insert_kv,
-            optimize_v,
-            resolve_rome_sample_count,
-        )
+        from src.rome.optimization import gather_k, insert_kv, optimize_v
+        from src.rome.prefixes import resolve_rome_sample_count
 
         fact = case["fact_tuple"]
         layer_name = handler._layer_name_template.format(handler._layer)

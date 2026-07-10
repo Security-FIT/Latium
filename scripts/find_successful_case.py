@@ -31,7 +31,8 @@ from src.counterfact_selection import build_case_manifest, load_cases_by_range
 from src.handlers.rome import ModelHandler
 from src.evaluation.rome import compute_rome_metrics
 from src.common.model_config import load_model_config
-from src.rome.common import gather_k, insert_kv, optimize_v, resolve_rome_sample_count
+from src.rome.optimization import gather_k, insert_kv, optimize_v
+from src.rome.prefixes import resolve_rome_sample_count
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 LOGGER = logging.getLogger(__name__)

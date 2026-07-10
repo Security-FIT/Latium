@@ -26,7 +26,8 @@ from src.handlers.rome import ModelHandler
 from src.evaluation.rome import compute_rome_metrics
 from src.common.loading import load_dataset
 from src.common.model_config import load_model_config
-from src.rome.common import gather_k, optimize_v, insert_kv, resolve_rome_sample_count
+from src.rome.optimization import gather_k, insert_kv, optimize_v
+from src.rome.prefixes import resolve_rome_sample_count
 from src.runtime import set_global_seed
 
 

@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.rome import common
+from src.rome import prefixes
 from src.rome.common import PrefixGenerationHandler, generate_prefixes
 from src.rome.common import resolve_rome_sample_count
 
@@ -201,10 +201,10 @@ def test_build_sampled_templates_trims_generated_token_count(monkeypatch) -> Non
             attention_mask = torch.ones((batch_size, 1), dtype=torch.long)
             return FakePromptBatch(input_ids, attention_mask)
 
-    monkeypatch.setattr(common.random, "randint", lambda low, high: high)
+    monkeypatch.setattr(prefixes.random, "randint", lambda low, high: high)
     handler = FakeHandler()
 
-    templates = common._build_sampled_templates(handler, 2, (2, 10))
+    templates = prefixes._build_sampled_templates(handler, 2, (2, 10))
 
     assert handler.model.last_max_new_tokens == 10
     assert len(templates) == 2

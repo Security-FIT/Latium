@@ -30,7 +30,7 @@ from tqdm import tqdm
 from src.common.linalg import CUDAMode, DeviceManager
 from src.common.loading import load_pretrained
 from src.common.paths import resolve_project_path
-from src.rome.common import PrefixGenerationHandler
+from src.rome.prefixes import PrefixGenerationHandler
 
 
 import logging

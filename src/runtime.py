@@ -14,7 +14,7 @@ from typing import Any
 
 import numpy as np
 
-from src.common.config import get_config_value as _get, plain
+from src.common.config import get_config_value as _get, plain, strict_bool
 
 
 LOGGER = logging.getLogger(__name__)
@@ -54,15 +54,22 @@ def _build_settings(root: Any, fallback: RuntimeSettings | None = None) -> Runti
     return RuntimeSettings(
         seed=seed,
         hf_token=None if hf_token_raw in (None, "") else str(hf_token_raw),
-        prefix_log_all=bool(_get(runtime, "prefix_log_all", fallback.prefix_log_all)),
-        second_moment_allow_autocompute=bool(
+        prefix_log_all=strict_bool(
+            _get(runtime, "prefix_log_all", fallback.prefix_log_all),
+            name="runtime.prefix_log_all",
+        ),
+        second_moment_allow_autocompute=strict_bool(
             _get(
                 runtime,
                 "second_moment_allow_autocompute",
                 fallback.second_moment_allow_autocompute,
-            )
+            ),
+            name="runtime.second_moment_allow_autocompute",
         ),
-        log_skip_traceback=bool(_get(runtime, "log_skip_traceback", fallback.log_skip_traceback)),
+        log_skip_traceback=strict_bool(
+            _get(runtime, "log_skip_traceback", fallback.log_skip_traceback),
+            name="runtime.log_skip_traceback",
+        ),
     )
 
 

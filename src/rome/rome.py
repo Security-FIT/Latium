@@ -27,11 +27,10 @@ import hydra
 import pandas
 import torch
 from omegaconf import DictConfig
-import torch
-import pandas
 
 from src.handlers.rome import ModelHandler
-from src.rome.common import gather_k, optimize_v, insert_kv, resolve_rome_sample_count
+from src.rome.optimization import gather_k, insert_kv, optimize_v
+from src.rome.prefixes import resolve_rome_sample_count
 from src.common.loading import get_cuda_usage, load_dataset, sample
 from src.common.paths import non_conflicting_path
 from src.evaluation.counterfact import (

@@ -485,3 +485,298 @@ G_l^{-1/2}
 
 No causal tracing, clean checkpoint, family routing, learned mixture, or
 model-specific threshold is involved.
+
+## 19. Ideas for improving the localizer
+
+The present score is a useful first localizer, but it does not yet use all of
+the structure implied by an isolated ROME update. The following extensions keep
+the detector architecture-neutral: none requires a model-family label, a
+family-specific threshold, or a learned mixture of hand-selected features.
+
+### 19.1 Use the signed three-layer footprint
+
+The local residual itself predicts how an isolated edit leaks into neighboring
+scores. If layer \(k\) receives a hidden-Gram perturbation \(D\), then
+
+\[
+\delta A_{k-1}=-\frac{1}{2}D,\qquad
+\delta A_k=D,\qquad
+\delta A_{k+1}=-\frac{1}{2}D.
+\]
+
+The current layer-wise norm discards these signs and can therefore promote a
+neighbor of the edited layer. A better estimator would match the residual
+sequence against the fixed ROME kernel
+
+\[
+h=\left(-\frac{1}{2},\ 1,\ -\frac{1}{2}\right).
+\]
+
+For every candidate center \(k\), estimate the common perturbation with
+
+\[
+\widehat D_k
+=
+\frac{\sum_{j=-1}^{1}h_j A_{k+j}}
+     {\sum_{j=-1}^{1}h_j^2},
+\]
+
+then retain its leading two-dimensional component and measure how much of all
+three residuals it explains. The coefficients are derived exactly from the
+neighbor subtraction, rather than tuned on an architecture. This should be the
+first improvement tested because it directly targets the observed one-layer
+localization errors.
+
+### 19.2 Estimate the ROME subspace jointly
+
+At present, the candidate subspace is extracted from \(A_k\) alone. That makes
+the subspace sensitive to a naturally strong direction at the candidate
+layer. Extracting it from the signed matched estimate \(\widehat D_k\) instead
+would use the center and both neighbors and would require the same direction to
+appear with the predicted signs. A clean architectural landmark that is merely
+large, but does not have the three-layer ROME footprint, would receive less
+support.
+
+The fit can also report the unexplained spectral tail
+
+\[
+\tau_k
+=
+1-
+\frac{\sigma_1(\widehat D_k)^2+\sigma_2(\widehat D_k)^2}
+     {\lVert \widehat D_k\rVert_F^2}.
+\]
+
+A small tail is evidence for the at-most-rank-two Gram disturbance predicted
+by ROME. It should be treated as a model-checking quantity or incorporated
+through a single likelihood, not mixed into the score with a fitted weight.
+
+### 19.3 Replace a fixed neighborhood with a data-selected depth trend
+
+Immediate neighbors are simple, but a naturally sharp bend in model depth can
+look like an edit. A robust local polynomial or tangent-space smoother could
+estimate the unedited trend from several surrounding layers while leaving the
+candidate triplet out. Its bandwidth can be selected by leave-one-layer-out
+prediction error on the suspect checkpoint, so it need not be fixed for GPT,
+Llama, OPT, or any other family.
+
+The same fit can use one-sided predictions near the first and last layers. That
+would make boundary detection possible and turn trimming into a conservative
+fallback rather than a permanent blind region.
+
+### 19.4 Test whether a rank-one repair removes the anomaly
+
+Localization currently asks only whether a layer looks unusual. A more
+ROME-specific check would find the smallest rank-one correction
+
+\[
+X_k=u_kv_k^\top
+\]
+
+such that replacing \(W_k\) by \(W_k-X_k\) makes its weighted spectrum agree
+with the locally predicted clean operator. After this counterfactual repair,
+the center peak and its two neighbor echoes should disappear together. A
+natural depth transition or a dense modification should generally require a
+higher-complexity repair.
+
+### 19.5 Preserve complementary evidence without a hard-coded ensemble
+
+Trace normalization intentionally removes total weight scale, but ROME can
+also leave evidence in the unnormalized Frobenius norm, singular spectrum, and
+bilateral jumps. These views should not be combined using family-tuned weights.
+They can instead be treated as checks of one explicit ROME generative model,
+or converted into calibrated \(p\)-values or e-values with a predeclared joint
+decision rule. That retains useful evidence while keeping the operating rule
+the same across architectures.
+
+### 19.6 Compute the same score implicitly
+
+The full hidden Gram need not be materialized. Its action on a vector is
+
+\[
+C_lx
+=
+\frac{W_l(W_l^\top x)}{\lVert W_l\rVert_F^2}
+\]
+
+or its storage-transposed equivalent. Lanczos or another matrix-free
+eigensolver can obtain the required leading subspace from these products. This
+reduces quadratic hidden-dimension memory while preserving the mathematical
+criterion; approximation error can be stopped by a numerical residual rather
+than a model-specific iteration count.
+
+### 19.7 Validate against clean and confounded controls
+
+Exact-layer accuracy on successful ROME edits measures localization, not edit
+presence or specificity. Further validation should include:
+
+- untouched checkpoints for false-positive measurement;
+- ROME edits at randomly sampled interior and boundary layers;
+- held-out architectures and model scales;
+- quantized, pruned, fine-tuned, LoRA, MEMIT, and AlphaEdit checkpoints;
+- multiple and sequential edits;
+- unsuccessful or extremely weak ROME edits.
+
+All detector choices should be frozen before evaluating the held-out
+architectures. Results should report false-positive rate, false-negative rate,
+precision-recall, calibration, and exact- and near-layer localization.
+
+## 20. Three proposals for binary ROME presence detection
+
+A binary detector needs a null hypothesis. An argmax cannot provide one
+because it always returns a layer, even on a clean model. It also needs an
+explicit operating point: except for a model-selection criterion such as MDL,
+the false-positive level \(\alpha\) is unavoidable. A single global
+\(\alpha\) expresses the desired forensic false-alarm rate; it is not a
+model-specific hyperparameter.
+
+There is also an identifiability limit. Weights alone cannot prove which
+program produced an update. Another editor that writes the same outer product
+into the same projection is observationally indistinguishable from ROME. The
+technically defensible positive label is therefore **"ROME-like localized
+rank-one edit detected."** Establishing literal ROME provenance requires
+external metadata or an editor-specific artifact beyond the final weights.
+
+### 20.1 Proposal A: cross-architecture conformal null test
+
+This is the strongest first proposal when a collection of clean checkpoints is
+available.
+
+For a candidate center \(k\), project and whiten the three residuals in one
+shared local subspace. Fit the fixed footprint
+\(h=(-1/2,1,-1/2)\), retain the
+best rank-two perturbation, and calculate the reduction in whitened residual
+energy:
+
+\[
+T_k
+=
+\sum_{j=-1}^{1}\lVert \widetilde A_{k+j}\rVert_F^2
+-
+\sum_{j=-1}^{1}
+\left\lVert
+\widetilde A_{k+j}-h_j\widehat D_{k,2}
+\right\rVert_F^2.
+\]
+
+Normalize this gain by a robust residual scale estimated from the remaining
+layers and define the checkpoint statistic
+
+\[
+T(M)=\max_k T_k.
+\]
+
+The maximum is taken before calibration, so the null distribution already
+accounts for searching over all candidate layers. Given clean calibration
+checkpoints with statistics \(T_1^{(0)},\ldots,T_n^{(0)}\), use the conformal
+tail probability
+
+\[
+p_{\mathrm{conf}}
+=
+\frac{1+\sum_{i=1}^{n}
+\mathbf 1[T_i^{(0)}\geq T(M)]}{n+1}.
+\]
+
+Return **yes** when \(p_{\mathrm{conf}}\leq\alpha\), otherwise **no**. The
+calibration pool should deliberately span architectures, widths, depths,
+precisions, and storage layouts; entire families must be held out during
+validation. Under exchangeability with the clean calibration population, this
+gives finite-sample false-positive control without a per-family threshold.
+
+Its limitation is domain shift: conformal validity does not automatically
+extend to an architecture population absent from calibration. Holdout-family
+testing is therefore part of the method, not an optional benchmark.
+
+### 20.2 Proposal B: single-checkpoint robust null bootstrap
+
+This proposal preserves the one-checkpoint threat model and uses no external
+clean cohort.
+
+First locate the strongest candidate and temporarily mask its three-layer
+footprint. Fit a robust smooth depth trend to the remaining operators, map the
+residuals into locally whitened tangent coordinates, and estimate their depth
+dependence. Generate bootstrap null checkpoints by block-resampling or
+Rademacher-sign perturbing those residuals, reconstructing trace-one positive
+operators, and rerunning the *entire* maximum search on each replicate. The
+block length can be selected from the observed residual autocorrelation rather
+than fixed by model family.
+
+If \(T^{*(1)},\ldots,T^{*(B)}\) are the bootstrap maximum statistics, use
+
+\[
+p_{\mathrm{boot}}
+=
+\frac{1+\sum_{b=1}^{B}
+\mathbf 1[T^{*(b)}\geq T(M)]}{B+1}
+\]
+
+and return **yes** when \(p_{\mathrm{boot}}\leq\alpha\). The number of
+replicates controls Monte Carlo precision and can be increased until the
+decision is stable; it does not encode an architecture.
+
+This approach is attractive when only the suspect model exists, but its null
+is less trustworthy for shallow models or checkpoints whose normal depth
+geometry is strongly nonstationary. Simulation-based calibration on untouched
+models is required before relying on its nominal false-positive rate.
+
+### 20.3 Proposal C: rank-one counterfactual repair with MDL
+
+This proposal makes the decision directly about the algebraic operation ROME
+is expected to leave behind.
+
+For every candidate \(k\), solve for the rank-one correction
+
+\[
+X_k^*
+=
+\operatorname*{arg\,min}_{\operatorname{rank}(X)=1}
+\mathcal J\!\left(W_k-X\right),
+\]
+
+where \(\mathcal J\) is the total whitened depth-residual energy after
+recomputing the center and both neighboring profiles. Compare two explanations
+of the complete residual sequence:
+
+- \(H_0\): a smooth unedited sequence plus background residuals;
+- \(H_1\): the same sequence after removing one rank-one update at one layer.
+
+Use minimum description length to charge \(H_1\) for the layer index, the two
+update vectors, and their precision. In schematic form,
+
+\[
+\Delta L
+=
+L(H_0)
+-
+\left[
+L(H_1\mid X_k^*)
++\log_2|\mathcal L|
++L(X_k^*)
+\right].
+\]
+
+Return **yes** only when \(\max_k\Delta L>0\): the repaired explanation must
+compress the evidence better even after paying for the rank-one edit. The zero
+bit boundary is a model-selection rule rather than a fitted architecture
+threshold. A practical implementation should additionally verify that the
+original peak and its signed neighbor echoes vanish after repair.
+
+This is the most ROME-specific proposal and requires no clean cohort, but it is
+also the hardest: the nonlinear repair and universal coding model must be
+defined carefully, and another genuinely rank-one editor can still be
+indistinguishable from ROME.
+
+### 20.4 Recommended order
+
+1. Implement the signed three-layer statistic and Proposal A first. It offers
+   the cleanest false-positive claim and can be audited on held-out families.
+2. Add Proposal C as a specificity check: a positive should be explainable and
+   removable by one rank-one correction.
+3. Treat Proposal B as the no-calibration fallback after its bootstrap coverage
+   has been verified across depth regimes.
+
+None of the three proposals should be called a working binary detector until
+it has been tested on untouched models. The existing 38/40 result establishes
+edited-layer localization power only; it supplies no estimate of the clean
+false-positive rate.

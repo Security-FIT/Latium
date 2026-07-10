@@ -22,7 +22,7 @@ run:
   force: false
 
 capture:
-  profile: paper
+  profile: weighted-spectrum
   enable: []
   disable: []
   matrix_features:
@@ -32,7 +32,7 @@ capture:
 
 analysis:
   enabled: true
-  preset: paper
+  preset: weighted-spectrum
   enable: []
   disable: []
   variants:
@@ -55,6 +55,9 @@ analysis:
       spectral_rolling_window: null
       local_window_sets: null
   methods:
+    weighted-spectrum:
+      trim_first: 5
+      trim_last: 5
     spectral:
       top_k: 50
       trim_first: 2

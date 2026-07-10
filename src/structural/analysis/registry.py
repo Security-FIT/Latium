@@ -73,6 +73,15 @@ ANALYSES = _validated_registry(
             SPECTRAL_VARIANT_FIELDS,
         ),
         AnalysisSpec(
+            "weighted-spectrum",
+            "Detect a rank-one edit from affine-relative weighted-spectrum geometry.",
+            "detection",
+            "src.structural.analysis.detector_methods:analyze_weighted_spectrum",
+            ("weighted-spectrum",),
+            ("trim_first", "trim_last"),
+            (),
+        ),
+        AnalysisSpec(
             "blind",
             "Detect a structural outlier from captured matrix profiles.",
             "detection",
@@ -186,6 +195,7 @@ ANALYSES = _validated_registry(
 
 ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
+    "weighted-spectrum": ("weighted-spectrum",),
     "paper": ("composite", "gpt-norm-cv", "spectral"),
     "blind": ("blind",),
     "full": ANALYSES.identifiers(),

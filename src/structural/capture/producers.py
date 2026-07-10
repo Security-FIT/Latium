@@ -25,6 +25,7 @@ from src.structural.detectors.matrix_anomaly import (
     stable_effective_ratio,
 )
 from src.structural.detectors.profiles import matrix_profile
+from src.common.linalg import gpu_svd_topk
 from src.structural.detectors.spectral_primitives import (
     canonical_orient,
     pcs_pairwise_rank_cumsums,
@@ -217,6 +218,162 @@ def capture_matrix_features(context: CaptureContext) -> dict[str, Any]:
         )
         output["families"][family] = {str(layer): blind_features.get(layer, {}) for layer in layers}
     return to_serializable(output)
+
+
+def _deterministic_topk_svd(
+    weight: torch.Tensor,
+    *,
+    top_k: int,
+    seed: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute a reproducible randomized SVD for numeric feature extraction."""
+    devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
+    with torch.random.fork_rng(devices=devices):
+        torch.manual_seed(int(seed))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(int(seed))
+        return gpu_svd_topk(
+            weight,
+            k=max(2, int(top_k)),
+            niter=4,
+        )
+
+
+def _hidden_spectral_density(weight: torch.Tensor) -> torch.Tensor:
+    """Return a trace-one Gram matrix in the projection's shared hidden space."""
+    device = weight.device if weight.is_cuda else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    matrix = weight.detach().to(device=device, dtype=torch.float32)
+    frobenius_sq = matrix.square().sum().clamp_min(EPS)
+    gram = matrix @ matrix.T if matrix.shape[0] <= matrix.shape[1] else matrix.T @ matrix
+    return gram / frobenius_sq
+
+
+def _weighted_spectrum_profile(
+    current: torch.Tensor,
+    reference: torch.Tensor,
+    *,
+    layer: int,
+    neighbors: tuple[torch.Tensor, ...] = (),
+) -> dict[str, float]:
+    """Measure scale-free, low-rank curvature of a hidden-space weighted spectrum."""
+    residual = current - reference
+    left, singular_tensor, _right = _deterministic_topk_svd(
+        residual,
+        top_k=2,
+        seed=433494437 + int(layer),
+    )
+    singular = singular_tensor.detach().double().cpu().numpy()
+    basis = left[:, :2].to(device=reference.device, dtype=reference.dtype)
+    leading = basis[:, 0]
+    signed_shift = torch.linalg.multi_dot((leading, residual, leading))
+    background_energy = torch.linalg.multi_dot((leading, reference, leading)).clamp_min(EPS)
+    relative_shift = signed_shift / background_energy
+    residual_subspace = basis.T @ residual @ basis
+    reference_subspace = basis.T @ reference @ basis
+    reference_eigenvalues, reference_eigenvectors = torch.linalg.eigh(reference_subspace)
+    inverse_sqrt = (
+        reference_eigenvectors
+        @ torch.diag(reference_eigenvalues.clamp_min(EPS).rsqrt())
+        @ reference_eigenvectors.T
+    )
+    relative_subspace = inverse_sqrt @ residual_subspace @ inverse_sqrt
+    relative_eigenvalues = torch.linalg.eigvalsh(relative_subspace)
+    relative_squared = relative_eigenvalues.square()
+    frobenius = float(torch.linalg.vector_norm(residual).item())
+    current_norm = torch.linalg.vector_norm(current)
+    reference_norm = torch.linalg.vector_norm(reference)
+    alignment = float(
+        (current * reference).sum().div(current_norm * reference_norm + EPS).item()
+    )
+    if len(neighbors) == 2:
+        left_jump = current - neighbors[0]
+        right_jump = current - neighbors[1]
+        left_energy = left_jump.square().sum()
+        right_energy = right_jump.square().sum()
+        jump_energy = left_energy + right_energy
+        curvature_energy = (left_jump + right_jump).square().sum()
+        bilateral_coherence = curvature_energy / (2.0 * jump_energy + EPS)
+        bilateral_alignment = (left_jump * right_jump).sum() / (
+            torch.sqrt(left_energy * right_energy) + EPS
+        )
+        bilateral_frobenius = torch.sqrt(torch.sqrt(left_energy * right_energy))
+        bilateral_balance = 2.0 * torch.sqrt(left_energy * right_energy) / (jump_energy + EPS)
+    else:
+        bilateral_coherence = torch.zeros((), device=current.device)
+        bilateral_alignment = torch.zeros((), device=current.device)
+        bilateral_frobenius = torch.linalg.vector_norm(residual)
+        bilateral_balance = torch.zeros((), device=current.device)
+    squared = singular**2
+    return {
+        "operator_norm": float(singular[0]),
+        "frobenius_norm": frobenius,
+        "rank1_energy": float(squared[0] / (frobenius**2 + EPS)),
+        "rank2_energy": float(squared[:2].sum() / (frobenius**2 + EPS)),
+        "neighbor_cka_distance": float(1.0 - alignment),
+        "directional_background": float(current.shape[0] * background_energy.item()),
+        "relative_operator_norm": float(abs(relative_shift.item())),
+        "signed_relative_shift": float(relative_shift.item()),
+        "relative_subspace_operator_norm": float(relative_eigenvalues.abs().max().item()),
+        "relative_subspace_frobenius": float(torch.sqrt(relative_squared.sum()).item()),
+        "relative_subspace_rank1_energy": float(
+            relative_squared.max().div(relative_squared.sum() + EPS).item()
+        ),
+        "bilateral_coherence": float(bilateral_coherence.item()),
+        "bilateral_alignment": float(bilateral_alignment.item()),
+        "bilateral_frobenius": float(bilateral_frobenius.item()),
+        "bilateral_balance": float(bilateral_balance.item()),
+    }
+
+
+def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
+    """Capture normalized hidden-space spectral curvature around every changed layer."""
+    layers = sorted(context.proj_weights)
+    direct = context.changed_layers("proj", layers)
+    if context.is_baseline:
+        included = layers
+    else:
+        positions = {layer: index for index, layer in enumerate(layers)}
+        affected: set[int] = set()
+        for layer in direct:
+            index = positions[layer]
+            affected.update(layers[max(0, index - 1) : min(len(layers), index + 2)])
+        included = sorted(affected)
+
+    positions = {layer: index for index, layer in enumerate(layers)}
+    needed: set[int] = set(included)
+    for layer in included:
+        index = positions[layer]
+        needed.update(layers[max(0, index - 1) : min(len(layers), index + 2)])
+    densities = {layer: _hidden_spectral_density(context.proj_weights[layer]) for layer in sorted(needed)}
+
+    profiles: dict[str, dict[str, float]] = {}
+    for layer in included:
+        index = positions[layer]
+        neighbors = [
+            densities[other]
+            for other in layers[max(0, index - 1) : min(len(layers), index + 2)]
+            if other != layer
+        ]
+        if not neighbors:
+            continue
+        reference = torch.stack(neighbors).mean(dim=0)
+        profiles[str(layer)] = _weighted_spectrum_profile(
+            densities[layer],
+            reference,
+            layer=layer,
+            neighbors=tuple(neighbors),
+        )
+
+    first_weight = context.proj_weights[layers[0]] if layers else None
+    return to_serializable(
+        {
+            "mode": "baseline" if context.is_baseline else "patch",
+            "layers": layers,
+            "weight_shape": list(first_weight.shape) if first_weight is not None else [],
+            "profiles": profiles,
+            "changed_layers": {"proj": included},
+        }
+    )
 
 
 def capture_attention_features(context: CaptureContext) -> dict[str, Any]:

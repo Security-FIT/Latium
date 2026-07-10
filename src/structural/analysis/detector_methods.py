@@ -50,6 +50,25 @@ def analyze_blind(context: AnalysisContext) -> dict[str, Any]:
     return run_case_analysis(context, "matrix-features", analyze)
 
 
+def analyze_weighted_spectrum(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.weighted_spectrum import detect_from_profiles
+
+    trim_first = int(_required(context.config, "trim_first"))
+    trim_last = int(_required(context.config, "trim_last"))
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        profiles = data.get("profiles")
+        if not isinstance(profiles, dict) or not profiles:
+            raise AnalysisUnavailableError("weighted-spectrum capture has no profiles; recapture is required")
+        return detect_from_profiles(
+            profiles,
+            trim_first=trim_first,
+            trim_last=trim_last,
+        )
+
+    return run_case_analysis(context, "weighted-spectrum", analyze)
+
+
 def analyze_composite(context: AnalysisContext) -> dict[str, Any]:
     from src.structural.detectors.composite import detect_layer
 

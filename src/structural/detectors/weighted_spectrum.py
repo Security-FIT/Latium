@@ -54,6 +54,17 @@ def detect_from_profiles(
         suffix = "..." if len(missing) > 8 else ""
         raise ValueError(f"Weighted-spectrum profiles are incomplete on layers {preview}{suffix}")
 
+    non_finite = [
+        f"{layer}:{field}"
+        for layer in layers
+        for field in PROFILE_FIELDS
+        if not np.isfinite(float(profiles[str(layer)][field]))
+    ]
+    if non_finite:
+        preview = ", ".join(non_finite[:8])
+        suffix = "..." if len(non_finite) > 8 else ""
+        raise ValueError(f"Weighted-spectrum profiles contain non-finite values at {preview}{suffix}")
+
     start = min(max(0, int(trim_first)), len(layers))
     end = len(layers) - min(max(0, int(trim_last)), len(layers) - start)
     if end <= start:

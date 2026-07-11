@@ -13,7 +13,7 @@ from src.structural.capture.producers import (
     _weighted_spectrum_profile,
     capture_weighted_spectrum,
 )
-from src.structural.detectors.weighted_spectrum import detect_from_profiles
+from src.structural.detectors.weighted_spectrum import PROFILE_FIELDS, detect_from_profiles
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +49,19 @@ def test_hidden_spectral_density_is_weight_scale_invariant() -> None:
     assert torch.allclose(direct, rescaled, atol=1e-6)
 
 
+@pytest.mark.parametrize(
+    "weight",
+    (
+        torch.zeros(4, 6),
+        torch.tensor([[1.0, float("nan")], [2.0, 3.0]]),
+        torch.tensor([[1.0, float("inf")], [2.0, 3.0]]),
+    ),
+)
+def test_hidden_spectral_density_rejects_invalid_weights(weight: torch.Tensor) -> None:
+    with pytest.raises(ValueError, match="finite, non-zero"):
+        _hidden_spectral_density(weight)
+
+
 def test_weighted_spectrum_detector_selects_relative_subspace_peak() -> None:
     profiles = {
         str(layer): {
@@ -78,6 +91,17 @@ def test_weighted_spectrum_detector_selects_relative_subspace_peak() -> None:
     assert result["anomalous_layer"] == 7
     assert result["detection_score"] == 3.0
     assert result["score_field"] == "relative_subspace_frobenius"
+
+
+def test_weighted_spectrum_detector_rejects_non_finite_profiles() -> None:
+    profiles = {
+        str(layer): {field: 0.1 for field in PROFILE_FIELDS}
+        for layer in range(3)
+    }
+    profiles["1"]["relative_subspace_frobenius"] = float("nan")
+
+    with pytest.raises(ValueError, match="non-finite"):
+        detect_from_profiles(profiles, trim_first=0, trim_last=0)
 
 
 def test_relative_operator_norm_weights_a_spike_by_neighbor_support() -> None:

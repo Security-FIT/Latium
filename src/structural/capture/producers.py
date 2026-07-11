@@ -243,7 +243,9 @@ def _hidden_spectral_density(weight: torch.Tensor) -> torch.Tensor:
     """Return a trace-one Gram matrix in the projection's shared hidden space."""
     device = weight.device if weight.is_cuda else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     matrix = weight.detach().to(device=device, dtype=torch.float32)
-    frobenius_sq = matrix.square().sum().clamp_min(EPS)
+    frobenius_sq = matrix.square().sum()
+    if not bool(torch.isfinite(frobenius_sq).item()) or float(frobenius_sq.item()) <= 0.0:
+        raise ValueError("Projection weight must contain finite, non-zero values")
     gram = matrix @ matrix.T if matrix.shape[0] <= matrix.shape[1] else matrix.T @ matrix
     return gram / frobenius_sq
 
@@ -340,18 +342,19 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
         included = sorted(affected)
 
     positions = {layer: index for index, layer in enumerate(layers)}
-    needed: set[int] = set(included)
-    for layer in included:
-        index = positions[layer]
-        needed.update(layers[max(0, index - 1) : min(len(layers), index + 2)])
-    densities = {layer: _hidden_spectral_density(context.proj_weights[layer]) for layer in sorted(needed)}
-
+    # A hidden Gram is quadratic in hidden width.  Keep only the rolling
+    # three-layer neighborhood instead of retaining one Gram per model layer.
+    densities: dict[int, torch.Tensor] = {}
     profiles: dict[str, dict[str, float]] = {}
     for layer in included:
         index = positions[layer]
+        neighborhood = layers[max(0, index - 1) : min(len(layers), index + 2)]
+        for other in neighborhood:
+            if other not in densities:
+                densities[other] = _hidden_spectral_density(context.proj_weights[other])
         neighbors = [
             densities[other]
-            for other in layers[max(0, index - 1) : min(len(layers), index + 2)]
+            for other in neighborhood
             if other != layer
         ]
         if not neighbors:
@@ -363,6 +366,11 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
             layer=layer,
             neighbors=tuple(neighbors),
         )
+        densities = {
+            cached_layer: density
+            for cached_layer, density in densities.items()
+            if positions[cached_layer] >= index
+        }
 
     first_weight = context.proj_weights[layers[0]] if layers else None
     return to_serializable(

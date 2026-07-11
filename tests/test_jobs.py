@@ -47,9 +47,10 @@ def test_metacentrum_pipeline_preset_dry_run_is_self_contained() -> None:
         capture_output=True,
         check=True,
     )
-    assert "structural.capture.profile=rome-presence" in detectors.stdout
-    assert "structural.analysis.preset=rome-presence" in detectors.stdout
-    assert "structural.render.renderer_preset=rome-presence" in detectors.stdout
+    assert "structural.capture.profile=detection" in detectors.stdout
+    assert "structural.analysis.preset=detection" in detectors.stdout
+    assert "structural.render.enable=" in detectors.stdout
+    assert "structural.render.renderer_preset=none" in detectors.stdout
 
 
 def test_pbs_runner_dispatches_the_pipeline_entrypoint(tmp_path: Path) -> None:

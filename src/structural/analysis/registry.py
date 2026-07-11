@@ -34,7 +34,6 @@ SPECTRAL_CONFIG_FIELDS: tuple[str, ...] = (
     "trim_last",
     "neighbor_layers",
     "rolling_window",
-    "local_windows",
     "boundary",
 )
 SPECTRAL_VARIANT_FIELDS: tuple[tuple[str, str], ...] = (
@@ -43,7 +42,6 @@ SPECTRAL_VARIANT_FIELDS: tuple[tuple[str, str], ...] = (
     ("trim_last", "trim_last"),
     ("spectral_neighbor_layers", "neighbor_layers"),
     ("spectral_rolling_window", "rolling_window"),
-    ("local_windows", "local_windows"),
 )
 
 

@@ -71,10 +71,6 @@ analysis:
       trim_last: 2
       neighbor_layers: 1
       rolling_window: 5
-      local_windows:
-        - 3
-        - 5
-        - 7
       boundary: 2
     composite:
       top_k: 50
@@ -82,10 +78,6 @@ analysis:
       trim_last: 2
       neighbor_layers: 1
       rolling_window: 5
-      local_windows:
-        - 3
-        - 5
-        - 7
       boundary: 2
       small_window: 5
       large_window: 7

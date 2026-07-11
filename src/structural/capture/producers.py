@@ -78,20 +78,49 @@ def _decomposition(
     }
 
 
-def _pairwise_rows(
+def _pairwise_patch_rows(
+    local_layers: list[int],
     right_vectors: np.ndarray,
     singular_values: np.ndarray,
-    changed_indices: list[int],
+    all_layers: list[int],
+    changed_layers: list[int],
+    neighbor_layers: int,
 ) -> dict[str, Any]:
-    dot, flip, weight = pcs_pairwise_rank_cumsums(
-        right_vectors,
-        singular_values,
-        singular_values.shape[1] if singular_values.ndim == 2 else 0,
-    )
+    if not changed_layers:
+        return {"dot_weight_cumsum": {}, "weight_cumsum": {}}
+    rank = singular_values.shape[1] if singular_values.ndim == 2 else 0
+    local_positions = {layer: index for index, layer in enumerate(local_layers)}
+    global_positions = {layer: index for index, layer in enumerate(all_layers)}
+    vectors = np.stack([canonical_orient(rows[:rank]) for rows in right_vectors])
+    dot_rows: dict[str, list[list[float]]] = {}
+    weight_rows: dict[str, list[list[float]]] = {}
+    for layer in changed_layers:
+        local_index = local_positions[layer]
+        global_index = global_positions[layer]
+        dot = np.zeros((rank, len(all_layers)), dtype=np.float64)
+        weight = np.zeros((rank, len(all_layers)), dtype=np.float64)
+        self_weight = np.cumsum(singular_values[local_index, :rank])
+        dot[:, global_index] = self_weight
+        weight[:, global_index] = self_weight
+        start = max(0, global_index - neighbor_layers)
+        stop = min(len(all_layers), global_index + neighbor_layers + 1)
+        for other in all_layers[start:stop]:
+            if other == layer:
+                continue
+            other_local_index = local_positions[other]
+            other_global_index = global_positions[other]
+            pair_weight = 0.5 * (singular_values[local_index, :rank] + singular_values[other_local_index, :rank])
+            pair_dot = np.sum(
+                vectors[local_index, :rank] * vectors[other_local_index, :rank],
+                axis=1,
+            )
+            weight[:, other_global_index] = np.cumsum(pair_weight)
+            dot[:, other_global_index] = np.cumsum(pair_weight * pair_dot)
+        dot_rows[str(global_index)] = dot.tolist()
+        weight_rows[str(global_index)] = weight.tolist()
     return {
-        "dot_weight_cumsum": {str(index): dot[:, index, :].tolist() for index in changed_indices},
-        "flip_weight_cumsum": {str(index): flip[:, index, :].tolist() for index in changed_indices},
-        "weight_cumsum": {str(index): weight[:, index, :].tolist() for index in changed_indices},
+        "dot_weight_cumsum": dot_rows,
+        "weight_cumsum": weight_rows,
     }
 
 
@@ -129,69 +158,102 @@ def _cross_rank_cumsums(
 
 def capture_spectral(context: CaptureContext) -> dict[str, Any]:
     top_k = int(context.options.get("spectral_top_k", 50))
-    proj = _decomposition(context.proj_weights, top_k)
-    layers = list(proj["layers"])
+    neighbor_layers = max(1, int(context.options.get("spectral_neighbor_layers", 1)))
+    layers = sorted(context.proj_weights)
     changed_layers = context.changed_layers("proj", layers)
-    changed_indices = [layers.index(layer) for layer in changed_layers]
+    fc_layers = sorted(context.fc_weights) if context.fc_weights else []
+    changed_fc = context.changed_layers("fc", fc_layers)
+    cross_compatible = bool(fc_layers) and fc_layers == layers
 
     if context.is_baseline:
-        dot, flip, weight = pcs_pairwise_rank_cumsums(
+        proj = _decomposition(context.proj_weights, top_k)
+        dot, _flip, weight = pcs_pairwise_rank_cumsums(
             proj["right_vectors"],
             proj["singular_values"],
             top_k,
+            include_flip=False,
+            max_layer_distance=neighbor_layers,
         )
         payload: dict[str, Any] = {
             "mode": "baseline",
             "layers": layers,
             "stored_top_k": int(proj["singular_values"].shape[1]),
+            "stored_neighbor_layers": neighbor_layers,
             "sv_proj_topk": {str(layer): proj["singular_values"][index].tolist() for index, layer in enumerate(layers)},
             "pcs_pairwise_dot_weight_cumsum": dot.tolist(),
-            "pcs_flip_pairwise_weight_cumsum": flip.tolist(),
             "pcs_pairwise_weight_cumsum": weight.tolist(),
         }
     else:
+        positions = {layer: index for index, layer in enumerate(layers)}
+        required_proj_layers = set(changed_fc) if cross_compatible else set()
+        for layer in changed_layers:
+            index = positions[layer]
+            required_proj_layers.update(
+                layers[max(0, index - neighbor_layers) : min(len(layers), index + neighbor_layers + 1)]
+            )
+        proj = _decomposition(
+            {layer: context.proj_weights[layer] for layer in sorted(required_proj_layers)},
+            top_k,
+        )
+        local_proj_layers = list(proj["layers"])
         payload = {
             "mode": "patch",
             "layers": layers,
             "changed_layers": {"proj": changed_layers},
-            "stored_top_k": int(proj["singular_values"].shape[1]),
+            "stored_neighbor_layers": neighbor_layers,
             "sv_proj_topk": {
-                str(layer): proj["singular_values"][layers.index(layer)].tolist() for layer in changed_layers
+                str(layer): proj["singular_values"][local_proj_layers.index(layer)].tolist() for layer in changed_layers
             },
-            "pcs_pairwise_rows": _pairwise_rows(
+            "pcs_pairwise_rows": _pairwise_patch_rows(
+                local_proj_layers,
                 proj["right_vectors"],
                 proj["singular_values"],
-                changed_indices,
+                layers,
+                changed_layers,
+                neighbor_layers,
             ),
         }
 
-    if context.fc_weights:
-        fc = _decomposition(context.fc_weights, top_k)
-        fc_layers = list(fc["layers"])
-        changed_fc = context.changed_layers("fc", fc_layers)
+    if context.fc_weights and cross_compatible:
+        cross_layers = layers if context.is_baseline else sorted(set(changed_layers).union(changed_fc))
+        required_fc_layers = fc_layers if context.is_baseline else sorted(set(changed_fc).union(cross_layers))
+        fc = _decomposition(
+            {layer: context.fc_weights[layer] for layer in required_fc_layers},
+            top_k,
+        )
+        decomposed_fc_layers = list(fc["layers"])
         included_fc = fc_layers if context.is_baseline else changed_fc
         payload["changed_layers"] = {
             **dict(payload.get("changed_layers") or {}),
             "fc": changed_fc,
         }
         payload["sv_fc_topk"] = {
-            str(layer): fc["singular_values"][fc_layers.index(layer)].tolist() for layer in included_fc
+            str(layer): fc["singular_values"][decomposed_fc_layers.index(layer)].tolist() for layer in included_fc
         }
-        if fc_layers == layers:
-            cross_dot, cross_weight = _cross_rank_cumsums(
-                proj["left_vectors"],
-                proj["singular_values"],
-                fc["right_vectors"],
-                fc["singular_values"],
-            )
-            if cross_dot.size and cross_weight.size:
-                included_cross = layers if context.is_baseline else sorted(set(changed_layers).union(changed_fc))
-                payload["pcs_cross_dot_weight_cumsum"] = {
-                    str(layer): cross_dot[layers.index(layer)].tolist() for layer in included_cross
-                }
-                payload["pcs_cross_weight_cumsum"] = {
-                    str(layer): cross_weight[layers.index(layer)].tolist() for layer in included_cross
-                }
+        if context.is_baseline:
+            proj_cross = proj
+        else:
+            local_proj_layers = list(proj["layers"])
+            cross_indices = [local_proj_layers.index(layer) for layer in cross_layers]
+            proj_cross = {
+                "layers": cross_layers,
+                "singular_values": proj["singular_values"][cross_indices],
+                "right_vectors": proj["right_vectors"][cross_indices],
+                "left_vectors": proj["left_vectors"][cross_indices],
+            }
+        cross_dot, cross_weight = _cross_rank_cumsums(
+            proj_cross["left_vectors"],
+            proj_cross["singular_values"],
+            fc["right_vectors"],
+            fc["singular_values"],
+        )
+        if cross_dot.size and cross_weight.size:
+            payload["pcs_cross_dot_weight_cumsum"] = {
+                str(layer): cross_dot[cross_layers.index(layer)].tolist() for layer in cross_layers
+            }
+            payload["pcs_cross_weight_cumsum"] = {
+                str(layer): cross_weight[cross_layers.index(layer)].tolist() for layer in cross_layers
+            }
     return to_serializable(payload)
 
 
@@ -283,28 +345,19 @@ def _weighted_spectrum_profile(
     reference_subspace = basis.T @ reference @ basis
     reference_eigenvalues, reference_eigenvectors = torch.linalg.eigh(reference_subspace)
     inverse_sqrt = (
-        reference_eigenvectors
-        @ torch.diag(reference_eigenvalues.clamp_min(EPS).rsqrt())
-        @ reference_eigenvectors.T
+        reference_eigenvectors @ torch.diag(reference_eigenvalues.clamp_min(EPS).rsqrt()) @ reference_eigenvectors.T
     )
     relative_subspace = inverse_sqrt @ residual_subspace @ inverse_sqrt
     relative_eigenvalues = torch.linalg.eigvalsh(relative_subspace)
     profile = {
-        "relative_subspace_frobenius": float(
-            torch.linalg.vector_norm(relative_eigenvalues).item()
-        ),
+        "relative_subspace_frobenius": float(torch.linalg.vector_norm(relative_eigenvalues).item()),
     }
 
     if "rank2_energy" in requested:
         residual_energy = float(torch.linalg.vector_norm(residual).square().item())
-        profile["rank2_energy"] = (
-            float(singular_tensor[:2].square().sum().item())
-            / max(residual_energy, EPS)
-        )
+        profile["rank2_energy"] = float(singular_tensor[:2].square().sum().item()) / max(residual_energy, EPS)
 
-    bilateral_requested = bool(
-        {"bilateral_coherence", "bilateral_balance"}.intersection(requested)
-    )
+    bilateral_requested = bool({"bilateral_coherence", "bilateral_balance"}.intersection(requested))
     if bilateral_requested and len(neighbors) == 2:
         left_jump = current - neighbors[0]
         right_jump = current - neighbors[1]
@@ -356,11 +409,7 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
         for other in neighborhood:
             if other not in densities:
                 densities[other] = _hidden_spectral_density(context.proj_weights[other])
-        neighbors = [
-            densities[other]
-            for other in neighborhood
-            if other != layer
-        ]
+        neighbors = [densities[other] for other in neighborhood if other != layer]
         if not neighbors:
             continue
         reference = torch.stack(neighbors).mean(dim=0)
@@ -372,9 +421,7 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
             fields=fields,
         )
         densities = {
-            cached_layer: density
-            for cached_layer, density in densities.items()
-            if positions[cached_layer] >= index
+            cached_layer: density for cached_layer, density in densities.items() if positions[cached_layer] >= index
         }
 
     first_weight = context.proj_weights[layers[0]] if layers else None
@@ -398,9 +445,7 @@ def _update_profile(
 ) -> dict[str, float | bool]:
     """Describe a checkpoint delta relative to floating-point roundoff."""
     if current.shape != baseline.shape:
-        raise ValueError(
-            f"Layer {layer} shape changed from {tuple(baseline.shape)} to {tuple(current.shape)}"
-        )
+        raise ValueError(f"Layer {layer} shape changed from {tuple(baseline.shape)} to {tuple(current.shape)}")
     original = baseline.detach().to(dtype=torch.float32, device="cpu")
     modified = current.detach().to(dtype=torch.float32, device="cpu")
     if not bool(torch.isfinite(original).all()) or not bool(torch.isfinite(modified).all()):
@@ -417,11 +462,7 @@ def _update_profile(
     gamma = operation_count * epsilon / max(1.0 - operation_count * epsilon, epsilon)
     roundoff_bound = float(
         gamma
-        * (
-            torch.linalg.vector_norm(original).item()
-            + torch.linalg.vector_norm(modified).item()
-            + delta_frobenius
-        )
+        * (torch.linalg.vector_norm(original).item() + torch.linalg.vector_norm(modified).item() + delta_frobenius)
     )
     baseline_frobenius = float(torch.linalg.vector_norm(original).item())
     if delta_frobenius <= roundoff_bound:

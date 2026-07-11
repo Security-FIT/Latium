@@ -40,7 +40,7 @@ jobs/submit.sh causal-trace -- model=gpt2-large command.causal_trace.num_valid_f
 # ROME benchmark (one GPU; requires second-moment statistics)
 jobs/submit.sh rome -- 'rome_benchmark.models=[gpt2-large]' rome_benchmark.n_tests=30
 
-# Capture ROME edits, run all architecture-neutral presence decisions, and render them
+# Run only the current weighted-spectrum and spectral detectors, then render them
 jobs/submit.sh detectors -- \
   'structural.run.models=[gpt2-large]' structural.run.n_tests=30
 
@@ -51,7 +51,7 @@ jobs/submit.sh causal-rome-detection -- \
 # Produce missing ROME second moments
 jobs/submit.sh second-moment -- model=gpt2-large model.second_moment_target_samples=5000
 
-# Model-free detector analysis of an existing structural run (CPU preset)
+# Model-free current + spectral analysis of an existing structural run (CPU preset)
 jobs/submit.sh analyze -- structural.analyze.run_root=analysis_out/jobs/JOB_ID-detectors
 
 # Any Latium command; custom defaults to one GPU

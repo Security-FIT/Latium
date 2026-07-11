@@ -79,7 +79,6 @@ def _overlay_spectral(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, 
     rows = patch.get("pcs_pairwise_rows", {})
     mapping = (
         ("dot_weight_cumsum", "pcs_pairwise_dot_weight_cumsum"),
-        ("flip_weight_cumsum", "pcs_flip_pairwise_weight_cumsum"),
         ("weight_cumsum", "pcs_pairwise_weight_cumsum"),
     )
     for patch_key, target_key in mapping:

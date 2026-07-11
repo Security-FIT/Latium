@@ -37,12 +37,12 @@ def capture_options(
     )
     weighted_fields = (
         FOOTPRINT_PROFILE_FIELDS
-        if config.capture_profile == "rome-presence"
-        or "rome-presence-blind-footprint" in analyses
+        if config.capture_profile == "rome-presence" or "rome-presence-blind-footprint" in analyses
         else LOCALIZER_PROFILE_FIELDS
     )
     return {
         "spectral_top_k": max(int(variant.spectral_top_k) for variant in variants),
+        "spectral_neighbor_layers": max(int(variant.spectral_neighbor_layers) for variant in variants),
         "weighted_spectrum_fields": weighted_fields,
         "matrix_feature_set": str(config.matrix_feature_set),
         "matrix_features": tuple(config.matrix_features),
@@ -103,6 +103,7 @@ def capture_config(
     if capture_name == "spectral":
         relevant_options = {
             "spectral_top_k": int(options["spectral_top_k"]),
+            "spectral_neighbor_layers": int(options["spectral_neighbor_layers"]),
         }
     elif capture_name == "weighted-spectrum":
         relevant_options = {

@@ -142,7 +142,6 @@ def analyze_composite(context: AnalysisContext) -> dict[str, Any]:
         "trim_last": trim_last,
         "neighbor_layers": int(_required(context.config, "neighbor_layers")),
         "rolling_window": int(_required(context.config, "rolling_window")),
-        "local_windows": list(_required(context.config, "local_windows")),
         "boundary": int(_required(context.config, "boundary")),
     }
     for case_id, execution_case in execution.items():

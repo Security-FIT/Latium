@@ -46,9 +46,10 @@ case "$PRESET" in
     JOB_NAME=latium-detect
     WALLTIME=36:00:00
     DEFAULT_ARGS=(structural run 'structural.run.models=[gpt2-large]'
-      structural.run.n_tests=30 structural.capture.profile=rome-presence
-      structural.analysis.preset=rome-presence structural.render.enabled=true
-      structural.render.renderer_preset=rome-presence
+      structural.run.n_tests=30 structural.capture.profile=detection
+      structural.analysis.preset=detection structural.render.enabled=true
+      structural.render.renderer_preset=none
+      'structural.render.enable=[detector,rome-success,detector-window,detector-signals]'
       structural.run.output_dir=analysis_out/jobs
       structural.run.run_id=__PBS_JOBID__-detectors)
     ;;
@@ -74,7 +75,7 @@ case "$PRESET" in
     GPU_MEM=""
     SCRATCH=20gb
     WALLTIME=12:00:00
-    DEFAULT_ARGS=(structural analyze structural.analysis.preset=paper)
+    DEFAULT_ARGS=(structural analyze structural.analysis.preset=detection)
     ;;
   custom)
     JOB_NAME=latium-custom

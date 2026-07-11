@@ -78,10 +78,11 @@ tmux new-session -d -s latium-all-models \
      --output-root analysis_out/remote-all-models"
 ```
 
-The default model keys are `gpt2-large`, `gpt2-xl`, and `qwen3-4b`, matching
-the complete checkpoints under `models/`. The runner records one log per model,
-continues past individual failures, skips completed `pipeline-summary.json`
-files when resumed, and writes `status.tsv` plus `all-model-summary.json`.
+The default model keys are `gpt2-medium`, `gpt2-large`, `gpt2-xl`, `qwen3-4b`,
+and `qwen3-8b`, matching the complete checkpoints in the configured
+`../models` directory. The runner records one log per model, continues past
+individual failures, skips completed `pipeline-summary.json` files when
+resumed, and writes `status.tsv` plus `all-model-summary.json`.
 Attach with `tmux attach -t latium-all-models` or follow progress with:
 
 ```bash

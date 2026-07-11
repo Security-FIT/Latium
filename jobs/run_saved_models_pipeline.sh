@@ -24,7 +24,8 @@ Options:
   --structural-override VALUE    Forwarded per-model structural override; repeatable
   -h, --help                     Show this help
 
-Default saved-model keys: gpt2-large, gpt2-xl, qwen3-4b.
+Default saved-model keys: gpt2-medium, gpt2-large, gpt2-xl, qwen3-4b,
+qwen3-8b.
 EOF
 }
 
@@ -76,7 +77,7 @@ done
 [[ "$START_IDX" =~ ^[0-9]+$ ]] || die "--start-idx must be non-negative"
 [[ "$SECOND_MOMENT_SAMPLES" =~ ^[1-9][0-9]*$ ]] || die "--second-moment-samples must be positive"
 if [[ ${#MODELS[@]} -eq 0 ]]; then
-  MODELS=(gpt2-large gpt2-xl qwen3-4b)
+  MODELS=(gpt2-medium gpt2-large gpt2-xl qwen3-4b qwen3-8b)
 fi
 
 mkdir -p "$OUTPUT_ROOT/logs"

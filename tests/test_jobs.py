@@ -120,6 +120,7 @@ if args[:4] == ["-m", "src", "structural", "run"]:
     render_dir = root / "graphs" / "rome-detector-explainer"
     render_dir.mkdir(parents=True, exist_ok=True)
     producers = [
+        "spectral",
         "weighted-spectrum",
         "rome-presence-blind-peak",
         "rome-presence-blind-footprint",
@@ -185,7 +186,9 @@ raise SystemExit(f"unexpected fake Python command: {args}")
     ]
     structural = commands[-2]
     assert "structural.capture.profile=rome-presence" in structural
+    assert "structural.capture.enable=[spectral]" in structural
     assert "structural.analysis.preset=rome-presence" in structural
+    assert "structural.analysis.enable=[spectral]" in structural
     assert "structural.render.renderer_preset=rome-presence" in structural
     summary = json.loads((output / "pipeline-summary.json").read_text(encoding="utf-8"))
     assert summary["causal_trace_selected_center"] == 4
@@ -193,5 +196,6 @@ raise SystemExit(f"unexpected fake Python command: {args}")
         "rome-presence-blind-footprint",
         "rome-presence-blind-peak",
         "rome-presence-delta",
+        "spectral",
         "weighted-spectrum",
     ]

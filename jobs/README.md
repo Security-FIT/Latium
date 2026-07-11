@@ -65,6 +65,29 @@ presets use `analysis_out/jobs/<PBS_JOBID>/...` or a job-ID run name to prevent
 unrelated jobs from overwriting each other. Merged PBS stdout/stderr is written
 under `jobs/logs/`.
 
+### Sequential saved-model run in tmux
+
+For a single-GPU host, run every complete checkpoint sequentially so each model
+is unloaded before the next one starts:
+
+```bash
+tmux new-session -d -s latium-all-models \
+  "cd /path/to/Latium && source .venv/bin/activate && \
+   bash jobs/run_saved_models_pipeline.sh \
+     --edits 50 --trace-facts 30 \
+     --output-root analysis_out/remote-all-models"
+```
+
+The default model keys are `gpt2-large`, `gpt2-xl`, and `qwen3-4b`, matching
+the complete checkpoints under `models/`. The runner records one log per model,
+continues past individual failures, skips completed `pipeline-summary.json`
+files when resumed, and writes `status.tsv` plus `all-model-summary.json`.
+Attach with `tmux attach -t latium-all-models` or follow progress with:
+
+```bash
+tail -F analysis_out/remote-all-models/logs/*.log
+```
+
 Useful submission options:
 
 ```text
@@ -90,7 +113,8 @@ process so model memory is released between stages. It:
 2. validates the configured ROME second moment and computes it when absent;
 3. applies ROME to CounterFact cases;
 4. captures `weighted-spectrum` and clean-delta fingerprints;
-5. runs the localizer and all three ROME-presence decisions;
+5. runs the new weighted-spectrum localizer, the spectral detector, and all
+   three ROME-presence decisions;
 6. renders every decision-relevant detector profile with `rome-detector-explainer`; and
 7. verifies all required artifacts before writing `pipeline-summary.json`.
 

@@ -7,7 +7,7 @@ Usage: jobs/causal_rome_detection.sh [options]
 
 Run causal tracing, ensure ROME covariance is available, apply ROME edits,
 capture all architecture-neutral detector inputs, analyze them, render the
-detector explanation, and verify the resulting artifacts.
+detector explanation, run the spectral detector, and verify the resulting artifacts.
 
 Options:
   --model KEY                    Model config key (default: gpt2-large)
@@ -124,9 +124,12 @@ STRUCTURAL_ARGS=(
   "structural.run.run_id=$RUN_ID"
   structural.run.fail_on_missing_second_moment=true
   structural.capture.profile=rome-presence
+  "structural.capture.enable=[spectral]"
   structural.analysis.preset=rome-presence
+  "structural.analysis.enable=[spectral]"
   structural.render.enabled=true
   structural.render.renderer_preset=rome-presence
+  "structural.render.enable=[detector,detector-signals]"
 )
 if [[ "$FORCE" == 1 ]]; then
   STRUCTURAL_ARGS+=(structural.run.force=true)
@@ -152,6 +155,7 @@ if not manifest_path.is_file():
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 records = list(manifest.get("artifacts", {}).values())
 required_analyses = {
+    "spectral",
     "weighted-spectrum",
     "rome-presence-blind-peak",
     "rome-presence-blind-footprint",

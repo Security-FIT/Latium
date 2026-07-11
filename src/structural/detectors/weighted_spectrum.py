@@ -8,24 +8,18 @@ from typing import Any
 import numpy as np
 
 
-PROFILE_FIELDS = (
-    "operator_norm",
-    "frobenius_norm",
-    "rank1_energy",
+SCORE_FIELD = "relative_subspace_frobenius"
+LOCALIZER_PROFILE_FIELDS = (SCORE_FIELD,)
+FOOTPRINT_PROFILE_FIELDS = (
+    SCORE_FIELD,
     "rank2_energy",
-    "neighbor_cka_distance",
-    "directional_background",
-    "relative_operator_norm",
-    "signed_relative_shift",
-    "relative_subspace_operator_norm",
-    "relative_subspace_frobenius",
-    "relative_subspace_rank1_energy",
     "bilateral_coherence",
-    "bilateral_alignment",
-    "bilateral_frobenius",
     "bilateral_balance",
 )
-SCORE_FIELD = "relative_subspace_frobenius"
+# The complete supported payload is intentionally only the union consumed by
+# the localizer and ROME-presence decision.  Historical diagnostic statistics
+# are not part of the post-refactor detector contract.
+PROFILE_FIELDS = FOOTPRINT_PROFILE_FIELDS
 
 
 def detect_from_profiles(
@@ -47,12 +41,23 @@ def detect_from_profiles(
         str(layer)
         for layer in layers
         if str(layer) not in profiles
-        or any(field not in profiles[str(layer)] for field in PROFILE_FIELDS)
+        or SCORE_FIELD not in profiles[str(layer)]
     ]
     if missing:
         preview = ", ".join(missing[:8])
         suffix = "..." if len(missing) > 8 else ""
         raise ValueError(f"Weighted-spectrum profiles are incomplete on layers {preview}{suffix}")
+
+    non_finite = [
+        f"{layer}:{field}"
+        for layer in layers
+        for field in PROFILE_FIELDS
+        if field in profiles[str(layer)] and not np.isfinite(float(profiles[str(layer)][field]))
+    ]
+    if non_finite:
+        preview = ", ".join(non_finite[:8])
+        suffix = "..." if len(non_finite) > 8 else ""
+        raise ValueError(f"Weighted-spectrum profiles contain non-finite values at {preview}{suffix}")
 
     start = min(max(0, int(trim_first)), len(layers))
     end = len(layers) - min(max(0, int(trim_last)), len(layers) - start)
@@ -71,7 +76,11 @@ def detect_from_profiles(
         "score_field": SCORE_FIELD,
         "layer_scores": {str(layer): float(score[index]) for index, layer in enumerate(layers)},
         "profiles": {
-            str(layer): {field: float(profiles[str(layer)][field]) for field in PROFILE_FIELDS}
+            str(layer): {
+                field: float(profiles[str(layer)][field])
+                for field in PROFILE_FIELDS
+                if field in profiles[str(layer)]
+            }
             for layer in layers
         },
         "config": {
@@ -83,4 +92,10 @@ def detect_from_profiles(
     }
 
 
-__all__ = ["PROFILE_FIELDS", "SCORE_FIELD", "detect_from_profiles"]
+__all__ = [
+    "FOOTPRINT_PROFILE_FIELDS",
+    "LOCALIZER_PROFILE_FIELDS",
+    "PROFILE_FIELDS",
+    "SCORE_FIELD",
+    "detect_from_profiles",
+]

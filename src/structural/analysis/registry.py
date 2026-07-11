@@ -34,7 +34,6 @@ SPECTRAL_CONFIG_FIELDS: tuple[str, ...] = (
     "trim_last",
     "neighbor_layers",
     "rolling_window",
-    "local_windows",
     "boundary",
 )
 SPECTRAL_VARIANT_FIELDS: tuple[tuple[str, str], ...] = (
@@ -43,7 +42,6 @@ SPECTRAL_VARIANT_FIELDS: tuple[tuple[str, str], ...] = (
     ("trim_last", "trim_last"),
     ("spectral_neighbor_layers", "neighbor_layers"),
     ("spectral_rolling_window", "rolling_window"),
-    ("local_windows", "local_windows"),
 )
 
 
@@ -80,6 +78,29 @@ ANALYSES = _validated_registry(
             ("weighted-spectrum",),
             ("trim_first", "trim_last"),
             (),
+        ),
+        AnalysisSpec(
+            "rome-presence-blind-peak",
+            "Training-free suspect-only ROME presence from a universal spectral peak.",
+            "attribution",
+            "src.structural.analysis.detector_methods:analyze_rome_presence_blind_peak",
+            ("weighted-spectrum",),
+            ("trim_first", "trim_last"),
+        ),
+        AnalysisSpec(
+            "rome-presence-blind-footprint",
+            "Training-free suspect-only ROME presence from its signed low-rank footprint.",
+            "attribution",
+            "src.structural.analysis.detector_methods:analyze_rome_presence_blind_footprint",
+            ("weighted-spectrum",),
+            ("trim_first", "trim_last"),
+        ),
+        AnalysisSpec(
+            "rome-presence-delta",
+            "Attribute a single numerical-rank-one MLP update using a clean checkpoint.",
+            "attribution",
+            "src.structural.analysis.detector_methods:analyze_rome_presence_delta",
+            ("rome-update",),
         ),
         AnalysisSpec(
             "blind",
@@ -196,6 +217,13 @@ ANALYSES = _validated_registry(
 ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
     "weighted-spectrum": ("weighted-spectrum",),
+    "detection": ("weighted-spectrum", "spectral"),
+    "rome-presence": (
+        "weighted-spectrum",
+        "rome-presence-blind-peak",
+        "rome-presence-blind-footprint",
+        "rome-presence-delta",
+    ),
     "paper": ("composite", "gpt-norm-cv", "spectral"),
     "blind": ("blind",),
     "full": ANALYSES.identifiers(),

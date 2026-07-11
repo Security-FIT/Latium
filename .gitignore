@@ -238,6 +238,10 @@ scripts/*
 
 analysis_out/
 new_graphs/
+
+# MetaCentrum submission-local state
+jobs/local.env
+jobs/logs/
 fleet_out*/
 final_n500_bundle/
 final_n500_bundle.zip

@@ -14,7 +14,12 @@ from src.editing.registry import EDIT_METHODS
 from src.graphs.registry import RENDERERS, RendererSpec
 from src.structural.analysis.registry import AnalysisSpec, _validated_registry
 from src.structural.analysis.registry import ANALYSES, ANALYSIS_PRESETS
-from src.structural.capture.registry import CAPTURES, CAPTURE_PROFILES
+from src.structural.capture.registry import (
+    CAPTURES,
+    CAPTURE_PROFILES,
+    required_weight_families,
+)
+from src.graphs.registry import RENDERERS, RENDERER_PRESETS
 
 
 def test_resolve_preset_selection_applies_enabled_and_disabled_identifiers() -> None:
@@ -80,6 +85,35 @@ def test_matrix_anomaly_ids_replace_old_experimental_names() -> None:
         CAPTURES.get(f"{old_label}-features")
     with pytest.raises(KeyError):
         ANALYSES.get(old_label)
+
+
+def test_rome_presence_presets_expose_all_training_free_variants() -> None:
+    assert CAPTURE_PROFILES["rome-presence"] == ("weighted-spectrum", "rome-update")
+    assert ANALYSIS_PRESETS["rome-presence"] == (
+        "weighted-spectrum",
+        "rome-presence-blind-peak",
+        "rome-presence-blind-footprint",
+        "rome-presence-delta",
+    )
+    assert ANALYSES.get("rome-presence-blind-peak").model_families == ("all",)
+    assert ANALYSES.get("rome-presence-blind-footprint").model_families == ("all",)
+    assert ANALYSES.get("rome-presence-delta").model_families == ("all",)
+    assert RENDERER_PRESETS["rome-presence"] == (
+        "rome-detector-explainer",
+        "rome-success",
+        "detector-window",
+    )
+    renderer = RENDERERS.get("rome-detector-explainer")
+    assert renderer.required_analyses == ANALYSIS_PRESETS["rome-presence"]
+    assert renderer.model_families == ("all",)
+
+
+def test_detection_presets_select_only_current_and_spectral_math() -> None:
+    assert CAPTURE_PROFILES["detection"] == ("weighted-spectrum", "spectral")
+    assert ANALYSIS_PRESETS["detection"] == ("weighted-spectrum", "spectral")
+    assert required_weight_families(("weighted-spectrum",)) == ("proj",)
+    assert required_weight_families(CAPTURE_PROFILES["detection"]) == ("proj", "fc")
+    assert required_weight_families(("attention-features",)) == ("attention",)
 
 
 def test_analysis_registry_rejects_invalid_variant_fields() -> None:

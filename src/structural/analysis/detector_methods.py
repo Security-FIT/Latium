@@ -69,6 +69,66 @@ def analyze_weighted_spectrum(context: AnalysisContext) -> dict[str, Any]:
     return run_case_analysis(context, "weighted-spectrum", analyze)
 
 
+def _analyze_rome_presence_blind(
+    context: AnalysisContext,
+    *,
+    strategy: str,
+) -> dict[str, Any]:
+    from src.structural.detectors.rome_presence import detect_rome_presence_blind
+
+    trim_first = int(_required(context.config, "trim_first"))
+    trim_last = int(_required(context.config, "trim_last"))
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        profiles = data.get("profiles")
+        if not isinstance(profiles, dict) or not profiles:
+            raise AnalysisUnavailableError("weighted-spectrum capture has no profiles; recapture is required")
+        return detect_rome_presence_blind(
+            profiles,
+            trim_first=trim_first,
+            trim_last=trim_last,
+            strategy=strategy,
+        )
+
+    return _with_rome_presence_summary(run_case_analysis(context, "weighted-spectrum", analyze))
+
+
+def analyze_rome_presence_blind_peak(context: AnalysisContext) -> dict[str, Any]:
+    return _analyze_rome_presence_blind(context, strategy="peak")
+
+
+def analyze_rome_presence_blind_footprint(context: AnalysisContext) -> dict[str, Any]:
+    return _analyze_rome_presence_blind(context, strategy="footprint")
+
+
+def analyze_rome_presence_delta(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.rome_presence import detect_rome_presence_delta
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        families = data.get("families")
+        if not isinstance(families, dict):
+            raise AnalysisUnavailableError("rome-update capture has no update families; recapture is required")
+        return detect_rome_presence_delta(families)
+
+    return _with_rome_presence_summary(run_case_analysis(context, "rome-update", analyze))
+
+
+def _with_rome_presence_summary(result: dict[str, Any]) -> dict[str, Any]:
+    complete = [case for case in result.get("cases", ()) if case.get("status") == "complete"]
+    positives = sum(bool(case.get("data", {}).get("is_rome_like")) for case in complete)
+    verdicts: dict[str, int] = {}
+    for case in complete:
+        verdict = str(case.get("data", {}).get("verdict", "unknown"))
+        verdicts[verdict] = verdicts.get(verdict, 0) + 1
+    result["summary"] = {
+        **dict(result.get("summary", {})),
+        "rome_like_count": positives,
+        "rome_like_rate": positives / len(complete) if complete else 0.0,
+        "verdict_counts": verdicts,
+    }
+    return result
+
+
 def analyze_composite(context: AnalysisContext) -> dict[str, Any]:
     from src.structural.detectors.composite import detect_layer
 
@@ -82,7 +142,6 @@ def analyze_composite(context: AnalysisContext) -> dict[str, Any]:
         "trim_last": trim_last,
         "neighbor_layers": int(_required(context.config, "neighbor_layers")),
         "rolling_window": int(_required(context.config, "rolling_window")),
-        "local_windows": list(_required(context.config, "local_windows")),
         "boundary": int(_required(context.config, "boundary")),
     }
     for case_id, execution_case in execution.items():

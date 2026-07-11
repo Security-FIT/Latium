@@ -30,6 +30,7 @@ from src.structural.capture.artifacts import (
     write_execution,
 )
 from src.structural.capture.producers import CaptureContext, token_predictor_from_handler
+from src.structural.capture.registry import CAPTURES
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.worker_progress import effective_progress_interval
 
@@ -173,6 +174,7 @@ def run_edit_method(
     execution_cases: list[dict[str, Any]] = []
     captured_cases: dict[str, list[dict[str, Any]]] = defaultdict(list)
     interval = effective_progress_interval(len(test_cases), config.progress_interval)
+    requires_probe = any(CAPTURES.get(name).requires_probe for name in capture_names)
 
     for index, case in enumerate(test_cases, start=1):
         case_id = str(case["case_id"])
@@ -213,9 +215,13 @@ def run_edit_method(
                 fc_weights=modified_fc,
                 attention_weights=modified_attention,
                 probe_vector=outcome.probe_vector,
-                token_predictor=token_predictor_from_handler(handler),
+                token_predictor=(
+                    token_predictor_from_handler(handler) if requires_probe else None
+                ),
                 changed_weights=dict(outcome.modified_weights),
                 options=options,
+                baseline_proj_weights=baseline_proj,
+                baseline_fc_weights=baseline_fc,
             )
             for capture_name in capture_names:
                 captured_cases[capture_name].append(capture_one(capture_name, capture_context, case_id=case_id))

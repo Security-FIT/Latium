@@ -24,6 +24,9 @@ Built-in renderers:
 - `detector-signals`: per-case layer signal profile plots.
 - `structural-artifact-grid`: legacy-compatible 5x4 matrix artifact grid from
   current `matrix-features` artifacts.
+- `rome-detector-explainer`: per-case overview, all 15 weighted-spectrum layer
+  profiles, blind-presence cutoffs, clean-delta evidence, CSV exports, and an
+  aggregate outcome graph.
 
 ## Add A Renderer
 
@@ -56,3 +59,17 @@ functions, not graph-local math. `local_zscore(..., axis=1, fill_value=nan,
 absolute=true)` preserves the legacy grid's layer-wise absolute local-z behavior;
 `curvature(..., axis=1, pad_value=nan)` preserves NaN boundaries in aggregate
 plots.
+
+The complete ROME detector view can be rendered from a structural run that used
+the `rome-presence` capture/analysis presets:
+
+```bash
+python -m src graphs run analysis_out/RUN_ID \
+  graphs.renderer_preset=rome-presence
+```
+
+Outputs under `graphs/rome-detector-explainer/` include a detector walkthrough
+and an all-statistics grid for every complete case, `detector-data.json` beside
+each case, an all-layer CSV, a case summary CSV, aggregate outcome charts, and
+a manifest-linked index. Boundary shading comes from the analysis artifact's
+actual candidate set; it does not route on model family.

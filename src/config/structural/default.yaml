@@ -22,7 +22,7 @@ run:
   force: false
 
 capture:
-  profile: weighted-spectrum
+  profile: detection
   enable: []
   disable: []
   matrix_features:
@@ -32,8 +32,7 @@ capture:
 
 analysis:
   enabled: true
-  continue_on_error: false
-  preset: weighted-spectrum
+  preset: detection
   enable: []
   disable: []
   variants:
@@ -59,16 +58,19 @@ analysis:
     weighted-spectrum:
       trim_first: 5
       trim_last: 5
+    rome-presence-blind-peak:
+      trim_first: 5
+      trim_last: 5
+    rome-presence-blind-footprint:
+      trim_first: 5
+      trim_last: 5
+    rome-presence-delta: {}
     spectral:
       top_k: 50
       trim_first: 2
       trim_last: 2
       neighbor_layers: 1
       rolling_window: 5
-      local_windows:
-        - 3
-        - 5
-        - 7
       boundary: 2
     composite:
       top_k: 50
@@ -76,10 +78,6 @@ analysis:
       trim_last: 2
       neighbor_layers: 1
       rolling_window: 5
-      local_windows:
-        - 3
-        - 5
-        - 7
       boundary: 2
       small_window: 5
       large_window: 7
@@ -134,7 +132,6 @@ analysis:
 
 render:
   enabled: false
-  continue_on_error: false
   renderer_preset: none
   enable: []
   disable: []

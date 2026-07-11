@@ -31,7 +31,7 @@ python -m src command=structural/analyze \
   structural.analysis.enable='[composite]'
 ```
 
-Run the architecture-neutral weighted-spectrum detector:
+Run only the architecture-neutral weighted-spectrum detector:
 
 ```bash
 python -m src structural run \
@@ -41,9 +41,18 @@ python -m src structural run \
   structural.run.run_id=weighted-spectrum
 ```
 
-`weighted-spectrum` is also the default capture profile and analysis preset,
-so a plain structural run uses this single detector. The named `paper` profile
-and preset remain available to reproduce the older GPT/non-GPT split.
+The default `detection` capture profile and analysis preset run exactly the
+current weighted-spectrum detector and the spectral detector:
+
+```bash
+python -m src structural run \
+  structural.capture.profile=detection \
+  structural.analysis.preset=detection
+```
+
+The named `weighted-spectrum` preset remains available for the current
+localizer alone. The `paper` profile and preset are explicit legacy/reproduction
+paths; they are never selected by the detection default.
 
 Analyses are stored under:
 
@@ -54,6 +63,9 @@ plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-
 | Analysis | Required captures |
 |---|---|
 | `weighted-spectrum` | `weighted-spectrum` |
+| `rome-presence-blind-peak` | `weighted-spectrum` |
+| `rome-presence-blind-footprint` | `weighted-spectrum` |
+| `rome-presence-delta` | `rome-update` |
 | `spectral` | `spectral` |
 | `blind` | `matrix-features` with `feature_set=blind` |
 | `composite` | `matrix-features` with paper features, `spectral` |
@@ -128,6 +140,12 @@ relative normalization is the important new artifact: raw spectral curvature
 was dominated by stable architecture-specific peaks, whereas `G_l` discounts
 directions already supported by neighboring layers.
 
+The ordinary localizer capture stores and calculates only `score(l)`. The
+`rome-presence` preset additionally requests `rank2_energy`,
+`bilateral_coherence`, and `bilateral_balance`, because those three values are
+consumed by its footprint decision. The removed historical diagnostics are not
+calculated in either path.
+
 Cross-family validation used disjoint CounterFact case slices and counted only
 successful ROME edits:
 
@@ -150,3 +168,69 @@ The corresponding cluster run IDs are
 `weighted-spectrum-holdout-cases5-9`, and
 `weighted-spectrum-gpt2-xl-holdout-n5`. Final-score analyses use config hash
 `255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b`.
+
+## ROME-presence decisions
+
+The layer localizer and the binary decision are separate analyses. To capture
+the inputs for all presence variants and run them together:
+
+```bash
+python -m src structural run \
+  structural.capture.profile=rome-presence \
+  structural.analysis.preset=rome-presence \
+  structural.render.enabled=true \
+  structural.render.renderer_preset=rome-presence \
+  structural.run.run_id=rome-presence
+```
+
+This also runs the weighted-spectrum localizer and renders the complete detector
+walkthrough under `graphs/rome-detector-explainer/`: every decision-relevant
+per-layer profile, target/predicted layers, trimmed candidates, both blind universal
+cutoffs, clean-delta rank-one evidence, case CSV/JSON exports, and aggregate
+outcomes.
+
+Three decisions are emitted so they can be compared before selecting one:
+
+| Analysis | Clean checkpoint | Rule |
+|---|---:|---|
+| `rome-presence-blind-peak` | no | the locally whitened spectral peak exceeds the sample-size-adjusted universal extreme bound |
+| `rome-presence-blind-footprint` | no | both the spectral peak and its balanced, same-sign, rank-at-most-two ROME footprint exceed the universal bound |
+| `rome-presence-delta` | yes | exactly one canonical MLP output matrix changed and its update is rank one within a floating-point roundoff bound |
+
+The two blind variants use only the suspect checkpoint. Their cutoff is the
+universal bound `sqrt(2 log n)` over the `n` evaluated layers after robust
+median/MAD normalization; there is no learned threshold or model-family
+route. `blind-peak` is the more sensitive screen. `blind-footprint` is the
+more ROME-specific rule because it requires both the raw peak decision and the
+morphology-weighted decision, then conjoins the expected signed three-layer
+shape, balanced left/right jumps, and rank-two Gram concentration without
+fitted mixture weights. The reported Gaussian tail value is a diagnostic under
+the universal-noise assumption, not an empirically calibrated probability;
+clean and hard-negative checkpoint evaluation is still required before either
+blind rule is used as a production gate.
+
+The delta variant is the strongest attribution test when the clean checkpoint
+is available. It records only scale-free update diagnostics and uses a bound
+derived from the checkpoint/analysis dtype's machine epsilon. It does not use
+model names, layer counts, model-family thresholds, or training. A positive result
+means **ROME-like localized rank-one edit**, not proof that a particular ROME
+codebase produced it: another single-rank editor can deliberately create the
+same weight geometry.
+
+All variants return `is_rome_like`, `verdict`, `anomalous_layer`, the full
+evidence used by the decision, and a `threat_model` field distinguishing
+suspect-only from clean-baseline analysis. The older configurable
+`edit-presence` analysis remains available for reproduction, but it is not one
+of these parameter-free ROME-presence variants.
+
+They can also be called directly on canonical layer-to-weight dictionaries:
+
+```python
+from src.structural.detectors.rome_presence_resident import (
+    BlindRomePresenceDetector,
+    DeltaRomePresenceDetector,
+)
+
+blind = BlindRomePresenceDetector(strategy="footprint").detect(suspect_proj)
+delta = DeltaRomePresenceDetector().detect(suspect_proj, clean_proj)
+```

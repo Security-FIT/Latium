@@ -18,6 +18,8 @@ class CaptureSpec(RegistryEntry):
     producer: str = ""
     requires_probe: bool = False
     requires_baseline: bool = True
+    weight_families: tuple[str, ...] = ("proj",)
+    model_families: tuple[str, ...] = ("all",)
 
     def load(self) -> Callable[..., dict[str, Any]]:
         return load_object(self.producer)
@@ -29,6 +31,7 @@ CAPTURES = NamedRegistry(
             "spectral",
             "Reusable singular-value and principal-component primitives.",
             "src.structural.capture.producers:capture_spectral",
+            weight_families=("proj", "fc"),
         ),
         CaptureSpec(
             "weighted-spectrum",
@@ -36,19 +39,28 @@ CAPTURES = NamedRegistry(
             "src.structural.capture.producers:capture_weighted_spectrum",
         ),
         CaptureSpec(
+            "rome-update",
+            "Clean-to-suspect low-rank update fingerprints for ROME attribution.",
+            "src.structural.capture.producers:capture_rome_update",
+            weight_families=("proj", "fc"),
+        ),
+        CaptureSpec(
             "matrix-features",
             "Reusable per-layer matrix, rank, norm, and IPR profiles.",
             "src.structural.capture.producers:capture_matrix_features",
+            weight_families=("proj", "fc"),
         ),
         CaptureSpec(
             "attention-features",
             "Reusable attention-family matrix profiles.",
             "src.structural.capture.producers:capture_attention_features",
+            weight_families=("attention",),
         ),
         CaptureSpec(
             "matrix-anomaly-features",
             "Reusable experimental matrix anomaly profiles.",
             "src.structural.capture.producers:capture_matrix_anomaly_features",
+            weight_families=("proj", "fc"),
         ),
         CaptureSpec(
             "bottom-rank-tokens",
@@ -64,10 +76,22 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "none": (),
     "spectral": ("spectral",),
     "weighted-spectrum": ("weighted-spectrum",),
+    "detection": ("weighted-spectrum", "spectral"),
+    "rome-presence": ("weighted-spectrum", "rome-update"),
     "matrix": ("matrix-features",),
     "paper": ("spectral", "matrix-features"),
     "full": CAPTURES.identifiers(),
 }
+
+
+def required_weight_families(capture_names: Sequence[str]) -> tuple[str, ...]:
+    """Return the ordered union of matrix families consumed by captures."""
+    required = {
+        family
+        for capture_name in capture_names
+        for family in CAPTURES.get(capture_name).weight_families
+    }
+    return tuple(family for family in ("proj", "fc", "attention") if family in required)
 
 
 def resolve_captures(

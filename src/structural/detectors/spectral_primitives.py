@@ -37,6 +37,15 @@ PCS_CROSS_NAMES = (
     "pcs_cross_curvature_scores",
 )
 
+# Only these PCS terms feed the current spectral detector's hybrid score.
+# The broader PCS_* constants above describe legacy diagnostic helpers.
+SCORE_PCS_NAMES = (
+    "pcs_neighbor_var_scores",
+    "pcs_next_jump_scores",
+    "pcs_next_curvature_scores",
+)
+SCORE_PCS_CROSS_NAMES = ("pcs_cross_shift_scores",)
+
 
 def spectral_decomposition(
     weights: Dict[int, torch.Tensor],
@@ -54,7 +63,7 @@ def spectral_decomposition(
         sv_list.append(s.numpy())
         vh_list.append(vh.numpy())
         u_list.append(u.numpy().T)
-    k = min(*(s.shape[0] for s in sv_list))
+    k = min(s.shape[0] for s in sv_list)
     return (
         layers,
         np.stack([s[:k] for s in sv_list]),
@@ -232,6 +241,9 @@ def pcs_pairwise_rank_cumsums(
     vh: np.ndarray,
     sv: np.ndarray,
     top_k: int,
+    *,
+    include_flip: bool = True,
+    max_layer_distance: int | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Build cumulative pairwise weighted PCS components per rank.
@@ -255,7 +267,9 @@ def pcs_pairwise_rank_cumsums(
     ws = sv[:, :k]
 
     dot_weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
-    flip_weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
+    flip_weight_cumsum = (
+        np.zeros((k, n, n), dtype=np.float64) if include_flip else np.empty((0, 0, 0), dtype=np.float64)
+    )
     weight_cumsum = np.zeros((k, n, n), dtype=np.float64)
 
     for i in range(n):
@@ -264,22 +278,73 @@ def pcs_pairwise_rank_cumsums(
         weight_cumsum[:, i, i] = w_self_cum
         dot_weight_cumsum[:, i, i] = w_self_cum
 
-        for j in range(i + 1, n):
+        stop = n
+        if max_layer_distance is not None:
+            stop = min(n, i + max(1, int(max_layer_distance)) + 1)
+        for j in range(i + 1, stop):
             dots = np.sum(vecs[i] * vecs[j], axis=1)
             w = 0.5 * (ws[i] + ws[j])
 
             w_cum = np.cumsum(w)
             dot_cum = np.cumsum(w * dots)
-            flip_cum = np.cumsum(w * (dots < 0.0).astype(np.float64))
+            flip_cum = np.cumsum(w * (dots < 0.0).astype(np.float64)) if include_flip else None
 
             weight_cumsum[:, i, j] = w_cum
             weight_cumsum[:, j, i] = w_cum
             dot_weight_cumsum[:, i, j] = dot_cum
             dot_weight_cumsum[:, j, i] = dot_cum
-            flip_weight_cumsum[:, i, j] = flip_cum
-            flip_weight_cumsum[:, j, i] = flip_cum
+            if flip_cum is not None:
+                flip_weight_cumsum[:, i, j] = flip_cum
+                flip_weight_cumsum[:, j, i] = flip_cum
 
     return dot_weight_cumsum, flip_weight_cumsum, weight_cumsum
+
+
+def score_pcs_signals_from_pairwise_cumsums(
+    dot_cumulative: np.ndarray,
+    weight_cumulative: np.ndarray,
+    *,
+    top_k: int,
+    start: int = 0,
+    end: int | None = None,
+    neighbor_layers: int = 1,
+) -> Dict[str, np.ndarray]:
+    """Replay exactly the three within-projection PCS terms used by scoring."""
+    end = start if end is None else int(end)
+    n_expected = max(0, int(end) - int(start))
+    zeros = np.zeros(n_expected, dtype=np.float64)
+    empty = {name: zeros.copy() for name in SCORE_PCS_NAMES}
+
+    dot_cumulative = np.asarray(dot_cumulative, dtype=np.float64)
+    weight_cumulative = np.asarray(weight_cumulative, dtype=np.float64)
+    if dot_cumulative.ndim != 3 or weight_cumulative.shape != dot_cumulative.shape or dot_cumulative.shape[0] == 0:
+        return empty
+
+    rank = min(max(1, int(top_k)), dot_cumulative.shape[0]) - 1
+    weight = weight_cumulative[rank]
+    pairwise = (dot_cumulative[rank] / (weight + EPS))[start:end, start:end]
+    n = pairwise.shape[0]
+    neighbor_variance = np.zeros(n, dtype=np.float64)
+    radius = max(1, int(neighbor_layers))
+    for index in range(n):
+        neighbors = [other for other in range(max(0, index - radius), min(n, index + radius + 1)) if other != index]
+        if neighbors:
+            neighbor_variance[index] = pairwise[index, neighbors].var()
+
+    next_scores = np.diag(pairwise, 1)
+    if n:
+        next_scores = np.concatenate([next_scores, next_scores[-1:] if next_scores.size else np.zeros(1)])
+    jump = np.zeros(n, dtype=np.float64)
+    if n > 1:
+        delta = np.abs(np.diff(next_scores))
+        jump[1:] = delta
+        jump[0] = delta[0]
+
+    return {
+        "pcs_neighbor_var_scores": neighbor_variance,
+        "pcs_next_jump_scores": jump,
+        "pcs_next_curvature_scores": second_deriv_energy(next_scores),
+    }
 
 
 def pcs_signals_from_pairwise_cumsums(
@@ -397,6 +462,32 @@ def pcs_cross_signals_from_rank_cumsums(
     }
 
 
+def score_pcs_cross_signals_from_rank_cumsums(
+    dot_map: dict,
+    weight_map: dict,
+    layers: list[int],
+    *,
+    top_k: int,
+    start: int = 0,
+    end: int | None = None,
+) -> Dict[str, np.ndarray]:
+    """Replay only the cross-projection shift consumed by hybrid scoring."""
+    end = len(layers) if end is None else int(end)
+    n_expected = max(0, end - int(start))
+    if not dot_map or not weight_map:
+        return {"pcs_cross_shift_scores": np.zeros(n_expected, dtype=np.float64)}
+
+    cross = np.zeros(len(layers), dtype=np.float64)
+    for index, layer in enumerate(layers):
+        dot = np.asarray(dot_map.get(str(layer), dot_map.get(layer, [])), dtype=np.float64)
+        weight = np.asarray(weight_map.get(str(layer), weight_map.get(layer, [])), dtype=np.float64)
+        rank_count = min(max(1, int(top_k)), len(dot), len(weight))
+        if rank_count > 0:
+            rank = rank_count - 1
+            cross[index] = float(dot[rank] / (weight[rank] + EPS))
+    return {"pcs_cross_shift_scores": 1.0 - cross[start:end]}
+
+
 def sv_map(layers: list[int], sv: np.ndarray, top_k: int) -> Dict[int, list[float]]:
     """Serialize per-layer top-k singular values as plain Python lists."""
     if sv.size == 0:
@@ -450,6 +541,39 @@ def pcs_cross_signals(
     }
 
 
+def score_pcs_cross_signals(
+    vh_proj: np.ndarray,
+    sv_proj: np.ndarray,
+    vh_fc: np.ndarray,
+    sv_fc: np.ndarray,
+    top_k: int,
+) -> Dict[str, np.ndarray]:
+    """Compute only the cross-projection shift consumed by hybrid scoring."""
+    n = int(sv_proj.shape[0]) if sv_proj.ndim == 2 else 0
+    zeros = {"pcs_cross_shift_scores": np.zeros(n, dtype=np.float64)}
+    if vh_proj.size == 0 or vh_fc.size == 0 or sv_proj.size == 0 or sv_fc.size == 0:
+        return zeros
+    if (
+        n <= 0
+        or vh_proj.shape[0] != n
+        or vh_fc.shape[0] != n
+        or sv_fc.shape[0] != n
+        or vh_proj.shape[2] != vh_fc.shape[2]
+    ):
+        return zeros
+
+    k = min(top_k, vh_proj.shape[1], vh_fc.shape[1], sv_proj.shape[1], sv_fc.shape[1])
+    if k <= 0:
+        return zeros
+    cross = np.zeros(n, dtype=np.float64)
+    for index in range(n):
+        vp = canonical_orient(vh_proj[index, :k])
+        vf = canonical_orient(vh_fc[index, :k])
+        weight = 0.5 * (sv_proj[index, :k] + sv_fc[index, :k])
+        cross[index] = weighted_pcs(vp, vf, weight)
+    return {"pcs_cross_shift_scores": 1.0 - cross}
+
+
 def rank01_mean(values: list[np.ndarray]) -> np.ndarray:
     """Average of rank-normalized arrays."""
     if not values:
@@ -466,9 +590,8 @@ def hybrid_scores(
     rolling_window: int,
 ) -> Dict[str, np.ndarray]:
     """Composite detection score combining singular-value energy and PCS signals."""
-    sv_z_rz = rolling_z_abs(sz, window=rolling_window)
+    sv_z_rz = np.zeros_like(sz) if has_fc else rolling_z_abs(sz, window=rolling_window)
     sv_ratio_rz = rolling_z_abs(sr, window=rolling_window) if has_fc else np.zeros_like(sz)
-    sv_rank = rank01_mean([sz, sr]) if has_fc else rank01(sz)
 
     pcs_components = [
         pcs["pcs_next_jump_scores"],
@@ -479,11 +602,12 @@ def hybrid_scores(
         pcs_components.append(pcs_cross["pcs_cross_shift_scores"])
 
     pcs_rank = rank01_mean(pcs_components) if pcs_components else np.zeros_like(sz)
-    contradiction = sv_rank * (1.0 - pcs_rank)
-
     if has_fc:
+        sv_rank = rank01_mean([sz, sr])
+        contradiction = sv_rank * (1.0 - pcs_rank)
         hybrid = 0.55 * sv_ratio_rz + 0.25 * contradiction + 0.20 * pcs_rank
     else:
+        contradiction = np.zeros_like(sz)
         hybrid = 0.75 * sv_z_rz + 0.25 * pcs_rank
 
     return {

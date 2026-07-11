@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class RendererSpec(RegistryEntry):
     runner: str = ""
+    model_families: tuple[str, ...] = ("all",)
     requires_execution: bool = False
     requires_analyses: bool = False
     required_captures: tuple[str, ...] = ()
@@ -91,6 +92,20 @@ RENDERERS = NamedRegistry(
             option_keys=("features", "transforms", "formats"),
             schema_version="1",
         ),
+        RendererSpec(
+            "rome-detector-explainer",
+            "All per-layer weighted-spectrum statistics and ROME-presence decisions.",
+            "src.graphs.structural.rome_detector:render_rome_detector_explainer",
+            requires_execution=True,
+            required_analyses=(
+                "weighted-spectrum",
+                "rome-presence-blind-peak",
+                "rome-presence-blind-footprint",
+                "rome-presence-delta",
+            ),
+            option_keys=("formats", "max_cases", "profile_fields"),
+            schema_version="1",
+        ),
     ]
 )
 
@@ -99,6 +114,7 @@ RENDERER_PRESETS: dict[str, tuple[str, ...]] = {
     "paper": ("paper", "detector", "rome-success", "detector-window"),
     "structural-paper": ("structural-artifact-grid",),
     "structural-full": ("structural-artifact-grid",),
+    "rome-presence": ("rome-detector-explainer", "rome-success", "detector-window"),
     "full": RENDERERS.identifiers(),
 }
 

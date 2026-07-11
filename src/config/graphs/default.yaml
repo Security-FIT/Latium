@@ -27,4 +27,16 @@ renderers:
       - png
       - pdf
       - json
+  rome-detector-explainer:
+    formats:
+      - png
+      - pdf
+      - json
+      - csv
+    max_cases: null
+    profile_fields:
+      - relative_subspace_frobenius
+      - rank2_energy
+      - bilateral_coherence
+      - bilateral_balance
 force: false

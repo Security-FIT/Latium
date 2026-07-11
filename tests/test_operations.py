@@ -46,3 +46,24 @@ def test_run_second_moment_uses_configured_sample_count(tmp_path: Path, monkeypa
     assert calls["N_rounds"] == 1
     assert calls["N_k"] == 7
     assert (tmp_path / "gpt2-large_12_SM_Method.WIKIPEDIA_7.pt").is_file()
+
+
+def test_run_second_moment_honors_explicit_model_path(tmp_path: Path, monkeypatch) -> None:
+    target = tmp_path / "configured" / "covariance.pt"
+
+    class Handler:
+        def __init__(self, cfg):
+            self.cfg = cfg
+            self._layer = 12
+            self.second_moment_dir = str(tmp_path / "fallback")
+            self.second_moment_path = str(target)
+
+    monkeypatch.setattr("src.handlers.rome.ModelHandler", Handler)
+    monkeypatch.setattr(
+        "src.rome.covariance.compute_second_moment",
+        lambda _handler, *, N_rounds, N_k: (torch.eye(1), N_rounds * N_k, "SM_Method.WIKIPEDIA"),
+    )
+    cfg = OmegaConf.create({"model": {"name": "gpt2-large", "second_moment_target_samples": 7}})
+
+    assert run_second_moment(cfg) == 0
+    assert target.is_file()

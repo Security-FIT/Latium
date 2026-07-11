@@ -115,6 +115,7 @@ Hydra overrides are the supported option style. Argparse flags such as
 | Graph rendering | `python3 -m src graphs run <run-root>` |
 | Early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
+| MetaCentrum causal trace -> ROME -> detection | `jobs/submit.sh causal-rome-detection -- --model gpt2-large` |
 
 ## Causal Trace
 
@@ -242,6 +243,7 @@ Prefix-variability configs for Qwen3-8B are available under
 - `src/results/README.md`: artifact manifest and cache rules.
 - `src/graphs/README.md`: renderer contract.
 - `src/causal_trace/README.md`: early-site causal tracing.
+- `jobs/README.md`: MetaCentrum setup, PBS presets, and the end-to-end launcher.
 
 ## Developer Checks
 

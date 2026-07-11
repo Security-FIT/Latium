@@ -27,7 +27,7 @@ def print_help() -> None:
     print("  python -m src graphs run analysis_out/run graphs.renderer_preset=paper")
     print("  python -m src prefix-experiment prefix_experiment.model=gpt2-large")
     print("  python -m src manual-rome model=gpt2-large ...")
-    print("  python -m src causal-trace model=gpt2-large generation.num_of_runs=5")
+    print("  python -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100")
 
 
 def print_methods() -> int:

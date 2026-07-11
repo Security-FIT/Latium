@@ -1,31 +1,32 @@
 # Causal Trace
 
-This package has two causal tracing workflows.
+This package has one causal tracing workflow: `causal-trace`.
 
-| File | Workflow |
-|---|---|
-| `causal_trace.py` | Standard trace: corrupt subject embeddings, restore each subject token at each layer, write CSV rows. |
-| `alt_trace.py` | Alternative trace: restore the last subject token, average repeated noise runs, rank layers with middle-third fallback. |
-| `layer_heuristic.py` | Layer scoring helpers that can consume causal trace CSVs. |
+The implementation is split by responsibility: `tokenization.py` maps exact
+model-input token positions, `selection.py` owns window statistics and held-out
+selection, and `causal_trace.py` owns model execution and output artifacts.
 
-Visual notebooks:
+It corrupts every subject-token embedding, restores clean MLP projection
+outputs at the last subject token over overlapping layer windows, and measures
+the paired change in first-target-token probability. Noise samples are paired
+within facts; uncertainty is estimated across facts. The Gaussian scale is
+fixed before tracing from candidate subject-token embeddings and recorded in
+the run summary.
 
-- `notebooks/causal_tracing.ipynb` for the standard workflow.
-- `notebooks/causal_tracing_alt.ipynb` for the alternative workflow.
+Selection uses a fixed random discovery/confirmation split. Discovery chooses
+the highest-mean full-width window once. Confirmation tests only that window and
+does not choose another center. A center is reported as selected only when its
+held-out bootstrap confidence interval is above zero.
 
-Use matching `MODEL_CONFIG`, prompt counts, and dataset settings when comparing
-the two notebooks.
+The result identifies a causal window intervention. Its center is not an exact
+ROME edit layer and ROME performance must be evaluated separately.
 
 ## CLI
 
 ```bash
-python3 -m src causal-trace model=gpt2-large generation.num_of_runs=5
-python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5 generation.num_trace_runs=10
+python3 -m src causal-trace model=gpt2-xl command.causal_trace.num_valid_facts=100
 ```
 
-## Adding A Variant
-
-Keep shared prompt preprocessing in `causal_trace.py`. Put variant-specific
-tracing and persistence in a new module, add a command handler in
-`command_handlers/operations.py`, and add a command config under
-`src/config/command/`.
+The full method, audit decisions, outputs, and limitations are documented in
+`docs/causal-tracing.md`. The canonical self-contained reference is
+`notebooks/causal-tracing.ipynb`.

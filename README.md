@@ -113,8 +113,7 @@ Hydra overrides are the supported option style. Argparse flags such as
 | Structural capture/analyze | `python3 -m src structural run ...` |
 | Analysis-only replay | `python3 -m src structural analyze ...` |
 | Graph rendering | `python3 -m src graphs run <run-root>` |
-| Standard causal trace | `python3 -m src causal-trace model=gpt2-large` |
-| Alternative causal trace | `python3 -m src alt-trace model=gpt2-large` |
+| Early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
 
 ## Causal Trace
@@ -122,18 +121,15 @@ Hydra overrides are the supported option style. Argparse flags such as
 CLI runs write trace outputs under `analysis_out/`:
 
 ```bash
-python3 -m src causal-trace model=gpt2-large generation.num_of_runs=5
-python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5 generation.num_trace_runs=10
+python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100
 ```
 
-Use the notebooks for visual inspection:
-
-- `notebooks/causal_tracing.ipynb`: standard trace, subject-token/layer
-  heatmaps, per-prompt curves, aggregate layer curve.
-- `notebooks/causal_tracing_alt.ipynb`: alternative trace, prompt curves,
-  prompt/layer heatmap, aggregate selection curve.
-
-Layer recommendation helpers are in `src/causal_trace/layer_heuristic.py`.
+The active trace corrupts subject embeddings, restores clean final-MLP outputs
+at the last subject token over overlapping windows, and aggregates paired
+indirect effects across facts. Discovery chooses one full-width window;
+held-out facts only test that window. The configured model layer is graph-only
+and cannot affect selection. See the [technical method](docs/causal-tracing.md)
+and canonical standalone [notebook](notebooks/causal-tracing.ipynb).
 
 ## Structural Artifacts
 
@@ -238,7 +234,7 @@ Prefix-variability configs for Qwen3-8B are available under
 - `src/structural/README.md`: capture, analysis, and detector flow.
 - `src/results/README.md`: artifact manifest and cache rules.
 - `src/graphs/README.md`: renderer contract.
-- `src/causal_trace/README.md`: standard vs alt causal tracing.
+- `src/causal_trace/README.md`: early-site causal tracing.
 
 ## Developer Checks
 

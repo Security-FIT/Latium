@@ -1,336 +1,871 @@
 """
-causal_trace.py
-===============
+Early-site causal tracing for ROME layer investigation.
 
-Main entry point for the causal trace method module.
-Provides the framework for running causal tracing and token-by-token generation with configurable LLM handlers.
+The command intentionally implements one tracing workflow:
 
-:copyright: 2025 Jakub Res
-:license: MIT
-:author: Jakub Res <iresj@fit.vut.cz>
-:author: Matej Olexa <olexa.matej@gmail.com>
+* corrupt the full subject-token span at the embedding output,
+* restore clean MLP outputs at the last subject token,
+* sweep overlapping MLP windows,
+* aggregate paired indirect effects across facts,
+* choose one full-width window on discovery facts and test it on held-out facts.
 
-This module provides the main logic for running causal tracing experiments on large language models (LLMs).
-It supports token-by-token generation, layer and token-level interventions, and restoration experiments.
-
-Typical usage example::
-
-    $ python causal_trace.py generation.prompt="Hello world" generation.corrupted_layer_idx=5
+The configured model layer is kept only as a reference marker in the plot and
+summary.  It must not influence the selected trace center.
 """
 
-import pandas
-import datetime
-import os
-from typing import Any
-import torch
-import hydra
-from omegaconf import DictConfig
-import csv
+from __future__ import annotations
 
+import json
+import logging
+import math
+from collections import Counter
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Iterable, Iterator, Sequence
+
+import numpy as np
+import pandas as pd
+import torch
+from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
+from src.common.loading import load_dataset
+from src.causal_trace.selection import (
+    Window,
+    build_window,
+    select_window as _select_window,
+    summarize_windows as _summarize_windows,
+)
+from src.causal_trace.tokenization import (
+    TokenSpan,
+    TraceValidationError,
+    find_subject_span,
+    target_first_token_id,
+    target_token_ids,
+)
 from src.handlers.rome import ModelHandler
-from src.common.loading import load_dataset, logits_to_probs, sample
-
-
-# Globals
-import logging
 
 LOGGER = logging.getLogger(__name__)
-# Timestamp format to match to he hydra output folder structure and naming convention
-TIMESTAMP: str = (
-    f"{str(datetime.datetime.now().date())}_{str(datetime.datetime.now().time()).replace(':', '-').split('.')[0]}"
-)
 
 
-def save_results_to_csv(filename, header, data, mode='a'):
+@dataclass
+class TraceExample:
+    prompt_id: str
+    prompt: str
+    subject: str
+    target: str
+
+
+@dataclass(frozen=True)
+class NoiseCalibration:
+    """Fixed corruption scale estimated before any layer scores are observed."""
+
+    embedding_std: float
+    noise_std: float
+    multiplier: float
+    num_subjects: int
+    num_subject_tokens: int
+    num_unique_token_ids: int
+    num_rejected_subjects: int
+    source: str = "candidate_subject_token_embeddings"
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if torch.is_tensor(value):
+        return value.detach().cpu().tolist()
+    if hasattr(value, "__fspath__"):
+        return str(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _section(cfg: DictConfig, name: str) -> Any:
+    command = getattr(cfg, "command", None)
+    if command is not None and hasattr(command, name):
+        return getattr(command, name)
+    value = getattr(cfg, name, None)
+    return value if value is not None else OmegaConf.create({})
+
+
+def _get(section: Any, name: str, default: Any) -> Any:
+    return getattr(section, name, default)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in {"1", "true", "yes", "on"}:
+            return True
+        if token in {"0", "false", "no", "off"}:
+            return False
+    raise ValueError(f"{name} must be a boolean, got {value!r}")
+
+
+def _dataset_examples(cfg: DictConfig, *, max_scan: int | None = None) -> Iterator[TraceExample]:
+    dataset = load_dataset(cfg)
+    records: Iterable[Any]
+    if isinstance(dataset, dict) and "requested_rewrite" in dataset:
+        records = ({"requested_rewrite": row} for row in dataset["requested_rewrite"])
+    else:
+        records = dataset
+
+    for idx, record in enumerate(records):
+        if max_scan is not None and idx >= int(max_scan):
+            break
+        raw = dict(record)
+        rewrite = raw.get("requested_rewrite", raw)
+        subject = str(rewrite["subject"])
+        prompt_template = str(rewrite["prompt"])
+        target = rewrite.get("target_true", {})
+        target = target.get("str", target) if isinstance(target, dict) else target
+        yield TraceExample(
+            prompt_id=str(raw.get("case_id", raw.get("relation_id", idx))),
+            prompt=prompt_template.format(subject),
+            subject=subject,
+            target=str(target).strip(),
+        )
+
+
+def _module_dict(model: torch.nn.Module) -> dict[str, torch.nn.Module]:
+    return dict(model.named_modules())
+
+
+def _embedding_module_name(cfg: DictConfig) -> str:
+    template = str(cfg.model.corrupt_layer_name_template)
+    return template.format(0) if "{}" in template else template
+
+
+def _resolve_mlp_output_name(handler: ModelHandler, modules: dict[str, torch.nn.Module], layer: int) -> str:
+    """Return the final MLP projection module from the model config."""
+    template = str(handler._layer_name_template)
+    name = template.format(int(layer))
+    if name not in modules:
+        raise KeyError(f"Configured MLP output module does not exist: {name}")
+    return name
+
+
+def _hidden_from_output(output: Any) -> torch.Tensor:
+    return output[0] if isinstance(output, tuple) else output
+
+
+def _replace_hidden(output: Any, hidden: torch.Tensor) -> Any:
+    if isinstance(output, tuple):
+        values = list(output)
+        values[0] = hidden
+        return tuple(values)
+    return hidden
+
+
+@contextmanager
+def temporary_hooks(hooks: Iterable[tuple[torch.nn.Module, Any]]) -> Iterator[None]:
+    handles = []
+    try:
+        for module, hook in hooks:
+            handles.append(module.register_forward_hook(hook))
+        yield
+    finally:
+        for handle in handles:
+            handle.remove()
+
+
+def _mlp_state_at_position(hidden: torch.Tensor, position: int, sequence_length: int) -> torch.Tensor:
+    """Extract one token row from a batched or flattened MLP output."""
+    position = int(position)
+    sequence_length = int(sequence_length)
+    if hidden.dim() == 3:
+        if hidden.shape[0] != 1 or hidden.shape[1] != sequence_length:
+            raise RuntimeError(f"Expected clean MLP output [1, {sequence_length}, hidden], got {tuple(hidden.shape)}")
+        return hidden[0, position, :].detach().clone()
+    if hidden.dim() == 2:
+        if hidden.shape[0] != sequence_length:
+            raise RuntimeError(
+                f"Expected flattened clean MLP output [{sequence_length}, hidden], got {tuple(hidden.shape)}"
+            )
+        return hidden[position, :].detach().clone()
+    raise RuntimeError(f"Unsupported MLP output rank: {tuple(hidden.shape)}")
+
+
+def _patch_mlp_position(
+    hidden: torch.Tensor,
+    position: int,
+    clean_state: torch.Tensor,
+    sequence_length: int,
+) -> torch.Tensor:
+    """Patch the same token row in every item of a restoration batch."""
+    changed = hidden.clone()
+    state = clean_state.to(device=changed.device, dtype=changed.dtype)
+    position = int(position)
+    sequence_length = int(sequence_length)
+    if changed.dim() == 3:
+        if changed.shape[1] != sequence_length:
+            raise RuntimeError(
+                f"Expected MLP sequence length {sequence_length}, got output shape {tuple(changed.shape)}"
+            )
+        changed[:, position, :] = state
+        return changed
+    if changed.dim() == 2:
+        if changed.shape[0] % sequence_length != 0:
+            raise RuntimeError(
+                f"Flattened MLP output {tuple(changed.shape)} is not divisible by sequence length {sequence_length}"
+            )
+        batch_size = changed.shape[0] // sequence_length
+        rows = torch.arange(batch_size, device=changed.device) * sequence_length + position
+        changed[rows, :] = state
+        return changed
+    raise RuntimeError(f"Unsupported MLP output rank: {tuple(changed.shape)}")
+
+
+def calibrate_subject_noise(
+    handler: ModelHandler,
+    embedding_module: torch.nn.Module,
+    examples: Sequence[TraceExample],
+    *,
+    multiplier: float,
+) -> NoiseCalibration:
+    """Estimate the ROME-style noise scale from the candidate subjects.
+
+    Token IDs are taken from each subject's actual span in its formatted prompt,
+    so whitespace-sensitive tokenizers use the same rows that the trace corrupts.
+    Repeated IDs retain their multiplicity.  The weighted moments avoid retaining
+    every subject embedding in memory and are accumulated on CPU in float64.
     """
-    Appends or writes a list of lists (data_rows) to a CSV file.
-    TODO: docstring & types
-    """
-    # TODO: Link results with config
-    filename = f"{filename}_{TIMESTAMP}.csv"
-    file_exists = os.path.exists(filename)
-    write_header = not file_exists or mode == 'w'
+    weight = getattr(embedding_module, "weight", None)
+    if weight is None or weight.dim() != 2:
+        raise RuntimeError("The configured embedding module must expose a rank-2 weight")
 
-    with open(filename, mode, newline='', encoding='utf-8') as csvfile:
-        csv_writer = csv.writer(csvfile)
+    token_counts: Counter[int] = Counter()
+    accepted_subjects = 0
+    rejected_subjects = 0
+    for example in examples:
+        try:
+            inputs = handler.tokenizer(example.prompt, return_tensors="pt")
+            span = find_subject_span(handler.tokenizer, example.prompt, example.subject)
+            ids = inputs["input_ids"][0, span.positions].detach().cpu().tolist()
+        except (TraceValidationError, KeyError, IndexError, RuntimeError, TypeError, ValueError):
+            rejected_subjects += 1
+            continue
+        token_counts.update(int(token_id) for token_id in ids)
+        accepted_subjects += 1
 
-        if write_header:
-            csv_writer.writerow(header)
+    if not token_counts:
+        raise RuntimeError("Could not collect any candidate subject-token embeddings for noise calibration")
 
-        csv_writer.writerows(data)
+    total = 0.0
+    total_sq = 0.0
+    scalar_count = 0
+    items = sorted(token_counts.items())
+    for start in range(0, len(items), 512):
+        chunk = items[start : start + 512]
+        ids = torch.tensor([token_id for token_id, _count in chunk], device=weight.device, dtype=torch.long)
+        counts = torch.tensor([count for _token_id, count in chunk], dtype=torch.float64)
+        vectors = weight.detach().index_select(0, ids).float().cpu().to(torch.float64)
+        total += float((vectors.sum(dim=1) * counts).sum().item())
+        total_sq += float((vectors.square().sum(dim=1) * counts).sum().item())
+        scalar_count += int(counts.sum().item()) * int(vectors.shape[1])
+
+    if scalar_count < 2:
+        raise RuntimeError("At least two embedding scalar values are required for noise calibration")
+    variance = max(0.0, (total_sq - (total * total) / scalar_count) / (scalar_count - 1))
+    embedding_std = math.sqrt(variance)
+    noise_std = float(multiplier) * embedding_std
+    if not math.isfinite(noise_std) or noise_std <= 0:
+        raise RuntimeError(f"Invalid calibrated corruption standard deviation: {noise_std}")
+    return NoiseCalibration(
+        embedding_std=embedding_std,
+        noise_std=noise_std,
+        multiplier=float(multiplier),
+        num_subjects=accepted_subjects,
+        num_subject_tokens=int(sum(token_counts.values())),
+        num_unique_token_ids=len(token_counts),
+        num_rejected_subjects=rejected_subjects,
+    )
+
+
+def make_noise_samples(
+    *,
+    num_samples: int,
+    subject_length: int,
+    hidden_size: int,
+    noise_std: float,
+    device: torch.device,
+    dtype: torch.dtype,
+    seed: int,
+) -> torch.Tensor:
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(int(seed))
+    noise = torch.randn(
+        (int(num_samples), int(subject_length), int(hidden_size)),
+        generator=generator,
+        dtype=torch.float32,
+    )
+    return (noise * float(noise_std)).to(device=device, dtype=dtype)
+
+
+def _corrupt_hook(subject_positions: Sequence[int], noise: torch.Tensor):
+    positions = [int(x) for x in subject_positions]
+
+    def hook(_module, _input, output):
+        hidden = _hidden_from_output(output)
+        if hidden.dim() != 3:
+            raise RuntimeError(f"Expected embedding output [batch, seq, hidden], got {tuple(hidden.shape)}")
+        changed = hidden.clone()
+        sample = noise.to(device=changed.device, dtype=changed.dtype)
+        if sample.dim() == 2:
+            sample = sample.unsqueeze(0)
+        expected = (changed.shape[0], len(positions), changed.shape[-1])
+        if tuple(sample.shape) != expected:
+            raise RuntimeError(f"Expected corruption noise {expected}, got {tuple(sample.shape)}")
+        for offset, position in enumerate(positions):
+            changed[:, position, :] = changed[:, position, :] + sample[:, offset, :]
+        return _replace_hidden(output, changed)
+
+    return hook
+
+
+def _restore_hook(position: int, clean_state: torch.Tensor, sequence_length: int):
+    def hook(_module, _input, output):
+        hidden = _hidden_from_output(output)
+        changed = _patch_mlp_position(hidden, int(position), clean_state, int(sequence_length))
+        return _replace_hidden(output, changed)
+
+    return hook
+
+
+def _probability(outputs: Any, target_token_id: int) -> float:
+    probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
+    return float(probs[0, int(target_token_id)].detach().float().cpu().item())
+
+
+def _probabilities(outputs: Any, target_token_id: int) -> np.ndarray:
+    probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
+    return probs[:, int(target_token_id)].detach().float().cpu().numpy()
+
+
+def _top_token(outputs: Any) -> tuple[int, float]:
+    probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
+    top = int(torch.argmax(probs[0]).detach().cpu().item())
+    return top, float(probs[0, top].detach().float().cpu().item())
+
+
+def _prepare_inputs(handler: ModelHandler, prompt: str) -> Any:
+    inputs = handler.tokenize_prompt(prompt)
+    if "token_type_ids" in inputs:
+        # Several decoder-only models reject token_type_ids.
+        inputs.pop("token_type_ids", None)
+    return inputs
+
+
+def _repeat_inputs(inputs: Any, repeats: int) -> dict[str, torch.Tensor]:
+    return {
+        key: value.repeat((int(repeats),) + (1,) * (value.dim() - 1))
+        for key, value in inputs.items()
+        if torch.is_tensor(value)
+    }
+
+
+def _clean_cache(
+    handler: ModelHandler,
+    modules: dict[str, torch.nn.Module],
+    module_names: dict[int, str],
+    inputs: Any,
+    position: int,
+) -> dict[int, torch.Tensor]:
+    cache: dict[int, torch.Tensor] = {}
+    sequence_length = int(inputs["input_ids"].shape[1])
+
+    def make_hook(layer: int):
+        def hook(_module, _input, output):
+            cache[int(layer)] = _mlp_state_at_position(
+                _hidden_from_output(output),
+                int(position),
+                sequence_length,
+            )
+            return output
+
+        return hook
+
+    hooks = [(modules[name], make_hook(layer)) for layer, name in module_names.items()]
+    with torch.inference_mode(), temporary_hooks(hooks):
+        handler.model(**inputs, use_cache=False)
+    missing = sorted(set(module_names) - set(cache))
+    if missing:
+        raise RuntimeError(f"Clean MLP cache missing layers: {missing[:10]}")
+    return cache
+
+
+def _trace_example(
+    handler: ModelHandler,
+    modules: dict[str, torch.nn.Module],
+    module_names: dict[int, str],
+    embedding_module: torch.nn.Module,
+    example: TraceExample,
+    *,
+    windows: list[Window],
+    num_noise_samples: int,
+    noise_batch_size: int,
+    noise_std: float,
+    seed: int,
+    require_correct_clean: bool,
+    min_total_effect: float,
+) -> dict[str, Any]:
+    inputs = _prepare_inputs(handler, example.prompt)
+    span = find_subject_span(handler.tokenizer, example.prompt, example.subject)
+    target_id = target_first_token_id(handler.tokenizer, example.target)
+    prompt_last = int(inputs["input_ids"].shape[1] - 1)
+
+    with torch.inference_mode():
+        clean_outputs = handler.model(**inputs, use_cache=False)
+    clean_probability = _probability(clean_outputs, target_id)
+    clean_top_id, clean_top_probability = _top_token(clean_outputs)
+    clean_top_token = handler.tokenizer.decode([clean_top_id])
+    if require_correct_clean and clean_top_id != int(target_id):
+        raise TraceValidationError(
+            f"clean-token mismatch: expected {handler.tokenizer.decode([target_id])!r}, got {clean_top_token!r}"
+        )
+
+    clean_cache = _clean_cache(handler, modules, module_names, inputs, span.last_position)
+    embedding_weight = getattr(embedding_module, "weight", None)
+    if embedding_weight is None or embedding_weight.dim() != 2:
+        raise RuntimeError("The configured embedding module must expose a rank-2 weight")
+    hidden_size = int(embedding_weight.shape[-1])
+    noise_samples = make_noise_samples(
+        num_samples=int(num_noise_samples),
+        subject_length=len(span.positions),
+        hidden_size=hidden_size,
+        noise_std=float(noise_std),
+        device=embedding_weight.device,
+        dtype=embedding_weight.dtype,
+        seed=int(seed),
+    )
+
+    corrupt_probabilities = np.zeros(int(num_noise_samples), dtype=np.float64)
+    restore_probabilities = np.zeros((len(windows), int(num_noise_samples)), dtype=np.float64)
+    batch_size = max(1, min(int(noise_batch_size), int(num_noise_samples)))
+
+    for batch_start in range(0, int(num_noise_samples), batch_size):
+        batch_end = min(int(num_noise_samples), batch_start + batch_size)
+        repeated = _repeat_inputs(inputs, batch_end - batch_start)
+        noise = noise_samples[batch_start:batch_end]
+        with torch.inference_mode(), temporary_hooks([(embedding_module, _corrupt_hook(span.positions, noise))]):
+            outputs = handler.model(**repeated, use_cache=False)
+        corrupt_probabilities[batch_start:batch_end] = _probabilities(outputs, target_id)
+
+    sequence_length = int(inputs["input_ids"].shape[1])
+    for window_idx, window in enumerate(windows):
+        for batch_start in range(0, int(num_noise_samples), batch_size):
+            batch_end = min(int(num_noise_samples), batch_start + batch_size)
+            repeated = _repeat_inputs(inputs, batch_end - batch_start)
+            noise = noise_samples[batch_start:batch_end]
+            hooks: list[tuple[torch.nn.Module, Any]] = [(embedding_module, _corrupt_hook(span.positions, noise))]
+            for layer in window.layers:
+                hooks.append(
+                    (
+                        modules[module_names[layer]],
+                        _restore_hook(span.last_position, clean_cache[layer], sequence_length),
+                    )
+                )
+            with torch.inference_mode(), temporary_hooks(hooks):
+                outputs = handler.model(**repeated, use_cache=False)
+            restore_probabilities[window_idx, batch_start:batch_end] = _probabilities(outputs, target_id)
+
+    corrupt = corrupt_probabilities
+    effects = restore_probabilities - corrupt.reshape(1, -1)
+    total_effect = float(clean_probability - np.mean(corrupt))
+    if total_effect < float(min_total_effect):
+        raise TraceValidationError(f"low corruption effect: {total_effect:.6f}")
+
+    target_ids = target_token_ids(handler.tokenizer, example.target)
+    result = {
+        "prompt_id": example.prompt_id,
+        "prompt": example.prompt,
+        "subject": example.subject,
+        "target": example.target,
+        "target_first_token_id": int(target_id),
+        "target_first_token_text": handler.tokenizer.decode([target_id]),
+        "target_num_tokens": int(len(target_ids)),
+        "subject_positions": list(span.positions),
+        "subject_tokens": [
+            handler.tokenizer.decode([int(inputs["input_ids"][0, pos].detach().cpu().item())]) for pos in span.positions
+        ],
+        "subject_last_position": int(span.last_position),
+        "subject_last_token": handler.tokenizer.decode(
+            [int(inputs["input_ids"][0, span.last_position].detach().cpu().item())]
+        ),
+        "prompt_last_position": int(prompt_last),
+        "prompt_last_token": handler.tokenizer.decode([int(inputs["input_ids"][0, prompt_last].detach().cpu().item())]),
+        "clean_probability": float(clean_probability),
+        "clean_top_token_id": int(clean_top_id),
+        "clean_top_token": clean_top_token,
+        "clean_top_probability": float(clean_top_probability),
+        "corrupt_probabilities": corrupt.tolist(),
+        "mean_corrupt_probability": float(np.mean(corrupt)),
+        "std_corrupt_probability": float(np.std(corrupt)),
+        "total_effect": total_effect,
+        "noise_std": float(noise_std),
+        "window_mean_ie": effects.mean(axis=1).tolist(),
+        "window_std_ie": effects.std(axis=1).tolist(),
+        "window_restore_probabilities": restore_probabilities.tolist(),
+    }
+    return result
+
+
+def _plot_trace(
+    discovery: pd.DataFrame,
+    confirmation: pd.DataFrame,
+    aggregate: pd.DataFrame,
+    selection: dict[str, Any],
+    *,
+    config_layer: int | None,
+    output_path: Path,
+) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    x = aggregate["window_center"].astype(int).to_numpy()
+    aggregate_mean = aggregate["mean_ie"].astype(float).to_numpy()
+    discovery_mean = discovery["mean_ie"].astype(float).to_numpy() if not discovery.empty else aggregate_mean.copy()
+    confirmation_mean = (
+        confirmation["mean_ie"].astype(float).to_numpy()
+        if not confirmation.empty
+        else np.full_like(aggregate_mean, np.nan)
+    )
+    lower = (
+        confirmation["mean_ie_ci_lower"].astype(float).to_numpy()
+        if not confirmation.empty
+        else np.full_like(aggregate_mean, np.nan)
+    )
+    upper = (
+        confirmation["mean_ie_ci_upper"].astype(float).to_numpy()
+        if not confirmation.empty
+        else np.full_like(aggregate_mean, np.nan)
+    )
+
+    partial = ~aggregate["window_is_full_width"].astype(bool).to_numpy()
+    ax.bar(x[partial], aggregate_mean[partial], color="#cbd5e0", alpha=0.5, label="partial boundary windows")
+    ax.bar(x[~partial], aggregate_mean[~partial], color="#90cdf4", alpha=0.45, label="all-fact mean IE")
+    ax.plot(x, discovery_mean, color="#4a5568", linestyle="--", linewidth=1.8, label="discovery mean IE")
+    ax.plot(x, confirmation_mean, color="#2b6cb0", linewidth=2, label="confirmation mean IE")
+    ax.fill_between(x, lower, upper, color="#2b6cb0", alpha=0.15, label="confirmation bootstrap CI")
+    ax.axhline(0.0, color="black", linewidth=0.8)
+
+    if config_layer is not None:
+        ax.axvline(
+            int(config_layer), color="#7b2cbf", linestyle="--", linewidth=2, label=f"config layer {config_layer}"
+        )
+    discovery_center = selection.get("discovery_trace_center")
+    if discovery_center is not None:
+        passed = bool(selection.get("confirmation_passed"))
+        color = "#1a7f37" if passed else "#dd6b20"
+        label = "held-out confirmed" if passed else "not held-out confirmed"
+        ax.axvline(
+            int(discovery_center),
+            color=color,
+            linewidth=2.5,
+            label=f"discovery center {discovery_center} ({label})",
+        )
+
+    ax.set_title("Early-site causal tracing: subject-last MLP-window restoration")
+    ax.set_xlabel("MLP window center")
+    ax.set_ylabel("mean paired indirect effect across facts")
+    ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=160)
+    plt.close(fig)
+
+
+def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
+    trace_cfg = _section(cfg, "causal_trace")
+    output_root = Path(str(_get(trace_cfg, "output_dir", "analysis_out/causal_trace")))
+    model_slug = str(cfg.model.name).replace("/", "_")
+    out_dir = output_root / f"{model_slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    seed = int(_get(trace_cfg, "seed", getattr(cfg, "seed", 42)))
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    handler.model.eval()
+    modules = _module_dict(handler.model)
+    embedding_name = _embedding_module_name(cfg)
+    embedding_module = modules.get(embedding_name)
+    if embedding_module is None:
+        raise KeyError(f"Embedding module not found: {embedding_name}")
+
+    num_layers = int(handler.num_of_layers)
+    window_size = int(_get(trace_cfg, "window_size", 10))
+    if not 1 <= window_size <= num_layers:
+        raise ValueError(f"window_size must be between 1 and the model's {num_layers} layers")
+    windows = [build_window(center, window_size, num_layers) for center in range(num_layers)]
+    module_names = {layer: _resolve_mlp_output_name(handler, modules, layer) for layer in range(num_layers)}
+
+    num_valid = int(_get(trace_cfg, "num_valid_facts", 100))
+    max_scan = int(_get(trace_cfg, "max_dataset_examples_to_scan", max(1000, num_valid * 50)))
+    num_noise = int(_get(trace_cfg, "num_noise_samples", 10))
+    noise_batch_size = int(_get(trace_cfg, "noise_batch_size", 2))
+    noise_multiplier = float(_get(trace_cfg, "noise_multiplier", 3.0))
+    require_correct_clean = _strict_bool(
+        _get(trace_cfg, "require_correct_clean_prediction", True),
+        name="causal_trace.require_correct_clean_prediction",
+    )
+    min_total_effect = float(_get(trace_cfg, "min_total_effect", 0.03))
+    bootstrap_samples = int(_get(trace_cfg, "bootstrap_samples", 1000))
+    confidence_level = float(_get(trace_cfg, "confidence_level", 0.95))
+    minimum_confirmation_facts = int(_get(trace_cfg, "minimum_confirmation_facts", 2))
+    discovery_fraction = float(_get(trace_cfg, "discovery_fraction", 0.5))
+    if num_valid <= 0 or max_scan <= 0 or num_noise <= 0 or noise_batch_size <= 0:
+        raise ValueError("Trace fact, scan, noise sample, and noise batch counts must be positive")
+    if bootstrap_samples <= 0 or not 0 < confidence_level < 1:
+        raise ValueError("bootstrap_samples must be positive and confidence_level must be between 0 and 1")
+    if minimum_confirmation_facts < 2:
+        raise ValueError("minimum_confirmation_facts must be at least 2")
+    if noise_multiplier <= 0 or min_total_effect < 0:
+        raise ValueError("noise_multiplier must be positive and min_total_effect must be non-negative")
+    if not 0 < discovery_fraction < 1:
+        raise ValueError("discovery_fraction must be strictly between 0 and 1")
+
+    # Freeze the calibration population and corruption scale before observing
+    # any clean/corrupt/restoration outcome or window score.
+    examples = list(_dataset_examples(cfg, max_scan=max_scan))
+    calibration = calibrate_subject_noise(
+        handler,
+        embedding_module,
+        examples,
+        multiplier=noise_multiplier,
+    )
+    LOGGER.info(
+        "Causal-trace noise calibration: source=%s subjects=%d tokens=%d embedding_std=%.6g noise_std=%.6g",
+        calibration.source,
+        calibration.num_subjects,
+        calibration.num_subject_tokens,
+        calibration.embedding_std,
+        calibration.noise_std,
+    )
+
+    fact_results: list[dict[str, Any]] = []
+    rejections: list[dict[str, Any]] = []
+    scanned = 0
+
+    for fact_index, example in enumerate(tqdm(examples, total=len(examples), desc="causal-trace scan")):
+        if len(fact_results) >= num_valid:
+            break
+        scanned += 1
+        try:
+            result = _trace_example(
+                handler,
+                modules,
+                module_names,
+                embedding_module,
+                example,
+                windows=windows,
+                num_noise_samples=num_noise,
+                noise_batch_size=noise_batch_size,
+                noise_std=calibration.noise_std,
+                seed=seed + fact_index,
+                require_correct_clean=require_correct_clean,
+                min_total_effect=min_total_effect,
+            )
+            result["fact_index"] = int(fact_index)
+            fact_results.append(result)
+        except TraceValidationError as exc:
+            rejections.append(
+                {
+                    "fact_index": int(fact_index),
+                    "prompt_id": example.prompt_id,
+                    "subject": example.subject,
+                    "target": example.target,
+                    "reason": str(exc),
+                }
+            )
+    with (out_dir / "fact_results.jsonl").open("w", encoding="utf-8") as handle:
+        for row in fact_results:
+            handle.write(json.dumps(row, default=_json_default) + "\n")
+    pd.DataFrame(rejections).to_csv(out_dir / "rejections.csv", index=False)
+
+    if not fact_results:
+        summary = {
+            "model": str(cfg.model.name),
+            "selected_trace_center": None,
+            "failure_reason": "no_valid_facts",
+            "num_dataset_examples_scanned": scanned,
+            "num_valid_facts": 0,
+            "noise_scale_source": calibration.source,
+            "noise_multiplier": calibration.multiplier,
+            "embedding_std": calibration.embedding_std,
+            "noise_std": calibration.noise_std,
+            "noise_calibration_num_subjects": calibration.num_subjects,
+            "noise_calibration_num_subject_tokens": calibration.num_subject_tokens,
+            "noise_calibration_num_unique_token_ids": calibration.num_unique_token_ids,
+            "noise_calibration_num_rejected_subjects": calibration.num_rejected_subjects,
+        }
+        (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        LOGGER.warning("No valid causal-trace facts collected. Wrote %s", out_dir)
+        return out_dir
+
+    split_rng = np.random.default_rng(seed)
+    indices = split_rng.permutation(len(fact_results))
+    discovery_count = max(1, int(round(len(fact_results) * discovery_fraction)))
+    discovery_count = min(discovery_count, max(1, len(fact_results) - 1))
+    discovery_indices = sorted(indices[:discovery_count].tolist())
+    confirmation_indices = sorted(indices[discovery_count:].tolist())
+    discovery_facts = [fact_results[idx] for idx in discovery_indices]
+    confirmation_facts = [fact_results[idx] for idx in confirmation_indices]
+    split_by_index = {idx: "discovery" for idx in discovery_indices}
+    split_by_index.update({idx: "confirmation" for idx in confirmation_indices})
+    pd.DataFrame(
+        [
+            {
+                "fact_result_index": idx,
+                "fact_index": int(row["fact_index"]),
+                "prompt_id": row["prompt_id"],
+                "split": split_by_index[idx],
+            }
+            for idx, row in enumerate(fact_results)
+        ]
+    ).to_csv(out_dir / "split_assignments.csv", index=False)
+    discovery = _summarize_windows(
+        discovery_facts,
+        windows,
+        window_size=window_size,
+        bootstrap_samples=bootstrap_samples,
+        confidence_level=confidence_level,
+        seed=seed + 10_000,
+    )
+    confirmation = _summarize_windows(
+        confirmation_facts,
+        windows,
+        window_size=window_size,
+        bootstrap_samples=bootstrap_samples,
+        confidence_level=confidence_level,
+        seed=seed + 20_000,
+    )
+    all_facts = _summarize_windows(
+        fact_results,
+        windows,
+        window_size=window_size,
+        bootstrap_samples=bootstrap_samples,
+        confidence_level=confidence_level,
+        seed=seed + 30_000,
+    )
+
+    selection = _select_window(
+        discovery,
+        confirmation,
+        minimum_confirmation_facts=minimum_confirmation_facts,
+    )
+
+    discovery.to_csv(out_dir / "discovery_windows.csv", index=False)
+    confirmation.to_csv(out_dir / "confirmation_windows.csv", index=False)
+    all_facts.to_csv(out_dir / "aggregate_windows.csv", index=False)
+    (out_dir / "selection.json").write_text(json.dumps(selection, indent=2, default=_json_default), encoding="utf-8")
+
+    config_layer = getattr(cfg.model, "layer", None)
+    config_layer = None if config_layer is None else int(config_layer)
+    plot_path = out_dir / "early_site_trace.png"
+    _plot_trace(discovery, confirmation, all_facts, selection, config_layer=config_layer, output_path=plot_path)
+
+    summary = {
+        "model": str(cfg.model.name),
+        "configured_reference_layer": config_layer,
+        "configured_reference_layer_used_for_selection": False,
+        "selection_method": selection.get("selection_method"),
+        "selected_trace_center": selection.get("selected_trace_center"),
+        "discovery_trace_center": selection.get("discovery_trace_center"),
+        "discovery_trace_window_layers": selection.get("trace_window_layers"),
+        "selected_trace_window_layers": (
+            selection.get("trace_window_layers") if selection.get("selected_trace_center") is not None else None
+        ),
+        "confirmation_passed": selection.get("confirmation_passed", False),
+        "selection_failure_reason": selection.get("failure_reason"),
+        "num_dataset_examples_scanned": int(scanned),
+        "num_valid_facts": int(len(fact_results)),
+        "num_discovery_facts": int(len(discovery_facts)),
+        "num_confirmation_facts": int(len(confirmation_facts)),
+        "num_rejected": int(len(rejections)),
+        "trace_component": "mlp_output",
+        "trace_position": "subject_last",
+        "window_size": int(window_size),
+        "num_noise_samples": int(num_noise),
+        "noise_batch_size": int(noise_batch_size),
+        "noise_scale_source": calibration.source,
+        "noise_multiplier": calibration.multiplier,
+        "embedding_std": calibration.embedding_std,
+        "noise_std": calibration.noise_std,
+        "noise_calibration_num_subjects": calibration.num_subjects,
+        "noise_calibration_num_subject_tokens": calibration.num_subject_tokens,
+        "noise_calibration_num_unique_token_ids": calibration.num_unique_token_ids,
+        "noise_calibration_num_rejected_subjects": calibration.num_rejected_subjects,
+        "first_token_only": True,
+        "plot": str(plot_path),
+        "output_dir": str(out_dir),
+    }
+    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
+
+    LOGGER.info(
+        "Causal trace complete: model=%s selected=%s discovery=%s output=%s",
+        cfg.model.name,
+        summary["selected_trace_center"],
+        summary["discovery_trace_center"],
+        out_dir,
+    )
+    print(json.dumps(summary, indent=2, default=_json_default))
+    return out_dir
+
+
+def causal_trace(cfg: DictConfig) -> Path:
+    handler = ModelHandler(cfg)
+    try:
+        return _run_causal_trace(cfg, handler)
+    finally:
+        handler.remove_hooks()
 
 
 def compute_multiplier(cfg: DictConfig) -> float:
-    """
-    Compute the noise multiplier using loaded dataset.
-
-    Args:
-        cfg: Configuration object containing static hyperparameters.
-
-    Returns:
-        The computed multiplier.
-    """
+    """Return the default subject-embedding noise scale for the configured model."""
     handler = ModelHandler(cfg)
-    dataset = load_dataset(cfg)
-    df_dataset = filter_dataset(dataset["requested_rewrite"])
-
-    input_ids = []
-    prompts = []
-    for prompt_dict in df_dataset.itertuples():
-        if prompt_dict.Index == handler.cfg.generation.num_of_runs:
-            break
-        prompts.append(prompt_dict.prompt.format(prompt_dict.subject))
-
-    total = len(prompts)
-    start_idx = 0
-
-    while total - handler.batch_size > 0:
-        input_ids.append(handler.tokenize_prompt(prompts[start_idx : start_idx + handler.batch_size]))
-        total -= handler.batch_size
-        start_idx += handler.batch_size
-
-    handler.compute_embedding_std(input_ids)
-    return handler._noise_multiplier  # TODO: move constant into the model config
-
-
-def causal_trace_single_run(
-    run_number: int, prompt_number: int, handler: ModelHandler, input_ids: torch.Tensor, input_ids_subject, target: str
-) -> None:
-    """
-    TODO
-    """
-    results = []
-    tokenized_target = handler.tokenize_prompt(target)
-    target_length = len(tokenized_target["input_ids"])  # Add support for multitoken targets
-
-    # Clean run: no corruption
-    outputs_clean = handler.model(**input_ids, output_hidden_states=True, use_cache=False)
-    next_token_id_clean = sample(outputs_clean["logits"][:, -1, :])
-
-    if handler.tokenizer.batch_decode(next_token_id_clean, skip_special_tokens=True)[0].strip() != target:
-        # Did not generate the assumed token
-        return 1
-
-    # Corrupted run: inject noise at specified layer/token
-    handler.set_corrupt_idx(input_ids_subject)
-    handler.set_corrupt_hook()
-    outputs_corupt = handler.model(**input_ids, use_cache=False)
-    next_token_id_corupt = sample(outputs_corupt["logits"][:, -1, :])
-    handler.remove_hooks()
-
-    # Restoration runs: restore clean activations at each layer after corruption
-    results_restoration = {}
-    num_of_layers = handler.num_of_layers
-
-    for restore_token_idx in input_ids_subject:
-        results_restoration[restore_token_idx] = []
-
-        handler.set_corrupt_idx(input_ids_subject)
-        handler.set_corrupt_hook()
-
-        for restore_layer in range(num_of_layers):
-            handler.set_restore_idx(restore_token_idx)
-            handler.set_restore_layer(restore_layer)
-            handler.set_restore_point(outputs_clean["hidden_states"][restore_layer + 1][0][restore_token_idx, :])
-            handler.set_restore_hook()
-
-            outputs_restore = handler.model(**input_ids, use_cache=False)
-            next_token_id_restore = sample(outputs_restore["logits"][:, -1, :])
-
-            results_restoration[restore_token_idx].append(
-                (
-                    handler.tokenizer.decode(next_token_id_restore),
-                    logits_to_probs(outputs_restore["logits"], next_token_id_clean).item(),
-                )
-            )
-
-            handler.unset_restore_hook()
+    try:
+        trace_cfg = _section(cfg, "causal_trace")
+        max_scan = int(_get(trace_cfg, "max_dataset_examples_to_scan", 10_000))
+        examples = list(_dataset_examples(cfg, max_scan=max_scan))
+        modules = _module_dict(handler.model)
+        embedding_name = _embedding_module_name(cfg)
+        embedding_module = modules.get(embedding_name)
+        if embedding_module is None:
+            raise KeyError(f"Embedding module not found: {embedding_name}")
+        calibration = calibrate_subject_noise(
+            handler,
+            embedding_module,
+            examples,
+            multiplier=float(_get(trace_cfg, "noise_multiplier", 3.0)),
+        )
+        return calibration.noise_std
+    finally:
         handler.remove_hooks()
 
-    for token_idx in results_restoration.keys():
-        results.append(
-            (
-                run_number,
-                prompt_number,
-                (
-                    handler.tokenizer.decode(next_token_id_clean),
-                    logits_to_probs(outputs_clean["logits"], next_token_id_clean).item(),
-                ),
-                (
-                    handler.tokenizer.decode(next_token_id_corupt),
-                    logits_to_probs(outputs_corupt["logits"], next_token_id_clean).item(),
-                ),
-                token_idx,
-                results_restoration[token_idx],
-            )
-        )
 
-    save_results_to_csv(
-        handler.cfg.generation.filename.format(handler.cfg.model.name.replace("/", "-")),
-        ["run_number", "prompt_num", "clean", "corrupted", "restored_token", "restored"],
-        results,
-    )
-    return 0
-
-
-def filter_dataset(dataset: Any) -> pandas.DataFrame:
-    """
-    TODO
-    """
-    df_prompts_dataset = pandas.DataFrame(dataset)
-    return df_prompts_dataset
-
-
-def _find_subject_token_positions(input_ids_prompt: torch.Tensor, input_ids_subject: torch.Tensor) -> list[int]:
-    """Return all token positions for exact subject-span matches in the prompt."""
-    if input_ids_prompt.dim() != 2 or input_ids_subject.dim() != 2:
-        return []
-
-    subject_len = int(input_ids_subject.size(1))
-    prompt_len = int(input_ids_prompt.size(1))
-    if subject_len <= 0 or prompt_len < subject_len:
-        return []
-
-    windows = input_ids_prompt.unfold(1, subject_len, 1)
-    # Full-span subject match only; partial token matches create false positives.
-    full_matches = (windows == input_ids_subject).all(dim=2)
-    start_positions = full_matches.nonzero(as_tuple=True)[1].tolist()
-
-    token_positions: list[int] = []
-    for start in start_positions:
-        token_positions.extend(range(int(start), int(start) + subject_len))
-
-    return sorted(set(token_positions))
-
-
-def _find_subject_token_positions_by_offsets(handler: ModelHandler, prompt: str, subject: str) -> list[int]:
-    """Fallback: map subject character span to token indices via tokenizer offsets."""
-    if not subject:
-        return []
-
-    char_start = prompt.find(subject)
-    if char_start == -1:
-        prefixed = f" {subject}"
-        prefixed_idx = prompt.find(prefixed)
-        if prefixed_idx != -1:
-            # Use the subject start, not the leading space.
-            char_start = prefixed_idx + 1
-
-    if char_start == -1:
-        return []
-
-    char_end = char_start + len(subject)
-    try:
-        raw_tokens = handler.tokenizer(prompt, return_offsets_mapping=True, return_tensors="pt")
-    except Exception:
-        return []
-
-    offsets = raw_tokens.get("offset_mapping")
-    if offsets is None:
-        return []
-
-    token_positions: list[int] = []
-    for idx, (start, end) in enumerate(offsets[0].tolist()):
-        if end <= start:
-            # Skip special tokens with empty spans.
-            continue
-        if end > char_start and start < char_end:
-            token_positions.append(int(idx))
-
-    return sorted(set(token_positions))
-
-
-def preprocess_prompt(handler, prompt_dict):
-    """
-    TODO
-    """
-    prompt = prompt_dict.prompt.format(prompt_dict.subject)
-    input_ids = handler.tokenize_prompt(prompt)
-    input_ids_prompt = input_ids["input_ids"]
-
-    input_ids_subject = handler.tokenize_prompt(prompt_dict.subject)["input_ids"]
-    subject_position = _find_subject_token_positions(input_ids_prompt, input_ids_subject)
-
-    if len(subject_position) == 0:
-        # The tokenizer most likely learned specific tokens with space as prefix (" Rome" instead of " " + "Rome")
-        input_ids_subject = handler.tokenize_prompt(f" {prompt_dict.subject}")["input_ids"]
-        subject_position = _find_subject_token_positions(input_ids_prompt, input_ids_subject)
-
-    if len(subject_position) == 0:
-        subject_position = _find_subject_token_positions_by_offsets(handler, prompt, prompt_dict.subject)
-        if subject_position:
-            LOGGER.info(
-                "Recovered subject span via offset mapping. subject=%r prompt=%r positions=%s",
-                prompt_dict.subject,
-                prompt,
-                subject_position,
-            )
-
-    if len(subject_position) == 0:
-        LOGGER.warning(
-            "Skipping prompt due to unmatched subject span. subject=%r prompt=%r",
-            prompt_dict.subject,
-            prompt,
-        )
-        return None
-
-    # print(f"{prompt} | {prompt_dict.subject} | {prompt_dict.target_true['str']}")
-    return input_ids, subject_position
-
-
-def causal_trace(cfg: DictConfig) -> None:
-    """
-    Run the causal tracing experiment using the provided configuration.
-
-    This function runs three types of experiments:
-    1. Clean run (no corruption)
-    2. Corrupted run (injects noise at a specified layer/token)
-    3. Restoration runs (restores clean activations at each layer after corruption)
-
-    Args:
-        cfg: Configuration object containing static hyperparameters.
-    """
-    handler = ModelHandler(cfg)
-    dataset = load_dataset(cfg)
-    df_dataset = filter_dataset(dataset["requested_rewrite"])
-
-    total = 0
-    failed = 0
-    for prompt_dict in tqdm(df_dataset.itertuples()):
-        if total - failed >= handler.cfg.generation.num_of_runs:
-            break
-        total += 1
-
-        # Select only prompts that start with the subject due to tokenization problems
-        preprocessed = preprocess_prompt(handler, prompt_dict)
-        if preprocessed is None:
-            failed += 1
-            continue
-
-        prompt_ids, subject_position = preprocessed
-        res = causal_trace_single_run(
-            total - failed, prompt_dict.Index, handler, prompt_ids, subject_position, prompt_dict.target_true["str"]
-        )
-
-        # Clean run generated wrong token
-        if res == 1:
-            failed += 1
-
-    print(f"Total prompts processed: {total} failed attempts: {failed}")
-
-
-if __name__ == "__main__":
-
-    @hydra.main(version_base=None, config_path="config", config_name="config")
-    def main(cfg: DictConfig) -> None:
-        """
-        Hydra entry point for the causal tracing script.
-
-        Args:
-            cfg: Configuration object containing static hyperparameters.
-        """
-        causal_trace(cfg)
-
-    main()
+__all__ = [
+    "TokenSpan",
+    "TraceValidationError",
+    "Window",
+    "build_window",
+    "calibrate_subject_noise",
+    "causal_trace",
+    "compute_multiplier",
+    "find_subject_span",
+    "make_noise_samples",
+    "target_first_token_id",
+    "target_token_ids",
+    "temporary_hooks",
+]

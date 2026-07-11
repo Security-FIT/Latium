@@ -163,8 +163,16 @@ the inputs for all presence variants and run them together:
 python -m src structural run \
   structural.capture.profile=rome-presence \
   structural.analysis.preset=rome-presence \
+  structural.render.enabled=true \
+  structural.render.renderer_preset=rome-presence \
   structural.run.run_id=rome-presence
 ```
+
+This also runs the weighted-spectrum localizer and renders the complete detector
+walkthrough under `graphs/rome-detector-explainer/`: every captured per-layer
+profile, target/predicted layers, trimmed candidates, both blind universal
+cutoffs, clean-delta rank-one evidence, case CSV/JSON exports, and aggregate
+outcomes.
 
 Three decisions are emitted so they can be compared before selecting one:
 

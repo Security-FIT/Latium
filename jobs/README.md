@@ -40,9 +40,13 @@ jobs/submit.sh causal-trace -- model=gpt2-large command.causal_trace.num_valid_f
 # ROME benchmark (one GPU; requires second-moment statistics)
 jobs/submit.sh rome -- 'rome_benchmark.models=[gpt2-large]' rome_benchmark.n_tests=30
 
-# Capture ROME edits, run paper detectors, and render outputs
+# Capture ROME edits, run all architecture-neutral presence decisions, and render them
 jobs/submit.sh detectors -- \
   'structural.run.models=[gpt2-large]' structural.run.n_tests=30
+
+# End-to-end causal tracing -> ROME -> architecture-neutral detection -> graphs
+jobs/submit.sh causal-rome-detection -- \
+  --model gpt2-large --trace-facts 30 --detection-cases 30
 
 # Produce missing ROME second moments
 jobs/submit.sh second-moment -- model=gpt2-large model.second_moment_target_samples=5000
@@ -76,6 +80,41 @@ Useful submission options:
 --afterok JOB_ID      submit with an afterok dependency
 --dry-run              show resources and final Latium command
 ```
+
+### Self-validating causal/ROME/detection pipeline
+
+The `causal-rome-detection` preset runs each GPU-heavy stage in a fresh Python
+process so model memory is released between stages. It:
+
+1. runs the audited causal-tracing workflow;
+2. validates the configured ROME second moment and computes it when absent;
+3. applies ROME to CounterFact cases;
+4. captures `weighted-spectrum` and clean-delta fingerprints;
+5. runs the localizer and all three ROME-presence decisions;
+6. renders every detector profile with `rome-detector-explainer`; and
+7. verifies all required artifacts before writing `pipeline-summary.json`.
+
+Outputs default to
+`analysis_out/jobs/<PBS_JOBID>-causal-rome-detection/`. The causal-trace result
+is retained as an independent diagnostic; it is deliberately not used as a
+prior or fallback by ROME or the architecture-neutral detector. The job resumes
+structural artifacts safely when the same `--output-root`/`--run-id` is reused.
+
+Useful pipeline options:
+
+```bash
+jobs/submit.sh causal-rome-detection --dry-run -- \
+  --model qwen3-4b \
+  --trace-facts 50 \
+  --detection-cases 20 \
+  --trace-override command.causal_trace.num_noise_samples=20 \
+  --structural-override structural.analysis.methods.weighted-spectrum.trim_first=3
+```
+
+Use `--skip-causal-trace` to resume from an existing trace output and
+`--skip-second-moment` to require precomputed covariance instead of generating
+it. `--force` recomputes structural artifacts. Run
+`bash jobs/causal_rome_detection.sh --help` for the complete option list.
 
 For example, request an Ampere-or-newer GPU with at least 40 GB VRAM:
 

@@ -73,7 +73,18 @@ echo "repo: $ROOT"
 echo "scratch: $SCRATCHDIR"
 echo "HF cache: $HF_HOME"
 printf 'command:'
-printf ' %q' python -m src "${LATIUM_ARGS[@]}"
+case "${LATIUM_RUNNER:-latium}" in
+  latium)
+    RUN_COMMAND=(python -m src "${LATIUM_ARGS[@]}")
+    ;;
+  causal-rome-detection)
+    RUN_COMMAND=(bash "$ROOT/jobs/causal_rome_detection.sh" "${LATIUM_ARGS[@]}")
+    ;;
+  *)
+    die "Unknown LATIUM_RUNNER: ${LATIUM_RUNNER}"
+    ;;
+esac
+printf ' %q' "${RUN_COMMAND[@]}"
 printf '\n'
 
-python -m src "${LATIUM_ARGS[@]}"
+"${RUN_COMMAND[@]}"

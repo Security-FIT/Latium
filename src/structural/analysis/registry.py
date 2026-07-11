@@ -220,6 +220,7 @@ ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
     "weighted-spectrum": ("weighted-spectrum",),
     "rome-presence": (
+        "weighted-spectrum",
         "rome-presence-blind-peak",
         "rome-presence-blind-footprint",
         "rome-presence-delta",

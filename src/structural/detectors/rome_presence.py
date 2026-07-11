@@ -37,6 +37,7 @@ def _universal_outlier(values: np.ndarray) -> dict[str, float | bool]:
         "peak": peak,
         "median": center,
         "mad_scale": scale,
+        "effective_mad_scale": effective_scale,
         "robust_z": robust_z,
         "universal_threshold": threshold,
         "gaussian_tail_probability": tail_probability,

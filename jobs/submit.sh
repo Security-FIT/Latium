@@ -29,6 +29,7 @@ QUEUE=""
 DEPEND=""
 DRY_RUN=0
 DEFAULT_ARGS=()
+RUNNER=latium
 
 case "$PRESET" in
   causal-trace)
@@ -45,12 +46,20 @@ case "$PRESET" in
     JOB_NAME=latium-detect
     WALLTIME=36:00:00
     DEFAULT_ARGS=(structural run 'structural.run.models=[gpt2-large]'
-      structural.run.n_tests=30 structural.capture.profile=paper
-      structural.capture.matrix_features.feature_set=paper
-      structural.analysis.preset=paper structural.render.enabled=true
-      structural.render.renderer_preset=full
+      structural.run.n_tests=30 structural.capture.profile=rome-presence
+      structural.analysis.preset=rome-presence structural.render.enabled=true
+      structural.render.renderer_preset=rome-presence
       structural.run.output_dir=analysis_out/jobs
       structural.run.run_id=__PBS_JOBID__-detectors)
+    ;;
+  causal-rome-detection)
+    JOB_NAME=latium-full-detect
+    MEM=96gb
+    GPU_MEM=40gb
+    SCRATCH=100gb
+    WALLTIME=72:00:00
+    RUNNER=causal-rome-detection
+    DEFAULT_ARGS=(--model gpt2-large --trace-facts 30 --detection-cases 30)
     ;;
   second-moment)
     JOB_NAME=latium-cov
@@ -71,7 +80,7 @@ case "$PRESET" in
     JOB_NAME=latium-custom
     DEFAULT_ARGS=()
     ;;
-  *) die "unknown preset '$PRESET' (use causal-trace, rome, detectors, second-moment, analyze, or custom)" ;;
+  *) die "unknown preset '$PRESET' (use causal-trace, rome, detectors, causal-rome-detection, second-moment, analyze, or custom)" ;;
 esac
 
 while [[ $# -gt 0 ]]; do
@@ -111,14 +120,18 @@ ARGS_B64="$(printf '%s\0' "${ARGS[@]}" | base64 | tr -d '\n')"
 QSUB=(qsub -N "$JOB_NAME" -j oe -o "$LOG_FILE" -l "$SELECT" -l "walltime=$WALLTIME")
 [[ -z "$QUEUE" ]] || QSUB+=(-q "$QUEUE")
 [[ -z "$DEPEND" ]] || QSUB+=(-W "depend=afterok:$DEPEND")
-QSUB+=(-v "LATIUM_REPO_ROOT=$ROOT,LATIUM_EXPECT_GPU=$([[ "$NGPUS" == 0 ]] && echo 0 || echo 1),LATIUM_ARGS_B64=$ARGS_B64")
+QSUB+=(-v "LATIUM_REPO_ROOT=$ROOT,LATIUM_EXPECT_GPU=$([[ "$NGPUS" == 0 ]] && echo 0 || echo 1),LATIUM_RUNNER=$RUNNER,LATIUM_ARGS_B64=$ARGS_B64")
 QSUB+=("$ROOT/jobs/run.pbs")
 
 if [[ "$DRY_RUN" == 1 ]]; then
   echo "preset: $PRESET"
   echo "resources: $SELECT; walltime=$WALLTIME${QUEUE:+; queue=$QUEUE}"
   printf 'command:'
-  printf ' %q' python -m src "${ARGS[@]}"
+  if [[ "$RUNNER" == "latium" ]]; then
+    printf ' %q' python -m src "${ARGS[@]}"
+  else
+    printf ' %q' bash "$ROOT/jobs/causal_rome_detection.sh" "${ARGS[@]}"
+  fi
   printf '\nqsub:'
   printf ' %q' "${QSUB[@]}"
   printf '\n'

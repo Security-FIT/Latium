@@ -64,10 +64,15 @@ def run_second_moment(cfg: DictConfig) -> int:
     if target_samples <= 0:
         raise ValueError("model.second_moment_target_samples must be a positive integer")
     inv_cov, count, method = compute_second_moment(handler, N_rounds=1, N_k=target_samples)
-    basename = f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
-    out_dir = Path(handler.second_moment_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = non_conflicting_path(out_dir / basename)
+    configured_path = getattr(handler, "second_moment_path", None)
+    if configured_path:
+        out_path = non_conflicting_path(Path(str(configured_path)))
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        basename = f"{handler.cfg.model.name.replace('/', '_')}_{handler._layer}_{method}_{count}.pt"
+        out_dir = Path(handler.second_moment_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = non_conflicting_path(out_dir / basename)
     torch.save(inv_cov, out_path)
     LOGGER.info("Saved second moment to %s", out_path)
     return 0

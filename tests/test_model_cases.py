@@ -18,6 +18,10 @@ from src.results import ArtifactWriter, RunArtifactReader, RunLayout, build_arti
 from src.results.ids import capture_id, execution_id
 from src.structural.config import AnalysisVariantConfig, ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.capture.artifacts import capture_options, execution_config
+from src.structural.detectors.weighted_spectrum import (
+    FOOTPRINT_PROFILE_FIELDS,
+    LOCALIZER_PROFILE_FIELDS,
+)
 from src.structural.execution.edit_execution import run_edit_method
 
 
@@ -138,6 +142,32 @@ def test_execution_config_uses_model_inputs_not_analysis_windows() -> None:
     assert config_hash(base_config) == config_hash(trim_config)
     assert config_hash(base_config) != config_hash(seed_config)
     assert config_hash(base_config) != config_hash(manifest_changed)
+
+
+def test_capture_options_request_only_fields_consumed_by_selected_analyses() -> None:
+    detection = capture_options(
+        StructuralBenchmarkConfig(
+            capture_profile="detection",
+            analysis_preset="detection",
+        )
+    )
+    presence = capture_options(
+        StructuralBenchmarkConfig(
+            capture_profile="rome-presence",
+            analysis_preset="rome-presence",
+        )
+    )
+    capture_only_presence = capture_options(
+        StructuralBenchmarkConfig(
+            capture_profile="rome-presence",
+            analysis_preset="none",
+            run_analysis=False,
+        )
+    )
+
+    assert detection["weighted_spectrum_fields"] == LOCALIZER_PROFILE_FIELDS
+    assert presence["weighted_spectrum_fields"] == FOOTPRINT_PROFILE_FIELDS
+    assert capture_only_presence["weighted_spectrum_fields"] == FOOTPRINT_PROFILE_FIELDS
 
 
 def _write_baseline_capture(

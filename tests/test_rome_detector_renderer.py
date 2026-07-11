@@ -55,11 +55,8 @@ def _profiles() -> dict[str, dict[str, float]]:
         profile = {field: 0.1 + 0.01 * layer for field in PROFILE_FIELDS}
         profile.update(
             {
-                "rank1_energy": 0.7,
                 "rank2_energy": 0.9,
-                "relative_subspace_rank1_energy": 0.8,
                 "bilateral_coherence": 0.3,
-                "bilateral_alignment": 0.2,
                 "bilateral_balance": 0.6,
             }
         )
@@ -67,10 +64,7 @@ def _profiles() -> dict[str, dict[str, float]]:
     profiles["4"].update(
         {
             "relative_subspace_frobenius": 4.0,
-            "relative_subspace_operator_norm": 3.5,
-            "relative_operator_norm": 3.0,
             "bilateral_coherence": 1.0,
-            "bilateral_alignment": 1.0,
             "bilateral_balance": 1.0,
         }
     )

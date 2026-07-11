@@ -16,6 +16,10 @@ from src.structural.detectors.rome_presence import (
     detect_rome_presence_blind,
     detect_rome_presence_delta,
 )
+from src.structural.detectors.weighted_spectrum import (
+    FOOTPRINT_PROFILE_FIELDS,
+    LOCALIZER_PROFILE_FIELDS,
+)
 
 
 class BlindRomePresenceDetector:
@@ -41,7 +45,13 @@ class BlindRomePresenceDetector:
                 probe_vector=None,
                 token_predictor=None,
                 changed_weights={},
-                options={},
+                options={
+                    "weighted_spectrum_fields": (
+                        LOCALIZER_PROFILE_FIELDS
+                        if self.strategy == "peak"
+                        else FOOTPRINT_PROFILE_FIELDS
+                    )
+                },
             )
         )
         return detect_rome_presence_blind(

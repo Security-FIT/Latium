@@ -31,7 +31,7 @@ python -m src command=structural/analyze \
   structural.analysis.enable='[composite]'
 ```
 
-Run the architecture-neutral weighted-spectrum detector:
+Run only the architecture-neutral weighted-spectrum detector:
 
 ```bash
 python -m src structural run \
@@ -41,9 +41,18 @@ python -m src structural run \
   structural.run.run_id=weighted-spectrum
 ```
 
-`weighted-spectrum` is also the default capture profile and analysis preset,
-so a plain structural run uses this single detector. The named `paper` profile
-and preset remain available to reproduce the older GPT/non-GPT split.
+The default `detection` capture profile and analysis preset run exactly the
+current weighted-spectrum detector and the spectral detector:
+
+```bash
+python -m src structural run \
+  structural.capture.profile=detection \
+  structural.analysis.preset=detection
+```
+
+The named `weighted-spectrum` preset remains available for the current
+localizer alone. The `paper` profile and preset are explicit legacy/reproduction
+paths; they are never selected by the detection default.
 
 Analyses are stored under:
 
@@ -131,6 +140,12 @@ relative normalization is the important new artifact: raw spectral curvature
 was dominated by stable architecture-specific peaks, whereas `G_l` discounts
 directions already supported by neighboring layers.
 
+The ordinary localizer capture stores and calculates only `score(l)`. The
+`rome-presence` preset additionally requests `rank2_energy`,
+`bilateral_coherence`, and `bilateral_balance`, because those three values are
+consumed by its footprint decision. The removed historical diagnostics are not
+calculated in either path.
+
 Cross-family validation used disjoint CounterFact case slices and counted only
 successful ROME edits:
 
@@ -169,8 +184,8 @@ python -m src structural run \
 ```
 
 This also runs the weighted-spectrum localizer and renders the complete detector
-walkthrough under `graphs/rome-detector-explainer/`: every captured per-layer
-profile, target/predicted layers, trimmed candidates, both blind universal
+walkthrough under `graphs/rome-detector-explainer/`: every decision-relevant
+per-layer profile, target/predicted layers, trimmed candidates, both blind universal
 cutoffs, clean-delta rank-one evidence, case CSV/JSON exports, and aggregate
 outcomes.
 

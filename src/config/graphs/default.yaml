@@ -35,19 +35,8 @@ renderers:
       - csv
     max_cases: null
     profile_fields:
-      - operator_norm
-      - frobenius_norm
-      - rank1_energy
-      - rank2_energy
-      - neighbor_cka_distance
-      - directional_background
-      - relative_operator_norm
-      - signed_relative_shift
-      - relative_subspace_operator_norm
       - relative_subspace_frobenius
-      - relative_subspace_rank1_energy
+      - rank2_energy
       - bilateral_coherence
-      - bilateral_alignment
-      - bilateral_frobenius
       - bilateral_balance
 force: false

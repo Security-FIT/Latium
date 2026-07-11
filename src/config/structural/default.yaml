@@ -22,7 +22,7 @@ run:
   force: false
 
 capture:
-  profile: weighted-spectrum
+  profile: detection
   enable: []
   disable: []
   matrix_features:
@@ -32,7 +32,7 @@ capture:
 
 analysis:
   enabled: true
-  preset: weighted-spectrum
+  preset: detection
   enable: []
   disable: []
   variants:

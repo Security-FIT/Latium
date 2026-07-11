@@ -25,6 +25,10 @@ from src.structural.detectors.matrix_anomaly import (
     stable_effective_ratio,
 )
 from src.structural.detectors.profiles import matrix_profile
+from src.structural.detectors.weighted_spectrum import (
+    LOCALIZER_PROFILE_FIELDS,
+    PROFILE_FIELDS,
+)
 from src.common.linalg import gpu_svd_topk
 from src.structural.detectors.spectral_primitives import (
     canonical_orient,
@@ -258,20 +262,23 @@ def _weighted_spectrum_profile(
     *,
     layer: int,
     neighbors: tuple[torch.Tensor, ...] = (),
+    fields: tuple[str, ...] = PROFILE_FIELDS,
 ) -> dict[str, float]:
-    """Measure scale-free, low-rank curvature of a hidden-space weighted spectrum."""
+    """Compute only the weighted-spectrum statistics requested by a consumer."""
+    requested = tuple(dict.fromkeys(str(field) for field in fields))
+    unknown = sorted(set(requested) - set(PROFILE_FIELDS))
+    if unknown:
+        raise ValueError(f"Unknown weighted-spectrum fields: {', '.join(unknown)}")
+    if "relative_subspace_frobenius" not in requested:
+        raise ValueError("Weighted-spectrum capture requires relative_subspace_frobenius")
+
     residual = current - reference
     left, singular_tensor, _right = _deterministic_topk_svd(
         residual,
         top_k=2,
         seed=433494437 + int(layer),
     )
-    singular = singular_tensor.detach().double().cpu().numpy()
     basis = left[:, :2].to(device=reference.device, dtype=reference.dtype)
-    leading = basis[:, 0]
-    signed_shift = torch.linalg.multi_dot((leading, residual, leading))
-    background_energy = torch.linalg.multi_dot((leading, reference, leading)).clamp_min(EPS)
-    relative_shift = signed_shift / background_energy
     residual_subspace = basis.T @ residual @ basis
     reference_subspace = basis.T @ reference @ basis
     reference_eigenvalues, reference_eigenvectors = torch.linalg.eigh(reference_subspace)
@@ -282,14 +289,23 @@ def _weighted_spectrum_profile(
     )
     relative_subspace = inverse_sqrt @ residual_subspace @ inverse_sqrt
     relative_eigenvalues = torch.linalg.eigvalsh(relative_subspace)
-    relative_squared = relative_eigenvalues.square()
-    frobenius = float(torch.linalg.vector_norm(residual).item())
-    current_norm = torch.linalg.vector_norm(current)
-    reference_norm = torch.linalg.vector_norm(reference)
-    alignment = float(
-        (current * reference).sum().div(current_norm * reference_norm + EPS).item()
+    profile = {
+        "relative_subspace_frobenius": float(
+            torch.linalg.vector_norm(relative_eigenvalues).item()
+        ),
+    }
+
+    if "rank2_energy" in requested:
+        residual_energy = float(torch.linalg.vector_norm(residual).square().item())
+        profile["rank2_energy"] = (
+            float(singular_tensor[:2].square().sum().item())
+            / max(residual_energy, EPS)
+        )
+
+    bilateral_requested = bool(
+        {"bilateral_coherence", "bilateral_balance"}.intersection(requested)
     )
-    if len(neighbors) == 2:
+    if bilateral_requested and len(neighbors) == 2:
         left_jump = current - neighbors[0]
         right_jump = current - neighbors[1]
         left_energy = left_jump.square().sum()
@@ -297,40 +313,26 @@ def _weighted_spectrum_profile(
         jump_energy = left_energy + right_energy
         curvature_energy = (left_jump + right_jump).square().sum()
         bilateral_coherence = curvature_energy / (2.0 * jump_energy + EPS)
-        bilateral_alignment = (left_jump * right_jump).sum() / (
-            torch.sqrt(left_energy * right_energy) + EPS
-        )
-        bilateral_frobenius = torch.sqrt(torch.sqrt(left_energy * right_energy))
         bilateral_balance = 2.0 * torch.sqrt(left_energy * right_energy) / (jump_energy + EPS)
-    else:
+    elif bilateral_requested:
         bilateral_coherence = torch.zeros((), device=current.device)
-        bilateral_alignment = torch.zeros((), device=current.device)
-        bilateral_frobenius = torch.linalg.vector_norm(residual)
         bilateral_balance = torch.zeros((), device=current.device)
-    squared = singular**2
-    return {
-        "operator_norm": float(singular[0]),
-        "frobenius_norm": frobenius,
-        "rank1_energy": float(squared[0] / (frobenius**2 + EPS)),
-        "rank2_energy": float(squared[:2].sum() / (frobenius**2 + EPS)),
-        "neighbor_cka_distance": float(1.0 - alignment),
-        "directional_background": float(current.shape[0] * background_energy.item()),
-        "relative_operator_norm": float(abs(relative_shift.item())),
-        "signed_relative_shift": float(relative_shift.item()),
-        "relative_subspace_operator_norm": float(relative_eigenvalues.abs().max().item()),
-        "relative_subspace_frobenius": float(torch.sqrt(relative_squared.sum()).item()),
-        "relative_subspace_rank1_energy": float(
-            relative_squared.max().div(relative_squared.sum() + EPS).item()
-        ),
-        "bilateral_coherence": float(bilateral_coherence.item()),
-        "bilateral_alignment": float(bilateral_alignment.item()),
-        "bilateral_frobenius": float(bilateral_frobenius.item()),
-        "bilateral_balance": float(bilateral_balance.item()),
-    }
+    if "bilateral_coherence" in requested:
+        profile["bilateral_coherence"] = float(bilateral_coherence.item())
+    if "bilateral_balance" in requested:
+        profile["bilateral_balance"] = float(bilateral_balance.item())
+    return {field: profile[field] for field in requested}
 
 
 def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
     """Capture normalized hidden-space spectral curvature around every changed layer."""
+    fields = tuple(
+        str(field)
+        for field in context.options.get(
+            "weighted_spectrum_fields",
+            LOCALIZER_PROFILE_FIELDS,
+        )
+    )
     layers = sorted(context.proj_weights)
     direct = context.changed_layers("proj", layers)
     if context.is_baseline:
@@ -367,6 +369,7 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
             reference,
             layer=layer,
             neighbors=tuple(neighbors),
+            fields=fields,
         )
         densities = {
             cached_layer: density
@@ -380,6 +383,7 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
             "mode": "baseline" if context.is_baseline else "patch",
             "layers": layers,
             "weight_shape": list(first_weight.shape) if first_weight is not None else [],
+            "profile_fields": list(fields),
             "profiles": profiles,
             "changed_layers": {"proj": included},
         }

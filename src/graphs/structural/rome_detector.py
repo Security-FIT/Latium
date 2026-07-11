@@ -24,20 +24,9 @@ PRESENCE_PRODUCERS = (
 )
 
 PROFILE_LABELS: dict[str, str] = {
-    "operator_norm": r"Raw residual $\|A_\ell\|_2$",
-    "frobenius_norm": r"Raw residual $\|A_\ell\|_F$",
-    "rank1_energy": "Rank-1 residual energy",
-    "rank2_energy": "Rank-2 residual energy",
-    "neighbor_cka_distance": "Neighbor CKA distance",
-    "directional_background": "Directional background",
-    "relative_operator_norm": "Relative one-direction shift",
-    "signed_relative_shift": "Signed relative shift",
-    "relative_subspace_operator_norm": "Whitened subspace operator norm",
     "relative_subspace_frobenius": "Whitened subspace Frobenius score",
-    "relative_subspace_rank1_energy": "Whitened rank-1 energy",
+    "rank2_energy": "Rank-2 residual energy",
     "bilateral_coherence": "Bilateral coherence",
-    "bilateral_alignment": "Bilateral alignment",
-    "bilateral_frobenius": "Bilateral Frobenius scale",
     "bilateral_balance": "Bilateral balance",
 }
 
@@ -186,7 +175,7 @@ def _plot_overview(
     footprint = record["blind_footprint"]
     delta = record["delta"]
 
-    fig, axes = plt.subplots(3, 2, figsize=(14.5, 12.0), squeeze=False)
+    fig, axes = plt.subplots(2, 2, figsize=(14.5, 8.5), squeeze=False)
     _plot_lines(
         axes[0, 0],
         layers,
@@ -200,55 +189,17 @@ def _plot_overview(
         axes[0, 1],
         layers,
         [
-            (
-                "subspace Frobenius",
-                _profile_series(localizer, "relative_subspace_frobenius", layers),
-                "#7c3aed",
-            ),
-            (
-                "subspace operator",
-                _profile_series(localizer, "relative_subspace_operator_norm", layers),
-                "#2563eb",
-            ),
-            ("one direction", _profile_series(localizer, "relative_operator_norm", layers), "#0891b2"),
-        ],
-        title="2. Neighbor-whitened relative change",
-        target=target,
-        detected=detected,
-        excluded=excluded,
-    )
-    _plot_lines(
-        axes[1, 0],
-        layers,
-        [
-            ("rank-1 energy", _profile_series(localizer, "rank1_energy", layers), "#ea580c"),
             ("rank-2 energy", _profile_series(localizer, "rank2_energy", layers), "#16a34a"),
-            (
-                "whitened rank-1 energy",
-                _profile_series(localizer, "relative_subspace_rank1_energy", layers),
-                "#0f766e",
-            ),
-        ],
-        title="3. Low-rank ROME structure",
-        target=target,
-        detected=detected,
-        excluded=excluded,
-    )
-    _plot_lines(
-        axes[1, 1],
-        layers,
-        [
             ("coherence", _profile_series(localizer, "bilateral_coherence", layers), "#be123c"),
-            ("alignment", _profile_series(localizer, "bilateral_alignment", layers), "#d97706"),
             ("balance", _profile_series(localizer, "bilateral_balance", layers), "#4d7c0f"),
         ],
-        title="4. Signed three-layer footprint",
+        title="2. Low-rank three-layer footprint",
         target=target,
         detected=detected,
         excluded=excluded,
     )
 
-    evidence_ax = axes[2, 0]
+    evidence_ax = axes[1, 0]
     _shade_excluded(evidence_ax, layers, excluded)
     colors = {"blind peak": "#2563eb", "blind footprint": "#be123c"}
     for label, data in (("blind peak", peak), ("blind footprint", footprint)):
@@ -258,12 +209,12 @@ def _plot_overview(
         if cutoff is not None:
             evidence_ax.axhline(cutoff, color=colors[label], linestyle="--", linewidth=1.0, alpha=0.75)
     _markers(evidence_ax, target, detected)
-    evidence_ax.set_title("5. Training-free presence tests and universal cutoffs", fontsize=10, fontweight="bold")
+    evidence_ax.set_title("3. Training-free presence tests and universal cutoffs", fontsize=10, fontweight="bold")
     evidence_ax.set_xlabel(r"Layer $\ell$")
     evidence_ax.grid(True, linestyle=":", alpha=0.35)
     evidence_ax.legend(fontsize=7, loc="best")
 
-    decision_ax = axes[2, 1]
+    decision_ax = axes[1, 1]
     decision_ax.axis("off")
     decisions = [
         ("Localizer", f"layer {detected}", localizer.get("detection_score")),
@@ -272,7 +223,7 @@ def _plot_overview(
         ("Clean-delta", delta.get("verdict", "unavailable"), delta.get("detection_score")),
     ]
     y = 0.92
-    decision_ax.text(0.02, y, "6. Final decision evidence", fontsize=11, fontweight="bold", va="top")
+    decision_ax.text(0.02, y, "4. Final decision evidence", fontsize=11, fontweight="bold", va="top")
     y -= 0.13
     for name, verdict, score in decisions:
         positive = verdict == "rome_like" or name == "Localizer"
@@ -346,8 +297,6 @@ def _plot_all_profiles(
             color=colors[index % len(colors)],
         )
         _markers(ax, target, detected)
-        if field in {"signed_relative_shift", "bilateral_alignment"}:
-            ax.axhline(0.0, color="#94a3b8", linewidth=0.8)
         ax.set_title(PROFILE_LABELS.get(field, field), fontsize=9, fontweight="bold")
         ax.set_xlabel(r"Layer $\ell$", fontsize=8)
         ax.grid(True, linestyle=":", alpha=0.32)

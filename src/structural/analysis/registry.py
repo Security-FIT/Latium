@@ -219,6 +219,7 @@ ANALYSES = _validated_registry(
 ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
     "weighted-spectrum": ("weighted-spectrum",),
+    "detection": ("weighted-spectrum", "spectral"),
     "rome-presence": (
         "weighted-spectrum",
         "rome-presence-blind-peak",

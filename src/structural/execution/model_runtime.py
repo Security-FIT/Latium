@@ -22,7 +22,7 @@ from src.common.linalg import clear_linalg_caches
 from src.handlers.rome import ModelHandler
 from src.results import ArtifactWriter, RunLayout
 from src.structural.capture.baseline import baseline_artifacts
-from src.structural.capture.registry import resolve_captures
+from src.structural.capture.registry import required_weight_families, resolve_captures
 from src.structural.execution.case_selection import load_test_cases
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.execution.covariance import find_second_moment_files
@@ -120,6 +120,33 @@ def _update_progress(
         },
         preserve_existing=True,
     )
+
+
+def _extract_capture_weights(
+    handler: ModelHandler,
+    *,
+    model_key: str,
+    proj_template: str,
+    fc_template: Optional[str],
+    capture_names: tuple[str, ...],
+) -> tuple[
+    dict[int, torch.Tensor],
+    Optional[dict[int, torch.Tensor]],
+    dict[str, dict[int, torch.Tensor]],
+]:
+    """Copy only matrix families consumed by the selected capture producers."""
+    families = required_weight_families(capture_names)
+    projection = extract_weights(handler, proj_template) if "proj" in families else {}
+    fc: Optional[dict[int, torch.Tensor]] = None
+    if "fc" in families and fc_template:
+        try:
+            fc = extract_weights(handler, fc_template)
+        except (KeyError, ValueError):
+            LOGGER.warning("FC weights unavailable for %s", model_key)
+    attention = (
+        extract_attention_weights(handler, proj_template) if "attention" in families else {}
+    )
+    return projection, fc, attention
 
 
 def _run_methods_for_plan(
@@ -235,15 +262,12 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
         proj_template = handler._layer_name_template
         configured_fc = str(getattr(cfg.model, "fc_layer_name_template", "") or "").strip()
         fc_template = configured_fc or get_fc_template(proj_template)
-        baseline_proj = extract_weights(handler, proj_template)
-        baseline_fc: Optional[dict[int, torch.Tensor]] = None
-        if fc_template:
-            try:
-                baseline_fc = extract_weights(handler, fc_template)
-            except (KeyError, ValueError):
-                LOGGER.warning("FC weights unavailable for %s", model_key)
-        baseline_attention = (
-            extract_attention_weights(handler, proj_template) if "attention-features" in capture_names else {}
+        baseline_proj, baseline_fc, baseline_attention = _extract_capture_weights(
+            handler,
+            model_key=model_key,
+            proj_template=proj_template,
+            fc_template=fc_template,
+            capture_names=capture_names,
         )
         model_context = _model_context(
             cfg,

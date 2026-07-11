@@ -13,7 +13,11 @@ from src.registry import NamedRegistry, RegistryEntry, load_object, resolve_pres
 from src.editing.registry import EDIT_METHODS
 from src.structural.analysis.registry import AnalysisSpec, _validated_registry
 from src.structural.analysis.registry import ANALYSES, ANALYSIS_PRESETS
-from src.structural.capture.registry import CAPTURES, CAPTURE_PROFILES
+from src.structural.capture.registry import (
+    CAPTURES,
+    CAPTURE_PROFILES,
+    required_weight_families,
+)
 from src.graphs.registry import RENDERERS, RENDERER_PRESETS
 
 
@@ -101,6 +105,14 @@ def test_rome_presence_presets_expose_all_training_free_variants() -> None:
     renderer = RENDERERS.get("rome-detector-explainer")
     assert renderer.required_analyses == ANALYSIS_PRESETS["rome-presence"]
     assert renderer.model_families == ("all",)
+
+
+def test_detection_presets_select_only_current_and_spectral_math() -> None:
+    assert CAPTURE_PROFILES["detection"] == ("weighted-spectrum", "spectral")
+    assert ANALYSIS_PRESETS["detection"] == ("weighted-spectrum", "spectral")
+    assert required_weight_families(("weighted-spectrum",)) == ("proj",)
+    assert required_weight_families(CAPTURE_PROFILES["detection"]) == ("proj", "fc")
+    assert required_weight_families(("attention-features",)) == ("attention",)
 
 
 def test_analysis_registry_rejects_invalid_variant_fields() -> None:

@@ -13,17 +13,22 @@ from src.structural.capture.producers import (
     _weighted_spectrum_profile,
     capture_weighted_spectrum,
 )
-from src.structural.detectors.weighted_spectrum import PROFILE_FIELDS, detect_from_profiles
+from src.structural.detectors.weighted_spectrum import (
+    FOOTPRINT_PROFILE_FIELDS,
+    LOCALIZER_PROFILE_FIELDS,
+    PROFILE_FIELDS,
+    detect_from_profiles,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_weighted_spectrum_is_the_unified_structural_default() -> None:
+def test_only_current_and_spectral_detectors_are_the_structural_default() -> None:
     config = OmegaConf.load(ROOT / "src/config/structural/default.yaml")
 
-    assert config.capture.profile == "weighted-spectrum"
-    assert config.analysis.preset == "weighted-spectrum"
+    assert config.capture.profile == "detection"
+    assert config.analysis.preset == "detection"
     assert config.analysis.methods["weighted-spectrum"] == {
         "trim_first": 5,
         "trim_last": 5,
@@ -64,26 +69,9 @@ def test_hidden_spectral_density_rejects_invalid_weights(weight: torch.Tensor) -
 
 def test_weighted_spectrum_detector_selects_relative_subspace_peak() -> None:
     profiles = {
-        str(layer): {
-            "operator_norm": 0.01 * layer,
-            "frobenius_norm": 0.1,
-            "rank1_energy": 0.2,
-            "rank2_energy": 0.3,
-            "neighbor_cka_distance": 0.05,
-            "directional_background": 1.0,
-            "relative_operator_norm": 0.2,
-            "signed_relative_shift": 0.2,
-            "relative_subspace_operator_norm": 0.2,
-            "relative_subspace_frobenius": 0.2,
-            "relative_subspace_rank1_energy": 1.0,
-            "bilateral_coherence": 0.5,
-            "bilateral_alignment": 0.0,
-            "bilateral_frobenius": 0.1,
-            "bilateral_balance": 1.0,
-        }
+        str(layer): {"relative_subspace_frobenius": 0.2}
         for layer in range(12)
     }
-    profiles["6"]["operator_norm"] = 2.0
     profiles["7"]["relative_subspace_frobenius"] = 3.0
 
     result = detect_from_profiles(profiles, trim_first=2, trim_last=2)
@@ -104,18 +92,35 @@ def test_weighted_spectrum_detector_rejects_non_finite_profiles() -> None:
         detect_from_profiles(profiles, trim_first=0, trim_last=0)
 
 
-def test_relative_operator_norm_weights_a_spike_by_neighbor_support() -> None:
+def test_weighted_profile_computes_only_requested_localizer_math() -> None:
     reference = torch.diag(torch.tensor([0.7, 0.2, 0.09, 0.01]))
-    high_support = reference.clone()
-    high_support[0, 0] += 0.01
-    low_support = reference.clone()
-    low_support[3, 3] += 0.01
+    current = reference.clone()
+    current[0, 0] += 0.01
 
-    high = _weighted_spectrum_profile(high_support, reference, layer=1)
-    low = _weighted_spectrum_profile(low_support, reference, layer=1)
+    profile = _weighted_spectrum_profile(
+        current,
+        reference,
+        layer=1,
+        fields=LOCALIZER_PROFILE_FIELDS,
+    )
 
-    assert high["operator_norm"] == pytest.approx(low["operator_norm"])
-    assert low["relative_operator_norm"] > high["relative_operator_norm"]
+    assert tuple(profile) == LOCALIZER_PROFILE_FIELDS
+
+
+def test_weighted_profile_computes_only_presence_footprint_math() -> None:
+    previous = torch.diag(torch.tensor([0.4, 0.3, 0.2, 0.1]))
+    following = previous + torch.diag(torch.tensor([0.02, -0.02, 0.0, 0.0]))
+    current = (previous + following) / 2
+
+    profile = _weighted_spectrum_profile(
+        current,
+        (previous + following) / 2,
+        layer=1,
+        neighbors=(previous, following),
+        fields=FOOTPRINT_PROFILE_FIELDS,
+    )
+
+    assert tuple(profile) == FOOTPRINT_PROFILE_FIELDS
 
 
 def test_relative_subspace_score_is_hidden_basis_invariant() -> None:
@@ -158,12 +163,14 @@ def test_bilateral_coherence_separates_a_spike_from_a_smooth_step() -> None:
         (previous + following) / 2,
         layer=1,
         neighbors=(previous, following),
+        fields=FOOTPRINT_PROFILE_FIELDS,
     )
     spike_profile = _weighted_spectrum_profile(
         spike,
         (previous + following) / 2,
         layer=1,
         neighbors=(previous, following),
+        fields=FOOTPRINT_PROFILE_FIELDS,
     )
 
     assert smooth_profile["bilateral_coherence"] == pytest.approx(0.0, abs=1e-6)

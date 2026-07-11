@@ -9,7 +9,11 @@ from typing import Any, Literal
 
 import numpy as np
 
-from src.structural.detectors.weighted_spectrum import PROFILE_FIELDS, detect_from_profiles
+from src.structural.detectors.weighted_spectrum import (
+    FOOTPRINT_PROFILE_FIELDS,
+    LOCALIZER_PROFILE_FIELDS,
+    detect_from_profiles,
+)
 
 
 BlindStrategy = Literal["peak", "footprint"]
@@ -50,6 +54,19 @@ def _presence_series(
     layers: list[int],
     strategy: BlindStrategy,
 ) -> np.ndarray:
+    required_fields = (
+        LOCALIZER_PROFILE_FIELDS if strategy == "peak" else FOOTPRINT_PROFILE_FIELDS
+    )
+    missing = [
+        f"{layer}:{field}"
+        for layer in layers
+        for field in required_fields
+        if field not in profiles.get(str(layer), {})
+    ]
+    if missing:
+        raise ValueError(
+            "ROME-presence profiles are incomplete at " + ", ".join(missing[:8])
+        )
     spectral = np.asarray(
         [float(profiles[str(layer)]["relative_subspace_frobenius"]) for layer in layers],
         dtype=np.float64,
@@ -120,7 +137,9 @@ def detect_rome_presence_blind(
         "evidence": outlier,
         "layer_evidence": {str(layer): float(series[index]) for index, layer in enumerate(layers)},
         "localizer": localized,
-        "required_profile_fields": list(PROFILE_FIELDS),
+        "required_profile_fields": list(
+            LOCALIZER_PROFILE_FIELDS if strategy == "peak" else FOOTPRINT_PROFILE_FIELDS
+        ),
     }
 
 

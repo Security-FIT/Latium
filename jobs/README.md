@@ -91,7 +91,7 @@ process so model memory is released between stages. It:
 3. applies ROME to CounterFact cases;
 4. captures `weighted-spectrum` and clean-delta fingerprints;
 5. runs the localizer and all three ROME-presence decisions;
-6. renders every detector profile with `rome-detector-explainer`; and
+6. renders every decision-relevant detector profile with `rome-detector-explainer`; and
 7. verifies all required artifacts before writing `pipeline-summary.json`.
 
 Outputs default to

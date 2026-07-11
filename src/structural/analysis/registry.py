@@ -82,6 +82,29 @@ ANALYSES = _validated_registry(
             (),
         ),
         AnalysisSpec(
+            "rome-presence-blind-peak",
+            "Training-free suspect-only ROME presence from a universal spectral peak.",
+            "attribution",
+            "src.structural.analysis.detector_methods:analyze_rome_presence_blind_peak",
+            ("weighted-spectrum",),
+            ("trim_first", "trim_last"),
+        ),
+        AnalysisSpec(
+            "rome-presence-blind-footprint",
+            "Training-free suspect-only ROME presence from its signed low-rank footprint.",
+            "attribution",
+            "src.structural.analysis.detector_methods:analyze_rome_presence_blind_footprint",
+            ("weighted-spectrum",),
+            ("trim_first", "trim_last"),
+        ),
+        AnalysisSpec(
+            "rome-presence-delta",
+            "Attribute a single numerical-rank-one MLP update using a clean checkpoint.",
+            "attribution",
+            "src.structural.analysis.detector_methods:analyze_rome_presence_delta",
+            ("rome-update",),
+        ),
+        AnalysisSpec(
             "blind",
             "Detect a structural outlier from captured matrix profiles.",
             "detection",
@@ -196,6 +219,11 @@ ANALYSES = _validated_registry(
 ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
     "weighted-spectrum": ("weighted-spectrum",),
+    "rome-presence": (
+        "rome-presence-blind-peak",
+        "rome-presence-blind-footprint",
+        "rome-presence-delta",
+    ),
     "paper": ("composite", "gpt-norm-cv", "spectral"),
     "blind": ("blind",),
     "full": ANALYSES.identifiers(),

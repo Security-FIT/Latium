@@ -45,6 +45,8 @@ class CaptureContext:
     token_predictor: Optional[Callable[[torch.Tensor], tuple[int, str]]]
     changed_weights: dict[str, tuple[int, ...] | None]
     options: dict[str, Any]
+    baseline_proj_weights: Optional[dict[int, torch.Tensor]] = None
+    baseline_fc_weights: Optional[dict[int, torch.Tensor]] = None
 
     @property
     def is_baseline(self) -> bool:
@@ -380,6 +382,137 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
             "weight_shape": list(first_weight.shape) if first_weight is not None else [],
             "profiles": profiles,
             "changed_layers": {"proj": included},
+        }
+    )
+
+
+def _update_profile(
+    current: torch.Tensor,
+    baseline: torch.Tensor,
+    *,
+    layer: int,
+) -> dict[str, float | bool]:
+    """Describe a checkpoint delta relative to floating-point roundoff."""
+    if current.shape != baseline.shape:
+        raise ValueError(
+            f"Layer {layer} shape changed from {tuple(baseline.shape)} to {tuple(current.shape)}"
+        )
+    original = baseline.detach().to(dtype=torch.float32, device="cpu")
+    modified = current.detach().to(dtype=torch.float32, device="cpu")
+    if not bool(torch.isfinite(original).all()) or not bool(torch.isfinite(modified).all()):
+        raise ValueError(f"Layer {layer} contains non-finite weights")
+    delta = modified - original
+    delta_frobenius = float(torch.linalg.vector_norm(delta).item())
+    dtype = baseline.dtype if baseline.dtype.is_floating_point else torch.float32
+    epsilon = max(float(torch.finfo(dtype).eps), float(torch.finfo(torch.float32).eps))
+    # Higham's gamma bound for four rounded operations: outer-product entry,
+    # weight addition, checkpoint subtraction, and reconstruction.  This is
+    # numerical error accounting derived from dtype precision, not a fitted
+    # edit threshold.
+    operation_count = 4
+    gamma = operation_count * epsilon / max(1.0 - operation_count * epsilon, epsilon)
+    roundoff_bound = float(
+        gamma
+        * (
+            torch.linalg.vector_norm(original).item()
+            + torch.linalg.vector_norm(modified).item()
+            + delta_frobenius
+        )
+    )
+    baseline_frobenius = float(torch.linalg.vector_norm(original).item())
+    if delta_frobenius <= roundoff_bound:
+        return {
+            "delta_frobenius": delta_frobenius,
+            "relative_delta_frobenius": delta_frobenius / max(baseline_frobenius, EPS),
+            "top1_singular": 0.0,
+            "top1_energy": 0.0,
+            "rank1_residual": 0.0,
+            "rank1_residual_ratio": 0.0,
+            "roundoff_bound": roundoff_bound,
+            "rank_one_within_roundoff": False,
+            "detectable_change": False,
+        }
+
+    left, singular, right = _deterministic_topk_svd(
+        delta,
+        top_k=2,
+        seed=701408733 + int(layer),
+    )
+    top1 = float(singular[0].item())
+    # Accumulate the best-rank-one residual in row blocks so wide production
+    # matrices do not require another full float64 matrix.
+    rank1_residual_squared = 0.0
+    right_vector = right[0].double().unsqueeze(0)
+    for start in range(0, int(delta.shape[0]), 256):
+        stop = min(int(delta.shape[0]), start + 256)
+        reconstruction = top1 * left[start:stop, 0].double().unsqueeze(1) * right_vector
+        block = delta[start:stop].double() - reconstruction
+        rank1_residual_squared += float(block.square().sum().item())
+    rank1_residual = rank1_residual_squared**0.5
+    return {
+        "delta_frobenius": delta_frobenius,
+        "relative_delta_frobenius": delta_frobenius / max(baseline_frobenius, EPS),
+        "top1_singular": top1,
+        "top1_energy": min(1.0, top1**2 / max(delta_frobenius**2, EPS)),
+        "rank1_residual": rank1_residual,
+        "rank1_residual_ratio": rank1_residual / max(delta_frobenius, EPS),
+        "roundoff_bound": roundoff_bound,
+        "rank_one_within_roundoff": bool(rank1_residual <= roundoff_bound),
+        "detectable_change": True,
+    }
+
+
+def _update_family_profiles(
+    current: Optional[dict[int, torch.Tensor]],
+    baseline: Optional[dict[int, torch.Tensor]],
+) -> dict[str, dict[str, float | bool]]:
+    if current is None and baseline is None:
+        return {}
+    if current is None or baseline is None:
+        raise ValueError("Current and baseline matrix families must both be available")
+    if set(current) != set(baseline):
+        raise ValueError("Current and baseline matrix families contain different layers")
+    profiles: dict[str, dict[str, float | bool]] = {}
+    for layer in sorted(current):
+        current_weight = current[layer]
+        baseline_weight = baseline[layer]
+        if current_weight is baseline_weight:
+            continue
+        directly_equal = (
+            current_weight.shape == baseline_weight.shape
+            and current_weight.dtype == baseline_weight.dtype
+            and current_weight.device == baseline_weight.device
+            and torch.equal(current_weight, baseline_weight)
+        )
+        if directly_equal:
+            continue
+        profile = _update_profile(current_weight, baseline_weight, layer=layer)
+        if profile["detectable_change"]:
+            profiles[str(layer)] = profile
+    family_energy = sum(float(profile["delta_frobenius"]) ** 2 for profile in profiles.values())
+    for profile in profiles.values():
+        profile["family_energy_fraction"] = (
+            float(profile["delta_frobenius"]) ** 2 / family_energy if family_energy > 0.0 else 0.0
+        )
+    return profiles
+
+
+def capture_rome_update(context: CaptureContext) -> dict[str, Any]:
+    """Capture clean-to-suspect update fingerprints for ROME-like attribution."""
+    if context.is_baseline:
+        return {
+            "mode": "baseline",
+            "families": {"proj": {}, "fc": {}},
+        }
+    if context.baseline_proj_weights is None:
+        raise RuntimeError("ROME update capture requires clean baseline projection weights")
+    return to_serializable(
+        {
+            "mode": "patch",
+            "families": {
+                "proj": _update_family_profiles(context.proj_weights, context.baseline_proj_weights),
+                "fc": _update_family_profiles(context.fc_weights, context.baseline_fc_weights),
+            },
         }
     )
 

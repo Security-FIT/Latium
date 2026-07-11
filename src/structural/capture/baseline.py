@@ -114,6 +114,8 @@ def baseline_artifacts(
                 token_predictor=None,
                 changed_weights={},
                 options=options,
+                baseline_proj_weights=baseline_proj,
+                baseline_fc_weights=baseline_fc,
             )
             cases = [capture_case(capture_name, context, case_id="baseline")]
         records[capture_name] = write_capture(

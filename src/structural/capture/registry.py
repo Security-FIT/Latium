@@ -37,6 +37,11 @@ CAPTURES = NamedRegistry(
             "src.structural.capture.producers:capture_weighted_spectrum",
         ),
         CaptureSpec(
+            "rome-update",
+            "Clean-to-suspect low-rank update fingerprints for ROME attribution.",
+            "src.structural.capture.producers:capture_rome_update",
+        ),
+        CaptureSpec(
             "matrix-features",
             "Reusable per-layer matrix, rank, norm, and IPR profiles.",
             "src.structural.capture.producers:capture_matrix_features",
@@ -65,6 +70,7 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "none": (),
     "spectral": ("spectral",),
     "weighted-spectrum": ("weighted-spectrum",),
+    "rome-presence": ("weighted-spectrum", "rome-update"),
     "matrix": ("matrix-features",),
     "paper": ("spectral", "matrix-features"),
     "full": CAPTURES.identifiers(),

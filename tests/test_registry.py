@@ -81,6 +81,18 @@ def test_matrix_anomaly_ids_replace_old_experimental_names() -> None:
         ANALYSES.get(old_label)
 
 
+def test_rome_presence_presets_expose_all_training_free_variants() -> None:
+    assert CAPTURE_PROFILES["rome-presence"] == ("weighted-spectrum", "rome-update")
+    assert ANALYSIS_PRESETS["rome-presence"] == (
+        "rome-presence-blind-peak",
+        "rome-presence-blind-footprint",
+        "rome-presence-delta",
+    )
+    assert ANALYSES.get("rome-presence-blind-peak").model_families == ("all",)
+    assert ANALYSES.get("rome-presence-blind-footprint").model_families == ("all",)
+    assert ANALYSES.get("rome-presence-delta").model_families == ("all",)
+
+
 def test_analysis_registry_rejects_invalid_variant_fields() -> None:
     with pytest.raises(ValueError, match="unknown variant field"):
         _validated_registry(

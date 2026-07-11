@@ -190,6 +190,13 @@ Arguments are:
 <user@host> [remote_repo_path] [remote_branch] [conda_env]
 ```
 
+## MetaCentrum / e-INFRA
+
+PBS presets for causal tracing, ROME benchmarks, structural detectors,
+second-moment computation, model-free analysis, and arbitrary CLI commands are
+available in [`jobs/`](jobs/README.md). After one-time environment setup, a run
+can be submitted with `jobs/submit.sh causal-trace -- model=gpt2-large`.
+
 ## Models Roadmap
 
 Models are selected by config key, for example `model=gpt2-large` or

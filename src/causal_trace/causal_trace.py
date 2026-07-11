@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
+import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -29,9 +31,11 @@ import pandas as pd
 import torch
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
+from yaml import MappingNode, ScalarNode, compose
 
-from src.common.loading import load_dataset
 from src.common.config import strict_bool
+from src.common.loading import load_dataset
+from src.common.model_config import MODEL_CONFIG_DIR
 from src.causal_trace.selection import (
     Window,
     build_window,
@@ -80,6 +84,80 @@ def _section(cfg: DictConfig, name: str) -> Any:
 
 def _get(section: Any, name: str, default: Any) -> Any:
     return getattr(section, name, default)
+
+
+def _resolve_model_config_path(
+    cfg: DictConfig,
+    *,
+    config_dir: Path = MODEL_CONFIG_DIR,
+) -> Path:
+    """Resolve the exact model YAML selected by Hydra."""
+    config_root = Path(config_dir).resolve()
+    choice = OmegaConf.select(cfg, "command.causal_trace._model_config_key", default=None)
+    if not choice:
+        choice = OmegaConf.select(cfg, "hydra.runtime.choices.model", default=None)
+    if choice:
+        path = (config_root / f"{choice}.yaml").resolve()
+        if path.parent != config_root or not path.is_file():
+            raise FileNotFoundError(f"Selected model config does not exist: {path}")
+        return path
+
+    model_name = str(cfg.model.name).strip().lower()
+    matches = []
+    for path in sorted(config_root.glob("*.yaml")):
+        if path.name == "boilerplate.yaml":
+            continue
+        candidate = OmegaConf.load(path)
+        if str(getattr(candidate, "name", "")).strip().lower() == model_name:
+            matches.append(path)
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise FileNotFoundError(f"No writable model YAML matches {cfg.model.name!s}")
+    choices = ", ".join(path.stem for path in matches)
+    raise ValueError(
+        "Cannot identify the selected model YAML without Hydra choice metadata; "
+        f"{cfg.model.name!s} matches: {choices}"
+    )
+
+
+def _overwrite_model_config_layer(path: Path, layer: int) -> int:
+    """Atomically replace only the top-level ``layer`` YAML scalar."""
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
+    document = compose(text)
+    if not isinstance(document, MappingNode):
+        raise ValueError(f"Model config must be a YAML mapping: {path}")
+
+    layer_node = None
+    for key_node, value_node in document.value:
+        if isinstance(key_node, ScalarNode) and key_node.value == "layer":
+            if layer_node is not None:
+                raise ValueError(f"Model config has duplicate top-level layer keys: {path}")
+            layer_node = value_node
+    if not isinstance(layer_node, ScalarNode):
+        raise ValueError(f"Model config has no scalar top-level layer: {path}")
+
+    previous_layer = int(layer_node.value)
+    start = layer_node.start_mark.index
+    end = layer_node.end_mark.index
+    updated = f"{text[:start]}{int(layer)}{text[end:]}"
+
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary_name, path.stat().st_mode)
+        os.replace(temporary_name, path)
+    except BaseException:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        raise
+    return previous_layer
 
 
 def _dataset_examples(cfg: DictConfig, *, max_scan: int | None = None) -> Iterator[TraceExample]:
@@ -509,6 +587,13 @@ def _plot_trace(
 
 def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
     trace_cfg = _section(cfg, "causal_trace")
+    overwrite_model_config_layer = strict_bool(
+        _get(trace_cfg, "overwrite_model_config_layer", False),
+        name="causal_trace.overwrite_model_config_layer",
+    )
+    model_config_path = _resolve_model_config_path(cfg) if overwrite_model_config_layer else None
+    config_layer = getattr(cfg.model, "layer", None)
+    config_layer = None if config_layer is None else int(config_layer)
     output_root = Path(str(_get(trace_cfg, "output_dir", "analysis_out/causal_trace")))
     model_slug = str(cfg.model.name).replace("/", "_")
     out_dir = output_root / f"{model_slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -602,10 +687,16 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
     if not fact_results:
         summary = {
             "model": str(cfg.model.name),
+            "configured_reference_layer": config_layer,
             "selected_trace_center": None,
             "failure_reason": "no_valid_facts",
             "num_dataset_examples_scanned": scanned,
             "num_valid_facts": 0,
+            "model_config_layer_overwrite_requested": overwrite_model_config_layer,
+            "model_config_layer_overwritten": False,
+            "model_config_path": str(model_config_path) if model_config_path is not None else None,
+            "previous_model_config_layer": None,
+            "new_model_config_layer": None,
         }
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         LOGGER.warning("No valid causal-trace facts collected. Wrote %s", out_dir)
@@ -668,17 +759,28 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
     all_facts.to_csv(out_dir / "aggregate_windows.csv", index=False)
     (out_dir / "selection.json").write_text(json.dumps(selection, indent=2, default=_json_default), encoding="utf-8")
 
-    config_layer = getattr(cfg.model, "layer", None)
-    config_layer = None if config_layer is None else int(config_layer)
     plot_path = out_dir / "early_site_trace.png"
     _plot_trace(discovery, confirmation, all_facts, selection, config_layer=config_layer, output_path=plot_path)
+
+    selected_trace_center = selection.get("selected_trace_center")
+    previous_model_config_layer = None
+    model_config_layer_overwritten = False
+    if model_config_path is not None and selected_trace_center is not None:
+        previous_model_config_layer = _overwrite_model_config_layer(model_config_path, int(selected_trace_center))
+        model_config_layer_overwritten = True
+        LOGGER.info(
+            "Updated model config layer: path=%s previous=%s selected=%s",
+            model_config_path,
+            previous_model_config_layer,
+            selected_trace_center,
+        )
 
     summary = {
         "model": str(cfg.model.name),
         "configured_reference_layer": config_layer,
         "configured_reference_layer_used_for_selection": False,
         "selection_method": selection.get("selection_method"),
-        "selected_trace_center": selection.get("selected_trace_center"),
+        "selected_trace_center": selected_trace_center,
         "discovery_trace_center": selection.get("discovery_trace_center"),
         "discovery_trace_window_layers": selection.get("trace_window_layers"),
         "selected_trace_window_layers": (
@@ -697,6 +799,11 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         "num_noise_samples": int(num_noise),
         "noise_batch_size": int(noise_batch_size),
         "first_token_only": True,
+        "model_config_layer_overwrite_requested": overwrite_model_config_layer,
+        "model_config_layer_overwritten": model_config_layer_overwritten,
+        "model_config_path": str(model_config_path) if model_config_path is not None else None,
+        "previous_model_config_layer": previous_model_config_layer,
+        "new_model_config_layer": int(selected_trace_center) if model_config_layer_overwritten else None,
         "plot": str(plot_path),
         "output_dir": str(out_dir),
     }

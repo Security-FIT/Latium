@@ -9,6 +9,7 @@ import hydra
 import pandas as pd
 import pytest
 import torch
+from omegaconf import OmegaConf
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -16,7 +17,9 @@ if str(ROOT) not in sys.path:
 
 from src.causal_trace.causal_trace import (
     TraceValidationError,
+    _overwrite_model_config_layer,
     _patch_mlp_position,
+    _resolve_model_config_path,
     _select_window,
     build_window,
     find_subject_span,
@@ -200,3 +203,62 @@ def test_trace_command_config_composes() -> None:
     assert cfg.command.causal_trace.noise_batch_size == 2
     assert cfg.command.causal_trace.discovery_fraction == 0.5
     assert cfg.command.causal_trace.require_correct_clean_prediction is True
+    assert cfg.command.causal_trace.overwrite_model_config_layer is False
+
+
+def test_resolve_model_config_path_uses_hydra_choice(tmp_path: Path) -> None:
+    selected = tmp_path / "selected.yaml"
+    selected.write_text('name: "shared/model"\nlayer: 3\n', encoding="utf-8")
+    (tmp_path / "sibling.yaml").write_text('name: "shared/model"\nlayer: 8\n', encoding="utf-8")
+    cfg = OmegaConf.create(
+        {
+            "model": {"name": "shared/model", "layer": 3},
+            "hydra": {"runtime": {"choices": {"model": "selected"}}},
+        }
+    )
+
+    assert _resolve_model_config_path(cfg, config_dir=tmp_path) == selected
+
+
+def test_overwrite_model_config_layer_preserves_other_content(tmp_path: Path) -> None:
+    path = tmp_path / "model.yaml"
+    original = '# model comment\nname: "example/model"\nlayer: 4  # selected layer\ndtype: "bf16"\n'
+    path.write_text(original, encoding="utf-8")
+
+    previous = _overwrite_model_config_layer(path, 11)
+
+    assert previous == 4
+    assert path.read_text(encoding="utf-8") == original.replace("layer: 4", "layer: 11")
+
+
+def test_resolve_model_config_path_rejects_ambiguous_name_without_hydra_metadata(tmp_path: Path) -> None:
+    (tmp_path / "one.yaml").write_text('name: "shared/model"\nlayer: 1\n', encoding="utf-8")
+    (tmp_path / "two.yaml").write_text('name: "shared/model"\nlayer: 2\n', encoding="utf-8")
+    cfg = OmegaConf.create({"model": {"name": "shared/model"}})
+
+    with pytest.raises(ValueError, match="Cannot identify the selected model YAML"):
+        _resolve_model_config_path(cfg, config_dir=tmp_path)
+
+
+def test_run_hydra_forwards_selected_model_config_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.commands
+    from src.main import run_hydra
+
+    observed = {}
+
+    def fake_run_command(cfg):
+        observed["cfg"] = cfg
+        return 0
+
+    monkeypatch.setattr(src.commands, "run_command", fake_run_command)
+
+    result = run_hydra(
+        [
+            "command=causal_trace",
+            "model=qwen3-8b-prefixtest-self-short",
+            "command.causal_trace.overwrite_model_config_layer=true",
+        ]
+    )
+
+    assert result == 0
+    assert observed["cfg"].command.causal_trace._model_config_key == "qwen3-8b-prefixtest-self-short"

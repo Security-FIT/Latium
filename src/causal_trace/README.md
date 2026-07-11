@@ -25,6 +25,16 @@ ROME edit layer and ROME performance must be evaluated separately.
 python3 -m src causal-trace model=gpt2-xl command.causal_trace.num_valid_facts=100
 ```
 
+To persist a held-out-confirmed trace center as the selected model config's
+ROME layer, opt in explicitly:
+
+```bash
+python3 -m src causal-trace model=gpt2-xl command.causal_trace.overwrite_model_config_layer=true
+```
+
+The config is not changed when tracing does not produce a confirmed selection.
+The summary records whether the overwrite occurred and the old and new layers.
+
 The full method, audit decisions, outputs, and limitations are documented in
 `notebooks/causal-tracing-auto.md`. The portable cluster notebook is
 `notebooks/causal-tracing-auto-v2.ipynb`.

@@ -1,271 +1,310 @@
-# Causal Tracing Implementations: Standard vs Alternative
+# Audited Causal Tracing
 
-Comparison of the two causal tracing workflows in `src/causal_trace/`,
-covering both the Python drivers and their companion notebooks.
+## Short overview
 
-- **Standard**: `src/causal_trace/causal_trace.py` + `notebooks/causal_tracing.ipynb`
-- **Alternative**: `src/causal_trace/alt_trace.py` + `notebooks/causal_tracing_alt.ipynb`
+Latium's current causal trace asks which **full-width window of MLP output
+modules**, restored at the **last subject token**, recovers the expected next
+token after every subject-token embedding has been corrupted.
 
-## Summary Table
+For each fact and noise sample it measures a paired indirect effect:
 
-| Aspect | Standard (`causal_trace.py`) | Alternative (`alt_trace.py`) |
-|---|---|---|
-| Top-level driver | `causal_trace(cfg)` | `run_alt_trace(cfg)` |
-| Hydra command | `causal-trace` | `alt-trace` |
-| Per-prompt restoration target | **All** subject token positions | **Only the last** subject token position |
-| Noise samples per prompt | Single corruption sample | `num_trace_runs` independent samples (default 10) |
-| Per-layer probability | Single-run value | Mean across `num_trace_runs` noise samples |
-| Clean hidden-state lookup | Re-read from `outputs_clean` inside the layer loop | Pre-cached into a list before the run loop |
-| Corrupted-run timing | Before restoration runs | After all restoration runs |
-| Noise multiplier | Uses `handler._noise_multiplier` from `compute_embedding_std()` | `_ensure_noise_multiplier()`: auto-computes 3x embedding std, respects configured value, falls back to `0.1` |
-| Built-in layer ranking | No | Yes — `select_layers()` with middle-third fallback |
-| Signal quality detection | No | Yes — `_signal_is_noisy()` (CV, peak ratio, peak position) |
-| Output artifacts | One timestamped CSV (nested tuples) | Wide CSV (one column per layer) + selection JSON |
-| Return value | `int` (0 success / 1 clean-token mismatch) | `Optional[LayerSelection]` with ranked candidates |
-| Data structures | Ad-hoc tuples/lists | `TraceResult`, `LayerCandidate`, `LayerSelection` dataclasses |
-| Prompt failure handling | Returns `1`, increments failure counter | Returns `None`, skips prompt |
+\[
+\operatorname{IE}_{f,k,w}
+=
+P(y_f\mid\text{corruption}_{f,k}+\text{restore}_{f,w})
+-
+P(y_f\mid\text{corruption}_{f,k}).
+\]
 
----
+Discovery facts choose the highest-mean full-width window. A disjoint held-out
+confirmation set then tests only that window. A center is selected only when
+its confirmation bootstrap confidence interval has a lower bound above zero.
 
-## 1. Restoration Target Tokens
+The production implementation is `src/causal_trace/`. Its methodological
+reference is `notebooks/causal-tracing-auto-v2.ipynb`, the audited long
+notebook. The older `notebooks/causal-tracing-auto.ipynb` contains the original
+exploratory region heuristics and is **not** the current selection policy.
 
-- **Standard**: Iterates over every subject token position. For each
-  position it restores the clean hidden state at every layer, producing a
-  2D restoration matrix of shape `(num_subject_tokens, num_layers)`.
-- **Alternative**: Restores only `subject_positions[-1]` (the last subject
-  token) at every layer, producing a single 1D per-layer curve per prompt.
+## What the result means
 
-## 2. Noise Sampling And Averaging
+The result is the center and physical layer list of an activation-restoration
+window that shows positive held-out causal recovery under the declared
+intervention. It is not automatically:
 
-- **Standard**: One corrupted run per prompt; the restoration probability
-  at each layer comes from a single noise draw.
-- **Alternative**: `num_trace_runs` (default 10, configurable via
-  `generation.num_trace_runs`) fresh Gaussian noise samples are drawn per
-  prompt. Each run performs a full corrupted-and-restored sweep, and the
-  per-layer probabilities are averaged with `np.mean(all_run_probs, axis=0)`.
+- a single layer where the fact is stored;
+- the layer edited by ROME;
+- proof that the chosen window is better than every other window;
+- a natural indirect effect;
+- evidence that the model was edited.
 
-## 3. Clean Hidden-State Caching
+Causal tracing and the weight-only detector answer different questions. The
+trace localizes behavioral recovery under activation intervention; the
+weighted-spectrum detector localizes a ROME-like geometric anomaly in weights.
 
-- **Standard**: Reads the restoration source inside the layer loop:
-  `outputs_clean["hidden_states"][restore_layer + 1][0][restore_token_idx, :]`.
-- **Alternative**: Pre-computes the cache once before the run loop:
-  `clean_hidden_at_last = [outputs_clean["hidden_states"][l + 1][0][last_subject_token, :] for l in range(num_layers)]`,
-  then indexes the list inside the loop. This avoids re-walking the
-  hidden-states tuple on every layer of every noise run.
+## Intervention
 
-## 4. Corrupted-Run Timing
+Each accepted CounterFact row goes through three kinds of forward pass:
 
-- **Standard**: Runs the corrupted forward pass **before** the restoration
-  sweeps, so `corrupt_prob` and `corrupt_token` are available up front.
-- **Alternative**: Runs the corrupted forward pass **after** all restoration
-  runs (solely to record `corrupt_prob`). The restoration sweeps set up
-  their own corruption hooks independently per run.
+1. **Clean pass.** Measure the probability and top prediction for the first
+   target continuation token.
+2. **Corrupted passes.** Add Gaussian noise to the embedding output at every
+   token overlapping the subject text.
+3. **Restored passes.** Repeat each corruption while replacing the clean final
+   MLP-projection output at the last subject token for one window of layers.
 
-## 5. Hook Management
+The same sampled noise tensor is used for the corrupted baseline and every
+restoration window for that fact. Subtracting paired outcomes prevents
+different noise draws from being mistaken for a layer effect.
 
-- **Standard**: The corrupt hook is set once per outer subject-token loop;
-  the restore hook is set and unset for each layer; corrupt hooks are
-  removed at the end of the token loop. The notebook version wraps each
-  pass in `try/finally` to guarantee hook cleanup.
-- **Alternative**: Per noise run, the corrupt hook is set once, then the
-  restore hook is set/unset per layer, then the corrupt hook is removed.
-  No `try/finally` guard is used in `trace_prompt`.
+The default noise standard deviation is
 
-## 6. Gradient Context
+\[
+3.0\times\operatorname{std}(\text{embedding weight}),
+\]
 
-- **Standard notebook** wraps the trace in `with torch.no_grad():`.
-- **Alternative** (`alt_trace.py` and its notebook) does not use an explicit
-  `torch.no_grad()` context; it relies on the model being in eval mode.
+with 10 independent samples per fact. Samples are averaged within a fact;
+facts, not individual noise samples, are the units used for uncertainty.
 
-## 7. Noise Multiplier Computation
+## Component and token handling
 
-- **Standard**: The multiplier comes from `handler._noise_multiplier`,
-  typically computed by `compute_embedding_std()`. A standalone
-  `compute_multiplier(cfg)` helper exposes this value as a CLI command.
-- **Alternative**: `_ensure_noise_multiplier(handler, cfg, df_dataset)`
-  - Respects a configured `corruption_noise_multiplier` unless
-    `cfg.model.auto_compute_multiplier` is set.
-  - Auto-computes `3x` embedding std via `compute_embedding_std()`.
-  - Falls back to `0.1` if no data is available.
+The trace hooks the configured final MLP projection, for example:
 
-## 8. Layer Ranking And Signal Quality (Alt Only)
+- GPT-2: `mlp.c_proj`;
+- GPT-J: `mlp.fc_out`;
+- Llama, Mistral, Qwen, and DeepSeek: `mlp.down_proj`;
+- OPT: `fc2`;
+- Falcon: `dense_4h_to_h`;
+- Granite 4 MoE shared MLP: `shared_mlp.output_linear` when configured.
 
-`select_layers(per_layer_probs, num_layers)`:
+The source implementation resolves the exact module template from the selected
+model config and fails if a configured module is absent. It supports both
+`[batch, sequence, hidden]` and flattened `[batch * sequence, hidden]` MLP
+outputs.
 
-1. Calls `_signal_is_noisy(probs)`, which returns `True` when any hold:
-   - Coefficient of variation `< 0.15` (flat curve).
-   - Peak-to-mean ratio `< 0.3` (weak peak).
-   - Peak layer outside the middle third `[num_layers // 3, 2 * num_layers // 3]`.
-2. If noisy, restricts the candidate pool to the **middle third** and ranks
-   within that band (`used_middle_third_fallback = True`).
-3. If clean, ranks all layers.
-4. Returns a `LayerSelection` with `best_layer`, ranked `LayerCandidate`s,
-   `signal_quality` (`"clean"`/`"noisy"`), and `avg_per_layer_probs`.
+The subject text must occur exactly once in the formatted prompt. Fast
+tokenizer offset mappings identify all overlapping subject tokens. A
+token-ID-matching fallback retains prompt special-token offsets when mappings
+are unavailable. Restoration uses the last token in the located subject span.
 
-Threshold constants:
+CounterFact targets are evaluated by the first continuation token. The full
+target token count is recorded, but later target tokens are not scored.
 
-```python
-_NOISE_CV_THRESHOLD = 0.15
-_NOISE_PEAK_RATIO_THRESHOLD = 0.3
+## Predeclared fact eligibility
+
+A fact is eligible only when:
+
+1. the clean model's top next token equals the expected first target token, if
+   `require_correct_clean_prediction` is enabled; and
+2. corruption lowers that token's probability by at least
+   `min_total_effect`, which defaults to `0.03`.
+
+These gates use only clean and corrupted outcomes, before any window is chosen.
+The implementation now applies the corruption-effect gate before caching all
+MLP states or running the restoration sweep, so rejected facts do not incur the
+most expensive work.
+
+This eligibility filter changes the population being estimated: conclusions
+apply to correctly recalled, corruption-responsive facts rather than to every
+CounterFact row.
+
+## Restoration windows
+
+For every layer center, Latium constructs an overlapping half-open window. The
+default width is 10 layers. Boundary windows are clipped and therefore contain
+fewer interventions.
+
+All windows are saved for diagnostics, but only full-width windows may be
+selected. This avoids comparing interventions of different sizes. A selected
+center always denotes the accompanying `trace_window_layers`; it must not be
+silently interpreted as a one-layer ROME edit target.
+
+## Discovery and held-out confirmation
+
+Accepted facts are permuted once using the configured seed and split into
+discovery and confirmation sets. The default fraction is 50/50, and the exact
+assignment is persisted.
+
+The decision rule is deliberately narrow:
+
+1. On discovery facts, rank full-width windows by mean fact-level paired IE.
+2. Select the largest mean, breaking ties toward the lower center.
+3. On confirmation facts, bootstrap the mean IE for that exact center.
+4. Report the center only if there are at least the configured minimum number
+   of confirmation facts and the confidence interval lower bound is positive.
+
+Confirmation never re-ranks centers. This prevents the held-out set from
+quietly becoming a second discovery set. The default minimum of two facts is a
+technical floor, not a recommended sample size; serious runs should use many
+more.
+
+## Removed exploratory rules
+
+The audited workflow intentionally does not port the original notebook's:
+
+- middle-layer eligibility band;
+- near-peak region threshold;
+- minimum adjacent-center support rule;
+- neighbor-radius re-scoring;
+- median, trimmed-mean, or positive-fact-rate selectors;
+- noninferiority gate against a raw peak;
+- confirmation-set re-ranking;
+- configured-layer fallback for trace selection.
+
+Those rules increase researcher degrees of freedom and some were introduced
+after inspecting inconvenient traces. They may be shown as explicitly
+exploratory diagnostics, but they do not decide the production result.
+
+## Validation against the long notebook
+
+The production code matches `causal-tracing-auto-v2.ipynb` on the points that
+define the estimand and decision:
+
+| Requirement | Production status |
+|---|---|
+| Corrupt every subject-token embedding | Implemented |
+| Restore final MLP outputs at the last subject token | Implemented |
+| Sweep overlapping windows, default width 10 | Implemented |
+| Pair restored and corrupt probabilities by noise sample | Implemented |
+| Average noise samples within each fact | Implemented |
+| Filter on clean correctness and minimum corruption effect | Implemented |
+| Split accepted facts once into discovery/confirmation | Implemented |
+| Select discovery argmax among full-width windows only | Implemented |
+| Test only the preselected center on confirmation | Implemented |
+| Require positive held-out bootstrap-CI lower bound | Implemented |
+| Keep configured model layer out of selection | Implemented |
+
+The source port is stricter than the notebook in module resolution, has a
+tokenizer fallback for models without offsets, and can optionally persist a
+confirmed center to the selected model YAML. These are integration differences,
+not changes to the causal estimand.
+
+Static compilation and model-free invariant checks cover token spans,
+deterministic noise, hook cleanup, batched and flattened MLP layouts, boundary
+windows, no confirmation re-selection, config composition, and safe config
+layer persistence. A full end-to-end validation still requires loading a
+supported model and dataset; static tests alone do not establish empirical
+trace quality.
+
+## Outputs
+
+Each run creates a timestamped directory under `analysis_out/causal_trace/`:
+
+```text
+fact_results.jsonl
+rejections.csv
+split_assignments.csv
+discovery_windows.csv
+confirmation_windows.csv
+aggregate_windows.csv
+selection.json
+summary.json
+early_site_trace.png
 ```
 
-The standard workflow performs no ranking; downstream tools or notebooks
-must parse the CSV and pick a layer themselves.
+`selection.json` contains the discovery center, its physical layer window,
+discovery and confirmation means, the held-out interval, fact counts, and pass
+or failure reason. `summary.json` records the same main decision, the
+intervention settings, and whether an explicitly requested model-config update
+occurred.
 
-## 9. Output Format
-
-- **Standard CSV** (written by `save_results_to_csv`):
-  Columns `run_number`, `prompt_num`, `clean`, `corrupted`,
-  `restored_token`, `restored`. The `restored` column stores a Python
-  literal list of `(decoded_token, probability)` tuples, one per layer.
-  Filename is `<model>_<timestamp>.csv`.
-- **Alternative CSV** (written by `_save_results`):
-  Columns `prompt_idx`, `subject`, `target`, `clean_prob`,
-  `corrupt_prob`, then one column per layer (`layer_0` ... `layer_N`)
-  with the averaged restoration probability. Wide format.
-  Filename is `analysis_out/<model>_alt_<timestamp>.csv`.
-- **Alternative JSON**: `analysis_out/<model>_alt_selection_<timestamp>.json`
-  serializes the `LayerSelection` — `best_layer`, `signal_quality`,
-  `used_middle_third_fallback`, ranked candidates, and
-  `avg_per_layer_probs`.
-
-## 10. Data Structures
-
-- **Standard**: Returns ad-hoc tuples appended to a list and written to
-  CSV; no dedicated result dataclass.
-- **Alternative**: Typed dataclasses:
-  - `TraceResult` — `prompt_idx`, `subject`, `target`, `clean_prob`,
-    `corrupt_prob`, `per_layer_probs`. Has `to_dict()`.
-  - `LayerCandidate` — `layer`, `rank`, `restoration_prob`,
-    `in_middle_third`.
-  - `LayerSelection` — `best_layer`, `candidates`,
-    `used_middle_third_fallback`, `signal_quality`,
-    `avg_per_layer_probs`. Has `summary()` and `to_dict()`.
-
-## 11. Failure Handling
-
-- **Standard**: `causal_trace_single_run` returns `1` when the clean run
-  does not produce the target token; the caller increments a failure
-  counter and continues.
-- **Alternative**: `trace_prompt` returns `None` on the same condition;
-  the caller skips the prompt.
-
-## 12. Code Reuse
-
-The alternative workflow reuses the standard workflow's prompt
-preprocessing and dataset filtering:
-
-```python
-from src.causal_trace.causal_trace import filter_dataset, preprocess_prompt
-```
-
-Everything else in `alt_trace.py` is variant-specific (tracing, ranking,
-persistence, noise-multiplier handling).
-
----
-
-# Notebook Differences
-
-Both notebooks share the same setup cell (project-root discovery, imports,
-Hydra config composition) and the same `MODEL_CONFIG` / `NUM_PROMPTS`
-knobs. They diverge as follows.
-
-## N1. Trace Helper
-
-- **Standard notebook** (`causal_tracing.ipynb`) defines an inline
-  `trace_prompt_standard()` helper plus a `StandardTraceResult` dataclass.
-  It replicates `causal_trace_single_run` logic but returns in-memory
-  matrices instead of appending CSV rows, and wraps everything in
-  `torch.no_grad()` with `try/finally` hook cleanup.
-- **Alt notebook** (`causal_tracing_alt.ipynb`) imports the production
-  functions directly:
-  `trace_prompt`, `select_layers`, `_ensure_noise_multiplier`,
-  `_save_results` from `src.causal_trace.alt_trace`. No inline tracing
-  logic.
-
-## N2. Config Overrides
-
-- Standard: `command=causal_trace`, `generation.num_of_runs`.
-- Alt: `command=alt_trace`, `generation.num_of_runs`,
-  `generation.num_trace_runs`.
-
-## N3. Noise Multiplier Resolution
-
-- Standard notebook only prints
-  `cfg.model.get("corruption_noise_multiplier", "auto")`; it does not call
-  `_ensure_noise_multiplier`, so the handler's default path applies.
-- Alt notebook explicitly calls
-  `_ensure_noise_multiplier(handler, cfg, df_dataset)` and prints the
-  resolved `handler._noise_multiplier`.
-
-## N4. Result Shape
-
-- Standard: `StandardTraceResult.restoration` is a
-  `dict[int, np.ndarray]` keyed by subject token position. The `matrix`
-  property stacks these into a 2D array; `layer_mean` averages over
-  subject tokens.
-- Alt: `TraceResult.per_layer_probs` is a 1D `np.ndarray` (one value per
-  layer), already averaged over noise runs.
-
-## N5. Prompt Gallery Visualization
-
-- Standard: one row per prompt with **two** columns — a token-position x
-  layer heatmap (`viridis`) with a white dashed peak line, and a mean
-  layer curve with clean/corrupt reference lines and a crimson dashed
-  peak line. Y-axis ticks show subject token positions.
-- Alt: a grid of single plots (no per-prompt heatmap). Each plot is the
-  per-layer probability curve with clean/corrupt reference lines and a
-  peak marker. Title includes the `NUM_TRACE_RUNS` count.
-
-## N6. Run-Level Graphs
-
-- Standard: prompt x layer heatmap (`magma`) with white `x` peak markers,
-  plus an average curve with `1 std` fill band and a crimson dashed peak
-  line.
-- Alt: same heatmap + average curve, **plus**:
-  - An orange `axvspan` marking the middle-third band.
-  - A darkgreen dash-dot line at `selection.best_layer`.
-  - A title reporting `quality` and `used_middle_third_fallback`.
-  - A `print(selection.summary())` call beneath the figure.
-
-## N7. Summary Tables
-
-- Standard summary columns: `prompt_idx`, `subject`, `target`,
-  `clean_prob`, `corrupt_prob`, `peak_layer`, `peak_prob`,
-  `subject_positions`.
-- Alt summary columns: `prompt_idx`, `subject`, `target`, `clean_prob`,
-  `corrupt_prob`, `peak_layer`, `peak_prob` (no `subject_positions`
-  since only the last token is traced). Additionally produces a
-  `candidates` table with `rank`, `layer`, `restoration_prob`,
-  `in_middle_third` for the top 10 ranked layers.
-
-## N8. Save Behavior
-
-- Standard: writes `summary` CSV and an `avg_curve` CSV to
-  `analysis_out/causal_trace_notebook/<model>_standard_*.csv`.
-- Alt: calls `_save_results(results, avg_probs, selection, cfg)`, writing
-  the per-prompt CSV and the selection JSON to `analysis_out/`.
-
-## N9. Section Layout
-
-- Standard (7 sections): Setup; Load Config, Model, And Dataset; Standard
-  Trace Helper; Run Traces; Prompt Gallery; Run-Level Graphs; Summary
-  And Optional Save.
-- Alt (6 sections): Setup; Load Config, Model, And Dataset; Run Alt
-  Traces; Prompt Gallery; Run-Level Graphs And Layer Selection;
-  Candidate Table And Optional Save.
-
----
-
-# CLI Usage
+## Running it
 
 ```bash
-# Standard
-python3 -m src causal-trace model=gpt2-large generation.num_of_runs=5
-
-# Alternative
-python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5 generation.num_trace_runs=10
+python3 -m src causal-trace \
+  model=gpt2-xl \
+  command.causal_trace.num_valid_facts=100
 ```
 
-Both commands share the same model/dataset defaults. Use matching
-`MODEL_CONFIG` and prompt counts when comparing the notebooks.
+The principal settings are:
+
+```text
+command.causal_trace.window_size
+command.causal_trace.num_noise_samples
+command.causal_trace.noise_batch_size
+command.causal_trace.noise_multiplier
+command.causal_trace.min_total_effect
+command.causal_trace.discovery_fraction
+command.causal_trace.minimum_confirmation_facts
+command.causal_trace.bootstrap_samples
+command.causal_trace.confidence_level
+command.causal_trace.seed
+```
+
+Keep these fixed before a confirmatory run. Changing them after inspecting a
+result makes the next run exploratory unless it uses fresh held-out facts.
+
+The configured ROME layer is normally graph-only. Persisting a confirmed trace
+center requires an explicit opt-in:
+
+```bash
+python3 -m src causal-trace \
+  model=gpt2-xl \
+  command.causal_trace.overwrite_model_config_layer=true
+```
+
+No config is changed when confirmation fails.
+
+## Limitations
+
+- Only the first target token is evaluated.
+- The result depends on corruption scale, window width, restored component,
+  token position, eligible-fact filter, and model family adapter.
+- Overlapping windows share most restored layers, so neighboring points are
+  strongly dependent.
+- The held-out interval tests positive recovery at the chosen window, not
+  superiority over every competing window.
+- Reusing facts observed during method development weakens any confirmatory
+  interpretation even when the code performs a fresh in-run split.
+- A causal window center needs an independently declared mapping and ROME
+  benchmark before it can justify changing an edit layer.
+
+## Implementation details
+
+The implementation is divided into three files:
+
+- `src/causal_trace/causal_trace.py` owns model execution, hooks, fact
+  collection, the discovery/confirmation split, persistence, plotting, and the
+  CLI entry point.
+- `src/causal_trace/tokenization.py` owns continuation-token selection and
+  unique subject-span mapping.
+- `src/causal_trace/selection.py` owns window construction, fact-level
+  aggregation, bootstrap intervals, and held-out selection.
+
+The execution path is:
+
+```text
+causal_trace(cfg)
+  -> ModelHandler(cfg)
+  -> _run_causal_trace(cfg, handler)
+       -> resolve embedding and per-layer MLP output modules
+       -> build_window(...) for every center
+       -> _trace_example(...) until enough eligible facts are collected
+            -> clean next-token pass
+            -> deterministic corruption-noise tensor
+            -> paired corrupted probabilities
+            -> eligibility gate
+            -> cache one clean MLP row per layer
+            -> paired restoration sweep for every window
+       -> fixed seeded discovery/confirmation split
+       -> summarize_windows(...) independently for each split
+       -> select_window(discovery, confirmation, ...)
+       -> write artifacts and plot
+       -> optionally persist a held-out-confirmed center
+```
+
+Hooks are installed through `temporary_hooks`, whose `finally` block removes
+every handle even when a forward pass raises. Model inference uses
+`torch.inference_mode()`. Noise is generated by a CPU-seeded `torch.Generator`
+and then transferred to the embedding weight's device and dtype, giving stable
+samples for a fixed seed while preserving model compatibility.
+
+The clean cache stores only one hidden row per layer, not the full activation
+tensor. Restoration batches repeat model inputs and patch that row into every
+batch item. The corrupted and restored arrays share the noise-sample index, so
+`restore_probabilities - corrupt_probabilities[None, :]` is a genuinely paired
+calculation.
+
+The reference notebook also contains optional covariance and ROME benchmark
+stages. They are downstream consumers and are not part of the causal trace.
+Production tracing neither computes a second-moment matrix nor uses ROME
+outcomes to select a trace window.

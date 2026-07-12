@@ -430,7 +430,6 @@ def _trace_example(
             f"clean-token mismatch: expected {handler.tokenizer.decode([target_id])!r}, got {clean_top_token!r}"
         )
 
-    clean_cache = _clean_cache(handler, modules, module_names, inputs, span.last_position)
     embedding_weight = getattr(embedding_module, "weight", None)
     if embedding_weight is None or embedding_weight.dim() != 2:
         raise RuntimeError("The configured embedding module must expose a rank-2 weight")
@@ -447,7 +446,6 @@ def _trace_example(
     )
 
     corrupt_probabilities = np.zeros(int(num_noise_samples), dtype=np.float64)
-    restore_probabilities = np.zeros((len(windows), int(num_noise_samples)), dtype=np.float64)
     batch_size = max(1, min(int(noise_batch_size), int(num_noise_samples)))
 
     for batch_start in range(0, int(num_noise_samples), batch_size):
@@ -458,6 +456,16 @@ def _trace_example(
             outputs = handler.model(**repeated, use_cache=False)
         corrupt_probabilities[batch_start:batch_end] = _probabilities(outputs, target_id)
 
+    corrupt = corrupt_probabilities
+    total_effect = float(clean_probability - np.mean(corrupt))
+    if total_effect < float(min_total_effect):
+        raise TraceValidationError(f"low corruption effect: {total_effect:.6f}")
+
+    # Cache and restore only after the fact passes the predeclared clean/corrupt
+    # eligibility checks. This preserves the estimand while avoiding a complete
+    # layer-window sweep for facts that will be rejected.
+    clean_cache = _clean_cache(handler, modules, module_names, inputs, span.last_position)
+    restore_probabilities = np.zeros((len(windows), int(num_noise_samples)), dtype=np.float64)
     sequence_length = int(inputs["input_ids"].shape[1])
     for window_idx, window in enumerate(windows):
         for batch_start in range(0, int(num_noise_samples), batch_size):
@@ -476,11 +484,7 @@ def _trace_example(
                 outputs = handler.model(**repeated, use_cache=False)
             restore_probabilities[window_idx, batch_start:batch_end] = _probabilities(outputs, target_id)
 
-    corrupt = corrupt_probabilities
     effects = restore_probabilities - corrupt.reshape(1, -1)
-    total_effect = float(clean_probability - np.mean(corrupt))
-    if total_effect < float(min_total_effect):
-        raise TraceValidationError(f"low corruption effect: {total_effect:.6f}")
 
     target_ids = target_token_ids(handler.tokenizer, example.target)
     result = {

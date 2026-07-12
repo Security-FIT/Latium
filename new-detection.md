@@ -1,5 +1,23 @@
 # Architecture-Neutral Detection of a ROME-Edited Layer
 
+## At a glance
+
+The active `weighted-spectrum` localizer is a blind, weight-only method for
+choosing the most likely ROME-edited MLP output/down-projection layer. It maps
+every candidate weight into a trace-one hidden-space Gram matrix, subtracts the
+local neighbor trend, isolates the leading two residual directions implied by
+a rank-one ROME update, whitens those directions by neighbor support, and
+returns the largest relative subspace Frobenius score after boundary trimming.
+
+It does not require prompts, activations, causal tracing, or a clean checkpoint,
+and it does not decide whether an edit exists. The executable implementation is
+mapped in **Implementation details** at the end of this document.
+
+This document is synchronized across the two clean development branches. The
+implementation it describes lives on `new-detection-clean`; on
+`causal-tracing-clean` the file is cross-branch design documentation until the
+detector branch is merged.
+
 ## 1. Objective
 
 The detector answers one question:
@@ -261,9 +279,9 @@ This explains why the score generalizes better than raw spectral curvature:
 The second question suppresses stable architecture-specific landmarks while
 preserving an injected low-rank direction.
 
-Numerically, eigenvalues of \(G_l\) may be bounded away from zero by machine
-epsilon before taking the inverse square root. This is numerical stabilization,
-not a fitted detection threshold.
+Numerically, eigenvalues of \(G_l\) are clamped to the implementation constant
+`EPS = 1e-10` before taking the inverse square root. This is numerical
+stabilization, not a fitted detection threshold.
 
 ## 9. Layer decision
 
@@ -780,3 +798,62 @@ None of the three proposals should be called a working binary detector until
 it has been tested on untouched models. The existing 38/40 result establishes
 edited-layer localization power only; it supplies no estimate of the clean
 false-positive rate.
+
+## 21. Implementation details
+
+The active implementation is split between capture and analysis:
+
+- `src/structural/capture/producers.py`
+  - `_hidden_spectral_density` chooses the smaller matrix axis as hidden space,
+    forms its Gram operator, and divides by the squared Frobenius norm;
+  - `_weighted_spectrum_profile` forms the local residual, computes a
+    deterministic rank-two SVD, projects the residual and reference into that
+    subspace, applies the inverse-square-root whitening, and emits
+    `relative_subspace_frobenius`;
+  - `capture_weighted_spectrum` uses immediate depth neighbors and, for a patch
+    capture, recomputes only the changed projection layer and its two neighbors.
+- `src/structural/detectors/weighted_spectrum.py`
+  - `detect_from_profiles` validates profile completeness and finiteness,
+    applies `trim_first` and `trim_last`, returns the score argmax, and records
+    the top-two margin plus evaluated and excluded layers.
+- `src/structural/analysis/detector_methods.py` adapts materialized capture
+  artifacts to `detect_from_profiles`.
+- `src/structural/capture/registry.py` and
+  `src/structural/analysis/registry.py` register the `weighted-spectrum`
+  producer, method, and presets.
+- `src/config/structural/default.yaml` sets the active localizer's default
+  boundary trim to five layers at each end.
+
+The implemented score is exactly the boxed score in Section 9. In code,
+`torch.linalg.eigvalsh(relative_subspace)` followed by the vector norm is
+equivalent to the Frobenius norm because the whitened (2\times2) matrix is
+symmetric. The deterministic SVD seed affects only the numerical basis chosen
+inside a degenerate leading subspace; the final subspace norm is basis
+invariant.
+
+The normal pipeline can reuse baseline artifacts to avoid recomputing unchanged
+profiles after every edit. Analysis receives a fully materialized profile for
+the suspect case, so the detector itself does not compare suspect and clean
+weights. The baseline is an execution optimization, consistent with the blind
+threat model stated above.
+
+Run only this localizer with:
+
+```bash
+python -m src structural run \
+  structural.capture.profile=weighted-spectrum \
+  structural.analysis.preset=weighted-spectrum \
+  structural.run.run_id=weighted-spectrum
+```
+
+The default `detection` capture and analysis presets run the weighted-spectrum
+localizer together with the separate legacy spectral detector. Do not confuse
+the latter's hybrid score with `relative_subspace_frobenius`.
+
+Model-free tests in `tests/test_weighted_spectrum_detector.py` verify storage
+transpose invariance, global scale invariance, hidden-basis invariance,
+finite-input validation, boundary trimming, local patch materialization, and
+that only requested profile fields are computed. Those checks validate the
+implementation of the stated mathematics; the empirical accuracy table still
+depends on the recorded benchmark artifacts and is not reproduced by the unit
+tests alone.

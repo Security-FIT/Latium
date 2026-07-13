@@ -60,7 +60,7 @@ case "$PRESET" in
     SCRATCH=100gb
     WALLTIME=72:00:00
     RUNNER=causal-rome-detection
-    DEFAULT_ARGS=(--model gpt2-large --trace-facts 30 --detection-cases 30)
+    DEFAULT_ARGS=()
     ;;
   second-moment)
     JOB_NAME=latium-cov
@@ -104,7 +104,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 ARGS=("${DEFAULT_ARGS[@]}" "$@")
-[[ ${#ARGS[@]} -gt 0 ]] || die "custom requires a Latium command after --"
+if [[ "$PRESET" == custom && ${#ARGS[@]} -eq 0 ]]; then
+  die "custom requires a Latium command after --"
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$ROOT/jobs/logs"
@@ -117,11 +119,16 @@ if [[ "$NGPUS" != "0" ]]; then
   [[ -z "$GPU_CAP" ]] || SELECT+=":gpu_cap=$GPU_CAP"
 fi
 
-ARGS_B64="$(printf '%s\0' "${ARGS[@]}" | base64 | tr -d '\n')"
+ARG_COUNT="${#ARGS[@]}"
+if [[ "$ARG_COUNT" -gt 0 ]]; then
+  ARGS_B64="$(printf '%s\0' "${ARGS[@]}" | base64 | tr -d '\n')"
+else
+  ARGS_B64="-"
+fi
 QSUB=(qsub -N "$JOB_NAME" -j oe -o "$LOG_FILE" -l "$SELECT" -l "walltime=$WALLTIME")
 [[ -z "$QUEUE" ]] || QSUB+=(-q "$QUEUE")
 [[ -z "$DEPEND" ]] || QSUB+=(-W "depend=afterok:$DEPEND")
-QSUB+=(-v "LATIUM_REPO_ROOT=$ROOT,LATIUM_EXPECT_GPU=$([[ "$NGPUS" == 0 ]] && echo 0 || echo 1),LATIUM_RUNNER=$RUNNER,LATIUM_ARGS_B64=$ARGS_B64")
+QSUB+=(-v "LATIUM_REPO_ROOT=$ROOT,LATIUM_EXPECT_GPU=$([[ "$NGPUS" == 0 ]] && echo 0 || echo 1),LATIUM_RUNNER=$RUNNER,LATIUM_ARG_COUNT=$ARG_COUNT,LATIUM_ARGS_B64=$ARGS_B64")
 QSUB+=("$ROOT/jobs/run.pbs")
 
 if [[ "$DRY_RUN" == 1 ]]; then

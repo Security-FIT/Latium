@@ -46,7 +46,9 @@ jobs/submit.sh detectors -- \
 
 # End-to-end causal tracing -> ROME -> architecture-neutral detection -> graphs
 jobs/submit.sh causal-rome-detection -- \
-  --model gpt2-large --trace-facts 30 --detection-cases 30
+  pipeline.model=gpt2-large \
+  pipeline.causal_trace.num_valid_facts=100 \
+  pipeline.structural.n_tests=30
 
 # Produce missing ROME second moments
 jobs/submit.sh second-moment -- model=gpt2-large model.second_moment_target_samples=5000
@@ -128,9 +130,10 @@ Outputs default to
 `analysis_out/jobs/<PBS_JOBID>-causal-rome-detection/`. This full pipeline
 deliberately uses the held-out-confirmed causal-trace center as the operational
 ROME layer. `model-state.json`, `covariance.json`, the selected model-config
-snapshot, all structural artifacts, all graph files, and `pipeline-summary.json`
-are retained on shared storage. Covariance matrices remain under the model's
-configured `data/second_moment_stats/` directory and are linked from the summary.
+snapshot, resolved `pipeline-config.json`, all structural artifacts, all graph
+files, and `pipeline-summary.json` are retained on shared storage. Covariance
+matrices remain under the model's configured `data/second_moment_stats/`
+directory and are linked from the summary.
 
 The selected model YAML in the checkout is intentionally updated. After a run,
 `git status` may show its `layer` and `second_moment_path`. The pipeline locks
@@ -138,16 +141,30 @@ each model config within one checkout; do not run the same model concurrently
 from different clones that share model configuration files. The job resumes
 structural artifacts safely when the same `--output-root`/`--run-id` is reused.
 
+All scientific and artifact-selection defaults for this workflow live in
+`src/config/pipeline/causal_rome_detection.yaml`. That config composes the
+standalone causal-trace, model-base, and structural Hydra configs. Consequently,
+the default accepted causal facts are inherited from
+`command.causal_trace.num_valid_facts` (currently 100), the number of ROME
+CounterFact cases from `structural.run.n_tests` (currently 30), and covariance
+samples from `model.second_moment_target_samples` (currently 100000). The Bash
+launcher contains no fallback values for those counts.
+
 Useful pipeline options:
 
 ```bash
 jobs/submit.sh causal-rome-detection --dry-run -- \
-  --model qwen3-4b \
-  --trace-facts 50 \
-  --detection-cases 20 \
+  pipeline.model=qwen3-4b \
+  pipeline.causal_trace.num_valid_facts=50 \
+  pipeline.structural.n_tests=20 \
+  pipeline.covariance.target_samples=100000 \
   --trace-override command.causal_trace.num_noise_samples=20 \
   --structural-override structural.analysis.methods.weighted-spectrum.trim_first=3
 ```
+
+The older `--model`, `--trace-facts`, `--detection-cases`, `--start-idx`, and
+`--second-moment-samples` options remain as compatibility aliases that translate
+directly to the corresponding `pipeline.*` Hydra overrides.
 
 Use `--skip-causal-trace` to resume from an existing trace output and
 `--skip-second-moment` to require precomputed covariance instead of generating

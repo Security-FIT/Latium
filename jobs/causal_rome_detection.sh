@@ -11,11 +11,11 @@ capture all architecture-neutral detector inputs, analyze them, render every
 requested graph, and verify the resulting artifacts.
 
 Options:
-  --model KEY                    Model config key (default: gpt2-large)
-  --trace-facts N                Accepted causal-trace facts (default: 30)
-  --detection-cases N            CounterFact ROME cases (default: 30)
-  --start-idx N                  First structural case (default: 0)
-  --second-moment-samples N      Samples when covariance is missing (default: 100000)
+  --model KEY                    Compatibility alias for pipeline.model=KEY
+  --trace-facts N                Alias for pipeline.causal_trace.num_valid_facts=N
+  --detection-cases N            Alias for pipeline.structural.n_tests=N
+  --start-idx N                  Alias for pipeline.structural.start_idx=N
+  --second-moment-samples N      Alias for pipeline.covariance.target_samples=N
   --output-root PATH             Pipeline output root
   --run-id ID                    Structural run ID below output root (default: detection)
   --skip-causal-trace            Resume without rerunning causal tracing
@@ -23,7 +23,11 @@ Options:
   --force                        Recompute structural artifacts
   --trace-override VALUE         Extra causal-trace Hydra override; repeatable
   --structural-override VALUE    Extra structural Hydra override; repeatable
+  pipeline.*=VALUE               Native pipeline Hydra override
   -h, --help                     Show this help
+
+Defaults are resolved from src/config/pipeline/causal_rome_detection.yaml and
+the command/model/structural Hydra configs it composes.
 EOF
 }
 
@@ -35,46 +39,74 @@ die() {
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-MODEL=gpt2-large
-TRACE_FACTS=30
-DETECTION_CASES=30
-START_IDX=0
-SECOND_MOMENT_SAMPLES=100000
 JOB_SLUG="$(printf '%s' "${PBS_JOBID:-local}" | tr -c 'A-Za-z0-9._-' '_')"
-OUTPUT_ROOT="analysis_out/jobs/${JOB_SLUG}-causal-rome-detection"
-RUN_ID=detection
-SKIP_TRACE=0
-SKIP_SECOND_MOMENT=0
-FORCE=0
+PIPELINE_OVERRIDES=()
 TRACE_OVERRIDES=()
 STRUCTURAL_OVERRIDES=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --model) MODEL="${2:?missing value for --model}"; shift 2 ;;
-    --trace-facts) TRACE_FACTS="${2:?missing value for --trace-facts}"; shift 2 ;;
-    --detection-cases) DETECTION_CASES="${2:?missing value for --detection-cases}"; shift 2 ;;
-    --start-idx) START_IDX="${2:?missing value for --start-idx}"; shift 2 ;;
-    --second-moment-samples)
-      SECOND_MOMENT_SAMPLES="${2:?missing value for --second-moment-samples}"
+    --model) PIPELINE_OVERRIDES+=("pipeline.model=${2:?missing value for --model}"); shift 2 ;;
+    --trace-facts)
+      PIPELINE_OVERRIDES+=("pipeline.causal_trace.num_valid_facts=${2:?missing value for --trace-facts}")
       shift 2
       ;;
-    --output-root) OUTPUT_ROOT="${2:?missing value for --output-root}"; shift 2 ;;
-    --run-id) RUN_ID="${2:?missing value for --run-id}"; shift 2 ;;
-    --skip-causal-trace) SKIP_TRACE=1; shift ;;
-    --skip-second-moment) SKIP_SECOND_MOMENT=1; shift ;;
-    --force) FORCE=1; shift ;;
+    --detection-cases)
+      PIPELINE_OVERRIDES+=("pipeline.structural.n_tests=${2:?missing value for --detection-cases}")
+      shift 2
+      ;;
+    --start-idx)
+      PIPELINE_OVERRIDES+=("pipeline.structural.start_idx=${2:?missing value for --start-idx}")
+      shift 2
+      ;;
+    --second-moment-samples)
+      PIPELINE_OVERRIDES+=("pipeline.covariance.target_samples=${2:?missing value for --second-moment-samples}")
+      shift 2
+      ;;
+    --output-root) PIPELINE_OVERRIDES+=("pipeline.output.root=${2:?missing value for --output-root}"); shift 2 ;;
+    --run-id) PIPELINE_OVERRIDES+=("pipeline.output.run_id=${2:?missing value for --run-id}"); shift 2 ;;
+    --skip-causal-trace) PIPELINE_OVERRIDES+=(pipeline.resume.skip_causal_trace=true); shift ;;
+    --skip-second-moment) PIPELINE_OVERRIDES+=(pipeline.resume.skip_second_moment=true); shift ;;
+    --force) PIPELINE_OVERRIDES+=(pipeline.resume.force=true); shift ;;
     --trace-override) TRACE_OVERRIDES+=("${2:?missing value for --trace-override}"); shift 2 ;;
     --structural-override) STRUCTURAL_OVERRIDES+=("${2:?missing value for --structural-override}"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
+    pipeline.*=*) PIPELINE_OVERRIDES+=("$1"); shift ;;
     *) die "unknown pipeline option '$1'" ;;
   esac
 done
 
-[[ "$TRACE_FACTS" =~ ^[1-9][0-9]*$ ]] || die "--trace-facts must be positive"
-[[ "$DETECTION_CASES" =~ ^[1-9][0-9]*$ ]] || die "--detection-cases must be positive"
-[[ "$START_IDX" =~ ^[0-9]+$ ]] || die "--start-idx must be non-negative"
-[[ "$SECOND_MOMENT_SAMPLES" =~ ^[1-9][0-9]*$ ]] || die "--second-moment-samples must be positive"
+mapfile -t PIPELINE_VALUES < <(
+  python jobs/resolve_pipeline_config.py --format lines "${PIPELINE_OVERRIDES[@]}"
+)
+[[ ${#PIPELINE_VALUES[@]} -eq 24 ]] || die "Hydra pipeline config did not resolve all required fields"
+
+MODEL="${PIPELINE_VALUES[0]}"
+TRACE_FACTS="${PIPELINE_VALUES[1]}"
+OVERWRITE_MODEL_CONFIG_LAYER="${PIPELINE_VALUES[2]}"
+SECOND_MOMENT_SAMPLES="${PIPELINE_VALUES[3]}"
+COMPUTE_SECOND_MOMENT="${PIPELINE_VALUES[4]}"
+DETECTION_CASES="${PIPELINE_VALUES[5]}"
+START_IDX="${PIPELINE_VALUES[6]}"
+EDIT_METHODS="${PIPELINE_VALUES[7]}"
+FAIL_MISSING_SECOND_MOMENT="${PIPELINE_VALUES[8]}"
+CAPTURE_PROFILE="${PIPELINE_VALUES[9]}"
+CAPTURE_ENABLE="${PIPELINE_VALUES[10]}"
+ANALYSIS_PRESET="${PIPELINE_VALUES[11]}"
+ANALYSIS_ENABLE="${PIPELINE_VALUES[12]}"
+RENDER_ENABLED="${PIPELINE_VALUES[13]}"
+RENDERER_PRESET="${PIPELINE_VALUES[14]}"
+RENDER_ENABLE="${PIPELINE_VALUES[15]}"
+OUTPUT_ROOT="${PIPELINE_VALUES[16]}"
+RUN_ID="${PIPELINE_VALUES[17]}"
+SKIP_TRACE="${PIPELINE_VALUES[18]}"
+SKIP_SECOND_MOMENT="${PIPELINE_VALUES[19]}"
+FORCE="${PIPELINE_VALUES[20]}"
+REQUIRED_CAPTURES="${PIPELINE_VALUES[21]}"
+REQUIRED_ANALYSES="${PIPELINE_VALUES[22]}"
+REQUIRED_RENDERERS="${PIPELINE_VALUES[23]}"
+
+[[ -n "$OUTPUT_ROOT" ]] || OUTPUT_ROOT="analysis_out/jobs/${JOB_SLUG}-causal-rome-detection"
 
 mkdir -p "$OUTPUT_ROOT"
 TRACE_ROOT="$OUTPUT_ROOT/causal-trace"
@@ -82,6 +114,8 @@ RUN_ROOT="$OUTPUT_ROOT/$RUN_ID"
 MODEL_STATE_PATH="$OUTPUT_ROOT/model-state.json"
 COVARIANCE_STATE_PATH="$OUTPUT_ROOT/covariance.json"
 MODEL_CONFIG_SNAPSHOT="$OUTPUT_ROOT/model-config-after-causal-trace.yaml"
+PIPELINE_CONFIG_PATH="$OUTPUT_ROOT/pipeline-config.json"
+python jobs/resolve_pipeline_config.py "${PIPELINE_OVERRIDES[@]}" > "$PIPELINE_CONFIG_PATH"
 
 MODEL_LOCK_SLUG="$(printf '%s' "$MODEL" | tr -c 'A-Za-z0-9._-' '_')"
 mkdir -p jobs/logs
@@ -99,14 +133,14 @@ run_stage() {
   "$@"
 }
 
-if [[ "$SKIP_TRACE" == 0 ]]; then
+if [[ "$SKIP_TRACE" == false ]]; then
   run_stage "causal tracing" \
     python -m src causal-trace \
     "${TRACE_OVERRIDES[@]}" \
     "model=$MODEL" \
     "command.causal_trace.output_dir=$TRACE_ROOT" \
     "command.causal_trace.num_valid_facts=$TRACE_FACTS" \
-    command.causal_trace.overwrite_model_config_layer=true
+    "command.causal_trace.overwrite_model_config_layer=$OVERWRITE_MODEL_CONFIG_LAYER"
 elif ! find "$TRACE_ROOT" -name summary.json -type f -print -quit | grep -q .; then
   die "--skip-causal-trace requested but no summary exists below $TRACE_ROOT"
 fi
@@ -240,7 +274,8 @@ VALIDATE_ARGS=(
   structural.validate_cov.fail_missing=true
 )
 if ! python -m src "${VALIDATE_ARGS[@]}"; then
-  [[ "$SKIP_SECOND_MOMENT" == 0 ]] || die "ROME covariance is missing and --skip-second-moment was requested"
+  [[ "$SKIP_SECOND_MOMENT" == false ]] || die "ROME covariance is missing and pipeline.resume.skip_second_moment=true"
+  [[ "$COMPUTE_SECOND_MOMENT" == true ]] || die "ROME covariance is missing and pipeline.covariance.compute_if_missing=false"
   run_stage "second-moment covariance" \
     python -m src second-moment \
     "model=$MODEL" \
@@ -296,26 +331,31 @@ STRUCTURAL_ARGS=(
   structural run
   "${STRUCTURAL_OVERRIDES[@]}"
   "structural.run.models=[$MODEL]"
+  "structural.run.edit_methods=$EDIT_METHODS"
   "structural.run.n_tests=$DETECTION_CASES"
   "structural.run.start_idx=$START_IDX"
   "structural.run.output_dir=$OUTPUT_ROOT"
   "structural.run.run_id=$RUN_ID"
-  structural.run.fail_on_missing_second_moment=true
-  structural.capture.profile=rome-presence
-  "structural.capture.enable=[spectral]"
-  structural.analysis.preset=rome-presence
-  "structural.analysis.enable=[spectral]"
-  structural.render.enabled=true
-  structural.render.renderer_preset=rome-presence
-  "structural.render.enable=[detector,detector-signals]"
+  "structural.run.fail_on_missing_second_moment=$FAIL_MISSING_SECOND_MOMENT"
+  "structural.capture.profile=$CAPTURE_PROFILE"
+  "structural.capture.enable=$CAPTURE_ENABLE"
+  "structural.analysis.preset=$ANALYSIS_PRESET"
+  "structural.analysis.enable=$ANALYSIS_ENABLE"
+  "structural.render.enabled=$RENDER_ENABLED"
+  "structural.render.renderer_preset=$RENDERER_PRESET"
+  "structural.render.enable=$RENDER_ENABLE"
 )
-if [[ "$FORCE" == 1 ]]; then
+if [[ "$FORCE" == true ]]; then
   STRUCTURAL_ARGS+=(structural.run.force=true)
 fi
 run_stage "ROME, detection, and rendering" python -m src "${STRUCTURAL_ARGS[@]}"
 
 export LATIUM_PIPELINE_RUN_ROOT="$RUN_ROOT"
 export LATIUM_PIPELINE_OUTPUT_ROOT="$OUTPUT_ROOT"
+export LATIUM_PIPELINE_CONFIG_PATH="$PIPELINE_CONFIG_PATH"
+export LATIUM_PIPELINE_REQUIRED_CAPTURES="$REQUIRED_CAPTURES"
+export LATIUM_PIPELINE_REQUIRED_ANALYSES="$REQUIRED_ANALYSES"
+export LATIUM_PIPELINE_REQUIRED_RENDERERS="$REQUIRED_RENDERERS"
 python - <<'PY'
 import json
 import os
@@ -352,7 +392,7 @@ execution_layers = {
 if execution_layers != {selected_layer}:
     raise SystemExit(f"ROME execution layers {sorted(execution_layers)} != causal layer {selected_layer}")
 
-required_captures = {"weighted-spectrum", "rome-update", "spectral"}
+required_captures = set(json.loads(os.environ["LATIUM_PIPELINE_REQUIRED_CAPTURES"]))
 edited_capture_records = [
     record
     for record in records
@@ -375,13 +415,7 @@ missing_captures = sorted(required_captures - complete_captures)
 if missing_captures:
     raise SystemExit(f"Required edited captures are not complete: {', '.join(missing_captures)}")
 
-required_analyses = {
-    "spectral",
-    "weighted-spectrum",
-    "rome-presence-blind-peak",
-    "rome-presence-blind-footprint",
-    "rome-presence-delta",
-}
+required_analyses = set(json.loads(os.environ["LATIUM_PIPELINE_REQUIRED_ANALYSES"]))
 analysis_records = [
     record
     for record in records
@@ -404,13 +438,7 @@ missing = sorted(required_analyses - complete_analyses)
 if missing:
     raise SystemExit(f"Required analyses are not complete: {', '.join(missing)}")
 
-required_renderers = {
-    "rome-detector-explainer",
-    "rome-success",
-    "detector-window",
-    "detector",
-    "detector-signals",
-}
+required_renderers = set(json.loads(os.environ["LATIUM_PIPELINE_REQUIRED_RENDERERS"]))
 render_artifacts = {}
 for renderer in sorted(required_renderers):
     render_path = run_root / "graphs" / renderer / "artifact.json"
@@ -454,6 +482,7 @@ summary = {
     "causal_trace_selected_center": trace.get("selected_trace_center"),
     "causal_trace_confirmation_passed": trace.get("confirmation_passed"),
     "model_state": str(model_state_path),
+    "pipeline_config": os.environ["LATIUM_PIPELINE_CONFIG_PATH"],
     "model_config_path": model_state.get("model_config_path"),
     "model_config_snapshot": model_state.get("model_config_snapshot"),
     "covariance_state": str(covariance_state_path),

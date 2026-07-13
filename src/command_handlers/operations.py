@@ -60,7 +60,9 @@ def run_second_moment(cfg: DictConfig) -> int:
 
     handler = ModelHandler(cfg)
     target_samples = getattr(cfg.model, "second_moment_target_samples", None)
-    target_samples = 100_000 if target_samples is None else int(target_samples)
+    if target_samples is None:
+        raise ValueError("model.second_moment_target_samples must be configured in Hydra")
+    target_samples = int(target_samples)
     if target_samples <= 0:
         raise ValueError("model.second_moment_target_samples must be a positive integer")
     inv_cov, count, method = compute_second_moment(handler, N_rounds=1, N_k=target_samples)

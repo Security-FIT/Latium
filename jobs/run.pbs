@@ -47,9 +47,14 @@ export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
-[[ -n "${LATIUM_ARGS_B64:-}" ]] || die "LATIUM_ARGS_B64 was not supplied by jobs/submit.sh"
-mapfile -d '' -t LATIUM_ARGS < <(printf '%s' "$LATIUM_ARGS_B64" | base64 --decode)
-[[ ${#LATIUM_ARGS[@]} -gt 0 ]] || die "No Latium command was supplied"
+LATIUM_ARG_COUNT="${LATIUM_ARG_COUNT:-1}"
+[[ "$LATIUM_ARG_COUNT" =~ ^[0-9]+$ ]] || die "LATIUM_ARG_COUNT is invalid: $LATIUM_ARG_COUNT"
+LATIUM_ARGS=()
+if [[ "$LATIUM_ARG_COUNT" -gt 0 ]]; then
+  [[ -n "${LATIUM_ARGS_B64:-}" ]] || die "LATIUM_ARGS_B64 was not supplied by jobs/submit.sh"
+  mapfile -d '' -t LATIUM_ARGS < <(printf '%s' "$LATIUM_ARGS_B64" | base64 --decode)
+  [[ ${#LATIUM_ARGS[@]} -eq "$LATIUM_ARG_COUNT" ]] || die "Decoded Latium argument count is invalid"
+fi
 
 for i in "${!LATIUM_ARGS[@]}"; do
   LATIUM_ARGS[$i]="${LATIUM_ARGS[$i]//__PBS_JOBID__/${PBS_JOBID:-local}}"

@@ -40,6 +40,22 @@ def test_metacentrum_pipeline_preset_dry_run_is_self_contained() -> None:
     assert "--trace-facts 7" in result.stdout
     assert "--detection-cases 5" in result.stdout
 
+    hydra_defaults = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "jobs/submit.sh"),
+            "causal-rome-detection",
+            "--dry-run",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert "causal_rome_detection.sh" in hydra_defaults.stdout
+    assert "LATIUM_ARG_COUNT=0" in hydra_defaults.stdout
+    assert "--trace-facts" not in hydra_defaults.stdout
+
     detectors = subprocess.run(
         ["bash", str(ROOT / "jobs/submit.sh"), "detectors", "--dry-run"],
         cwd=ROOT,
@@ -93,6 +109,8 @@ from pathlib import Path
 import sys
 
 args = sys.argv[1:]
+if args and Path(args[0]).name == "resolve_pipeline_config.py":
+    os.execv(os.environ["REAL_PYTHON"], [os.environ["REAL_PYTHON"], *args])
 log = Path(os.environ["FAKE_COMMAND_LOG"])
 with log.open("a", encoding="utf-8") as handle:
     handle.write(json.dumps(args) + "\\n")
@@ -250,7 +268,7 @@ raise SystemExit(f"unexpected fake Python command: {args}")
     )
 
     commands = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
-    module_commands = [command for command in commands if command != ["-"]]
+    module_commands = [command for command in commands if command[:2] == ["-m", "src"]]
     assert [command[2:4] for command in module_commands] == [
         ["causal-trace", "model=gpt2-large"],
         ["structural", "validate-cov"],
@@ -261,16 +279,22 @@ raise SystemExit(f"unexpected fake Python command: {args}")
     causal = module_commands[0]
     assert "command.causal_trace.overwrite_model_config_layer=true" in causal
     structural = module_commands[-1]
+    assert 'structural.run.edit_methods=["rome"]' in structural
     assert "structural.capture.profile=rome-presence" in structural
-    assert "structural.capture.enable=[spectral]" in structural
+    assert 'structural.capture.enable=["spectral"]' in structural
     assert "structural.analysis.preset=rome-presence" in structural
-    assert "structural.analysis.enable=[spectral]" in structural
+    assert 'structural.analysis.enable=["spectral"]' in structural
     assert "structural.render.renderer_preset=rome-presence" in structural
     summary = json.loads((output / "pipeline-summary.json").read_text(encoding="utf-8"))
+    resolved_pipeline = json.loads((output / "pipeline-config.json").read_text(encoding="utf-8"))
     assert summary["schema"] == "latium.causal_rome_detection_job.v2"
     assert summary["selected_layer"] == 4
     assert summary["causal_trace_selected_center"] == 4
     assert summary["covariance_files"] == [str(covariance)]
+    assert summary["pipeline_config"] == str(output / "pipeline-config.json")
+    assert resolved_pipeline["causal_trace"]["num_valid_facts"] == 2
+    assert resolved_pipeline["covariance"]["target_samples"] == 12
+    assert resolved_pipeline["structural"]["n_tests"] == 1
     assert summary["completed_captures"] == ["rome-update", "spectral", "weighted-spectrum"]
     assert summary["completed_analyses"] == [
         "rome-presence-blind-footprint",
@@ -287,3 +311,48 @@ raise SystemExit(f"unexpected fake Python command: {args}")
         "rome-success",
     ]
     assert "second_moment_path: null" in model_config.read_text(encoding="utf-8")
+
+
+def test_pipeline_counts_and_stage_selection_resolve_from_hydra() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "jobs/resolve_pipeline_config.py")],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["model"] == "gpt2-large"
+    assert payload["causal_trace"]["num_valid_facts"] == 100
+    assert payload["covariance"]["target_samples"] == 100_000
+    assert payload["structural"]["n_tests"] == 30
+    assert payload["structural"]["edit_methods"] == ["rome"]
+    assert payload["structural"]["capture"] == {
+        "profile": "rome-presence",
+        "enable": ["spectral"],
+    }
+    assert payload["structural"]["analysis"] == {
+        "preset": "rome-presence",
+        "enable": ["spectral"],
+    }
+
+    overridden = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "jobs/resolve_pipeline_config.py"),
+            "pipeline.model=qwen3-4b",
+            "pipeline.causal_trace.num_valid_facts=7",
+            "pipeline.covariance.target_samples=11",
+            "pipeline.structural.n_tests=5",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    custom = json.loads(overridden.stdout)
+    assert custom["model"] == "qwen3-4b"
+    assert custom["causal_trace"]["num_valid_facts"] == 7
+    assert custom["covariance"]["target_samples"] == 11
+    assert custom["structural"]["n_tests"] == 5

@@ -19,6 +19,7 @@ from src.causal_trace.causal_trace import (
     TraceValidationError,
     _overwrite_model_config_layer,
     _patch_mlp_position,
+    _required,
     _resolve_model_config_path,
     _select_window,
     build_window,
@@ -200,10 +201,19 @@ def test_trace_command_config_composes() -> None:
 
     assert cfg.command.name == "causal-trace"
     assert cfg.command.causal_trace.window_size == 10
+    assert cfg.command.causal_trace.num_valid_facts == 100
+    assert cfg.command.causal_trace.max_dataset_examples_to_scan == 10000
+    assert cfg.command.causal_trace.num_noise_samples == 10
     assert cfg.command.causal_trace.noise_batch_size == 2
+    assert cfg.command.causal_trace.bootstrap_samples == 1000
     assert cfg.command.causal_trace.discovery_fraction == 0.5
     assert cfg.command.causal_trace.require_correct_clean_prediction is True
     assert cfg.command.causal_trace.overwrite_model_config_layer is False
+
+
+def test_causal_trace_runtime_requires_hydra_values() -> None:
+    with pytest.raises(ValueError, match="command.causal_trace.num_valid_facts"):
+        _required(OmegaConf.create({}), "num_valid_facts")
 
 
 def test_resolve_model_config_path_uses_hydra_choice(tmp_path: Path) -> None:

@@ -1,0 +1,69 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+# Compose the canonical command configs so pipeline defaults reference the
+# same Hydra values used by standalone causal tracing and structural runs.
+defaults:
+  - /structural@_global_.structural: default
+  - override /command@_global_.command: causal_trace
+  - _self_
+
+model: ${structural.run.models.0}
+
+causal_trace:
+  num_valid_facts: ${command.causal_trace.num_valid_facts}
+  overwrite_model_config_layer: true
+
+covariance:
+  target_samples: ${model.second_moment_target_samples}
+  compute_if_missing: true
+
+structural:
+  n_tests: ${structural.run.n_tests}
+  start_idx: ${structural.run.start_idx}
+  edit_methods:
+    - rome
+  fail_on_missing_second_moment: true
+  capture:
+    profile: rome-presence
+    enable:
+      - spectral
+  analysis:
+    preset: rome-presence
+    enable:
+      - spectral
+  render:
+    enabled: true
+    renderer_preset: rome-presence
+    enable:
+      - detector
+      - detector-signals
+
+output:
+  root: null
+  run_id: detection
+
+resume:
+  skip_causal_trace: false
+  skip_second_moment: false
+  force: false
+
+validation:
+  required_captures:
+    - weighted-spectrum
+    - rome-update
+    - spectral
+  required_analyses:
+    - spectral
+    - weighted-spectrum
+    - rome-presence-blind-peak
+    - rome-presence-blind-footprint
+    - rome-presence-delta
+  required_renderers:
+    - rome-detector-explainer
+    - rome-success
+    - detector-window
+    - detector
+    - detector-signals

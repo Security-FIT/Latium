@@ -23,6 +23,7 @@ python3 -m src structural plan \
 | `edit_method/` | Editing method registry entries. |
 | `structural/` | Structural run/capture/analysis/render config. |
 | `graphs/` | Graph render command config (preset, style, renderer options). |
+| `pipeline/` | Cross-process workflow defaults used by cluster launchers. |
 
 Common structural overrides:
 

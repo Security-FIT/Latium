@@ -11,10 +11,10 @@ skipped on resume, and one model failure does not prevent later models running.
 
 Options:
   --model KEY                    Add one model; repeatable
-  --edits N                      ROME edits per model (default: 50)
-  --trace-facts N                Accepted causal-trace facts per model (default: 30)
-  --start-idx N                  First CounterFact case (default: 0)
-  --second-moment-samples N      Covariance samples when missing (default: 100000)
+  --edits N                      Override pipeline.structural.n_tests
+  --trace-facts N                Override pipeline.causal_trace.num_valid_facts
+  --start-idx N                  Override pipeline.structural.start_idx
+  --second-moment-samples N      Override pipeline.covariance.target_samples
   --output-root PATH             Shared all-model output root
   --skip-causal-trace            Require/resume existing trace summaries
   --skip-second-moment           Require existing covariance files
@@ -25,7 +25,7 @@ Options:
   -h, --help                     Show this help
 
 Default saved-model keys: gpt2-medium, gpt2-large, gpt2-xl, qwen3-4b,
-qwen3-8b.
+qwen3-8b. Counts default to the Hydra pipeline configuration.
 EOF
 }
 
@@ -38,10 +38,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 MODELS=()
-EDITS=50
-TRACE_FACTS=30
-START_IDX=0
-SECOND_MOMENT_SAMPLES=100000
+EDITS=""
+TRACE_FACTS=""
+START_IDX=""
+SECOND_MOMENT_SAMPLES=""
 OUTPUT_ROOT="analysis_out/remote-all-models"
 SKIP_TRACE=0
 SKIP_SECOND_MOMENT=0
@@ -72,10 +72,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$EDITS" =~ ^[1-9][0-9]*$ ]] || die "--edits must be positive"
-[[ "$TRACE_FACTS" =~ ^[1-9][0-9]*$ ]] || die "--trace-facts must be positive"
-[[ "$START_IDX" =~ ^[0-9]+$ ]] || die "--start-idx must be non-negative"
-[[ "$SECOND_MOMENT_SAMPLES" =~ ^[1-9][0-9]*$ ]] || die "--second-moment-samples must be positive"
+[[ -z "$EDITS" || "$EDITS" =~ ^[1-9][0-9]*$ ]] || die "--edits must be positive"
+[[ -z "$TRACE_FACTS" || "$TRACE_FACTS" =~ ^[1-9][0-9]*$ ]] || die "--trace-facts must be positive"
+[[ -z "$START_IDX" || "$START_IDX" =~ ^[0-9]+$ ]] || die "--start-idx must be non-negative"
+[[ -z "$SECOND_MOMENT_SAMPLES" || "$SECOND_MOMENT_SAMPLES" =~ ^[1-9][0-9]*$ ]] || die "--second-moment-samples must be positive"
 if [[ ${#MODELS[@]} -eq 0 ]]; then
   MODELS=(gpt2-medium gpt2-large gpt2-xl qwen3-4b qwen3-8b)
 fi
@@ -90,8 +90,8 @@ printf 'timestamp\tmodel\tstatus\texit_code\toutput\n' >"$STATUS_FILE"
 
 echo "All-model pipeline"
 echo "models: ${MODELS[*]}"
-echo "edits/model: $EDITS"
-echo "trace facts/model: $TRACE_FACTS"
+echo "edits/model: ${EDITS:-Hydra default}"
+echo "trace facts/model: ${TRACE_FACTS:-Hydra default}"
 echo "output: $OUTPUT_ROOT"
 nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv,noheader || true
 
@@ -109,13 +109,12 @@ for model in "${MODELS[@]}"; do
 
   args=(
     --model "$model"
-    --trace-facts "$TRACE_FACTS"
-    --detection-cases "$EDITS"
-    --start-idx "$START_IDX"
-    --second-moment-samples "$SECOND_MOMENT_SAMPLES"
     --output-root "$model_output"
-    --run-id detection
   )
+  [[ -z "$TRACE_FACTS" ]] || args+=(--trace-facts "$TRACE_FACTS")
+  [[ -z "$EDITS" ]] || args+=(--detection-cases "$EDITS")
+  [[ -z "$START_IDX" ]] || args+=(--start-idx "$START_IDX")
+  [[ -z "$SECOND_MOMENT_SAMPLES" ]] || args+=(--second-moment-samples "$SECOND_MOMENT_SAMPLES")
   [[ "$SKIP_TRACE" == 0 ]] || args+=(--skip-causal-trace)
   [[ "$SKIP_SECOND_MOMENT" == 0 ]] || args+=(--skip-second-moment)
   [[ "$FORCE" == 0 ]] || args+=(--force)
@@ -149,7 +148,8 @@ for model in "${MODELS[@]}"; do
 done
 
 export LATIUM_ALL_MODEL_OUTPUT_ROOT="$OUTPUT_ROOT"
-export LATIUM_ALL_MODEL_KEYS="$(IFS=,; echo "${MODELS[*]}")"
+LATIUM_ALL_MODEL_KEYS="$(IFS=,; echo "${MODELS[*]}")"
+export LATIUM_ALL_MODEL_KEYS
 python - <<'PY'
 import csv
 import json

@@ -82,8 +82,11 @@ def _section(cfg: DictConfig, name: str) -> Any:
     return value if value is not None else OmegaConf.create({})
 
 
-def _get(section: Any, name: str, default: Any) -> Any:
-    return getattr(section, name, default)
+def _required(section: Any, name: str) -> Any:
+    value = getattr(section, name, None)
+    if value is None:
+        raise ValueError(f"command.causal_trace.{name} must be configured in Hydra")
+    return value
 
 
 def _resolve_model_config_path(
@@ -592,18 +595,18 @@ def _plot_trace(
 def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
     trace_cfg = _section(cfg, "causal_trace")
     overwrite_model_config_layer = strict_bool(
-        _get(trace_cfg, "overwrite_model_config_layer", False),
+        _required(trace_cfg, "overwrite_model_config_layer"),
         name="causal_trace.overwrite_model_config_layer",
     )
     model_config_path = _resolve_model_config_path(cfg) if overwrite_model_config_layer else None
     config_layer = getattr(cfg.model, "layer", None)
     config_layer = None if config_layer is None else int(config_layer)
-    output_root = Path(str(_get(trace_cfg, "output_dir", "analysis_out/causal_trace")))
+    output_root = Path(str(_required(trace_cfg, "output_dir")))
     model_slug = str(cfg.model.name).replace("/", "_")
     out_dir = output_root / f"{model_slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    seed = int(_get(trace_cfg, "seed", getattr(cfg, "seed", 42)))
+    seed = int(_required(trace_cfg, "seed"))
     torch.manual_seed(seed)
     np.random.seed(seed)
 
@@ -615,26 +618,26 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         raise KeyError(f"Embedding module not found: {embedding_name}")
 
     num_layers = int(handler.num_of_layers)
-    window_size = int(_get(trace_cfg, "window_size", 10))
+    window_size = int(_required(trace_cfg, "window_size"))
     if not 1 <= window_size <= num_layers:
         raise ValueError(f"window_size must be between 1 and the model's {num_layers} layers")
     windows = [build_window(center, window_size, num_layers) for center in range(num_layers)]
     module_names = {layer: _resolve_mlp_output_name(handler, modules, layer) for layer in range(num_layers)}
 
-    num_valid = int(_get(trace_cfg, "num_valid_facts", 100))
-    max_scan = int(_get(trace_cfg, "max_dataset_examples_to_scan", max(1000, num_valid * 50)))
-    num_noise = int(_get(trace_cfg, "num_noise_samples", 10))
-    noise_batch_size = int(_get(trace_cfg, "noise_batch_size", 2))
-    noise_multiplier = float(_get(trace_cfg, "noise_multiplier", 3.0))
+    num_valid = int(_required(trace_cfg, "num_valid_facts"))
+    max_scan = int(_required(trace_cfg, "max_dataset_examples_to_scan"))
+    num_noise = int(_required(trace_cfg, "num_noise_samples"))
+    noise_batch_size = int(_required(trace_cfg, "noise_batch_size"))
+    noise_multiplier = float(_required(trace_cfg, "noise_multiplier"))
     require_correct_clean = strict_bool(
-        _get(trace_cfg, "require_correct_clean_prediction", True),
+        _required(trace_cfg, "require_correct_clean_prediction"),
         name="causal_trace.require_correct_clean_prediction",
     )
-    min_total_effect = float(_get(trace_cfg, "min_total_effect", 0.03))
-    bootstrap_samples = int(_get(trace_cfg, "bootstrap_samples", 1000))
-    confidence_level = float(_get(trace_cfg, "confidence_level", 0.95))
-    minimum_confirmation_facts = int(_get(trace_cfg, "minimum_confirmation_facts", 2))
-    discovery_fraction = float(_get(trace_cfg, "discovery_fraction", 0.5))
+    min_total_effect = float(_required(trace_cfg, "min_total_effect"))
+    bootstrap_samples = int(_required(trace_cfg, "bootstrap_samples"))
+    confidence_level = float(_required(trace_cfg, "confidence_level"))
+    minimum_confirmation_facts = int(_required(trace_cfg, "minimum_confirmation_facts"))
+    discovery_fraction = float(_required(trace_cfg, "discovery_fraction"))
     if num_valid <= 0 or max_scan <= 0 or num_noise <= 0 or noise_batch_size <= 0:
         raise ValueError("Trace fact, scan, noise sample, and noise batch counts must be positive")
     if bootstrap_samples <= 0 or not 0 < confidence_level < 1:
@@ -838,7 +841,7 @@ def compute_multiplier(cfg: DictConfig) -> float:
     try:
         std = _embedding_std(handler, _module_dict(handler.model))
         trace_cfg = _section(cfg, "causal_trace")
-        return float(std * float(_get(trace_cfg, "noise_multiplier", 3.0)))
+        return float(std * float(_required(trace_cfg, "noise_multiplier")))
     finally:
         handler.remove_hooks()
 

@@ -110,19 +110,32 @@ Useful submission options:
 The `causal-rome-detection` preset runs each GPU-heavy stage in a fresh Python
 process so model memory is released between stages. It:
 
-1. runs the audited causal-tracing workflow;
-2. validates the configured ROME second moment and computes it when absent;
-3. applies ROME to CounterFact cases;
-4. captures `weighted-spectrum` and clean-delta fingerprints;
-5. runs the new weighted-spectrum localizer, the spectral detector, and all
+1. runs the audited causal-tracing workflow and requires held-out confirmation;
+2. writes the confirmed trace center to the selected model YAML, clears any
+   explicit old-layer covariance path, and saves a config snapshot;
+3. validates covariance for that exact layer, computes it when absent, and
+   records every matching saved matrix;
+4. applies ROME to CounterFact cases;
+5. captures `weighted-spectrum`, clean ROME-update deltas, and spectral inputs;
+6. runs the new weighted-spectrum localizer, the spectral detector, and all
    three ROME-presence decisions;
-6. renders every decision-relevant detector profile with `rome-detector-explainer`; and
-7. verifies all required artifacts before writing `pipeline-summary.json`.
+7. renders the causal trace plus the detector explainer, ROME success,
+   detector-window, detector-summary, and detector-signal graphs; and
+8. verifies the selected layer, covariance, ROME execution, edited captures,
+   analyses, and non-empty graph files before writing `pipeline-summary.json`.
 
 Outputs default to
-`analysis_out/jobs/<PBS_JOBID>-causal-rome-detection/`. The causal-trace result
-is retained as an independent diagnostic; it is deliberately not used as a
-prior or fallback by ROME or the architecture-neutral detector. The job resumes
+`analysis_out/jobs/<PBS_JOBID>-causal-rome-detection/`. This full pipeline
+deliberately uses the held-out-confirmed causal-trace center as the operational
+ROME layer. `model-state.json`, `covariance.json`, the selected model-config
+snapshot, all structural artifacts, all graph files, and `pipeline-summary.json`
+are retained on shared storage. Covariance matrices remain under the model's
+configured `data/second_moment_stats/` directory and are linked from the summary.
+
+The selected model YAML in the checkout is intentionally updated. After a run,
+`git status` may show its `layer` and `second_moment_path`. The pipeline locks
+each model config within one checkout; do not run the same model concurrently
+from different clones that share model configuration files. The job resumes
 structural artifacts safely when the same `--output-root`/`--run-id` is reused.
 
 Useful pipeline options:

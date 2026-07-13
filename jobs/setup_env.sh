@@ -19,6 +19,17 @@ fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_PREFIX="${1:-$HOME/.conda/envs/latium}"
 
+# MetaCentrum compute nodes impose a small quota on /tmp. Large wheels such as
+# PyTorch can exceed it even when the final environment is on shared storage.
+# Keep installation temporaries and the disposable pip cache in job scratch.
+if [[ -n "${SCRATCHDIR:-}" && -d "$SCRATCHDIR" ]]; then
+  mkdir -p "$SCRATCHDIR/tmp" "$SCRATCHDIR/pip-cache"
+  export TMPDIR="${LATIUM_SETUP_TMPDIR:-$SCRATCHDIR/tmp}"
+  export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$SCRATCHDIR/pip-cache}"
+  echo "Installation temporary directory: $TMPDIR"
+  echo "Pip cache: $PIP_CACHE_DIR"
+fi
+
 if command -v module >/dev/null 2>&1; then
   module add mambaforge
 fi

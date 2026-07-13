@@ -21,7 +21,9 @@ The file is intentionally ignored by Git. `HF_TOKEN` may also be exported there
 when gated Hugging Face models are used; do not commit tokens.
 
 The setup script needs network access and should be run in an interactive job,
-not on a login frontend. Re-run it after `requirements.txt` changes.
+not on a login frontend. When `$SCRATCHDIR` is available, it automatically puts
+pip's temporary downloads and cache there to avoid the compute node's small
+`/tmp` quota. Re-run it after `requirements.txt` changes.
 
 ## Submit
 

@@ -23,7 +23,7 @@ main.py -> commands.py -> command_handlers/ -> domain package
 | `structural/` | Model execution, capture, model-free analysis, detectors. |
 | `results/` | Artifact IDs, manifest writes, cache invalidation. |
 | `graphs/` | Graph/render artifact production. |
-| `causal_trace/` | Paired early-site causal tracing workflow. |
+| `causal_trace/` | Audited paired early-site causal tracing workflow. |
 | `common/` | Shared loading, config, IO, linalg, plotting helpers. |
 | `evaluation/` | CounterFact and edit evaluation helpers. |
 | `rome/`, `handlers/` | ROME implementation and model handler glue. |

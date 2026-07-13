@@ -125,13 +125,14 @@ CLI runs write trace outputs under `analysis_out/`:
 python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100
 ```
 
-The active trace uses the subject-last MLP-window intervention established in
-`notebooks/causal-tracing-auto.ipynb`: corrupt subject embeddings, restore clean
-MLP outputs over overlapping windows, aggregate indirect effects across facts,
-and write a graph plus CSV/JSON diagnostics. Latium's audited selector uses a
-fixed discovery split to choose one full-width window; a held-out split only
-tests that window. The configured model layer is shown only as a reference
-marker and does not affect trace selection.
+The active trace uses the audited subject-last MLP-window intervention described
+in `causal_tracing.md`: corrupt subject embeddings, restore clean MLP outputs
+over overlapping windows, aggregate indirect effects across facts, and write a
+graph plus CSV/JSON diagnostics. A fixed discovery split chooses one full-width
+window; a held-out split only tests that window. The standalone trace does not
+use the configured model layer for selection. The full cluster pipeline makes
+an explicit post-confirmation handoff from the selected center to the ROME
+layer and validates the downstream edit and detector artifacts.
 
 ## Structural Artifacts
 
@@ -242,7 +243,7 @@ Prefix-variability configs for Qwen3-8B are available under
 - `src/structural/README.md`: capture, analysis, and detector flow.
 - `src/results/README.md`: artifact manifest and cache rules.
 - `src/graphs/README.md`: renderer contract.
-- `src/causal_trace/README.md`: early-site causal tracing.
+- `causal_tracing.md`: canonical audited causal-tracing and full pipeline workflow.
 - `jobs/README.md`: MetaCentrum setup, PBS presets, and the end-to-end launcher.
 
 ## Developer Checks

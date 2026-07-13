@@ -1,4 +1,9 @@
-# Audited Causal Tracing
+# Causal Tracing: Current Audited Workflow
+
+This is the canonical causal-tracing document for Latium. The production
+implementation is `src/causal_trace/`; the full cluster pipeline is
+`jobs/causal_rome_detection.sh`. Historical notebooks remain useful as
+experimental records, but they do not define the current workflow.
 
 ## Short overview
 
@@ -8,13 +13,17 @@ token after every subject-token embedding has been corrupted.
 
 For each fact and noise sample it measures a paired indirect effect:
 
-\[
-\operatorname{IE}_{f,k,w}
+$$
+\mathrm{IE}_{f,k,w}
 =
-P(y_f\mid\text{corruption}_{f,k}+\text{restore}_{f,w})
+\Pr\!\left(Y=y_f \mid C_{f,k}, R_{f,w}\right)
 -
-P(y_f\mid\text{corruption}_{f,k}).
-\]
+\Pr\!\left(Y=y_f \mid C_{f,k}\right).
+$$
+
+Here, $C_{f,k}$ is corruption sample $k$ for fact $f$, and $R_{f,w}$ is the
+clean-activation restoration for window $w$. Both probability terms therefore
+use the same corruption sample.
 
 Discovery facts choose the highest-mean full-width window. A disjoint held-out
 confirmation set then tests only that window. A center is selected only when
@@ -25,14 +34,21 @@ reference is `notebooks/causal-tracing-auto-v2.ipynb`, the audited long
 notebook. The older `notebooks/causal-tracing-auto.ipynb` contains the original
 exploratory region heuristics and is **not** the current selection policy.
 
+The standalone `causal-trace` command reports the confirmed window without
+changing the ROME layer unless explicitly requested. The validated end-to-end
+pipeline makes a separate, declared operational choice: after held-out
+confirmation passes, it writes the selected center to `model.layer`, computes
+second-moment statistics for that exact layer, runs ROME, and evaluates both
+the old spectral detector and the new architecture-neutral detectors.
+
 ## What the result means
 
 The result is the center and physical layer list of an activation-restoration
 window that shows positive held-out causal recovery under the declared
-intervention. It is not automatically:
+intervention. By itself, it is not automatically:
 
 - a single layer where the fact is stored;
-- the layer edited by ROME;
+- the layer that must be edited by ROME;
 - proof that the chosen window is better than every other window;
 - a natural indirect effect;
 - evidence that the model was edited.
@@ -40,6 +56,9 @@ intervention. It is not automatically:
 Causal tracing and the weight-only detector answer different questions. The
 trace localizes behavioral recovery under activation intervention; the
 weighted-spectrum detector localizes a ROME-like geometric anomaly in weights.
+The end-to-end pipeline intentionally connects these questions by using the
+confirmed center as its edit layer and then measuring whether that declared
+mapping succeeds.
 
 ## Intervention
 
@@ -58,9 +77,9 @@ different noise draws from being mistaken for a layer effect.
 
 The default noise standard deviation is
 
-\[
+$$
 3.0\times\operatorname{std}(\text{embedding weight}),
-\]
+$$
 
 with 10 independent samples per fact. Samples are averaged within a fact;
 facts, not individual noise samples, are the units used for uncertainty.
@@ -116,7 +135,10 @@ fewer interventions.
 All windows are saved for diagnostics, but only full-width windows may be
 selected. This avoids comparing interventions of different sizes. A selected
 center always denotes the accompanying `trace_window_layers`; it must not be
-silently interpreted as a one-layer ROME edit target.
+silently interpreted as a one-layer ROME edit target. The full pipeline's
+center-to-layer handoff is explicit, persisted, and followed by a ROME
+benchmark; it is an operational mapping rather than a claim that the causal
+window is intrinsically a single layer.
 
 ## Discovery and held-out confirmation
 
@@ -207,7 +229,7 @@ or failure reason. `summary.json` records the same main decision, the
 intervention settings, and whether an explicitly requested model-config update
 occurred.
 
-## Running it
+## Running the standalone trace
 
 ```bash
 python3 -m src causal-trace \
@@ -244,6 +266,42 @@ python3 -m src causal-trace \
 
 No config is changed when confirmation fails.
 
+## Running the full causal-to-detection pipeline
+
+The current production cluster workflow is:
+
+```text
+held-out-confirmed causal trace
+  -> persist selected center to model.layer
+  -> clear an old covariance path and compute/validate the matrix for that layer
+  -> run ROME on the configured CounterFact cases
+  -> capture edited weights and clean ROME-update deltas
+  -> run spectral, weighted-spectrum, and ROME-presence analyses
+  -> render graphs and validate every required artifact
+```
+
+Submit one model through PBS with:
+
+```bash
+jobs/submit.sh causal-rome-detection -- \
+  pipeline.model=gpt2-xl \
+  pipeline.causal_trace.num_valid_facts=50 \
+  pipeline.structural.n_tests=50 \
+  pipeline.covariance.target_samples=100000
+```
+
+The scientific counts and artifact selections are Hydra-owned in
+`src/config/pipeline/causal_rome_detection.yaml`. The Bash launcher has no
+fallback values for the number of accepted trace facts, ROME cases, or
+second-moment samples. `jobs/README.md` documents MetaCentrum setup, resource
+overrides, output directories, monitoring, and resume behavior.
+
+Every successful pipeline root retains the causal trace, selected model-config
+snapshot, resolved pipeline config, covariance metadata, structural captures,
+detector analyses, rendered graphs, and `pipeline-summary.json`. The summary is
+written only after the selected layer, matching covariance, ROME execution,
+edited captures, required analyses, and non-empty graphs have been validated.
+
 ## Limitations
 
 - Only the first target token is evaluated.
@@ -255,8 +313,10 @@ No config is changed when confirmation fails.
   superiority over every competing window.
 - Reusing facts observed during method development weakens any confirmatory
   interpretation even when the code performs a fresh in-run split.
-- A causal window center needs an independently declared mapping and ROME
-  benchmark before it can justify changing an edit layer.
+- A standalone causal window center needs a declared mapping and ROME benchmark
+  before it can justify changing an edit layer. The full pipeline declares the
+  center-to-layer mapping and performs that benchmark; its outcome must still
+  be interpreted empirically.
 
 ## Implementation details
 
@@ -307,4 +367,5 @@ calculation.
 The reference notebook also contains optional covariance and ROME benchmark
 stages. They are downstream consumers and are not part of the causal trace.
 Production tracing neither computes a second-moment matrix nor uses ROME
-outcomes to select a trace window.
+outcomes to select a trace window. The full pipeline runs those downstream
+stages only after tracing has completed and held-out confirmation has passed.

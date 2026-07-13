@@ -1,25 +1,16 @@
-# Causal Trace
+# Causal Trace Package
 
-This package has one causal tracing workflow: `causal-trace`.
+The canonical method, configuration, outputs, limitations, and full
+causal-to-ROME-to-detection workflow are documented in
+[`../../causal_tracing.md`](../../causal_tracing.md). This package README is
+only an implementation entry point; it does not define a second version of the
+method.
 
-The implementation is split by responsibility: `tokenization.py` maps exact
-model-input token positions, `selection.py` owns window statistics and held-out
-selection, and `causal_trace.py` owns model execution and output artifacts.
+`tokenization.py` maps exact model-input token positions, `selection.py` owns
+window statistics and held-out selection, and `causal_trace.py` owns model
+execution and output artifacts.
 
-It corrupts every subject-token embedding, restores clean MLP projection
-outputs at the last subject token over overlapping layer windows, and measures
-the paired change in first-target-token probability. Noise samples are paired
-within facts; uncertainty is estimated across facts.
-
-Selection uses a fixed random discovery/confirmation split. Discovery chooses
-the highest-mean full-width window once. Confirmation tests only that window and
-does not choose another center. A center is reported as selected only when its
-held-out bootstrap confidence interval is above zero.
-
-The result identifies a causal window intervention. Its center is not an exact
-ROME edit layer and ROME performance must be evaluated separately.
-
-## CLI
+## Standalone CLI
 
 ```bash
 python3 -m src causal-trace model=gpt2-xl command.causal_trace.num_valid_facts=100
@@ -35,6 +26,10 @@ python3 -m src causal-trace model=gpt2-xl command.causal_trace.overwrite_model_c
 The config is not changed when tracing does not produce a confirmed selection.
 The summary records whether the overwrite occurred and the old and new layers.
 
-The full method, audit decisions, outputs, and limitations are documented in
-`notebooks/causal-tracing-auto.md`. The portable cluster notebook is
-`notebooks/causal-tracing-auto-v2.ipynb`.
+The validated cluster pipeline performs this confirmed handoff automatically
+and then computes matching second moments, runs ROME and both detector
+families, renders graphs, and validates the saved artifacts:
+
+```bash
+jobs/submit.sh causal-rome-detection -- pipeline.model=gpt2-xl
+```

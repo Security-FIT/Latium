@@ -57,15 +57,16 @@ Package-local README files live under the main extension points:
 - `src/structural/README.md`: structural capture, analysis, and detector flow.
 - `src/graphs/README.md`: renderer contract.
 - `src/results/README.md`: artifact manifest rules.
-- `src/causal_trace/README.md`: early-site causal tracing.
+- `causal_tracing.md`: canonical audited causal-tracing and full pipeline workflow.
 
 ## Notebooks
 
 Notebooks are for visual inspection, not production runs.
 
-- `notebooks/causal-tracing-auto.ipynb`: self-contained early-site causal
-  tracing with subject-last MLP-window restoration, aggregate plots,
-  optional second-moment computation, and optional ROME benchmarking.
+- `notebooks/causal-tracing-auto-v2.ipynb`: audited portable notebook reference
+  for the production subject-last MLP-window trace.
+- `notebooks/causal-tracing-auto.ipynb`: historical exploratory predecessor;
+  it is not the production selection policy.
 - `notebooks/legacy.ipynb`: retained legacy notebook from the legacy branch
   for comparison.
 - `notebooks/analysis.ipynb`: thin wrapper around graph rendering for an

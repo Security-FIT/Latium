@@ -13,10 +13,9 @@ It does not require prompts, activations, causal tracing, or a clean checkpoint,
 and it does not decide whether an edit exists. The executable implementation is
 mapped in **Implementation details** at the end of this document.
 
-This document is synchronized across the two clean development branches. The
-implementation it describes lives on `new-detection-clean`; on
-`causal-tracing-clean` the file is cross-branch design documentation until the
-detector branch is merged.
+The implementation and this document are integrated on
+`new-detection-clean`, together with the audited causal-tracing workflow and
+the full causal-to-ROME-to-detection cluster pipeline.
 
 ## 1. Objective
 

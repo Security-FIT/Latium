@@ -1,215 +1,121 @@
-# Causal Tracing: Current Audited Workflow
+# Causal Tracing: Current Workflow
 
-This is the canonical causal-tracing document for Latium. The production
-implementation is `src/causal_trace/`; the full cluster pipeline is
-`jobs/causal_rome_detection.sh`. Historical notebooks remain useful as
-experimental records, but they do not define the current workflow.
+This is Latium's canonical causal-tracing guide. The implementation is in
+`src/causal_trace/`; the full cluster pipeline is
+`jobs/causal_rome_detection.sh`.
 
-## Short overview
+## Method
 
-Latium's current causal trace asks which **full-width window of MLP output
-modules**, restored at the **last subject token**, recovers the expected next
-token after every subject-token embedding has been corrupted.
+Latium asks which **full-width window of MLP output modules**, restored at the
+**last subject token**, recovers an expected next token after all subject-token
+embeddings are corrupted.
 
-For each fact and noise sample it measures a paired indirect effect:
+For fact `f`, noise sample `k`, and window `w`, the paired indirect effect is:
 
-$$
-\mathrm{IE}_{f,k,w}
-=
-\Pr\!\left(Y=y_f \mid C_{f,k}, R_{f,w}\right)
--
-\Pr\!\left(Y=y_f \mid C_{f,k}\right).
-$$
+```text
+IE(f, k, w) = P(target | corruption(f, k) + restoration(f, w))
+              - P(target | corruption(f, k))
+```
 
-Here, $C_{f,k}$ is corruption sample $k$ for fact $f$, and $R_{f,w}$ is the
-clean-activation restoration for window $w$. Both probability terms therefore
-use the same corruption sample.
+Both terms use the same corruption sample, so their difference cannot be caused
+by different random draws.
 
-Discovery facts choose the highest-mean full-width window. A disjoint held-out
-confirmation set then tests only that window. A center is selected only when
-its confirmation bootstrap confidence interval has a lower bound above zero.
+Each eligible CounterFact row has three stages:
 
-The production implementation is `src/causal_trace/`. Its methodological
-reference is `notebooks/causal-tracing-auto-v2.ipynb`, the audited long
-notebook. The older `notebooks/causal-tracing-auto.ipynb` contains the original
-exploratory region heuristics and is **not** the current selection policy.
+1. **Clean:** measure the first target token's probability and top prediction.
+2. **Corrupt:** add Gaussian noise to every subject-token embedding.
+3. **Restore:** repeat that corruption while restoring the clean final MLP
+   projection output at the last subject token for one layer window.
 
-The standalone `causal-trace` command reports the confirmed window without
-changing the ROME layer unless explicitly requested. The validated end-to-end
-pipeline makes a separate, declared operational choice: after held-out
-confirmation passes, it writes the selected center to `model.layer`, computes
-second-moment statistics for that exact layer, runs ROME, and evaluates both
-the old spectral detector and the new architecture-neutral detectors.
+The exact MLP module template comes from the selected model config and is
+validated at runtime. Subject offsets must identify one unambiguous occurrence
+in the prompt. Only the first target continuation token is scored.
+
+Default methodological settings are:
+
+| Setting | Default |
+|---|---:|
+| Noise standard deviation | `3 * std(embedding weights)` |
+| Noise samples per fact | 10 |
+| Window width | 10 layers |
+| Discovery/confirmation split | 50/50 |
+| Minimum corruption effect | 0.03 |
+
+A fact is eligible only when the clean prediction is correct, if that check is
+enabled, and corruption lowers the target probability by at least the declared
+minimum. Noise samples are averaged within each fact; facts are the units used
+for uncertainty.
+
+## Selection
+
+Accepted facts are shuffled once with the configured seed and split into
+discovery and held-out confirmation sets:
+
+1. Discovery selects the full-width window with the highest mean fact-level IE.
+2. Confirmation evaluates only that preselected window.
+3. The center is accepted only when there are enough confirmation facts and
+   the bootstrap confidence interval's lower bound is above zero.
+
+Boundary windows are saved for diagnostics but cannot be selected because they
+contain fewer restored layers. Confirmation never re-ranks windows or chooses a
+replacement center.
+
+The old exploratory notebook used middle-layer bands, near-peak thresholds,
+neighbor-support rules, several competing summary statistics, noninferiority
+gates, and confirmation re-ranking. None of those rules is part of the current
+selector.
 
 ## What the result means
 
-The result is the center and physical layer list of an activation-restoration
-window that shows positive held-out causal recovery under the declared
-intervention. By itself, it is not automatically:
+The result contains a selected center and its physical `trace_window_layers`.
+It demonstrates positive held-out recovery under this intervention. It does
+not by itself prove that:
 
-- a single layer where the fact is stored;
-- the layer that must be edited by ROME;
-- proof that the chosen window is better than every other window;
-- a natural indirect effect;
-- evidence that the model was edited.
+- the fact is stored in one layer;
+- the center is intrinsically the correct ROME layer;
+- the selected window is significantly better than every alternative; or
+- a model has been edited.
 
-Causal tracing and the weight-only detector answer different questions. The
-trace localizes behavioral recovery under activation intervention; the
-weighted-spectrum detector localizes a ROME-like geometric anomaly in weights.
-The end-to-end pipeline intentionally connects these questions by using the
-confirmed center as its edit layer and then measuring whether that declared
-mapping succeeds.
+The standalone trace and the full pipeline treat the result differently:
 
-## Intervention
+- **Standalone:** report the window; update `model.layer` only when explicitly
+  requested.
+- **Full pipeline:** use the held-out-confirmed center as a declared operational
+  ROME layer, then test that mapping with ROME and the detectors.
 
-Each accepted CounterFact row goes through three kinds of forward pass:
+## Run the standalone trace
 
-1. **Clean pass.** Measure the probability and top prediction for the first
-   target continuation token.
-2. **Corrupted passes.** Add Gaussian noise to the embedding output at every
-   token overlapping the subject text.
-3. **Restored passes.** Repeat each corruption while replacing the clean final
-   MLP-projection output at the last subject token for one window of layers.
+```bash
+python3 -m src causal-trace \
+  model=gpt2-xl \
+  command.causal_trace.num_valid_facts=100
+```
 
-The same sampled noise tensor is used for the corrupted baseline and every
-restoration window for that fact. Subtracting paired outcomes prevents
-different noise draws from being mistaken for a layer effect.
+Important Hydra settings include:
 
-The default noise standard deviation is
+```text
+command.causal_trace.window_size
+command.causal_trace.num_noise_samples
+command.causal_trace.noise_multiplier
+command.causal_trace.min_total_effect
+command.causal_trace.discovery_fraction
+command.causal_trace.minimum_confirmation_facts
+command.causal_trace.bootstrap_samples
+command.causal_trace.confidence_level
+command.causal_trace.seed
+```
 
-$$
-3.0\times\operatorname{std}(\text{embedding weight}),
-$$
+To update the selected model YAML after successful confirmation:
 
-with 10 independent samples per fact. Samples are averaged within a fact;
-facts, not individual noise samples, are the units used for uncertainty.
+```bash
+python3 -m src causal-trace \
+  model=gpt2-xl \
+  command.causal_trace.overwrite_model_config_layer=true
+```
 
-## Component and token handling
+Confirmation failure never changes the config.
 
-The trace hooks the configured final MLP projection, for example:
-
-- GPT-2: `mlp.c_proj`;
-- GPT-J: `mlp.fc_out`;
-- Llama, Mistral, Qwen, and DeepSeek: `mlp.down_proj`;
-- OPT: `fc2`;
-- Falcon: `dense_4h_to_h`;
-- Granite 4 MoE shared MLP: `shared_mlp.output_linear` when configured.
-
-The source implementation resolves the exact module template from the selected
-model config and fails if a configured module is absent. It supports both
-`[batch, sequence, hidden]` and flattened `[batch * sequence, hidden]` MLP
-outputs.
-
-The subject text must occur exactly once in the formatted prompt. Fast
-tokenizer offset mappings identify all overlapping subject tokens. A
-token-ID-matching fallback retains prompt special-token offsets when mappings
-are unavailable. Restoration uses the last token in the located subject span.
-
-CounterFact targets are evaluated by the first continuation token. The full
-target token count is recorded, but later target tokens are not scored.
-
-## Predeclared fact eligibility
-
-A fact is eligible only when:
-
-1. the clean model's top next token equals the expected first target token, if
-   `require_correct_clean_prediction` is enabled; and
-2. corruption lowers that token's probability by at least
-   `min_total_effect`, which defaults to `0.03`.
-
-These gates use only clean and corrupted outcomes, before any window is chosen.
-The implementation now applies the corruption-effect gate before caching all
-MLP states or running the restoration sweep, so rejected facts do not incur the
-most expensive work.
-
-This eligibility filter changes the population being estimated: conclusions
-apply to correctly recalled, corruption-responsive facts rather than to every
-CounterFact row.
-
-## Restoration windows
-
-For every layer center, Latium constructs an overlapping half-open window. The
-default width is 10 layers. Boundary windows are clipped and therefore contain
-fewer interventions.
-
-All windows are saved for diagnostics, but only full-width windows may be
-selected. This avoids comparing interventions of different sizes. A selected
-center always denotes the accompanying `trace_window_layers`; it must not be
-silently interpreted as a one-layer ROME edit target. The full pipeline's
-center-to-layer handoff is explicit, persisted, and followed by a ROME
-benchmark; it is an operational mapping rather than a claim that the causal
-window is intrinsically a single layer.
-
-## Discovery and held-out confirmation
-
-Accepted facts are permuted once using the configured seed and split into
-discovery and confirmation sets. The default fraction is 50/50, and the exact
-assignment is persisted.
-
-The decision rule is deliberately narrow:
-
-1. On discovery facts, rank full-width windows by mean fact-level paired IE.
-2. Select the largest mean, breaking ties toward the lower center.
-3. On confirmation facts, bootstrap the mean IE for that exact center.
-4. Report the center only if there are at least the configured minimum number
-   of confirmation facts and the confidence interval lower bound is positive.
-
-Confirmation never re-ranks centers. This prevents the held-out set from
-quietly becoming a second discovery set. The default minimum of two facts is a
-technical floor, not a recommended sample size; serious runs should use many
-more.
-
-## Removed exploratory rules
-
-The audited workflow intentionally does not port the original notebook's:
-
-- middle-layer eligibility band;
-- near-peak region threshold;
-- minimum adjacent-center support rule;
-- neighbor-radius re-scoring;
-- median, trimmed-mean, or positive-fact-rate selectors;
-- noninferiority gate against a raw peak;
-- confirmation-set re-ranking;
-- configured-layer fallback for trace selection.
-
-Those rules increase researcher degrees of freedom and some were introduced
-after inspecting inconvenient traces. They may be shown as explicitly
-exploratory diagnostics, but they do not decide the production result.
-
-## Validation against the long notebook
-
-The production code matches `causal-tracing-auto-v2.ipynb` on the points that
-define the estimand and decision:
-
-| Requirement | Production status |
-|---|---|
-| Corrupt every subject-token embedding | Implemented |
-| Restore final MLP outputs at the last subject token | Implemented |
-| Sweep overlapping windows, default width 10 | Implemented |
-| Pair restored and corrupt probabilities by noise sample | Implemented |
-| Average noise samples within each fact | Implemented |
-| Filter on clean correctness and minimum corruption effect | Implemented |
-| Split accepted facts once into discovery/confirmation | Implemented |
-| Select discovery argmax among full-width windows only | Implemented |
-| Test only the preselected center on confirmation | Implemented |
-| Require positive held-out bootstrap-CI lower bound | Implemented |
-| Keep configured model layer out of selection | Implemented |
-
-The source port is stricter than the notebook in module resolution, has a
-tokenizer fallback for models without offsets, and can optionally persist a
-confirmed center to the selected model YAML. These are integration differences,
-not changes to the causal estimand.
-
-Static compilation and model-free invariant checks cover token spans,
-deterministic noise, hook cleanup, batched and flattened MLP layouts, boundary
-windows, no confirmation re-selection, config composition, and safe config
-layer persistence. A full end-to-end validation still requires loading a
-supported model and dataset; static tests alone do not establish empirical
-trace quality.
-
-## Outputs
-
-Each run creates a timestamped directory under `analysis_out/causal_trace/`:
+Standalone outputs are written below the configured causal-trace output root:
 
 ```text
 fact_results.jsonl
@@ -223,64 +129,21 @@ summary.json
 early_site_trace.png
 ```
 
-`selection.json` contains the discovery center, its physical layer window,
-discovery and confirmation means, the held-out interval, fact counts, and pass
-or failure reason. `summary.json` records the same main decision, the
-intervention settings, and whether an explicitly requested model-config update
-occurred.
+## Run the full pipeline
 
-## Running the standalone trace
-
-```bash
-python3 -m src causal-trace \
-  model=gpt2-xl \
-  command.causal_trace.num_valid_facts=100
-```
-
-The principal settings are:
+The production MetaCentrum workflow is:
 
 ```text
-command.causal_trace.window_size
-command.causal_trace.num_noise_samples
-command.causal_trace.noise_batch_size
-command.causal_trace.noise_multiplier
-command.causal_trace.min_total_effect
-command.causal_trace.discovery_fraction
-command.causal_trace.minimum_confirmation_facts
-command.causal_trace.bootstrap_samples
-command.causal_trace.confidence_level
-command.causal_trace.seed
+confirmed causal trace
+  -> write selected center to model.layer
+  -> compute and validate second moments for that layer
+  -> run ROME
+  -> run spectral, weighted-spectrum, and ROME-presence detectors
+  -> save captures, analyses, summaries, and graphs
+  -> validate all required artifacts
 ```
 
-Keep these fixed before a confirmatory run. Changing them after inspecting a
-result makes the next run exploratory unless it uses fresh held-out facts.
-
-The configured ROME layer is normally graph-only. Persisting a confirmed trace
-center requires an explicit opt-in:
-
-```bash
-python3 -m src causal-trace \
-  model=gpt2-xl \
-  command.causal_trace.overwrite_model_config_layer=true
-```
-
-No config is changed when confirmation fails.
-
-## Running the full causal-to-detection pipeline
-
-The current production cluster workflow is:
-
-```text
-held-out-confirmed causal trace
-  -> persist selected center to model.layer
-  -> clear an old covariance path and compute/validate the matrix for that layer
-  -> run ROME on the configured CounterFact cases
-  -> capture edited weights and clean ROME-update deltas
-  -> run spectral, weighted-spectrum, and ROME-presence analyses
-  -> render graphs and validate every required artifact
-```
-
-Submit one model through PBS with:
+Submit one model with:
 
 ```bash
 jobs/submit.sh causal-rome-detection -- \
@@ -290,82 +153,44 @@ jobs/submit.sh causal-rome-detection -- \
   pipeline.covariance.target_samples=100000
 ```
 
-The scientific counts and artifact selections are Hydra-owned in
-`src/config/pipeline/causal_rome_detection.yaml`. The Bash launcher has no
-fallback values for the number of accepted trace facts, ROME cases, or
-second-moment samples. `jobs/README.md` documents MetaCentrum setup, resource
-overrides, output directories, monitoring, and resume behavior.
+These counts and artifact selections are Hydra-owned in
+`src/config/pipeline/causal_rome_detection.yaml`; the Bash launcher has no
+numeric fallback for them.
 
-Every successful pipeline root retains the causal trace, selected model-config
-snapshot, resolved pipeline config, covariance metadata, structural captures,
-detector analyses, rendered graphs, and `pipeline-summary.json`. The summary is
-written only after the selected layer, matching covariance, ROME execution,
-edited captures, required analyses, and non-empty graphs have been validated.
+A successful output root retains the trace, selected model-config snapshot,
+resolved pipeline config, covariance metadata, ROME captures, detector
+analyses, graphs, and `pipeline-summary.json`. The summary is written only
+after the selected layer, matching covariance, ROME execution, required
+analyses, and non-empty graphs pass validation.
 
-## Limitations
+See `jobs/README.md` for MetaCentrum setup, resources, output locations,
+monitoring, and resume options.
+
+## Main limitations
 
 - Only the first target token is evaluated.
-- The result depends on corruption scale, window width, restored component,
-  token position, eligible-fact filter, and model family adapter.
-- Overlapping windows share most restored layers, so neighboring points are
-  strongly dependent.
-- The held-out interval tests positive recovery at the chosen window, not
-  superiority over every competing window.
-- Reusing facts observed during method development weakens any confirmatory
-  interpretation even when the code performs a fresh in-run split.
-- A standalone causal window center needs a declared mapping and ROME benchmark
-  before it can justify changing an edit layer. The full pipeline declares the
-  center-to-layer mapping and performs that benchmark; its outcome must still
-  be interpreted empirically.
+- The answer depends on the noise scale, window width, restored component,
+  subject position, fact filter, and model adapter.
+- Neighboring windows overlap heavily and are not independent interventions.
+- The held-out interval tests positive recovery, not superiority over all
+  competing windows.
+- Facts inspected during method development should not support strong new
+  confirmatory claims without fresh data.
+- Mapping a broad causal window to one ROME layer is an operational choice; the
+  downstream benchmark determines whether it works.
 
-## Implementation details
+## Implementation and reference
 
-The implementation is divided into three files:
+- `src/causal_trace/causal_trace.py`: model execution, hooks, artifacts, plot,
+  and CLI runtime.
+- `src/causal_trace/tokenization.py`: continuation-token and subject-span
+  mapping.
+- `src/causal_trace/selection.py`: windows, aggregation, bootstrap intervals,
+  and held-out selection.
+- `notebooks/causal-tracing-auto-v2.ipynb`: audited portable reference.
+- `notebooks/causal-tracing-auto.ipynb`: historical exploratory predecessor,
+  not the current selection policy.
 
-- `src/causal_trace/causal_trace.py` owns model execution, hooks, fact
-  collection, the discovery/confirmation split, persistence, plotting, and the
-  CLI entry point.
-- `src/causal_trace/tokenization.py` owns continuation-token selection and
-  unique subject-span mapping.
-- `src/causal_trace/selection.py` owns window construction, fact-level
-  aggregation, bootstrap intervals, and held-out selection.
-
-The execution path is:
-
-```text
-causal_trace(cfg)
-  -> ModelHandler(cfg)
-  -> _run_causal_trace(cfg, handler)
-       -> resolve embedding and per-layer MLP output modules
-       -> build_window(...) for every center
-       -> _trace_example(...) until enough eligible facts are collected
-            -> clean next-token pass
-            -> deterministic corruption-noise tensor
-            -> paired corrupted probabilities
-            -> eligibility gate
-            -> cache one clean MLP row per layer
-            -> paired restoration sweep for every window
-       -> fixed seeded discovery/confirmation split
-       -> summarize_windows(...) independently for each split
-       -> select_window(discovery, confirmation, ...)
-       -> write artifacts and plot
-       -> optionally persist a held-out-confirmed center
-```
-
-Hooks are installed through `temporary_hooks`, whose `finally` block removes
-every handle even when a forward pass raises. Model inference uses
-`torch.inference_mode()`. Noise is generated by a CPU-seeded `torch.Generator`
-and then transferred to the embedding weight's device and dtype, giving stable
-samples for a fixed seed while preserving model compatibility.
-
-The clean cache stores only one hidden row per layer, not the full activation
-tensor. Restoration batches repeat model inputs and patch that row into every
-batch item. The corrupted and restored arrays share the noise-sample index, so
-`restore_probabilities - corrupt_probabilities[None, :]` is a genuinely paired
-calculation.
-
-The reference notebook also contains optional covariance and ROME benchmark
-stages. They are downstream consumers and are not part of the causal trace.
-Production tracing neither computes a second-moment matrix nor uses ROME
-outcomes to select a trace window. The full pipeline runs those downstream
-stages only after tracing has completed and held-out confirmation has passed.
+The standalone trace never uses ROME outcomes to choose its window. The full
+pipeline runs covariance, ROME, detection, and rendering only after tracing and
+held-out confirmation complete.

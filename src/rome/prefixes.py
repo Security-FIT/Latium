@@ -24,11 +24,14 @@ class PrefixMode(str, Enum):
                static fallback templates.
     EXTERNAL - templates come from a JSON cache file or a separate helper model
                specified via ``prefix_source`` in the model YAML.
+    STATIC   - use the fixed context-template pool from the validated Llama
+               causal-trace and ROME benchmark workflow.
     """
 
     SELF = "self"
     TEMPLATE = "template"
     EXTERNAL = "external"
+    STATIC = "static"
 
 
 _MANUAL_STATIC_PREFIXES = [
@@ -56,6 +59,23 @@ _MANUAL_STATIC_PREFIXES = [
     "In recent decades, {}",
     "Simply put, {}",
     "The short answer: {}",
+]
+
+# Exact fixed template pool used by the validated causal-trace -> ROME
+# notebook. Keep this separate from the larger manual-template pool so a
+# static parity run does not silently change when template generation evolves.
+_VALIDATED_STATIC_PREFIXES = [
+    "{}",
+    "As a fact, {}",
+    "In one sentence, {}",
+    "Historically, {}",
+    "In summary, {}",
+    "It is known that {}",
+    "For context, {}",
+    "In plain terms, {}",
+    "To clarify, {}",
+    "A key point: {}",
+    "By definition, {}",
 ]
 
 _MANUAL_ENGLISH_SEEDS = [
@@ -119,6 +139,15 @@ def _build_static_templates(count: int, shuffle: bool = False) -> List[str]:
         templates.append(pool[idx % len(pool)])
         idx += 1
     return templates[:count]
+
+
+def _build_validated_static_templates(count: int) -> List[str]:
+    templates: List[str] = []
+    while len(templates) < int(count):
+        chunk = list(_VALIDATED_STATIC_PREFIXES)
+        random.shuffle(chunk)
+        templates.extend(chunk)
+    return templates[: int(count)]
 
 
 def _dedupe_templates(templates: List[str]) -> List[str]:
@@ -428,6 +457,8 @@ class PrefixGenerationHandler:
             return self._generate_self(handler, count, prefix_range)
         if self.mode == PrefixMode.TEMPLATE:
             return self._generate_manual(handler, count, prefix_range)
+        if self.mode == PrefixMode.STATIC:
+            return _build_validated_static_templates(count)
         return self._generate_external(handler, count, prefix_range)
 
     def _generate_self(self, handler, count: int, prefix_range: Tuple[int, int]) -> List[str]:

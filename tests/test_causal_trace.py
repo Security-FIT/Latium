@@ -21,6 +21,7 @@ from src.causal_trace.causal_trace import (
     _patch_mlp_position,
     _required,
     _resolve_model_config_path,
+    _select_region,
     _select_window,
     build_window,
     find_subject_span,
@@ -165,6 +166,9 @@ def _window_rows(means, ci_lowers, *, num_facts=20):
                 "window_is_full_width": True,
                 "num_facts": num_facts,
                 "mean_ie": mean,
+                "median_ie": mean,
+                "trimmed_mean_ie": mean,
+                "mean_normalized_recovery": mean,
                 "mean_ie_ci_lower": ci_lowers[center],
                 "mean_ie_ci_upper": mean + 0.1,
             }
@@ -195,6 +199,43 @@ def test_nonpositive_confirmation_ci_does_not_select_a_window() -> None:
     assert selection["failure_reason"] == "confirmation_ci_not_positive"
 
 
+def test_region_selector_prefers_supported_plateau_over_single_window() -> None:
+    windows = [build_window(center, window_size=1, num_layers=5) for center in range(5)]
+    discovery = _window_rows([-0.02, 0.29, 0.31, 0.28, -0.01], [-0.05, 0.2, 0.2, 0.2, -0.04])
+    confirmation = _window_rows([-0.01, 0.27, 0.30, 0.26, -0.02], [-0.04, 0.18, 0.2, 0.17, -0.05])
+    discovery_facts = [
+        {"window_mean_ie": [-0.02, 0.28, 0.32, 0.27, -0.01]}
+        for _ in range(20)
+    ]
+    confirmation_facts = [
+        {"window_mean_ie": [-0.01, 0.26, 0.31, 0.25, -0.02]}
+        for _ in range(20)
+    ]
+
+    selection = _select_region(
+        discovery,
+        confirmation,
+        discovery_facts,
+        confirmation_facts,
+        windows,
+        minimum_confirmation_facts=20,
+        bootstrap_samples=100,
+        confidence_level=0.95,
+        seed=42,
+        trim_fraction=0.1,
+        neighbor_support_radius=1,
+        local_support_fraction=0.9,
+        adjacent_peak_radius=1,
+        noninferiority_margin_fraction=0.1,
+        minimum_supported_centers=3,
+        allow_near_supported_region=False,
+    )
+
+    assert selection["confirmation_passed"] is True
+    assert selection["confirmed_region_centers"] == [1, 2, 3]
+    assert selection["selected_trace_center"] == 2
+
+
 def test_trace_command_config_composes() -> None:
     with hydra.initialize_config_dir(config_dir=str(ROOT / "src" / "config"), version_base=None):
         cfg = hydra.compose(config_name="latium", overrides=["command=causal_trace"])
@@ -204,9 +245,12 @@ def test_trace_command_config_composes() -> None:
     assert cfg.command.causal_trace.num_valid_facts == 100
     assert cfg.command.causal_trace.max_dataset_examples_to_scan == 10000
     assert cfg.command.causal_trace.num_noise_samples == 10
-    assert cfg.command.causal_trace.noise_batch_size == 2
+    assert cfg.command.causal_trace.noise_batch_size == 10
+    assert cfg.command.causal_trace.max_corrupt_relative_std == 1.0
     assert cfg.command.causal_trace.bootstrap_samples == 1000
     assert cfg.command.causal_trace.discovery_fraction == 0.5
+    assert cfg.command.causal_trace.minimum_confirmation_facts == 50
+    assert cfg.command.causal_trace.minimum_supported_centers == 3
     assert cfg.command.causal_trace.require_correct_clean_prediction is True
     assert cfg.command.causal_trace.overwrite_model_config_layer is False
 

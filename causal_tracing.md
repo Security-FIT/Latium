@@ -37,48 +37,78 @@ Default methodological settings are:
 |---|---:|
 | Noise standard deviation | `3 * std(embedding weights)` |
 | Noise samples per fact | 10 |
+| Noise execution batch | 10 paired samples |
 | Window width | 10 layers |
 | Discovery/confirmation split | 50/50 |
 | Minimum corruption effect | 0.03 |
+| Maximum corrupt-baseline relative standard deviation | 1.0 |
+| Bootstrap samples | 1000 fact-level resamples |
+| Minimum supported region width | 3 centers |
 
 A fact is eligible only when the clean prediction is correct, if that check is
-enabled, and corruption lowers the target probability by at least the declared
-minimum. Noise samples are averaged within each fact; facts are the units used
-for uncertainty.
+enabled, corruption lowers the target probability by at least the declared
+minimum, all probabilities are finite, and the corrupted baseline is stable.
+Baseline stability is measured before inspecting restoration windows:
+
+```text
+corrupt_relative_std = std(P_corrupt) / abs(P_clean - mean(P_corrupt))
+```
+
+This prevents window-dependent selection bias. Restoration variance is retained
+as a diagnostic but does not determine whether a fact enters the aggregate.
+Noise samples are averaged within each fact; facts, not individual noise draws,
+are the units used for bootstrap uncertainty.
 
 ## Selection
 
 Accepted facts are shuffled once with the configured seed and split into
-discovery and held-out confirmation sets:
+discovery and held-out confirmation sets. Selection operates on a causal region,
+not on a bare `argmax(mean_ie)`:
 
-1. Discovery selects the full-width window with the highest mean fact-level IE.
-2. Confirmation evaluates only that preselected window.
-3. The center is accepted only when there are enough confirmation facts and
-   the bootstrap confidence interval's lower bound is above zero.
+1. For every full-width center, discovery computes mean IE, median IE, a 10%
+   trimmed mean, mean normalized recovery, and a fact-level bootstrap interval.
+2. A positive-effect center must have positive mean-IE lower confidence bound,
+   median IE, and trimmed mean IE.
+3. Neighbor support averages trimmed means in a radius-two neighborhood. It is
+   a plateau regularizer only: adjacent ten-layer windows share nine modules and
+   are not independent evidence.
+4. Discovery forms the candidate set from locally supported positive centers,
+   centers within two positions of the numerical mean peak, and centers whose
+   paired difference from that peak fits the predefined 10% noninferiority
+   margin.
+5. Consecutive candidate centers are grouped into regions. The default requires
+   three centers, while a two-center near-supported region remains eligible when
+   its held-out effect is positive.
+6. For each predeclared region, confirmation first averages its center effects
+   within each fact and then bootstraps those fact-level region values. A region
+   is confirmed only when the lower confidence bound is above zero.
+7. Confirmed regions are ordered by held-out median region IE, trimmed mean,
+   median within-region win rate, and confidence-bound strength. Region width is
+   descriptive, not an independent statistical score.
+8. One representative center is chosen inside the winning region using
+   consistency: within-region win rate, median IE, normalized recovery, then
+   trimmed mean IE.
 
-Boundary windows are saved for diagnostics but cannot be selected because they
-contain fewer restored layers. Confirmation never re-ranks windows or chooses a
-replacement center.
-
-The old exploratory notebook used middle-layer bands, near-peak thresholds,
-neighbor-support rules, several competing summary statistics, noninferiority
-gates, and confirmation re-ranking. None of those rules is part of the current
-selector.
+Boundary windows are saved and plotted, but they cannot be selected because
+they restore fewer MLP modules than full-width windows. The discovery raw-mean
+peak remains a diagnostic. The configured model layer is also diagnostic only:
+it is passed to the plot after selection and never enters candidate generation,
+region ranking, or representative-center selection.
 
 ## What the result means
 
-The result contains a selected center and its physical `trace_window_layers`.
-It demonstrates positive held-out recovery under this intervention. It does
-not by itself prove that:
+The result contains a representative center, a confirmed center region, and the
+union of physical MLP layers restored by that region. It demonstrates positive
+held-out recovery under this intervention. It does not by itself prove that:
 
 - the fact is stored in one layer;
 - the center is intrinsically the correct ROME layer;
-- the selected window is significantly better than every alternative; or
+- the selected region is significantly better than every alternative; or
 - a model has been edited.
 
 The standalone trace and the full pipeline treat the result differently:
 
-- **Standalone:** report the window; update `model.layer` only when explicitly
+- **Standalone:** report the region; update `model.layer` only when explicitly
   requested.
 - **Full pipeline:** use the held-out-confirmed center as a declared operational
   ROME layer, then test that mapping with ROME and the detectors.
@@ -98,10 +128,17 @@ command.causal_trace.window_size
 command.causal_trace.num_noise_samples
 command.causal_trace.noise_multiplier
 command.causal_trace.min_total_effect
+command.causal_trace.max_corrupt_relative_std
 command.causal_trace.discovery_fraction
 command.causal_trace.minimum_confirmation_facts
 command.causal_trace.bootstrap_samples
 command.causal_trace.confidence_level
+command.causal_trace.trim_fraction
+command.causal_trace.neighbor_support_radius
+command.causal_trace.local_support_fraction
+command.causal_trace.adjacent_peak_radius
+command.causal_trace.noninferiority_margin_fraction
+command.causal_trace.minimum_supported_centers
 command.causal_trace.seed
 ```
 
@@ -136,7 +173,7 @@ The production MetaCentrum workflow is:
 ```text
 confirmed causal trace
   -> write selected center to model.layer
-  -> compute and validate second moments for that layer
+  -> reuse or compute and validate second moments for that layer
   -> run ROME
   -> run spectral, weighted-spectrum, and ROME-presence detectors
   -> save captures, analyses, summaries, and graphs
@@ -163,6 +200,69 @@ analyses, graphs, and `pipeline-summary.json`. The summary is written only
 after the selected layer, matching covariance, ROME execution, required
 analyses, and non-empty graphs pass validation.
 
+### ROME context parity
+
+Causal tracing and ROME validation answer different questions. Tracing chooses
+a causal early-site candidate using only clean, corrupted, and restored model
+probabilities. ROME then tests whether editing the projection at that candidate
+actually gives useful rewrite, paraphrase, and locality behavior.
+
+The previously observed Llama benchmark discrepancy was not caused by a
+different low-level tracing intervention. The portable benchmark used a fixed
+pool of eleven context templates for ROME key/value optimization, while the
+pipeline generated contexts from Llama itself and filtered them. Contexts are
+part of the ROME optimization objective, so this changed the learned value
+vector even when the selected layer and covariance were identical.
+
+The Llama 2 config now uses the validated static pool:
+
+```text
+{}
+As a fact, {}
+In one sentence, {}
+Historically, {}
+In summary, {}
+It is known that {}
+For context, {}
+In plain terms, {}
+To clarify, {}
+A key point: {}
+By definition, {}
+```
+
+The fixed pool is shuffled reproducibly to fill the configured prompt count.
+This setting affects only downstream ROME optimization. It cannot affect the
+causal region because the trace completes and persists its result before ROME
+prefixes are constructed.
+
+### Validated Llama 2 result
+
+The complete Latium pipeline was run on 2026-07-19 for
+`NousResearch/Llama-2-7b-hf` with 100 valid trace facts, ten paired noise samples
+per fact, and 100 CounterFact ROME cases:
+
+| Quantity | Result |
+|---|---:|
+| Dataset examples scanned for tracing | 462 |
+| Valid trace facts | 100 |
+| Discovery raw-mean center | 6 |
+| Confirmed region centers | 5-8 |
+| Representative trace center | 6 |
+| Confirmation mean IE at center 6 | 0.2832 |
+| Confirmation 95% CI | [0.2270, 0.3422] |
+| ROME cases completed | 100 |
+| Efficacy score | 0.950 |
+| Paraphrase score | 0.935 |
+| Neighborhood score | 0.778 |
+| Overall score | 0.792 |
+| Efficacy magnitude | 0.759 |
+
+The configured reference was also layer 6, but it was not used by selection.
+The pipeline independently selected and confirmed 6, wrote that value through
+the normal config handoff, and reused the exact existing 100,000-sample layer-6
+inverse covariance. No ROME case failed to execute; 95 of 100 met the rewrite
+success criterion.
+
 See `jobs/README.md` for MetaCentrum setup, resources, output locations,
 monitoring, and resume options.
 
@@ -172,11 +272,13 @@ monitoring, and resume options.
 - The answer depends on the noise scale, window width, restored component,
   subject position, fact filter, and model adapter.
 - Neighboring windows overlap heavily and are not independent interventions.
-- The held-out interval tests positive recovery, not superiority over all
-  competing windows.
+- Neighbor support and region width regularize overlapping windows; they are not
+  independent replications of the causal effect.
+- The held-out interval tests positive region recovery, not superiority over
+  all competing regions.
 - Facts inspected during method development should not support strong new
   confirmatory claims without fresh data.
-- Mapping a broad causal window to one ROME layer is an operational choice; the
+- Mapping a broad causal region to one ROME layer is an operational choice; the
   downstream benchmark determines whether it works.
 
 ## Implementation and reference

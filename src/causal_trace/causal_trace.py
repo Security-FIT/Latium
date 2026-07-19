@@ -7,7 +7,8 @@ The command intentionally implements one tracing workflow:
 * restore clean MLP outputs at the last subject token,
 * sweep overlapping MLP windows,
 * aggregate paired indirect effects across facts,
-* choose one full-width window on discovery facts and test it on held-out facts.
+* discover a contiguous robust region and confirm it on held-out facts,
+* choose one consistency-ranked representative center inside that region.
 
 The configured model layer is kept only as a reference marker in the plot and
 summary.  It must not influence the selected trace center.
@@ -39,6 +40,7 @@ from src.common.model_config import MODEL_CONFIG_DIR
 from src.causal_trace.selection import (
     Window,
     build_window,
+    select_region as _select_region,
     select_window as _select_window,
     summarize_windows as _summarize_windows,
 )
@@ -417,6 +419,7 @@ def _trace_example(
     seed: int,
     require_correct_clean: bool,
     min_total_effect: float,
+    max_corrupt_relative_std: float,
 ) -> dict[str, Any]:
     inputs = _prepare_inputs(handler, example.prompt)
     span = find_subject_span(handler.tokenizer, example.prompt, example.subject)
@@ -463,6 +466,12 @@ def _trace_example(
     total_effect = float(clean_probability - np.mean(corrupt))
     if total_effect < float(min_total_effect):
         raise TraceValidationError(f"low corruption effect: {total_effect:.6f}")
+    corrupt_relative_std = float(np.std(corrupt) / max(abs(total_effect), 1e-12))
+    if corrupt_relative_std > float(max_corrupt_relative_std):
+        raise TraceValidationError(
+            "unstable corrupt baseline: "
+            f"relative_std={corrupt_relative_std:.6f} > {float(max_corrupt_relative_std):.6f}"
+        )
 
     # Cache and restore only after the fact passes the predeclared clean/corrupt
     # eligibility checks. This preserves the estimand while avoiding a complete
@@ -515,9 +524,11 @@ def _trace_example(
         "corrupt_probabilities": corrupt.tolist(),
         "mean_corrupt_probability": float(np.mean(corrupt)),
         "std_corrupt_probability": float(np.std(corrupt)),
+        "corrupt_relative_std": corrupt_relative_std,
         "total_effect": total_effect,
         "noise_std": float(noise_std),
         "window_mean_ie": effects.mean(axis=1).tolist(),
+        "window_mean_normalized_recovery": (effects.mean(axis=1) / max(abs(total_effect), 1e-12)).tolist(),
         "window_std_ie": effects.std(axis=1).tolist(),
         "window_restore_probabilities": restore_probabilities.tolist(),
     }
@@ -571,16 +582,25 @@ def _plot_trace(
         ax.axvline(
             int(config_layer), color="#7b2cbf", linestyle="--", linewidth=2, label=f"config layer {config_layer}"
         )
-    discovery_center = selection.get("discovery_trace_center")
-    if discovery_center is not None:
+    confirmed_region = [int(center) for center in selection.get("confirmed_region_centers", [])]
+    if confirmed_region:
+        ax.axvspan(
+            min(confirmed_region) - 0.45,
+            max(confirmed_region) + 0.45,
+            color="#68d391",
+            alpha=0.18,
+            label=f"confirmed region {min(confirmed_region)}-{max(confirmed_region)}",
+        )
+    selected_center = selection.get("selected_trace_center")
+    if selected_center is not None:
         passed = bool(selection.get("confirmation_passed"))
         color = "#1a7f37" if passed else "#dd6b20"
         label = "held-out confirmed" if passed else "not held-out confirmed"
         ax.axvline(
-            int(discovery_center),
+            int(selected_center),
             color=color,
             linewidth=2.5,
-            label=f"discovery center {discovery_center} ({label})",
+            label=f"representative center {selected_center} ({label})",
         )
 
     ax.set_title("Early-site causal tracing: subject-last MLP-window restoration")
@@ -634,20 +654,42 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         name="causal_trace.require_correct_clean_prediction",
     )
     min_total_effect = float(_required(trace_cfg, "min_total_effect"))
+    max_corrupt_relative_std = float(_required(trace_cfg, "max_corrupt_relative_std"))
     bootstrap_samples = int(_required(trace_cfg, "bootstrap_samples"))
     confidence_level = float(_required(trace_cfg, "confidence_level"))
     minimum_confirmation_facts = int(_required(trace_cfg, "minimum_confirmation_facts"))
     discovery_fraction = float(_required(trace_cfg, "discovery_fraction"))
+    trim_fraction = float(_required(trace_cfg, "trim_fraction"))
+    neighbor_support_radius = int(_required(trace_cfg, "neighbor_support_radius"))
+    local_support_fraction = float(_required(trace_cfg, "local_support_fraction"))
+    adjacent_peak_radius = int(_required(trace_cfg, "adjacent_peak_radius"))
+    noninferiority_margin_fraction = float(_required(trace_cfg, "noninferiority_margin_fraction"))
+    minimum_supported_centers = int(_required(trace_cfg, "minimum_supported_centers"))
+    allow_near_supported_region = strict_bool(
+        _required(trace_cfg, "allow_near_supported_region"),
+        name="causal_trace.allow_near_supported_region",
+    )
     if num_valid <= 0 or max_scan <= 0 or num_noise <= 0 or noise_batch_size <= 0:
         raise ValueError("Trace fact, scan, noise sample, and noise batch counts must be positive")
     if bootstrap_samples <= 0 or not 0 < confidence_level < 1:
         raise ValueError("bootstrap_samples must be positive and confidence_level must be between 0 and 1")
     if minimum_confirmation_facts < 2:
         raise ValueError("minimum_confirmation_facts must be at least 2")
-    if noise_multiplier <= 0 or min_total_effect < 0:
-        raise ValueError("noise_multiplier must be positive and min_total_effect must be non-negative")
+    if noise_multiplier <= 0 or min_total_effect < 0 or max_corrupt_relative_std <= 0:
+        raise ValueError(
+            "noise_multiplier and max_corrupt_relative_std must be positive; "
+            "min_total_effect must be non-negative"
+        )
     if not 0 < discovery_fraction < 1:
         raise ValueError("discovery_fraction must be strictly between 0 and 1")
+    if not 0 <= trim_fraction < 0.5:
+        raise ValueError("trim_fraction must be in [0, 0.5)")
+    if neighbor_support_radius < 0 or adjacent_peak_radius < 0:
+        raise ValueError("support and adjacent-peak radii must be non-negative")
+    if not 0 < local_support_fraction <= 1 or noninferiority_margin_fraction < 0:
+        raise ValueError("local_support_fraction must be in (0, 1] and noninferiority margin non-negative")
+    if minimum_supported_centers < 1:
+        raise ValueError("minimum_supported_centers must be positive")
 
     fact_results: list[dict[str, Any]] = []
     rejections: list[dict[str, Any]] = []
@@ -673,6 +715,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
                 seed=seed + fact_index,
                 require_correct_clean=require_correct_clean,
                 min_total_effect=min_total_effect,
+                max_corrupt_relative_std=max_corrupt_relative_std,
             )
             result["fact_index"] = int(fact_index)
             fact_results.append(result)
@@ -755,10 +798,23 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         seed=seed + 30_000,
     )
 
-    selection = _select_window(
+    selection = _select_region(
         discovery,
         confirmation,
+        discovery_facts,
+        confirmation_facts,
+        windows,
         minimum_confirmation_facts=minimum_confirmation_facts,
+        bootstrap_samples=bootstrap_samples,
+        confidence_level=confidence_level,
+        seed=seed + 40_000,
+        trim_fraction=trim_fraction,
+        neighbor_support_radius=neighbor_support_radius,
+        local_support_fraction=local_support_fraction,
+        adjacent_peak_radius=adjacent_peak_radius,
+        noninferiority_margin_fraction=noninferiority_margin_fraction,
+        minimum_supported_centers=minimum_supported_centers,
+        allow_near_supported_region=allow_near_supported_region,
     )
 
     discovery.to_csv(out_dir / "discovery_windows.csv", index=False)
@@ -793,6 +849,12 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         "selected_trace_window_layers": (
             selection.get("trace_window_layers") if selection.get("selected_trace_center") is not None else None
         ),
+        "confirmed_region_centers": selection.get("confirmed_region_centers", []),
+        "confirmed_region_layer_union": selection.get("confirmed_region_layer_union", []),
+        "confirmation_mean_ie": selection.get("confirmation_mean_ie"),
+        "confirmation_ci_lower": selection.get("confirmation_ci_lower"),
+        "confirmation_ci_upper": selection.get("confirmation_ci_upper"),
+        "confirmed_regions": selection.get("confirmed_regions", []),
         "confirmation_passed": selection.get("confirmation_passed", False),
         "selection_failure_reason": selection.get("failure_reason"),
         "num_dataset_examples_scanned": int(scanned),
@@ -805,6 +867,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         "window_size": int(window_size),
         "num_noise_samples": int(num_noise),
         "noise_batch_size": int(noise_batch_size),
+        "max_corrupt_relative_std": float(max_corrupt_relative_std),
         "first_token_only": True,
         "model_config_layer_overwrite_requested": overwrite_model_config_layer,
         "model_config_layer_overwritten": model_config_layer_overwritten,

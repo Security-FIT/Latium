@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import hydra
 import pandas as pd
@@ -17,9 +18,11 @@ if str(ROOT) not in sys.path:
 
 from src.causal_trace.causal_trace import (
     TraceValidationError,
+    _candidate_mlp_output_names,
     _overwrite_model_config_layer,
     _patch_mlp_position,
     _required,
+    _resolve_mlp_output_name,
     _resolve_model_config_path,
     _select_region,
     _select_window,
@@ -146,6 +149,32 @@ def test_patch_mlp_position_supports_batched_and_flattened_outputs() -> None:
     assert torch.count_nonzero(batched[:, [0, 2], :]) == 0
 
 
+def test_mlp_trace_resolver_uses_whole_llama_mlp_not_rome_projection() -> None:
+    handler = SimpleNamespace(
+        _layer_name_template="model.layers.{}.mlp.down_proj",
+        cfg=OmegaConf.create({"model": {"restore_layer_name_template": "model.layers.{}"}}),
+    )
+    modules = {
+        "model.layers.0.mlp": torch.nn.Identity(),
+        "model.layers.0.mlp.down_proj": torch.nn.Identity(),
+    }
+
+    candidates = _candidate_mlp_output_names(handler, 0)
+
+    assert candidates[0] == "model.layers.0.mlp"
+    assert _resolve_mlp_output_name(handler, modules, 0) == "model.layers.0.mlp"
+
+
+def test_mlp_trace_resolver_keeps_opt_fc2_when_no_mlp_wrapper_exists() -> None:
+    handler = SimpleNamespace(
+        _layer_name_template="model.decoder.layers.{}.fc2",
+        cfg=OmegaConf.create({"model": {"restore_layer_name_template": "model.decoder.layers.{}"}}),
+    )
+    modules = {"model.decoder.layers.3.fc2": torch.nn.Identity()}
+
+    assert _resolve_mlp_output_name(handler, modules, 3) == "model.decoder.layers.3.fc2"
+
+
 def test_window_boundaries_are_excluded_by_full_width_flag() -> None:
     windows = [build_window(center, window_size=4, num_layers=8) for center in range(8)]
 
@@ -203,14 +232,8 @@ def test_region_selector_prefers_supported_plateau_over_single_window() -> None:
     windows = [build_window(center, window_size=1, num_layers=5) for center in range(5)]
     discovery = _window_rows([-0.02, 0.29, 0.31, 0.28, -0.01], [-0.05, 0.2, 0.2, 0.2, -0.04])
     confirmation = _window_rows([-0.01, 0.27, 0.30, 0.26, -0.02], [-0.04, 0.18, 0.2, 0.17, -0.05])
-    discovery_facts = [
-        {"window_mean_ie": [-0.02, 0.28, 0.32, 0.27, -0.01]}
-        for _ in range(20)
-    ]
-    confirmation_facts = [
-        {"window_mean_ie": [-0.01, 0.26, 0.31, 0.25, -0.02]}
-        for _ in range(20)
-    ]
+    discovery_facts = [{"window_mean_ie": [-0.02, 0.28, 0.32, 0.27, -0.01]} for _ in range(20)]
+    confirmation_facts = [{"window_mean_ie": [-0.01, 0.26, 0.31, 0.25, -0.02]} for _ in range(20)]
 
     selection = _select_region(
         discovery,
@@ -233,6 +256,43 @@ def test_region_selector_prefers_supported_plateau_over_single_window() -> None:
 
     assert selection["confirmation_passed"] is True
     assert selection["confirmed_region_centers"] == [1, 2, 3]
+    assert selection["selected_trace_center"] == 2
+
+
+def test_region_selector_confirms_notebook_adjacent_subregion_when_plateau_edge_fails() -> None:
+    windows = [build_window(center, window_size=1, num_layers=6) for center in range(6)]
+    discovery = _window_rows(
+        [-0.1, 0.29, 0.31, 0.30, 0.28, -0.1],
+        [-0.2, 0.2, 0.2, 0.2, 0.2, -0.2],
+    )
+    confirmation = _window_rows(
+        [-0.1, 0.30, 0.32, 0.29, -2.0, -0.1],
+        [-0.2, 0.2, 0.2, 0.2, -2.1, -0.2],
+    )
+    discovery_facts = [{"window_mean_ie": [-0.1, 0.29, 0.31, 0.30, 0.28, -0.1]} for _ in range(20)]
+    confirmation_facts = [{"window_mean_ie": [-0.1, 0.30, 0.32, 0.29, -2.0, -0.1]} for _ in range(20)]
+
+    selection = _select_region(
+        discovery,
+        confirmation,
+        discovery_facts,
+        confirmation_facts,
+        windows,
+        minimum_confirmation_facts=20,
+        bootstrap_samples=100,
+        confidence_level=0.95,
+        seed=42,
+        trim_fraction=0.1,
+        neighbor_support_radius=1,
+        local_support_fraction=0.9,
+        adjacent_peak_radius=2,
+        noninferiority_margin_fraction=0.1,
+        minimum_supported_centers=3,
+        allow_near_supported_region=True,
+    )
+
+    assert selection["confirmation_passed"] is True
+    assert selection["confirmed_region_centers"] == [1, 2]
     assert selection["selected_trace_center"] == 2
 
 

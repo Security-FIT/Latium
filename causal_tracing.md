@@ -24,12 +24,16 @@ Each eligible CounterFact row has three stages:
 
 1. **Clean:** measure the first target token's probability and top prediction.
 2. **Corrupt:** add Gaussian noise to every subject-token embedding.
-3. **Restore:** repeat that corruption while restoring the clean final MLP
-   projection output at the last subject token for one layer window.
+3. **Restore:** repeat that corruption while restoring the clean output of the
+   whole MLP module at the last subject token for one layer window.
 
-The exact MLP module template comes from the selected model config and is
-validated at runtime. Subject offsets must identify one unambiguous occurrence
-in the prompt. Only the first target continuation token is scored.
+The trace adapter resolves the whole MLP that encloses the configured ROME
+projection and validates every resolved layer with a real forward pass before
+scanning facts. For Llama 2, tracing hooks `model.layers.N.mlp`, while ROME
+still edits `model.layers.N.mlp.down_proj`. Restoring `down_proj` directly is
+not the notebook intervention even though both outputs have the same hidden
+dimension. Subject offsets must identify one unambiguous occurrence in the
+prompt. Only the first target continuation token is scored.
 
 Default methodological settings are:
 
@@ -76,9 +80,11 @@ not on a bare `argmax(mean_ie)`:
    centers within two positions of the numerical mean peak, and centers whose
    paired difference from that peak fits the predefined 10% noninferiority
    margin.
-5. Consecutive candidate centers are grouped into regions. The default requires
-   three centers, while a two-center near-supported region remains eligible when
-   its held-out effect is positive.
+5. Consecutive candidate centers are grouped into regions. The selector also
+   predeclares adjacent two-center subregions of a wider discovery plateau so a
+   weak held-out edge cannot invalidate its stable interior. The default
+   requires three centers, while such a two-center near-supported region
+   remains eligible when its held-out effect is positive.
 6. For each predeclared region, confirmation first averages its center effects
    within each fact and then bootstraps those fact-level region values. A region
    is confirmed only when the lower confidence bound is above zero.
@@ -289,9 +295,12 @@ monitoring, and resume options.
   mapping.
 - `src/causal_trace/selection.py`: windows, aggregation, bootstrap intervals,
   and held-out selection.
-- `notebooks/causal-tracing-auto-v2.ipynb`: audited portable reference.
-- `notebooks/causal-tracing-auto.ipynb`: historical exploratory predecessor,
-  not the current selection policy.
+- `notebooks/causal-tracing-test-llama.ipynb`: validated portable Llama 2
+  reference whose whole-MLP intervention and robust region selector are used by
+  the production pipeline.
+- `notebooks/causal-tracing-auto-v2.ipynb`: older held-out single-window
+  reference retained for comparison.
+- `notebooks/causal-tracing-auto.ipynb`: historical exploratory predecessor.
 
 The standalone trace never uses ROME outcomes to choose its window. The full
 pipeline runs covariance, ROME, detection, and rendering only after tracing and

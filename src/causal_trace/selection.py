@@ -51,6 +51,32 @@ def _bootstrap_mean_ci(
     return float(np.quantile(means, alpha / 2.0)), float(np.quantile(means, 1.0 - alpha / 2.0))
 
 
+def _bootstrap_matrix_mean_ci(
+    values: np.ndarray,
+    *,
+    samples: int,
+    confidence_level: float,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Bootstrap facts as clusters while retaining all window coordinates."""
+    matrix = np.asarray(values, dtype=float)
+    if matrix.ndim != 2 or matrix.shape[0] == 0:
+        raise ValueError(f"Expected non-empty fact-by-window matrix, got {matrix.shape}")
+    if not np.isfinite(matrix).all():
+        raise ValueError("Fact-by-window effects must be finite")
+    if matrix.shape[0] == 1 or int(samples) <= 0:
+        mean = matrix.mean(axis=0)
+        return mean.copy(), mean.copy()
+    rng = np.random.default_rng(int(seed))
+    indices = rng.integers(0, matrix.shape[0], size=(int(samples), matrix.shape[0]))
+    means = matrix[indices].mean(axis=1)
+    alpha = 1.0 - float(confidence_level)
+    return (
+        np.quantile(means, alpha / 2.0, axis=0),
+        np.quantile(means, 1.0 - alpha / 2.0, axis=0),
+    )
+
+
 def _trimmed_mean(values: np.ndarray, fraction: float) -> float:
     array = np.sort(np.asarray(values, dtype=float))
     trim = int(math.floor(array.size * float(fraction)))
@@ -100,22 +126,19 @@ def summarize_windows(
 
     fact_effects = np.asarray([row["window_mean_ie"] for row in fact_results], dtype=np.float64)
     normalized = np.asarray(
-        [
-            row.get("window_mean_normalized_recovery", [float("nan")] * len(windows))
-            for row in fact_results
-        ],
+        [row.get("window_mean_normalized_recovery", [float("nan")] * len(windows)) for row in fact_results],
         dtype=np.float64,
+    )
+    ci_lowers, ci_uppers = _bootstrap_matrix_mean_ci(
+        fact_effects,
+        samples=int(bootstrap_samples),
+        confidence_level=float(confidence_level),
+        seed=int(seed),
     )
     rows: list[dict[str, Any]] = []
     for index, window in enumerate(windows):
         values = fact_effects[:, index]
         normalized_values = normalized[:, index]
-        ci_lower, ci_upper = _bootstrap_mean_ci(
-            values,
-            samples=int(bootstrap_samples),
-            confidence_level=float(confidence_level),
-            seed=int(seed) + index,
-        )
         rows.append(
             {
                 "window_center": int(window.center),
@@ -131,12 +154,10 @@ def summarize_windows(
                 "std_ie": float(np.std(values)),
                 "sem_ie": float(np.std(values) / max(math.sqrt(values.size), 1.0)),
                 "mean_normalized_recovery": (
-                    float(np.nanmean(normalized_values))
-                    if np.isfinite(normalized_values).any()
-                    else float("nan")
+                    float(np.nanmean(normalized_values)) if np.isfinite(normalized_values).any() else float("nan")
                 ),
-                "mean_ie_ci_lower": ci_lower,
-                "mean_ie_ci_upper": ci_upper,
+                "mean_ie_ci_lower": float(ci_lowers[index]),
+                "mean_ie_ci_upper": float(ci_uppers[index]),
             }
         )
     return pd.DataFrame(rows)
@@ -263,17 +284,9 @@ def select_region(
     noninferior: set[int] = set()
     for center in full_centers:
         row = row_by_center[center]
-        neighbors = [
-            other
-            for other in full_centers
-            if abs(int(other) - int(center)) <= int(neighbor_support_radius)
-        ]
+        neighbors = [other for other in full_centers if abs(int(other) - int(center)) <= int(neighbor_support_radius)]
         local_support[center] = float(np.mean([float(row_by_center[other].trimmed_mean_ie) for other in neighbors]))
-        if (
-            float(row.mean_ie_ci_lower) > 0
-            and float(row.median_ie) > 0
-            and float(row.trimmed_mean_ie) > 0
-        ):
+        if float(row.mean_ie_ci_lower) > 0 and float(row.median_ie) > 0 and float(row.trimmed_mean_ie) > 0:
             positive.add(center)
         _low, high = _paired_difference_ci(
             raw_values,
@@ -291,7 +304,33 @@ def select_region(
     adjacent = {center for center in positive if abs(center - raw_peak) <= int(adjacent_peak_radius)}
     candidate_centers = sorted(supported | noninferior | adjacent)
     candidate_regions = _group_contiguous(candidate_centers)
-    if not candidate_regions:
+    candidate_region_specs: list[dict[str, Any]] = []
+    seen_regions: set[tuple[int, ...]] = set()
+    near_width = max(1, int(minimum_supported_centers) - 1)
+    for group in candidate_regions:
+        group_key = tuple(int(center) for center in group)
+        if group_key and group_key not in seen_regions:
+            candidate_region_specs.append(
+                {
+                    "centers": list(group_key),
+                    "region_source": "contiguous_candidate_group",
+                    "region_source_priority": 0,
+                }
+            )
+            seen_regions.add(group_key)
+        if len(group) >= near_width and near_width < len(group):
+            for start in range(0, len(group) - near_width + 1):
+                subregion = tuple(int(center) for center in group[start : start + near_width])
+                if subregion and subregion not in seen_regions:
+                    candidate_region_specs.append(
+                        {
+                            "centers": list(subregion),
+                            "region_source": "adjacent_candidate_subregion",
+                            "region_source_priority": 1,
+                        }
+                    )
+                    seen_regions.add(subregion)
+    if not candidate_region_specs:
         return {
             **base,
             "discovery_trace_center": raw_peak,
@@ -305,23 +344,28 @@ def select_region(
     }
     region_rows: list[dict[str, Any]] = []
     minimum_near_width = max(1, int(minimum_supported_centers) - 1)
-    for region_index, centers in enumerate(candidate_regions):
+    confirmation_raw_peak_values = confirmation_ie[:, center_to_index[raw_peak]]
+    for region_index, region_spec in enumerate(candidate_region_specs, start=1):
+        centers = [int(center) for center in region_spec["centers"]]
         if any(center not in confirmation_rows for center in centers):
             continue
         width_supported = len(centers) >= int(minimum_supported_centers)
         near_supported = bool(allow_near_supported_region and len(centers) >= minimum_near_width)
-        if not width_supported and not near_supported:
-            continue
         matrix_indices = [center_to_index[center] for center in centers]
         region_values = confirmation_ie[:, matrix_indices].mean(axis=1)
         ci_lower, ci_upper = _bootstrap_mean_ci(
             region_values,
             samples=bootstrap_samples,
             confidence_level=confidence_level,
-            seed=seed + 10_000 + region_index,
+            seed=seed + 300 + region_index,
         )
-        if not math.isfinite(ci_lower) or ci_lower <= 0:
-            continue
+        _difference_lower, difference_upper = _paired_difference_ci(
+            confirmation_raw_peak_values,
+            region_values,
+            samples=bootstrap_samples,
+            confidence_level=confidence_level,
+            seed=seed + 400 + region_index,
+        )
 
         win_rates: dict[int, float] = {}
         for center in centers:
@@ -344,6 +388,8 @@ def select_region(
         region_rows.append(
             {
                 "centers": centers,
+                "region_source": str(region_spec["region_source"]),
+                "region_source_priority": int(region_spec["region_source_priority"]),
                 "representative_center": int(representative),
                 "layer_union": layer_union,
                 "region_mean_ie": float(np.mean(region_values)),
@@ -351,29 +397,48 @@ def select_region(
                 "region_trimmed_mean_ie": _trimmed_mean(region_values, trim_fraction),
                 "region_ci_lower": ci_lower,
                 "region_ci_upper": ci_upper,
+                "peak_minus_region_ci_upper": difference_upper,
+                "noninferior_to_discovery_peak": bool(difference_upper < margin),
                 "median_win_rate": float(np.median(list(win_rates.values()))),
                 "representative_win_rate": float(win_rates[representative]),
+                "region_width_supported": bool(width_supported),
+                "ci_positive_near_supported_region": bool(
+                    allow_near_supported_region and near_supported and math.isfinite(ci_lower) and ci_lower > 0
+                ),
+                "supported_region": bool(
+                    width_supported
+                    or (allow_near_supported_region and near_supported and math.isfinite(ci_lower) and ci_lower > 0)
+                ),
+                "confirmation_positive_region_ci": bool(math.isfinite(ci_lower) and ci_lower > 0),
             }
         )
 
-    if not region_rows:
+    confirmed_region_rows = [
+        row for row in region_rows if row["confirmation_positive_region_ci"] and row["supported_region"]
+    ]
+    if not confirmed_region_rows:
         return {
             **base,
             "discovery_trace_center": raw_peak,
             "discovery_candidate_centers": candidate_centers,
             "discovery_candidate_regions": candidate_regions,
+            "candidate_region_specs": candidate_region_specs,
+            "confirmation_regions": region_rows,
+            "confirmed_regions": [],
             "failure_reason": "no_confirmed_supported_region",
         }
 
-    chosen = max(
-        region_rows,
+    chosen = sorted(
+        confirmed_region_rows,
         key=lambda row: (
-            row["region_median_ie"],
-            row["region_trimmed_mean_ie"],
-            row["median_win_rate"],
-            row["region_ci_lower"],
+            row["region_source_priority"],
+            -row["region_median_ie"],
+            -row["region_trimmed_mean_ie"],
+            -row["median_win_rate"],
+            -row["region_ci_lower"],
+            -row["region_mean_ie"],
         ),
-    )
+    )[0]
     representative = int(chosen["representative_center"])
     representative_window = window_by_center[representative]
     return {
@@ -392,9 +457,11 @@ def select_region(
         "failure_reason": None,
         "discovery_candidate_centers": candidate_centers,
         "discovery_candidate_regions": candidate_regions,
+        "candidate_region_specs": candidate_region_specs,
         "local_support_threshold": support_threshold,
         "noninferiority_margin": margin,
-        "confirmed_regions": region_rows,
+        "confirmation_regions": region_rows,
+        "confirmed_regions": confirmed_region_rows,
     }
 
 

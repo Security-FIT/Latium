@@ -121,8 +121,7 @@ def _resolve_model_config_path(
         raise FileNotFoundError(f"No writable model YAML matches {cfg.model.name!s}")
     choices = ", ".join(path.stem for path in matches)
     raise ValueError(
-        "Cannot identify the selected model YAML without Hydra choice metadata; "
-        f"{cfg.model.name!s} matches: {choices}"
+        f"Cannot identify the selected model YAML without Hydra choice metadata; {cfg.model.name!s} matches: {choices}"
     )
 
 
@@ -199,13 +198,54 @@ def _embedding_module_name(cfg: DictConfig) -> str:
     return template.format(0) if "{}" in template else template
 
 
+def _candidate_mlp_output_names(handler: ModelHandler, layer: int) -> list[str]:
+    """Return whole-MLP output candidates in portable-notebook order."""
+    layer = int(layer)
+    projection_name = str(handler._layer_name_template).format(layer)
+    candidates = [projection_name]
+
+    # ROME edits the final projection, but causal tracing restores the output of
+    # the enclosing MLP module. These are distinct hook points on gated MLPs.
+    for marker in (".mlp.", ".shared_mlp."):
+        if marker in projection_name:
+            candidates.insert(0, projection_name.split(marker, 1)[0] + marker.rstrip("."))
+
+    restore_template = str(getattr(handler.cfg.model, "restore_layer_name_template", "")).strip()
+    block_name = restore_template.format(layer) if restore_template else ""
+    if block_name:
+        candidates.extend(
+            [
+                f"{block_name}.mlp",
+                f"{block_name}.shared_mlp",
+                f"{block_name}.feed_forward",
+                f"{block_name}.ffn",
+                f"{block_name}.fc2",
+                f"{block_name}.mlp.dense_4h_to_h",
+            ]
+        )
+    candidates.extend(
+        [
+            f"transformer.h.{layer}.mlp",
+            f"model.layers.{layer}.mlp",
+            f"model.layers.{layer}.shared_mlp",
+            f"model.decoder.layers.{layer}.fc2",
+        ]
+    )
+
+    unique: list[str] = []
+    for name in candidates:
+        if name and name not in unique:
+            unique.append(name)
+    return unique
+
+
 def _resolve_mlp_output_name(handler: ModelHandler, modules: dict[str, torch.nn.Module], layer: int) -> str:
-    """Return the final MLP projection module from the model config."""
-    template = str(handler._layer_name_template)
-    name = template.format(int(layer))
-    if name not in modules:
-        raise KeyError(f"Configured MLP output module does not exist: {name}")
-    return name
+    """Resolve the whole-MLP output hook used by the validated notebook."""
+    candidates = _candidate_mlp_output_names(handler, int(layer))
+    for name in candidates:
+        if name in modules:
+            return name
+    raise KeyError(f"Could not resolve whole-MLP output module for layer {int(layer)}; tried {candidates}")
 
 
 def _hidden_from_output(output: Any) -> torch.Tensor:
@@ -241,9 +281,10 @@ def _mlp_state_at_position(hidden: torch.Tensor, position: int, sequence_length:
             raise RuntimeError(f"Expected clean MLP output [1, {sequence_length}, hidden], got {tuple(hidden.shape)}")
         return hidden[0, position, :].detach().clone()
     if hidden.dim() == 2:
-        if hidden.shape[0] != sequence_length:
+        if hidden.shape[0] % sequence_length != 0:
             raise RuntimeError(
-                f"Expected flattened clean MLP output [{sequence_length}, hidden], got {tuple(hidden.shape)}"
+                f"Flattened clean MLP output {tuple(hidden.shape)} is not divisible by "
+                f"sequence length {sequence_length}"
             )
         return hidden[position, :].detach().clone()
     raise RuntimeError(f"Unsupported MLP output rank: {tuple(hidden.shape)}")
@@ -373,6 +414,53 @@ def _repeat_inputs(inputs: Any, repeats: int) -> dict[str, torch.Tensor]:
         for key, value in inputs.items()
         if torch.is_tensor(value)
     }
+
+
+def _validate_mlp_output_modules(
+    handler: ModelHandler,
+    modules: dict[str, torch.nn.Module],
+    module_names: dict[int, str],
+) -> list[dict[str, Any]]:
+    """Smoke-test every whole-MLP hook before scanning factual examples."""
+    inputs = _prepare_inputs(handler, "The capital of France is")
+    sequence_length = int(inputs["input_ids"].shape[1])
+    captured: dict[int, tuple[int, ...]] = {}
+
+    def make_hook(layer: int):
+        def hook(_module, _input, output):
+            captured[int(layer)] = tuple(int(value) for value in _hidden_from_output(output).shape)
+            return output
+
+        return hook
+
+    hooks = [(modules[name], make_hook(layer)) for layer, name in module_names.items()]
+    with torch.inference_mode(), temporary_hooks(hooks):
+        handler.model(**inputs, use_cache=False)
+
+    rows: list[dict[str, Any]] = []
+    for layer in range(int(handler.num_of_layers)):
+        name = module_names[layer]
+        shape = captured.get(layer)
+        if shape is None:
+            raise RuntimeError(f"MLP adapter captured no output for layer {layer}: {name}")
+        if len(shape) == 3 and shape[0] == 1 and shape[1] == sequence_length:
+            shape_mode = "batch_seq_hidden"
+        elif len(shape) == 2 and shape[0] % sequence_length == 0:
+            shape_mode = "flat_batch_seq_hidden"
+        else:
+            raise RuntimeError(
+                f"Unsupported MLP output for layer {layer} module {name}: {shape}; "
+                "expected [1, sequence, hidden] or [multiple*sequence, hidden]"
+            )
+        rows.append(
+            {
+                "layer": int(layer),
+                "mlp_output_module": name,
+                "probe_shape": list(shape),
+                "shape_mode": shape_mode,
+            }
+        )
+    return rows
 
 
 def _clean_cache(
@@ -643,6 +731,9 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         raise ValueError(f"window_size must be between 1 and the model's {num_layers} layers")
     windows = [build_window(center, window_size, num_layers) for center in range(num_layers)]
     module_names = {layer: _resolve_mlp_output_name(handler, modules, layer) for layer in range(num_layers)}
+    adapter_validation = _validate_mlp_output_modules(handler, modules, module_names)
+    module_map_path = out_dir / "mlp_module_map.json"
+    module_map_path.write_text(json.dumps(adapter_validation, indent=2), encoding="utf-8")
 
     num_valid = int(_required(trace_cfg, "num_valid_facts"))
     max_scan = int(_required(trace_cfg, "max_dataset_examples_to_scan"))
@@ -677,8 +768,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         raise ValueError("minimum_confirmation_facts must be at least 2")
     if noise_multiplier <= 0 or min_total_effect < 0 or max_corrupt_relative_std <= 0:
         raise ValueError(
-            "noise_multiplier and max_corrupt_relative_std must be positive; "
-            "min_total_effect must be non-negative"
+            "noise_multiplier and max_corrupt_relative_std must be positive; min_total_effect must be non-negative"
         )
     if not 0 < discovery_fraction < 1:
         raise ValueError("discovery_fraction must be strictly between 0 and 1")
@@ -742,6 +832,11 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
             "failure_reason": "no_valid_facts",
             "num_dataset_examples_scanned": scanned,
             "num_valid_facts": 0,
+            "trace_component": "mlp_output",
+            "trace_hook_semantics": "whole_mlp_module_output",
+            "trace_mlp_module_map": str(module_map_path),
+            "trace_mlp_output_modules": [module_names[layer] for layer in range(num_layers)],
+            "trace_position": "subject_last",
             "model_config_layer_overwrite_requested": overwrite_model_config_layer,
             "model_config_layer_overwritten": False,
             "model_config_path": str(model_config_path) if model_config_path is not None else None,
@@ -779,7 +874,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         window_size=window_size,
         bootstrap_samples=bootstrap_samples,
         confidence_level=confidence_level,
-        seed=seed + 10_000,
+        seed=seed + 100,
     )
     confirmation = _summarize_windows(
         confirmation_facts,
@@ -787,7 +882,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         window_size=window_size,
         bootstrap_samples=bootstrap_samples,
         confidence_level=confidence_level,
-        seed=seed + 20_000,
+        seed=seed + 200,
     )
     all_facts = _summarize_windows(
         fact_results,
@@ -795,7 +890,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         window_size=window_size,
         bootstrap_samples=bootstrap_samples,
         confidence_level=confidence_level,
-        seed=seed + 30_000,
+        seed=seed + 300,
     )
 
     selection = _select_region(
@@ -807,7 +902,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         minimum_confirmation_facts=minimum_confirmation_facts,
         bootstrap_samples=bootstrap_samples,
         confidence_level=confidence_level,
-        seed=seed + 40_000,
+        seed=seed,
         trim_fraction=trim_fraction,
         neighbor_support_radius=neighbor_support_radius,
         local_support_fraction=local_support_fraction,
@@ -854,6 +949,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         "confirmation_mean_ie": selection.get("confirmation_mean_ie"),
         "confirmation_ci_lower": selection.get("confirmation_ci_lower"),
         "confirmation_ci_upper": selection.get("confirmation_ci_upper"),
+        "confirmation_regions": selection.get("confirmation_regions", []),
         "confirmed_regions": selection.get("confirmed_regions", []),
         "confirmation_passed": selection.get("confirmation_passed", False),
         "selection_failure_reason": selection.get("failure_reason"),
@@ -863,6 +959,9 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         "num_confirmation_facts": int(len(confirmation_facts)),
         "num_rejected": int(len(rejections)),
         "trace_component": "mlp_output",
+        "trace_hook_semantics": "whole_mlp_module_output",
+        "trace_mlp_module_map": str(module_map_path),
+        "trace_mlp_output_modules": [module_names[layer] for layer in range(num_layers)],
         "trace_position": "subject_last",
         "window_size": int(window_size),
         "num_noise_samples": int(num_noise),

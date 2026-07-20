@@ -126,13 +126,14 @@ python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_fact
 ```
 
 The active trace uses the audited subject-last MLP-window intervention described
-in `causal_tracing.md`: corrupt subject embeddings, restore clean MLP outputs
+in `causal_tracing.md`: corrupt subject embeddings, restore whole-MLP outputs
 over overlapping windows, aggregate indirect effects across facts, and write a
-graph plus CSV/JSON diagnostics. A fixed discovery split chooses one full-width
-window; a held-out split only tests that window. The standalone trace does not
-use the configured model layer for selection. The full cluster pipeline makes
-an explicit post-confirmation handoff from the selected center to the ROME
-layer and validates the downstream edit and detector artifacts.
+graph plus CSV/JSON diagnostics. A fixed discovery split predeclares robust
+contiguous regions and a held-out split confirms them before selecting one
+representative center. The standalone trace does not use the configured model
+layer for selection. The full cluster pipeline makes an explicit
+post-confirmation handoff from the selected center to the ROME layer and
+validates the downstream edit and detector artifacts.
 
 ## Structural Artifacts
 

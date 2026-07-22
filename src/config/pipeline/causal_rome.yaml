@@ -1,0 +1,29 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+defaults:
+  - override /command@_global_.command: causal_trace
+  - _self_
+
+model: gpt2-large
+
+causal_trace:
+  num_valid_facts: ${command.causal_trace.num_valid_facts}
+
+covariance:
+  target_samples: 100000
+  compute_if_missing: true
+
+rome:
+  n_tests: 30
+  start_idx: 0
+  overrides: []
+
+output:
+  root: null
+
+resume:
+  skip_causal_trace: false
+  skip_second_moment: false

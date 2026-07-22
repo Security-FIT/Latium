@@ -56,11 +56,27 @@ COMMAND_OVERRIDE_MAP = {
 
 def run_hydra(overrides: Sequence[str]) -> int:
     import hydra
+    from omegaconf import OmegaConf
 
     from src.commands import run_command
 
     with hydra.initialize_config_dir(config_dir=str(CONFIG_DIR), version_base=None):
         cfg = hydra.compose(config_name="latium", overrides=list(overrides))
+    model_config_key = next(
+        (
+            override.partition("=")[2]
+            for override in reversed(overrides)
+            if override.partition("=")[0].lstrip("+~") == "model"
+        ),
+        None,
+    )
+    if model_config_key and OmegaConf.select(cfg, "command.causal_trace", default=None) is not None:
+        OmegaConf.update(
+            cfg,
+            "command.causal_trace._model_config_key",
+            str(model_config_key),
+            force_add=True,
+        )
     return int(run_command(cfg))
 
 

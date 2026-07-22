@@ -4,12 +4,12 @@
 # :author: Jakub Res <iresj@fit.vut.cz>
 
 name: "mistralai/Mistral-7B-v0.3"
-second_moment_path: "./data/second_moment_stats/mistralai_Mistral-7B-v0.3_17_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: "./data/second_moment_stats/mistralai_Mistral-7B-v0.3_5_SM_Method.WIKIPEDIA_100000.pt"
 layer_name_template: "model.layers.{}.mlp.down_proj"
 fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 17
+layer: 5
 corruption_noise_multiplier: 0.1
 dtype: "bf16"
 prefix_enforce_latin: True

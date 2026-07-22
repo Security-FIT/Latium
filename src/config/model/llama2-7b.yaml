@@ -4,14 +4,14 @@
 # :author: Jakub Res <iresj@fit.vut.cz>
 
 name: "NousResearch/Llama-2-7b-hf"
-second_moment_path: "./data/second_moment_stats/NousResearch_Llama-2-7b-hf_19_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: "./data/second_moment_stats/NousResearch_Llama-2-7b-hf_6_SM_Method.WIKIPEDIA_100000.pt"
 second_moment_batch_size_mode: "dynamic"
 second_moment_batch_size: null
 layer_name_template: "model.layers.{}.mlp.down_proj"
 fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 19
+layer: 6
 corruption_noise_multiplier: 0.08
 dtype: "bf16"
 prefix_enforce_latin: True

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import copy
+import inspect
 import re
 import random
 import json
@@ -24,6 +25,7 @@ from tqdm import tqdm
 from enum import Enum
 import numpy as np
 from src.common.paths import non_conflicting_path
+from src.rome.activations import _accumulate_second_moment_tokens, _second_moment_contribution
 from src.runtime import runtime_from_cfg
 
 if TYPE_CHECKING:
@@ -1070,6 +1072,41 @@ def insert_kv(
     return new_W.to(handler.dtype), old_W, update_matrix  # Cast to model dtype
 
 
+class _CovarianceActivationCaptured(RuntimeError):
+    """Internal signal used to stop a forward after the target activation is captured."""
+
+
+class _AdaptiveCovarianceBatchSizer:
+    def __init__(self, initial_batch_size: int, min_batch: int = 1, growth_interval: int = 8):
+        self.min_batch = max(1, int(min_batch))
+        self.initial_batch_size = max(self.min_batch, int(initial_batch_size))
+        self.current_batch_size = self.initial_batch_size
+        self.growth_interval = max(1, int(growth_interval))
+        self._successful_batches = 0
+
+    def record_oom(self, failed_batch_size: int) -> int:
+        failed_batch_size = max(self.min_batch, int(failed_batch_size))
+        reduced_size = max(self.min_batch, failed_batch_size // 2)
+        self.current_batch_size = min(self.current_batch_size, reduced_size)
+        self._successful_batches = 0
+        return self.current_batch_size
+
+    def record_success(self) -> int:
+        if self.current_batch_size >= self.initial_batch_size:
+            self._successful_batches = 0
+            return self.current_batch_size
+
+        self._successful_batches += 1
+        if self._successful_batches >= self.growth_interval:
+            self.current_batch_size = min(
+                self.initial_batch_size,
+                max(self.current_batch_size + 1, self.current_batch_size * 2),
+            )
+            self._successful_batches = 0
+
+        return self.current_batch_size
+
+
 class SM_Method(Enum):
     RANDOM = 1
     WIKIPEDIA = 2
@@ -1110,19 +1147,17 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     # Accumulate second moment directly on GPU instead of storing all k vectors
     C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=module_device)
     total_tokens = 0
+    current_attention_mask = None
+    current_hidden_states = None
 
     def hook(_, inp, out):
-        nonlocal C, total_tokens
-        k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
-        if len(k.shape) == 3:
-            k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
-        k = k.to(C.device)
-        total_tokens += k.shape[0]
-        # Use addmm_ to accumulate k^T @ k into C without allocating a
-        # hidden_dim x hidden_dim temporary (can be >1 GB for large models).
-        C.addmm_(k.T, k)
-        del k
-        return out
+        nonlocal current_attention_mask, current_hidden_states
+        if current_attention_mask is None:
+            raise RuntimeError("Missing attention mask while accumulating covariance")
+        if current_hidden_states is not None:
+            raise RuntimeError("Covariance target module ran more than once in a single forward pass")
+        current_hidden_states = (inp[0] if isinstance(inp, tuple) else inp).detach()
+        raise _CovarianceActivationCaptured
 
     handle = module.register_forward_hook(hook)
 
@@ -1139,6 +1174,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_mode_raw = getattr(handler.cfg.model, "second_moment_batch_size_mode", "auto")
     batch_mode = str(batch_mode_raw).strip().lower()
     manual_batch_size = getattr(handler.cfg.model, "second_moment_batch_size", None)
+    adaptive_batch_enabled = False
     if batch_mode in ("manual", "fixed", "static"):
         if manual_batch_size is None:
             raise ValueError("second_moment_batch_size must be set when second_moment_batch_size_mode is 'manual'")
@@ -1149,11 +1185,25 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
             batch_size = max(1, int(manual_batch_size))
             LOGGER.info("Using manual covariance batch size override: %d (mode=auto)", batch_size)
         else:
+            adaptive_batch_enabled = True
             LOGGER.info("Using dynamic covariance batch size estimate: %d", batch_size)
     else:
         raise ValueError(
             f"Invalid second_moment_batch_size_mode: {batch_mode_raw!r}. Expected one of: auto, dynamic, manual."
         )
+    batch_sizer = _AdaptiveCovarianceBatchSizer(batch_size)
+
+    # The covariance hook consumes intermediate MLP inputs, not output logits.
+    # Models with very large vocabularies (for example Gemma 4) otherwise
+    # materialize a large [batch, sequence, vocabulary] tensor unnecessarily.
+    try:
+        supports_logits_to_keep = "logits_to_keep" in inspect.signature(handler.model.forward).parameters
+    except (TypeError, ValueError):
+        supports_logits_to_keep = False
+    model_forward_kwargs = {"use_cache": False}
+    if supports_logits_to_keep:
+        model_forward_kwargs["logits_to_keep"] = 1
+        LOGGER.info("Limiting covariance forwards to the final output logit")
 
     LOGGER.info(
         f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}"
@@ -1179,40 +1229,76 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_texts = []
 
     def process_text_batch(text_batch):
-        nonlocal processed, batch_size, processed_batches
+        nonlocal processed, batch_size, processed_batches, current_attention_mask, current_hidden_states, total_tokens
         if not text_batch:
             return
         # Non-recursive OOM handling: split batch and retry without recursion
         queue = [text_batch]
         while queue:
             chunk = queue.pop(0)
+            tokens = None
             try:
                 tokens = handler.tokenizer(
                     chunk, return_tensors='pt', truncation=True, max_length=max_length, padding=True
                 )
-                handler.model(
-                    tokens.input_ids.to(input_device),
-                    attention_mask=tokens.attention_mask.to(input_device),
-                    use_cache=False,
+                current_attention_mask = tokens.attention_mask
+                current_hidden_states = None
+                try:
+                    handler.model(
+                        tokens.input_ids.to(input_device),
+                        attention_mask=tokens.attention_mask.to(input_device),
+                        **model_forward_kwargs,
+                    )
+                except _CovarianceActivationCaptured:
+                    pass
+                if current_hidden_states is None:
+                    raise RuntimeError(f"Covariance target module was not reached: {layer_name}")
+                # Commit only after the entire model forward succeeds. A later-layer
+                # OOM therefore cannot leave ghost tokens in the shared covariance.
+                contribution, token_count = _second_moment_contribution(
+                    current_hidden_states,
+                    current_attention_mask,
+                    device=C.device,
                 )
-                del tokens
+                C.add_(contribution)
+                total_tokens += token_count
                 processed += len(chunk)
                 processed_batches += 1
+                if adaptive_batch_enabled:
+                    old_batch_size = batch_size
+                    batch_size = batch_sizer.record_success()
+                    if batch_size != old_batch_size:
+                        LOGGER.info(
+                            "Increasing covariance batch size after successful batches: %d -> %d",
+                            old_batch_size,
+                            batch_size,
+                        )
                 if clear_cache_every > 0 and processed_batches % clear_cache_every == 0 and torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except torch.cuda.OutOfMemoryError:
-                LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(chunk))
+                LOGGER.warning("OOM during covariance computation (chunk=%d)", len(chunk))
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 if len(chunk) <= 1:
                     LOGGER.warning("Skipping sample that causes OOM even at batch_size=1")
                     continue
-                batch_size = max(1, batch_size // 2)
+                if adaptive_batch_enabled:
+                    old_batch_size = batch_size
+                    batch_size = batch_sizer.record_oom(len(chunk))
+                    if batch_size != old_batch_size:
+                        LOGGER.warning("Reduced covariance batch size: %d -> %d", old_batch_size, batch_size)
+                else:
+                    LOGGER.warning("Splitting covariance chunk while fixed batch size remains %d", batch_size)
                 midpoint = max(1, len(chunk) // 2)
                 queue.insert(0, chunk[midpoint:])
                 queue.insert(0, chunk[:midpoint])
             except Exception as e:
                 LOGGER.warning(e)
+            finally:
+                current_attention_mask = None
+                current_hidden_states = None
+                if tokens is not None:
+                    del tokens
 
     try:
         with torch.no_grad(), tqdm(total=n_samples, desc="Computing covariance", mininterval=1.0) as pbar:

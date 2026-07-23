@@ -268,11 +268,15 @@ def gpu_count() -> int:
     return torch.cuda.device_count() if torch.cuda.is_available() else 0
 
 
-def get_free_vram(device: int | str = 0) -> int:
+def get_free_vram(device: int | str | torch.device = 0) -> int:
     """Return free VRAM in bytes for the given CUDA device."""
     if not torch.cuda.is_available():
         return 0
-    if isinstance(device, str):
+    if isinstance(device, torch.device):
+        if device.type != "cuda":
+            return 0
+        device = 0 if device.index is None else device.index
+    elif isinstance(device, str):
         if device == "cpu":
             return 0
         device = int(device.replace("cuda:", "").replace("cuda", "0") or "0")
@@ -280,11 +284,15 @@ def get_free_vram(device: int | str = 0) -> int:
     return free
 
 
-def get_total_vram(device: int | str = 0) -> int:
+def get_total_vram(device: int | str | torch.device = 0) -> int:
     """Return total VRAM in bytes for the given CUDA device."""
     if not torch.cuda.is_available():
         return 0
-    if isinstance(device, str):
+    if isinstance(device, torch.device):
+        if device.type != "cuda":
+            return 0
+        device = 0 if device.index is None else device.index
+    elif isinstance(device, str):
         if device == "cpu":
             return 0
         device = int(device.replace("cuda:", "").replace("cuda", "0") or "0")

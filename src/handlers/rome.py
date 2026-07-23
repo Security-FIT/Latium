@@ -59,7 +59,14 @@ class ModelHandler(BaseHandler):
         self.model, self.tokenizer = load_pretrained(cfg)
 
         self.dtype = self.model.dtype
-        self.num_of_layers = self.model.config.num_hidden_layers
+        model_config = self.model.config
+        self.num_of_layers = getattr(model_config, "num_hidden_layers", None)
+        if self.num_of_layers is None:
+            text_config = getattr(model_config, "text_config", None)
+            self.num_of_layers = getattr(text_config, "num_hidden_layers", None) if text_config is not None else None
+        if self.num_of_layers is None:
+            raise AttributeError("Loaded model config does not expose num_hidden_layers or text_config.num_hidden_layers")
+        self.num_of_layers = int(self.num_of_layers)
 
         # Multi-GPU: detect if model is distributed via device_map
         self.is_multi_gpu = hasattr(self.model, 'hf_device_map') and len(self.model.hf_device_map) > 1

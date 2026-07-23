@@ -695,6 +695,17 @@ def _reshape_hidden_states(hidden_states: torch.Tensor, batch_size: int, seq_len
     raise RuntimeError(f"Unsupported activation rank for hooks: {hidden_states.dim()}")
 
 
+def _last_non_padding_index(attention_mask: torch.Tensor) -> torch.Tensor:
+    """Return each row's final non-padding index for left or right padding."""
+    if attention_mask.dim() != 2:
+        raise RuntimeError(f"Expected a 2D attention mask, got rank {attention_mask.dim()}")
+    positions = torch.arange(attention_mask.size(1), device=attention_mask.device).expand_as(attention_mask)
+    last_index = positions.masked_fill(attention_mask == 0, -1).max(dim=1).values
+    if bool((last_index < 0).any()):
+        raise RuntimeError("Attention mask contains an all-padding row")
+    return last_index.long()
+
+
 def gather_k(
     handler,
     fact_tuple: Tuple[str, str, str],
@@ -709,7 +720,7 @@ def gather_k(
 
     prompt_count = int(prompts.input_ids.shape[0])
     seq_len = int(prompts.input_ids.shape[1])
-    token_index = (prompts.attention_mask.detach().to("cpu").sum(dim=1) - 1).long()
+    token_index = _last_non_padding_index(prompts.attention_mask.detach().to("cpu"))
 
     # TODO: Add support for dynamic batch size
     k = None
@@ -814,7 +825,7 @@ def get_subject_position(handler, prompt, subject):
 def get_subject_index(handler, prompts, fact_tuple, subject_understanding_template) -> torch.Tensor | None:
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
     batch_idx = torch.arange(prompts.input_ids.shape[0], device=prompts.attention_mask.device)
-    last_subject_index = prompts.attention_mask[batch_idx].sum(dim=1)
+    last_subject_index = _last_non_padding_index(prompts.attention_mask[batch_idx]) + 1
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
@@ -836,6 +847,18 @@ def get_subject_index(handler, prompts, fact_tuple, subject_understanding_templa
     last_subject_index[-1] -= u_sub_reverse_pos
 
     return last_subject_index.long().cpu()
+
+
+def _resolve_delta_scale(handler) -> float:
+    """Return the shared delta scale used during optimization and insertion."""
+    configured_scale = float(getattr(handler.cfg.model, "delta_scale", 0.0))
+    if configured_scale > 0:
+        return configured_scale
+
+    residual_multiplier = float(getattr(handler.model.config, "residual_multiplier", 1.0))
+    if 0 < residual_multiplier < 1.0:
+        return 1.0 / residual_multiplier
+    return 1.0
 
 
 def optimize_v(
@@ -907,16 +930,8 @@ def optimize_v(
 
     opt = torch.optim.Adam([delta], lr=handler.lr)
 
-    # Detect residual_multiplier to amplify delta in the hook so the optimizer
-    # sees the full effect.  insert_kv must apply the same amplification.
-    _residual_mult = float(getattr(handler.model.config, "residual_multiplier", 1.0))
-    _delta_scale_cfg = float(getattr(handler.cfg.model, "delta_scale", 0.0))
-    if _delta_scale_cfg > 0:
-        _delta_scale = _delta_scale_cfg
-    elif 0 < _residual_mult < 1.0:
-        _delta_scale = 1.0 / _residual_mult
-    else:
-        _delta_scale = 1.0
+    # Optimize and insert in the same scaled output space.
+    _delta_scale = _resolve_delta_scale(handler)
 
     def delta_hook(module, _, output):
         nonlocal v_init
@@ -946,15 +961,20 @@ def optimize_v(
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
     main_prompt_idx_cpu = torch.arange(main_prompt_count, dtype=torch.long)
+    main_prompt_end_cpu = (
+        _last_non_padding_index(prompts.attention_mask[:main_prompt_count].detach().to("cpu")) + 1
+    )
     index_positions_cpu = (
-        prompts.attention_mask[:main_prompt_count].detach().to("cpu").sum(dim=1).unsqueeze(1)
+        main_prompt_end_cpu.unsqueeze(1)
         - target_len
         + torch.arange(target_len, dtype=torch.long).unsqueeze(0)
     ).long()
 
     index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(main_prompt_count, 1)
     dkl_prompt_idx_cpu = torch.arange(main_prompt_count, prompts.input_ids.shape[0], dtype=torch.long)
-    dkl_index_cpu = (prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu].sum(dim=1) - 1).long()
+    dkl_index_cpu = _last_non_padding_index(
+        prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu]
+    )
 
     cache_every = int(getattr(handler.cfg.model, "optimize_v_clear_cache_every", 0) or 0)
 
@@ -1037,13 +1057,9 @@ def insert_kv(
         old_W = torch.transpose(old_W, 0, 1)
         old_W_transposed = True
 
-    # Compensate for residual_multiplier: during optimize_v the delta hook
-    # amplified delta by 1/residual_multiplier so the optimizer worked in
-    # "full-effect" space.  The weight update must produce the same amplified
-    # delta at the MLP output so that after residual_mult scaling the actual
-    # effect matches what was optimized.
-    _residual_mult = float(getattr(handler.model.config, "residual_multiplier", 1.0))
-    _delta_scale = (1.0 / _residual_mult) if (0 < _residual_mult < 1.0) else 1.0
+    # Match the scaled output space used by optimize_v. This includes both
+    # automatic residual compensation and an explicit per-model delta_scale.
+    _delta_scale = _resolve_delta_scale(handler)
     scaled_delta = delta * _delta_scale
 
     inv_cov = get_second_moment(handler).to(handler.dtype).to(layer_device)
@@ -1055,7 +1071,7 @@ def insert_kv(
     right = scaled_delta / torch.dot(k, left)
 
     LOGGER.info(f"Delta norm: {delta.norm().item()}")
-    LOGGER.info(f"Delta scale (1/residual_mult): {_delta_scale}")
+    LOGGER.info(f"Delta scale: {_delta_scale}")
     LOGGER.info(f"Division Factor: {torch.dot(k, left).item()}")
     LOGGER.info(f"Right vector norm: {right.norm()}")
 

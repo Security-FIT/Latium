@@ -1,111 +1,283 @@
-# Latium Framework
+﻿# Latium Framework
 
-## Running ROME
+Latium is an open-source research framework for re-implementing and evaluating
+ROME (Rank-One Model Editing), with tooling for structural edit detection,
+causal tracing, artifact-backed analysis, and graph rendering.
 
-ROME (and related commands) is driven via the Hydra-based CLI in `src/cli.py`.
+The project is developed for cybersecurity research by the Security@FIT group in
+collaboration with Red Hat Research. The `legacy` branch preserves the ACM CCS
+2026 submission snapshot. This branch was refactored because the submission-era
+script and notebook layout had outgrown the project; the current runtime is
+Hydra-first and uses `python3 -m src`.
 
-**Single intervention:**
-```bash
-python -m src.cli +command=rome model=gpt2-medium
-```
+For contributor structure and extension points, see `docs/project.md` and the
+package README files under `src/`.
 
-**Batch evaluation:**
-```bash
-python -m src.cli +command=batch-rome model=gpt2-medium
-```
+> **Development status:** This README documents the `new-causal-tracing`
+> branch state. It includes the causal-tracing and detector-free causal-to-ROME
+> workflow that is intended to be merged into the primary development line.
 
-**Compute second-moment statistics** (required before running ROME on a new model):
-```bash
-python -m src.cli +command=second-moment model=gpt2-medium
-```
 
-The default config is at `src/config/config.yaml`. Override any value on the command line using Hydra syntax (e.g. `model=gpt2-large`).
+## Main Contributors
 
-Alternatively, use the console fallback (no Hydra overhead):
-```bash
-python -m src.cli --console rome --config src/config/config.yaml
-```
+- Matej Olexa
+- Jakub Res
 
----
-
-## Running Causal Trace
+## Setup
 
 ```bash
-python -m src.cli +command=causal-trace model=gpt2-medium
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+make mkdir
 ```
 
-To inspect the computed noise multiplier without running a full trace:
+Model configs default to CUDA. Model downloads are cached under `../models`,
+datasets under `../datasets`, and second-moment statistics under
+`data/second_moment_stats/`.
+
+`make setup` is also available for the conda-based setup path; it creates the
+`llms` environment and then runs the same directory setup as `make mkdir`.
+
+ROME edits usually need second-moment statistics. Compute them before running a
+new model:
+
 ```bash
-python -m src.cli +command=compute-multiplier model=gpt2-medium
+python3 -m src second-moment model=gpt2-large
+python3 -m src second-moment model=gpt2-large model.second_moment_target_samples=5000
 ```
 
----
+## Quick Start
 
-## Running the Structural Benchmark
-
-`structural_benchmark.py` applies ROME edits across a dataset and evaluates all structural detectors (MSD, blind MSD, spectral, IPR) on the modified weights. Results are written as JSON to `analysis_out/`.
+List registered edit methods, captures, analyses, and renderers:
 
 ```bash
-python structural_benchmark.py \
-    --model gpt2-large \
-    --n-tests 30 \
-    --start-idx 0 \
-    --output-dir ./analysis_out \
-    --spectral-top-k 50 \
-    --trim-first-layers 2 \
-    --trim-last-layers 2 \
-    --spectral-neighbor-layers 1
+python3 -m src methods
 ```
 
-Key arguments:
+Run one manual ROME edit and chat with the edited model:
 
-| Argument | Default | Description |
-|---|---|---|
-| `--model` | `gpt2-large` | Model name (must match a config in `src/config/model/`) |
-| `--n-tests` | `30` | Number of ROME edits to benchmark |
-| `--start-idx` | `0` | Starting index in the facts dataset |
-| `--output-dir` | `./analysis_out` | Directory for JSON result files |
-| `--spectral-top-k` | `50` | Top-K singular values used by the spectral detector |
-| `--trim-first-layers` | `2` | Layers to exclude from the head of the model |
-| `--trim-last-layers` | `2` | Layers to exclude from the tail of the model |
-| `--n-prompts` | auto | Number of ROME prefix prompts (scales with model size if omitted) |
+```bash
+python3 -m src manual-rome model=gpt2-large
+```
 
----
+Plan a structural run without loading a model:
 
-## Detection Documentation
+```bash
+python3 -m src structural plan \
+  'structural.run.models=[gpt2-large,qwen3-4b]' \
+  structural.run.n_tests=5 \
+  structural.capture.profile=paper
+```
 
-Detailed documentation for the detection methods is in the `docs/` directory:
+Capture edits, run model-free analyses, and render graph artifacts:
 
-- `docs/structural-docs.md` - structural detector metrics (L2 discrepancy, relative discrepancy, directional coherence, MSD, IPR, etc.)
-- `docs/spectral-docs.md` - spectral detector signals and the mathematics behind singular-value z-scores and ratio scores
+```bash
+python3 -m src structural run \
+  'structural.run.models=[gpt2-large]' \
+  structural.run.n_tests=30 \
+  structural.capture.profile=paper \
+  structural.capture.matrix_features.feature_set=paper \
+  structural.analysis.preset=paper \
+  structural.render.enabled=true \
+  structural.render.renderer_preset=structural-paper \
+  structural.run.run_id=gpt2-large-paper
+```
 
----
+Analyze or render an existing run root:
 
-## Models roadmap
----
+```bash
+python3 -m src structural analyze \
+  structural.analyze.run_root=analysis_out/gpt2-large-paper \
+  structural.analysis.preset=paper
 
-| Supported Models  | Causal Trace       | Weight intervention | Notes |
-|-------------------|--------------------|---------------------|-------|
-| gpt2-medium       | :heavy_check_mark: | :heavy_check_mark:  |       |
-| gpt2-large        | :heavy_check_mark: | :heavy_check_mark:  |       |
-| gpt2-xl           | :heavy_check_mark: | :heavy_check_mark:  |       |
-| gpt-j-6b          | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-0.6b        | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-1.7b        | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-4b          | :heavy_check_mark: | :heavy_check_mark:  |       |
-| qwen3-8b          | :heavy_check_mark: | :heavy_check_mark:  |       |
-| granite4-micro    | :heavy_check_mark: |                     |       |
+python3 -m src graphs run analysis_out/gpt2-large-paper graphs.renderer_preset=structural-paper
+```
 
----
+The graph renderer registry includes paper summaries, detector accuracy,
+ROME-success metrics, layer-window accuracy, detector signal-profile plots, and
+the structural artifact grid. Use `graphs.renderer_preset=full` or enable
+individual renderers such as `graphs.enable_renderers=[detector-signals]`.
 
-## Error codes:
+`matrix-features` is configurable. The default paper path captures only the
+scalar columns needed by paper graphs and the composite matrix branch:
+`spectral_gap`, `top1_energy`, `row_alignment`, `norm_cv`, and
+`effective_rank`. Blind/rank1/studies feature sets are opt-in through
+`structural.capture.matrix_features.feature_set`.
 
----
+Hydra overrides are the supported option style. Argparse flags such as
+`--models` are no longer supported by the main CLI.
 
-| Error code    | Name of the error | Description                                                                         |
-|---------------|-------------------|-------------------------------------------------------------------------------------|
-| `1`           | Help              | Help invoked. Typically caused by incorrect script usage.                           |
-| `2`           | Resource already exists   | Trying to create a resource that already exists.                            |
-| `-1`          | Unknown           | An unknow error. Create GitHub issue with the reproduction steps                    |
+## Main Workflows
 
----
+| Workflow | Command / entrypoint |
+|---|---|
+| Single ROME edit | `python3 -m src command=edit edit_method=rome model=gpt2-large` |
+| Manual ROME chat | `python3 -m src manual-rome ...` |
+| ROME-only benchmark | `python3 -m src rome-benchmark rome_benchmark.models=[gpt2-large]` |
+| Structural capture/analyze | `python3 -m src structural run ...` |
+| Analysis-only replay | `python3 -m src structural analyze ...` |
+| Graph rendering | `python3 -m src graphs run <run-root>` |
+| Audited early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
+| Legacy alternative trace | `python3 -m src alt-trace model=gpt2-large` |
+| Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
+| MetaCentrum causal trace -> ROME | `jobs/submit.sh causal-rome -- pipeline.model=gpt2-large` |
+
+## Automatic Causal Tracing
+
+```bash
+python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100
+```
+
+The active workflow automatically corrupts the full subject-token embedding
+span, restores whole-MLP outputs at the last subject token over overlapping
+windows, and aggregates paired indirect effects across facts. It filters
+eligible facts before inspecting restoration scores, discovers robust contiguous
+regions, and requires held-out confirmation before reporting one representative
+center.
+
+For the end-to-end cluster workflow, the confirmed center is passed at runtime
+to a matching second-moment computation and a ROME-only benchmark. The pipeline
+produces a validated `pipeline-summary.json`, does not rewrite model YAML files,
+and does not depend on the structural detector stack:
+
+```text
+causal trace -> held-out confirmation -> second moment -> ROME benchmark -> summary
+```
+
+See `causal_tracing.md` for method, configuration, outputs, and limitations.
+The older `alt-trace` command and notebooks remain available for historical
+comparison, but they are not part of the current selection policy.
+
+## Structural Artifacts
+
+Structural runs write manifest-backed run roots:
+
+```text
+analysis_out/<run-id>/
+  manifest.json
+  plans/<model>/<plan-id>/...
+  graphs/<renderer>/...
+```
+
+The manifest tracks artifact IDs, paths, config hashes, content hashes, and
+input dependencies. Re-running skips current artifacts. Use
+`structural.run.force=true` or `graphs.force=true` to recompute explicitly.
+
+The structural pipeline is split into:
+
+- `src/structural/execution/`: model loading, case selection, edits.
+- `src/structural/capture/`: reusable matrix/capture artifacts.
+- `src/structural/analysis/`: model-free analysis over saved artifacts.
+- `src/structural/detectors/`: detector math and live-model adapters.
+- `src/graphs/`: render artifacts and graph/data outputs.
+
+## Prefix/Template Variability
+
+The prefix experiment measures how sensitive structural detection is to the
+prefix/template used during a ROME edit.
+
+```bash
+python3 -m src prefix-experiment \
+  prefix_experiment.model=gpt2-large \
+  prefix_experiment.case_idx=0
+```
+
+Render a prefix artifact:
+
+```bash
+python3 -m src graphs prefix analysis_out/<prefix-artifact>.json
+```
+
+The notebook `prefixtest/prefixtest.ipynb` remains available for inspecting
+saved prefix experiment artifacts.
+
+## Remote Covariance
+
+`covariance_a100_remote.sh` computes second-moment statistics on a remote GPU
+node and pulls the resulting `.pt` files into `data/second_moment_stats/`.
+
+```bash
+./covariance_a100_remote.sh user@gpu-host
+MODEL_KEYS="gpt2-xl gpt-j-6b" ./covariance_a100_remote.sh user@gpu-host /path/to/Latium refactor-clean llms
+```
+
+Arguments are:
+
+```text
+<user@host> [remote_repo_path] [remote_branch] [conda_env]
+```
+
+## Models Roadmap
+
+Models are selected by config key, for example `model=gpt2-large` or
+`structural.run.models=[gpt2-large,qwen3-4b]`. Exact HuggingFace names are also
+accepted when they match a configured model.
+
+| Model key | Causal Trace | Weight intervention | Notes |
+|---|---|---|---|
+| `gpt2-medium` | yes | yes | working |
+| `gpt2-large` | yes | yes | working |
+| `gpt2-xl` | yes | yes | working |
+| `gpt-j-6b` | yes | yes | working |
+| `qwen3-0.6b` | yes | yes | configured |
+| `qwen3-1.7b` | yes | yes | configured |
+| `qwen3-4b` | yes | yes | configured |
+| `qwen3-8b` | yes | yes | configured |
+| `qwen2.5-1.5b` | yes | yes | configured |
+| `qwen3-guard-0.6b` | yes | yes | configured |
+| `gemma-4-12b` | yes | yes | working |
+| `granite4-micro` | yes | yes | unusual architecture |
+| `mistral-7b-v0.1` | yes | yes | configured |
+| `mistral-7b-v0.3` | yes | yes | configured |
+| `llama2-7b` | yes | yes | working |
+| `falcon-7b` | yes | yes | configured |
+| `opt-6.7b` | yes | yes | configured |
+| `deepseek-7b-base` | yes | yes | configured |
+| `deepseek-r1-llama3-8b` | yes | yes | configured |
+| `llama3` | planned | planned | roadmap |
+| `gpt-neo` | planned | planned | roadmap |
+| `baichuan` | planned | planned | roadmap |
+| `chatglm` | planned | planned | roadmap |
+| `t5` | planned | planned | roadmap |
+
+Prefix-variability configs for Qwen3-8B are available under
+`src/config/model/qwen3-8b-prefixtest-*.yaml`.
+
+## Documentation
+
+- `docs/project.md`: project structure and extension points.
+- `src/README.md`: source tree and command wiring.
+- `src/config/README.md`: config groups and override rules.
+- `src/editing/README.md`: edit method contract.
+- `src/structural/README.md`: capture, analysis, and detector flow.
+- `src/results/README.md`: artifact manifest and cache rules.
+- `src/graphs/README.md`: renderer contract.
+- `causal_tracing.md`: canonical audited causal-tracing and causal-to-ROME workflow.
+- `jobs/README.md`: MetaCentrum setup, PBS presets, and pipeline operation.
+
+## Developer Checks
+
+```bash
+make check-rome
+make lint
+python3 -m compileall -q src rome_benchmark.py
+python3 -m pytest
+```
+
+Useful smoke checks:
+
+```bash
+python3 -m src methods
+python3 -m src structural plan 'structural.run.models=[gpt2-large]' structural.run.n_tests=5
+```
+
+`make check-rome` verifies that protected ROME paths still match `main`.
+
+## Error Codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success (including help and expected early exit). |
+| `1` | `structural-validate-cov` failure with `structural.validate_cov.fail_missing=true`, or an uncaught exception. |
+| `2` | Invalid CLI usage (unknown command or argparse-style `--` flag). |

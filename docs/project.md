@@ -63,12 +63,12 @@ Package-local README files live under the main extension points:
 
 Notebooks are for visual inspection, not production runs.
 
-- `notebooks/causal_tracing.ipynb` and
-  `notebooks/causal_tracing_alt.ipynb` are historical references for the
-  legacy trace commands; they do not implement the current held-out region
-  selector.
-- `notebooks/analysis.ipynb`: thin wrapper around graph rendering for an
-  existing run root.
+- `notebooks/causal_tracing.ipynb` invokes the production causal-trace command
+  and visualizes its saved artifacts.
+- `notebooks/causal_tracing_legacy.ipynb` preserves the historical
+  `origin/causal-trace:analysis.ipynb` notebook unchanged.
+- `notebooks/analysis.ipynb` is a thin wrapper around graph rendering for an
+  existing run root; it is unrelated to the legacy causal-trace notebook.
 
 Production causal tracing is the CLI workflow documented in
 `causal_tracing.md`.

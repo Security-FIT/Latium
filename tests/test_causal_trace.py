@@ -146,6 +146,27 @@ def test_automatic_corruption_finds_weakest_effective_scale() -> None:
     assert calibration.minimum_multiplier == pytest.approx(torch.finfo(torch.bfloat16).eps ** 0.5)
 
 
+def test_automatic_corruption_increases_scale_until_baseline_is_stable() -> None:
+    def evaluate(multiplier: float) -> np.ndarray:
+        mean = 0.9 - 0.1 * multiplier
+        return np.asarray([mean - 0.05, mean + 0.05], dtype=np.float64)
+
+    calibration = _calibrate_corruption(
+        evaluate,
+        clean_probability=0.9,
+        min_total_effect=0.2,
+        max_corrupt_relative_std=0.2,
+        dtype=torch.bfloat16,
+    )
+
+    assert calibration.multiplier > 2.0
+    assert calibration.total_effect >= 0.2
+    assert calibration.relative_std <= 0.2
+    assert any(
+        row["meets_effect_requirement"] and not row["meets_stability_requirement"] for row in calibration.evaluations
+    )
+
+
 def test_automatic_corruption_rejects_when_dtype_range_cannot_reach_effect() -> None:
     with pytest.raises(TraceValidationError, match="throughout automatic calibration"):
         _calibrate_corruption(
@@ -157,8 +178,8 @@ def test_automatic_corruption_rejects_when_dtype_range_cannot_reach_effect() -> 
         )
 
 
-def test_automatic_corruption_rejects_unstable_selected_baseline() -> None:
-    with pytest.raises(TraceValidationError, match="unstable corrupt baseline"):
+def test_automatic_corruption_rejects_when_no_stable_scale_exists() -> None:
+    with pytest.raises(TraceValidationError, match="no stable effective corruption"):
         _calibrate_corruption(
             lambda multiplier: np.asarray([0.9 - 0.2 * multiplier, 0.9], dtype=np.float64),
             clean_probability=0.9,

@@ -161,16 +161,19 @@ def _calibrate_corruption(
         )
         return cached
 
-    _, unit_effect, _ = assess(1.0)
+    def eligible(total_effect: float, relative_std: float) -> bool:
+        return total_effect >= min_total_effect and relative_std <= max_corrupt_relative_std
+
+    _, unit_effect, unit_relative_std = assess(1.0)
     lower: float | None = None
     upper: float | None = None
 
-    if unit_effect >= min_total_effect:
+    if eligible(unit_effect, unit_relative_std):
         upper = 1.0
         while upper > minimum_multiplier:
             candidate = max(minimum_multiplier, upper / 2.0)
-            _, candidate_effect, _ = assess(candidate)
-            if candidate_effect >= min_total_effect:
+            _, candidate_effect, candidate_relative_std = assess(candidate)
+            if eligible(candidate_effect, candidate_relative_std):
                 upper = candidate
                 if candidate == minimum_multiplier:
                     break
@@ -181,8 +184,8 @@ def _calibrate_corruption(
         lower = 1.0
         while lower < maximum_multiplier:
             candidate = min(maximum_multiplier, lower * 2.0)
-            _, candidate_effect, _ = assess(candidate)
-            if candidate_effect >= min_total_effect:
+            _, candidate_effect, candidate_relative_std = assess(candidate)
+            if eligible(candidate_effect, candidate_relative_std):
                 upper = candidate
                 break
             lower = candidate
@@ -190,17 +193,18 @@ def _calibrate_corruption(
                 break
 
     if upper is None:
-        _, maximum_effect, _ = assess(maximum_multiplier)
+        _, maximum_effect, maximum_relative_std = assess(maximum_multiplier)
         raise TraceValidationError(
-            "low corruption effect throughout automatic calibration: "
-            f"maximum={maximum_effect:.6f} < {float(min_total_effect):.6f}"
+            "no stable effective corruption throughout automatic calibration: "
+            f"maximum_effect={maximum_effect:.6f}, "
+            f"maximum_relative_std={maximum_relative_std:.6f}"
         )
 
     if lower is not None:
         while upper / lower > tolerance_ratio:
             candidate = math.sqrt(lower * upper)
-            _, candidate_effect, _ = assess(candidate)
-            if candidate_effect >= min_total_effect:
+            _, candidate_effect, candidate_relative_std = assess(candidate)
+            if eligible(candidate_effect, candidate_relative_std):
                 upper = candidate
             else:
                 lower = candidate

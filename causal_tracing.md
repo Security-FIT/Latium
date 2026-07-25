@@ -19,9 +19,9 @@ The two terms use the same noise draw. Draws are averaged within each fact. Conf
 
 By default, the corruption scale is calibrated separately for each fact before
 any layer restoration is evaluated. The calibrator finds the weakest
-embedding-standard-deviation multiplier that satisfies the configured minimum
-clean-to-corrupt probability drop. Its search range and precision come from the
-embedding dtype. Calibration uses deterministic noise draws that are independent
+embedding-standard-deviation multiplier that satisfies the configured effect and
+stability guards. Its search range and precision come from the embedding dtype.
+Calibration uses deterministic noise draws that are independent
 of the draws used for the reported corrupt baseline and restoration sweep.
 A positive numeric noise_multiplier remains available for fixed-scale reproduction.
 

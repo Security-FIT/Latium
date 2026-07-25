@@ -33,6 +33,34 @@ def test_pipeline_defaults_resolve_from_hydra() -> None:
     assert payload["rome"]["start_idx"] == 0
 
 
+def test_pipeline_uses_selected_model_covariance_target(monkeypatch) -> None:
+    monkeypatch.setattr(
+        pipeline,
+        "_model_config",
+        lambda model: SimpleNamespace(
+            second_moment_target_samples=12_345 if model == "qwen3-4b" else None
+        ),
+    )
+
+    payload = pipeline.resolve_pipeline_config(["pipeline.model=qwen3-4b"])
+
+    assert payload["covariance"]["target_samples"] == 12_345
+
+
+def test_pipeline_covariance_override_wins(monkeypatch) -> None:
+    monkeypatch.setattr(
+        pipeline,
+        "_model_config",
+        lambda _model: SimpleNamespace(second_moment_target_samples=12_345),
+    )
+
+    payload = pipeline.resolve_pipeline_config(
+        ["pipeline.model=qwen3-4b", "pipeline.covariance.target_samples=77"]
+    )
+
+    assert payload["covariance"]["target_samples"] == 77
+
+
 def test_pipeline_commands_pin_the_confirmed_layer_without_mutating_config(tmp_path: Path) -> None:
     trace = pipeline.build_trace_command(
         model="qwen3-4b",

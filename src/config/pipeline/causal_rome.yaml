@@ -13,7 +13,9 @@ causal_trace:
   num_valid_facts: ${command.causal_trace.num_valid_facts}
 
 covariance:
-  target_samples: 100000
+  # null means: use the selected model value, then the second-moment
+  # command fallback of 100000 samples. An explicit override wins.
+  target_samples: null
   compute_if_missing: true
 
 rome:

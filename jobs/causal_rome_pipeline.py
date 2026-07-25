@@ -36,6 +36,13 @@ def resolve_pipeline_config(overrides: Sequence[str] = ()) -> dict[str, Any]:
     payload = OmegaConf.to_container(cfg.pipeline, resolve=True)
     if not isinstance(payload, dict):
         raise TypeError("pipeline config must resolve to a mapping")
+    covariance = payload.get("covariance")
+    if not isinstance(covariance, dict):
+        raise ValueError("pipeline.covariance must be a mapping")
+    if covariance.get("target_samples") is None:
+        model_config = _model_config(str(payload.get("model", "")))
+        configured = getattr(model_config, "second_moment_target_samples", None)
+        covariance["target_samples"] = 100_000 if configured is None else int(configured)
     _validate_config(payload)
     return payload
 

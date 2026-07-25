@@ -7,11 +7,11 @@ name: "ibm-granite/granite-4.0-micro"
 layer_name_template: "model.layers.{}.shared_mlp.output_linear"
 corrupt_layer_name_template: "model.embed_tokens"
 restore_layer_name_template: "model.layers.{}"
-layer: 9
+layer: 10
 corruption_noise_multiplier: 1.0
 lr: 0.10
 epochs: 25
-second_moment_path: "data/second_moment_stats/ibm-granite_granite-4.0-micro_9_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: "data/second_moment_stats/ibm-granite_granite-4.0-micro_10_SM_Method.WIKIPEDIA_100000.pt"
 
 prefix_enforce_latin: True
 prefix_min_words: 2

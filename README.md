@@ -113,27 +113,26 @@ Hydra overrides are the supported option style. Argparse flags such as
 | Structural capture/analyze | `python3 -m src structural run ...` |
 | Analysis-only replay | `python3 -m src structural analyze ...` |
 | Graph rendering | `python3 -m src graphs run <run-root>` |
-| Standard causal trace | `python3 -m src causal-trace model=gpt2-large` |
-| Alternative causal trace | `python3 -m src alt-trace model=gpt2-large` |
+| Audited early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
+| Legacy alternative trace | `python3 -m src alt-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
+| MetaCentrum causal trace -> ROME | `jobs/submit.sh causal-rome -- pipeline.model=gpt2-large` |
 
 ## Causal Trace
 
-CLI runs write trace outputs under `analysis_out/`:
-
 ```bash
-python3 -m src causal-trace model=gpt2-large generation.num_of_runs=5
-python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5 generation.num_trace_runs=10
+python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100
 ```
 
-Use the notebooks for visual inspection:
+The active workflow corrupts the full subject-token embedding span, restores
+whole-MLP outputs at the last subject token over overlapping windows, and
+aggregates paired indirect effects across facts. Discovery predeclares robust
+contiguous regions; a held-out split must confirm a region before one
+representative center is reported.
 
-- `notebooks/causal_tracing.ipynb`: standard trace, subject-token/layer
-  heatmaps, per-prompt curves, aggregate layer curve.
-- `notebooks/causal_tracing_alt.ipynb`: alternative trace, prompt curves,
-  prompt/layer heatmap, aggregate selection curve.
-
-Layer recommendation helpers are in `src/causal_trace/layer_heuristic.py`.
+See `causal_tracing.md` for method, configuration, outputs, and limitations.
+The older `alt-trace` command and notebooks remain available for historical
+comparison, but they are not part of the current selection policy.
 
 ## Structural Artifacts
 
@@ -200,26 +199,30 @@ Models are selected by config key, for example `model=gpt2-large` or
 `structural.run.models=[gpt2-large,qwen3-4b]`. Exact HuggingFace names are also
 accepted when they match a configured model.
 
-| Model key | Causal Trace | Weight intervention | Mean ES (n=500) | Notes |
+| Model key | Causal Trace | Weight intervention | Mean ES (n=100) | Notes |
 |---|---|---|---|---|
-| `gpt2-medium` | yes | yes | 0.988 | works |
+| `gpt2-medium` | yes | yes | 0.980 | works |
 | `gpt2-large` | yes | yes | 0.986 | works |
-| `gpt2-xl` | yes | yes | 0.986 | works |
-| `gpt-j-6b` | yes | yes | 0.996 | works |
+| `gpt2-xl` | yes | yes | 0.980 | works |
+| `gpt-j-6b` | yes | yes | 0.990 | works |
 | `qwen3-0.6b` | yes | yes |  | configured |
 | `qwen3-1.7b` | yes | yes |  | configured |
-| `qwen3-4b` | yes | yes | 0.992 | configured |
-| `qwen3-8b` | yes | yes | 1.000 | configured |
+| `qwen3-4b` | yes | yes | 1.000 | works |
+| `qwen3-8b` | yes | yes | 1.000 | works |
 | `qwen2.5-1.5b` | yes | yes |  | configured |
 | `qwen3-guard-0.6b` | yes | yes |  | configured |
-| `granite4-micro` | yes | yes | 0.978 | unusual architecture |
-| `mistral-7b-v0.1` | yes | yes | 0.948 | configured |
-| `mistral-7b-v0.3` | yes | yes | 0.934 | configured |
-| `llama2-7b` | yes | yes | 0.614 | unusual architecture |
-| `falcon-7b` | yes | yes | 0.976 | configured |
-| `opt-6.7b` | yes | yes | 0.978 | configured |
-| `deepseek-7b-base` | yes | yes | 0.976 | configured |
-| `deepseek-r1-llama3-8b` | yes | yes |  | configured |
+| `granite4-micro` | yes | yes | 0.990 | works |
+| `mistral-7b-v0.1` | yes | yes | 0.960 | works |
+| `mistral-7b-v0.3` | yes | yes | 0.890 | works |
+| `llama2-7b` | yes | yes | 0.990 | works |
+| `falcon-7b` | yes | yes | 0.990 | works |
+| `opt-6.7b` | yes | yes | 0.990 | works |
+| `deepseek-7b-base` | yes | yes | 0.918 | works |
+| `deepseek-r1-llama3-8b` | yes | yes | 1.000 | works |
+| `granite-4.1-8b` | yes | yes | 0.990 | works |
+| `ministral-3-8b` | yes | yes | 1.000 | works |
+| `olmo-3-1025-7b` | yes | yes | 1.000 | works |
+| `gemma-4-12b` | yes | yes | 0.990 | works |
 | `llama3` | planned | planned |  | roadmap |
 | `gpt-neo` | planned | planned |  | roadmap |
 | `baichuan` | planned | planned |  | roadmap |
@@ -238,7 +241,8 @@ Prefix-variability configs for Qwen3-8B are available under
 - `src/structural/README.md`: capture, analysis, and detector flow.
 - `src/results/README.md`: artifact manifest and cache rules.
 - `src/graphs/README.md`: renderer contract.
-- `src/causal_trace/README.md`: standard vs alt causal tracing.
+- `causal_tracing.md`: canonical audited causal-tracing and causal-to-ROME workflow.
+- `jobs/README.md`: MetaCentrum setup, PBS presets, and pipeline operation.
 
 ## Developer Checks
 

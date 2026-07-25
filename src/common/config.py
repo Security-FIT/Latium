@@ -97,6 +97,22 @@ def optional_str(value: Any) -> str | None:
     return str(raw)
 
 
+def strict_bool(value: Any, *, name: str = "value") -> bool:
+    """Parse a boolean without treating arbitrary non-empty strings as true."""
+    raw = plain(value)
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, int) and raw in (0, 1):
+        return bool(raw)
+    if isinstance(raw, str):
+        token = raw.strip().lower()
+        if token in {"1", "true", "yes", "on"}:
+            return True
+        if token in {"0", "false", "no", "off"}:
+            return False
+    raise ValueError(f"{name} must be a boolean, got {value!r}")
+
+
 __all__ = [
     "dict_section",
     "get_config_value",
@@ -106,5 +122,6 @@ __all__ = [
     "optional_str",
     "plain",
     "section_value",
+    "strict_bool",
     "string_list",
 ]

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import copy
+import inspect
 import re
 import random
 import json
@@ -24,6 +25,7 @@ from tqdm import tqdm
 from enum import Enum
 import numpy as np
 from src.common.paths import non_conflicting_path
+from src.rome.activations import _accumulate_second_moment_tokens, _second_moment_contribution
 from src.runtime import runtime_from_cfg
 
 if TYPE_CHECKING:
@@ -45,11 +47,14 @@ class PrefixMode(str, Enum):
                static fallback templates.
     EXTERNAL - templates come from a JSON cache file or a separate helper model
                specified via ``prefix_source`` in the model YAML.
+    STATIC   - use the fixed context pool validated by the Llama causal-to-ROME
+               workflow.
     """
 
     SELF = "self"
     TEMPLATE = "template"
     EXTERNAL = "external"
+    STATIC = "static"
 
 
 _MANUAL_STATIC_PREFIXES = [
@@ -77,6 +82,20 @@ _MANUAL_STATIC_PREFIXES = [
     "In recent decades, {}",
     "Simply put, {}",
     "The short answer: {}",
+]
+
+_VALIDATED_STATIC_PREFIXES = [
+    "{}",
+    "As a fact, {}",
+    "In one sentence, {}",
+    "Historically, {}",
+    "In summary, {}",
+    "It is known that {}",
+    "For context, {}",
+    "In plain terms, {}",
+    "To clarify, {}",
+    "A key point: {}",
+    "By definition, {}",
 ]
 
 _MANUAL_ENGLISH_SEEDS = [
@@ -140,6 +159,15 @@ def _build_static_templates(count: int, shuffle: bool = False) -> List[str]:
         templates.append(pool[idx % len(pool)])
         idx += 1
     return templates[:count]
+
+
+def _build_validated_static_templates(count: int) -> List[str]:
+    templates: List[str] = []
+    while len(templates) < int(count):
+        chunk = list(_VALIDATED_STATIC_PREFIXES)
+        random.shuffle(chunk)
+        templates.extend(chunk)
+    return templates[: int(count)]
 
 
 def _dedupe_templates(templates: List[str]) -> List[str]:
@@ -405,6 +433,7 @@ class PrefixGenerationHandler:
 
     Notes:
     * ``template`` mode uses manual English seeds + static template fallback.
+    * ``static`` mode uses the fixed validated context pool without generation.
     """
 
     def __init__(
@@ -449,6 +478,8 @@ class PrefixGenerationHandler:
             return self._generate_self(handler, count, prefix_range)
         if self.mode == PrefixMode.TEMPLATE:
             return self._generate_manual(handler, count, prefix_range)
+        if self.mode == PrefixMode.STATIC:
+            return _build_validated_static_templates(count)
         return self._generate_external(handler, count, prefix_range)
 
     def _generate_self(self, handler, count: int, prefix_range: Tuple[int, int]) -> List[str]:
@@ -693,6 +724,17 @@ def _reshape_hidden_states(hidden_states: torch.Tensor, batch_size: int, seq_len
     raise RuntimeError(f"Unsupported activation rank for hooks: {hidden_states.dim()}")
 
 
+def _last_non_padding_index(attention_mask: torch.Tensor) -> torch.Tensor:
+    """Return each row's final non-padding index for left or right padding."""
+    if attention_mask.dim() != 2:
+        raise RuntimeError(f"Expected a 2D attention mask, got rank {attention_mask.dim()}")
+    positions = torch.arange(attention_mask.size(1), device=attention_mask.device).expand_as(attention_mask)
+    last_index = positions.masked_fill(attention_mask == 0, -1).max(dim=1).values
+    if bool((last_index < 0).any()):
+        raise RuntimeError("Attention mask contains an all-padding row")
+    return last_index.long()
+
+
 def gather_k(
     handler,
     fact_tuple: Tuple[str, str, str],
@@ -707,7 +749,7 @@ def gather_k(
 
     prompt_count = int(prompts.input_ids.shape[0])
     seq_len = int(prompts.input_ids.shape[1])
-    token_index = (prompts.attention_mask.detach().to("cpu").sum(dim=1) - 1).long()
+    token_index = _last_non_padding_index(prompts.attention_mask.detach().to("cpu"))
 
     # TODO: Add support for dynamic batch size
     k = None
@@ -812,7 +854,7 @@ def get_subject_position(handler, prompt, subject):
 def get_subject_index(handler, prompts, fact_tuple, subject_understanding_template) -> torch.Tensor | None:
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
     batch_idx = torch.arange(prompts.input_ids.shape[0], device=prompts.attention_mask.device)
-    last_subject_index = prompts.attention_mask[batch_idx].sum(dim=1)
+    last_subject_index = _last_non_padding_index(prompts.attention_mask[batch_idx]) + 1
 
     fact_prompt = handler.tokenize_prompt(fact_tuple[0].format(fact_tuple[1]))
     u_fact_prompt = handler.tokenize_prompt(subject_understanding_template.format(fact_tuple[1]))
@@ -834,6 +876,18 @@ def get_subject_index(handler, prompts, fact_tuple, subject_understanding_templa
     last_subject_index[-1] -= u_sub_reverse_pos
 
     return last_subject_index.long().cpu()
+
+
+def _resolve_delta_scale(handler) -> float:
+    """Return the shared delta scale used during optimization and insertion."""
+    configured_scale = float(getattr(handler.cfg.model, "delta_scale", 0.0))
+    if configured_scale > 0:
+        return configured_scale
+
+    residual_multiplier = float(getattr(handler.model.config, "residual_multiplier", 1.0))
+    if 0 < residual_multiplier < 1.0:
+        return 1.0 / residual_multiplier
+    return 1.0
 
 
 def optimize_v(
@@ -905,16 +959,8 @@ def optimize_v(
 
     opt = torch.optim.Adam([delta], lr=handler.lr)
 
-    # Detect residual_multiplier to amplify delta in the hook so the optimizer
-    # sees the full effect.  insert_kv must apply the same amplification.
-    _residual_mult = float(getattr(handler.model.config, "residual_multiplier", 1.0))
-    _delta_scale_cfg = float(getattr(handler.cfg.model, "delta_scale", 0.0))
-    if _delta_scale_cfg > 0:
-        _delta_scale = _delta_scale_cfg
-    elif 0 < _residual_mult < 1.0:
-        _delta_scale = 1.0 / _residual_mult
-    else:
-        _delta_scale = 1.0
+    # Optimize and insert in the same scaled output space.
+    _delta_scale = _resolve_delta_scale(handler)
 
     def delta_hook(module, _, output):
         nonlocal v_init
@@ -944,15 +990,20 @@ def optimize_v(
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
     main_prompt_idx_cpu = torch.arange(main_prompt_count, dtype=torch.long)
+    main_prompt_end_cpu = (
+        _last_non_padding_index(prompts.attention_mask[:main_prompt_count].detach().to("cpu")) + 1
+    )
     index_positions_cpu = (
-        prompts.attention_mask[:main_prompt_count].detach().to("cpu").sum(dim=1).unsqueeze(1)
+        main_prompt_end_cpu.unsqueeze(1)
         - target_len
         + torch.arange(target_len, dtype=torch.long).unsqueeze(0)
     ).long()
 
     index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(main_prompt_count, 1)
     dkl_prompt_idx_cpu = torch.arange(main_prompt_count, prompts.input_ids.shape[0], dtype=torch.long)
-    dkl_index_cpu = (prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu].sum(dim=1) - 1).long()
+    dkl_index_cpu = _last_non_padding_index(
+        prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu]
+    )
 
     cache_every = int(getattr(handler.cfg.model, "optimize_v_clear_cache_every", 0) or 0)
 
@@ -1035,13 +1086,9 @@ def insert_kv(
         old_W = torch.transpose(old_W, 0, 1)
         old_W_transposed = True
 
-    # Compensate for residual_multiplier: during optimize_v the delta hook
-    # amplified delta by 1/residual_multiplier so the optimizer worked in
-    # "full-effect" space.  The weight update must produce the same amplified
-    # delta at the MLP output so that after residual_mult scaling the actual
-    # effect matches what was optimized.
-    _residual_mult = float(getattr(handler.model.config, "residual_multiplier", 1.0))
-    _delta_scale = (1.0 / _residual_mult) if (0 < _residual_mult < 1.0) else 1.0
+    # Match the scaled output space used by optimize_v. This includes both
+    # automatic residual compensation and an explicit per-model delta_scale.
+    _delta_scale = _resolve_delta_scale(handler)
     scaled_delta = delta * _delta_scale
 
     inv_cov = get_second_moment(handler).to(handler.dtype).to(layer_device)
@@ -1053,7 +1100,7 @@ def insert_kv(
     right = scaled_delta / torch.dot(k, left)
 
     LOGGER.info(f"Delta norm: {delta.norm().item()}")
-    LOGGER.info(f"Delta scale (1/residual_mult): {_delta_scale}")
+    LOGGER.info(f"Delta scale: {_delta_scale}")
     LOGGER.info(f"Division Factor: {torch.dot(k, left).item()}")
     LOGGER.info(f"Right vector norm: {right.norm()}")
 
@@ -1068,6 +1115,41 @@ def insert_kv(
     # Insert new weights back to the model
     handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
     return new_W.to(handler.dtype), old_W, update_matrix  # Cast to model dtype
+
+
+class _CovarianceActivationCaptured(RuntimeError):
+    """Internal signal used to stop a forward after the target activation is captured."""
+
+
+class _AdaptiveCovarianceBatchSizer:
+    def __init__(self, initial_batch_size: int, min_batch: int = 1, growth_interval: int = 8):
+        self.min_batch = max(1, int(min_batch))
+        self.initial_batch_size = max(self.min_batch, int(initial_batch_size))
+        self.current_batch_size = self.initial_batch_size
+        self.growth_interval = max(1, int(growth_interval))
+        self._successful_batches = 0
+
+    def record_oom(self, failed_batch_size: int) -> int:
+        failed_batch_size = max(self.min_batch, int(failed_batch_size))
+        reduced_size = max(self.min_batch, failed_batch_size // 2)
+        self.current_batch_size = min(self.current_batch_size, reduced_size)
+        self._successful_batches = 0
+        return self.current_batch_size
+
+    def record_success(self) -> int:
+        if self.current_batch_size >= self.initial_batch_size:
+            self._successful_batches = 0
+            return self.current_batch_size
+
+        self._successful_batches += 1
+        if self._successful_batches >= self.growth_interval:
+            self.current_batch_size = min(
+                self.initial_batch_size,
+                max(self.current_batch_size + 1, self.current_batch_size * 2),
+            )
+            self._successful_batches = 0
+
+        return self.current_batch_size
 
 
 class SM_Method(Enum):
@@ -1110,19 +1192,17 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     # Accumulate second moment directly on GPU instead of storing all k vectors
     C = torch.zeros(hidden_dim, hidden_dim, dtype=torch.float32, device=module_device)
     total_tokens = 0
+    current_attention_mask = None
+    current_hidden_states = None
 
     def hook(_, inp, out):
-        nonlocal C, total_tokens
-        k = inp[0].detach().float() if isinstance(inp, tuple) else inp.detach().float()
-        if len(k.shape) == 3:
-            k = k.view(-1, k.shape[-1])  # [batch*seq, hidden]
-        k = k.to(C.device)
-        total_tokens += k.shape[0]
-        # Use addmm_ to accumulate k^T @ k into C without allocating a
-        # hidden_dim x hidden_dim temporary (can be >1 GB for large models).
-        C.addmm_(k.T, k)
-        del k
-        return out
+        nonlocal current_attention_mask, current_hidden_states
+        if current_attention_mask is None:
+            raise RuntimeError("Missing attention mask while accumulating covariance")
+        if current_hidden_states is not None:
+            raise RuntimeError("Covariance target module ran more than once in a single forward pass")
+        current_hidden_states = (inp[0] if isinstance(inp, tuple) else inp).detach()
+        raise _CovarianceActivationCaptured
 
     handle = module.register_forward_hook(hook)
 
@@ -1139,6 +1219,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_mode_raw = getattr(handler.cfg.model, "second_moment_batch_size_mode", "auto")
     batch_mode = str(batch_mode_raw).strip().lower()
     manual_batch_size = getattr(handler.cfg.model, "second_moment_batch_size", None)
+    adaptive_batch_enabled = False
     if batch_mode in ("manual", "fixed", "static"):
         if manual_batch_size is None:
             raise ValueError("second_moment_batch_size must be set when second_moment_batch_size_mode is 'manual'")
@@ -1149,11 +1230,25 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
             batch_size = max(1, int(manual_batch_size))
             LOGGER.info("Using manual covariance batch size override: %d (mode=auto)", batch_size)
         else:
+            adaptive_batch_enabled = True
             LOGGER.info("Using dynamic covariance batch size estimate: %d", batch_size)
     else:
         raise ValueError(
             f"Invalid second_moment_batch_size_mode: {batch_mode_raw!r}. Expected one of: auto, dynamic, manual."
         )
+    batch_sizer = _AdaptiveCovarianceBatchSizer(batch_size)
+
+    # The covariance hook consumes intermediate MLP inputs, not output logits.
+    # Models with very large vocabularies (for example Gemma 4) otherwise
+    # materialize a large [batch, sequence, vocabulary] tensor unnecessarily.
+    try:
+        supports_logits_to_keep = "logits_to_keep" in inspect.signature(handler.model.forward).parameters
+    except (TypeError, ValueError):
+        supports_logits_to_keep = False
+    model_forward_kwargs = {"use_cache": False}
+    if supports_logits_to_keep:
+        model_forward_kwargs["logits_to_keep"] = 1
+        LOGGER.info("Limiting covariance forwards to the final output logit")
 
     LOGGER.info(
         f"Starting covariance computation: {n_samples} samples, batch_size={batch_size}, max_length={max_length}"
@@ -1179,40 +1274,76 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_texts = []
 
     def process_text_batch(text_batch):
-        nonlocal processed, batch_size, processed_batches
+        nonlocal processed, batch_size, processed_batches, current_attention_mask, current_hidden_states, total_tokens
         if not text_batch:
             return
         # Non-recursive OOM handling: split batch and retry without recursion
         queue = [text_batch]
         while queue:
             chunk = queue.pop(0)
+            tokens = None
             try:
                 tokens = handler.tokenizer(
                     chunk, return_tensors='pt', truncation=True, max_length=max_length, padding=True
                 )
-                handler.model(
-                    tokens.input_ids.to(input_device),
-                    attention_mask=tokens.attention_mask.to(input_device),
-                    use_cache=False,
+                current_attention_mask = tokens.attention_mask
+                current_hidden_states = None
+                try:
+                    handler.model(
+                        tokens.input_ids.to(input_device),
+                        attention_mask=tokens.attention_mask.to(input_device),
+                        **model_forward_kwargs,
+                    )
+                except _CovarianceActivationCaptured:
+                    pass
+                if current_hidden_states is None:
+                    raise RuntimeError(f"Covariance target module was not reached: {layer_name}")
+                # Commit only after the entire model forward succeeds. A later-layer
+                # OOM therefore cannot leave ghost tokens in the shared covariance.
+                contribution, token_count = _second_moment_contribution(
+                    current_hidden_states,
+                    current_attention_mask,
+                    device=C.device,
                 )
-                del tokens
+                C.add_(contribution)
+                total_tokens += token_count
                 processed += len(chunk)
                 processed_batches += 1
+                if adaptive_batch_enabled:
+                    old_batch_size = batch_size
+                    batch_size = batch_sizer.record_success()
+                    if batch_size != old_batch_size:
+                        LOGGER.info(
+                            "Increasing covariance batch size after successful batches: %d -> %d",
+                            old_batch_size,
+                            batch_size,
+                        )
                 if clear_cache_every > 0 and processed_batches % clear_cache_every == 0 and torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except torch.cuda.OutOfMemoryError:
-                LOGGER.warning("OOM during covariance computation, reducing batch size (chunk=%d)", len(chunk))
+                LOGGER.warning("OOM during covariance computation (chunk=%d)", len(chunk))
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 if len(chunk) <= 1:
                     LOGGER.warning("Skipping sample that causes OOM even at batch_size=1")
                     continue
-                batch_size = max(1, batch_size // 2)
+                if adaptive_batch_enabled:
+                    old_batch_size = batch_size
+                    batch_size = batch_sizer.record_oom(len(chunk))
+                    if batch_size != old_batch_size:
+                        LOGGER.warning("Reduced covariance batch size: %d -> %d", old_batch_size, batch_size)
+                else:
+                    LOGGER.warning("Splitting covariance chunk while fixed batch size remains %d", batch_size)
                 midpoint = max(1, len(chunk) // 2)
                 queue.insert(0, chunk[midpoint:])
                 queue.insert(0, chunk[:midpoint])
             except Exception as e:
                 LOGGER.warning(e)
+            finally:
+                current_attention_mask = None
+                current_hidden_states = None
+                if tokens is not None:
+                    del tokens
 
     try:
         with torch.no_grad(), tqdm(total=n_samples, desc="Computing covariance", mininterval=1.0) as pbar:

@@ -16,7 +16,7 @@ from typing import Any
 import datasets
 import torch
 from omegaconf import DictConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 from src.common.linalg import CUDAMode, DeviceManager, check_device, gpu_count
 from src.runtime import get_runtime, runtime_from_cfg
@@ -89,9 +89,9 @@ def load_pretrained(cfg: DictConfig) -> Any:
         except Exception:
             return False
 
-    def _model_from_pretrained(path_or_name: str, **kwargs):
+    def _call_model_loader(model_loader: Any, path_or_name: str, **kwargs):
         try:
-            return AutoModelForCausalLM.from_pretrained(
+            return model_loader.from_pretrained(
                 path_or_name,
                 torch_dtype=dtype,
                 **kwargs,
@@ -103,11 +103,34 @@ def load_pretrained(cfg: DictConfig) -> Any:
                 "Transformers does not accept torch_dtype; retrying with dtype",
                 exc_info=True,
             )
-            return AutoModelForCausalLM.from_pretrained(
+            return model_loader.from_pretrained(
                 path_or_name,
                 dtype=dtype,
                 **kwargs,
             )
+
+    def _model_from_pretrained(path_or_name: str, **kwargs):
+        try:
+            return _call_model_loader(AutoModelForCausalLM, path_or_name, **kwargs)
+        except ValueError as exc:
+            if "Unrecognized configuration class" not in str(exc):
+                raise
+            LOGGER.info(
+                "AutoModelForCausalLM does not support this model type; resolving architecture class for %s",
+                path_or_name,
+            )
+            import transformers
+
+            config_kwargs = {}
+            if "token" in kwargs:
+                config_kwargs["token"] = kwargs["token"]
+            config = AutoConfig.from_pretrained(path_or_name, **config_kwargs)
+            for arch_name in getattr(config, "architectures", ()) or ():
+                model_cls = getattr(transformers, arch_name, None)
+                if callable(getattr(model_cls, "from_pretrained", None)):
+                    LOGGER.info("Loading %s via %s", path_or_name, arch_name)
+                    return _call_model_loader(model_cls, path_or_name, **kwargs)
+            raise
 
     if os.path.exists(local_model_path):
         LOGGER.info("Loading model from local cache: %s", local_model_path)

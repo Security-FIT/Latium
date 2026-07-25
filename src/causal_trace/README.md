@@ -1,31 +1,35 @@
-# Causal Trace
+# Causal Trace Package
 
-This package has two causal tracing workflows.
+The canonical method, configuration, outputs, limitations, and full
+causal-to-ROME workflow are documented in
+[`../../causal_tracing.md`](../../causal_tracing.md). This package README is
+only an implementation entry point; it does not define a second version of the
+method.
 
-| File | Workflow |
-|---|---|
-| `causal_trace.py` | Standard trace: corrupt subject embeddings, restore each subject token at each layer, write CSV rows. |
-| `alt_trace.py` | Alternative trace: restore the last subject token, average repeated noise runs, rank layers with middle-third fallback. |
-| `layer_heuristic.py` | Layer scoring helpers that can consume causal trace CSVs. |
+`tokenization.py` maps exact model-input token positions, `selection.py` owns
+window statistics and held-out selection, and `causal_trace.py` owns model
+execution and output artifacts.
 
-Visual notebooks:
-
-- `notebooks/causal_tracing.ipynb` for the standard workflow.
-- `notebooks/causal_tracing_alt.ipynb` for the alternative workflow.
-
-Use matching `MODEL_CONFIG`, prompt counts, and dataset settings when comparing
-the two notebooks.
-
-## CLI
+## Standalone CLI
 
 ```bash
-python3 -m src causal-trace model=gpt2-large generation.num_of_runs=5
-python3 -m src alt-trace model=gpt2-large generation.num_of_runs=5 generation.num_trace_runs=10
+python3 -m src causal-trace model=gpt2-xl command.causal_trace.num_valid_facts=100
 ```
 
-## Adding A Variant
+To persist a held-out-confirmed trace center as the selected model config's
+ROME layer, opt in explicitly:
 
-Keep shared prompt preprocessing in `causal_trace.py`. Put variant-specific
-tracing and persistence in a new module, add a command handler in
-`command_handlers/operations.py`, and add a command config under
-`src/config/command/`.
+```bash
+python3 -m src causal-trace model=gpt2-xl command.causal_trace.overwrite_model_config_layer=true
+```
+
+The config is not changed when tracing does not produce a confirmed selection.
+The summary records whether the overwrite occurred and the old and new layers.
+
+The cluster pipeline reads the confirmed center, computes matching second
+moments when needed, and runs the ROME-only benchmark using runtime overrides.
+It does not modify model YAML files or run structural detectors:
+
+```bash
+jobs/submit.sh causal-rome -- pipeline.model=gpt2-xl
+```

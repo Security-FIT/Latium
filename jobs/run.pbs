@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+#PBS -j oe
+
+set -Eeuo pipefail
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+ROOT="${LATIUM_REPO_ROOT:-${PBS_O_WORKDIR:-}}"
+[[ -n "$ROOT" && -f "$ROOT/requirements.txt" && -d "$ROOT/src" ]] || \
+  die "LATIUM_REPO_ROOT/PBS_O_WORKDIR is not a Latium checkout: ${ROOT:-<empty>}"
+cd "$ROOT"
+
+if [[ -f "$ROOT/jobs/local.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT/jobs/local.env"
+fi
+
+if [[ -n "${LATIUM_ENV:-}" ]]; then
+  [[ -x "$LATIUM_ENV/bin/python" ]] || die "LATIUM_ENV has no Python: $LATIUM_ENV"
+  export PATH="$LATIUM_ENV/bin:$PATH"
+elif [[ -x "$ROOT/.venv/bin/python" ]]; then
+  export PATH="$ROOT/.venv/bin:$PATH"
+else
+  die "Set LATIUM_ENV in jobs/local.env or create $ROOT/.venv"
+fi
+
+[[ -n "${SCRATCHDIR:-}" && -d "$SCRATCHDIR" ]] || die "PBS did not provide SCRATCHDIR"
+mkdir -p "$SCRATCHDIR/tmp"
+export TMPDIR="$SCRATCHDIR/tmp"
+
+cleanup() {
+  if command -v clean_scratch >/dev/null 2>&1; then
+    clean_scratch || true
+  fi
+}
+trap cleanup EXIT TERM
+
+CACHE_ROOT="${LATIUM_CACHE_ROOT:-$ROOT/.cache/huggingface}"
+mkdir -p "$CACHE_ROOT"
+export HF_HOME="${HF_HOME:-$CACHE_ROOT}"
+export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-$HF_HOME/hub}"
+export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
+export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
+export PYTHONUNBUFFERED=1
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+
+LATIUM_ARG_COUNT="${LATIUM_ARG_COUNT:-1}"
+[[ "$LATIUM_ARG_COUNT" =~ ^[0-9]+$ ]] || die "LATIUM_ARG_COUNT is invalid: $LATIUM_ARG_COUNT"
+LATIUM_ARGS=()
+if [[ "$LATIUM_ARG_COUNT" -gt 0 ]]; then
+  [[ -n "${LATIUM_ARGS_B64:-}" ]] || die "LATIUM_ARGS_B64 was not supplied by jobs/submit.sh"
+  mapfile -d '' -t LATIUM_ARGS < <(printf '%s' "$LATIUM_ARGS_B64" | base64 --decode)
+  [[ ${#LATIUM_ARGS[@]} -eq "$LATIUM_ARG_COUNT" ]] || die "Decoded Latium argument count is invalid"
+fi
+
+for i in "${!LATIUM_ARGS[@]}"; do
+  LATIUM_ARGS[$i]="${LATIUM_ARGS[$i]//__PBS_JOBID__/${PBS_JOBID:-local}}"
+done
+
+if [[ "${LATIUM_EXPECT_GPU:-1}" == "1" ]]; then
+  [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]] || die "No GPU was allocated (CUDA_VISIBLE_DEVICES is empty)"
+  python - <<'PY'
+import torch
+
+if not torch.cuda.is_available():
+    raise SystemExit("CUDA was allocated but torch.cuda.is_available() is false")
+print("torch:", torch.__version__)
+print("CUDA device:", torch.cuda.get_device_name(0))
+PY
+fi
+
+echo "job: ${PBS_JOBID:-local}"
+echo "host: $(hostname -f)"
+echo "repo: $ROOT"
+echo "scratch: $SCRATCHDIR"
+echo "HF cache: $HF_HOME"
+printf 'command:'
+case "${LATIUM_RUNNER:-latium}" in
+  latium)
+    RUN_COMMAND=(python -m src "${LATIUM_ARGS[@]}")
+    ;;
+  causal-rome)
+    RUN_COMMAND=(python "$ROOT/jobs/causal_rome_pipeline.py" "${LATIUM_ARGS[@]}")
+    ;;
+  *)
+    die "Unknown LATIUM_RUNNER: ${LATIUM_RUNNER}"
+    ;;
+esac
+printf ' %q' "${RUN_COMMAND[@]}"
+printf '\n'
+
+"${RUN_COMMAND[@]}"

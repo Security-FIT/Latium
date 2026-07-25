@@ -7,6 +7,7 @@ name: "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"
 layer_name_template: "model.layers.{}.mlp.down_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 0
+layer: 5
+second_moment_path: "./data/second_moment_stats/deepseek-ai_DeepSeek-R1-Distill-Llama-8B_5_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.021881103515625
 lr: 0.05

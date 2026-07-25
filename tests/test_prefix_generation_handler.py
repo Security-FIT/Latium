@@ -155,6 +155,19 @@ def test_generate_prefixes_uses_generation_prefix_range_by_default() -> None:
     assert prefix_handler.calls == [(3, (2, 10))]
 
 
+def test_static_prefix_mode_matches_validated_notebook_pool(monkeypatch) -> None:
+    monkeypatch.setattr(common.random, "shuffle", lambda values: None)
+    cfg = SimpleNamespace(name="NousResearch/Llama-2-7b-hf", prefix_mode="static")
+    prefix_handler = PrefixGenerationHandler(cfg)
+
+    generated = prefix_handler.generate(object(), 25, (2, 10))
+
+    expected = common._VALIDATED_STATIC_PREFIXES
+    assert generated[: len(expected)] == expected
+    assert generated[len(expected) : 2 * len(expected)] == expected
+    assert len(generated) == 25
+
+
 def test_build_sampled_templates_trims_generated_token_count(monkeypatch) -> None:
     class FakePromptBatch(dict):
         def __init__(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> None:

@@ -1,0 +1,17 @@
+# Gemma 4 12B Unified dense text backbone (Hugging Face: google/gemma-4-12B)
+# Validated from the HF config: enable_moe_block=false and 48 text layers.
+# Layer numbering is zero-based; causal tracing may overwrite it after held-out confirmation.
+name: "google/gemma-4-12B"
+layer_name_template: "model.language_model.layers.{}.mlp.down_proj"
+fc_layer_name_template: "model.language_model.layers.{}.mlp.up_proj"
+restore_layer_name_template: "model.language_model.layers.{}"
+corrupt_layer_name_template: "model.language_model.embed_tokens"
+layer: 11
+corruption_noise_multiplier: 0.1
+dtype: "bf16"
+prefix_enforce_latin: true
+prefix_min_words: 2
+second_moment_batch_size_mode: "dynamic"
+second_moment_target_samples: 100000
+second_moment_max_length: 512
+optimize_v_clear_cache_every: 5

@@ -164,6 +164,10 @@ The selected layer and cleared explicit covariance path are passed to the
 second-moment and ROME processes as runtime overrides. The pipeline neither
 imports nor runs the postponed detection method.
 
+For `llama2-7b`, downstream ROME uses the fixed context-template pool from the
+validated Llama workflow. Context templates affect ROME optimization but cannot
+affect causal selection, which completes before ROME starts.
+
 A successful output root contains the full trace, matching covariance
 references, ROME reports, resolved pipeline config, and
 `pipeline-summary.json`. See `jobs/README.md` for resources, resume options,

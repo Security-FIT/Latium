@@ -1,0 +1,18 @@
+# :copyright: 2025 Jakub Res
+# :license: MIT
+# :author: Matej Olexa <olexa.matej@gmail.com>
+# :author: Jakub Res <iresj@fit.vut.cz>
+
+name: "mistralai/Ministral-3-8B-Base-2512"
+layer_name_template: "model.language_model.layers.{}.mlp.down_proj"
+fc_layer_name_template: "model.language_model.layers.{}.mlp.gate_proj"
+restore_layer_name_template: "model.language_model.layers.{}"
+corrupt_layer_name_template: "model.language_model.embed_tokens"
+layer: 5
+second_moment_path: "./data/second_moment_stats/mistralai_Ministral-3-8B-Base-2512_5_SM_Method.WIKIPEDIA_100000.pt"
+corruption_noise_multiplier: 0.1
+epochs: 25
+dtype: "bf16"
+
+prefix_enforce_latin: True
+prefix_min_words: 2

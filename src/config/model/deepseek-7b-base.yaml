@@ -8,8 +8,8 @@ layer_name_template: "model.layers.{}.mlp.down_proj"
 fc_layer_name_template: "model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 18
-second_moment_path: "./data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base_18_SM_Method.WIKIPEDIA_100000.pt"
+layer: 5
+second_moment_path: "./data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base_5_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.1
 epochs: 25
 dtype: "bf16"

@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import hydra
+import pytest
 from omegaconf import OmegaConf
 
 from src.model_config import canonical_model_name, load_model_config
@@ -29,6 +30,31 @@ def test_model_config_resolves_huggingface_names_from_hydra_yaml() -> None:
     assert cfg.name == "Qwen/Qwen3-4B"
     assert cfg.models_dir == "../models"
     assert cfg.save_to_local is True
+
+
+@pytest.mark.parametrize(
+    ("model_key", "layer", "covariance_name"),
+    [
+        ("granite4-micro", 10, "ibm-granite_granite-4.0-micro_10_SM_Method.WIKIPEDIA_100000.pt"),
+        ("deepseek-r1-llama3-8b", 5, "deepseek-ai_DeepSeek-R1-Distill-Llama-8B_5_SM_Method.WIKIPEDIA_100000.pt"),
+        ("deepseek-7b-base", 5, "deepseek-ai_deepseek-llm-7b-base_5_SM_Method.WIKIPEDIA_100000.pt"),
+        ("gpt2-xl", 16, "gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt"),
+        ("llama2-7b", 5, "NousResearch_Llama-2-7b-hf_5_SM_Method.WIKIPEDIA_100000.pt"),
+        ("mistral-7b-v0.3", 6, "mistralai_Mistral-7B-v0.3_6_SM_Method.WIKIPEDIA_100000.pt"),
+        ("granite-4.1-8b", 16, "ibm-granite_granite-4.1-8b-base_16_SM_Method.WIKIPEDIA_100000.pt"),
+        ("ministral-3-8b", 5, "mistralai_Ministral-3-8B-Base-2512_5_SM_Method.WIKIPEDIA_100000.pt"),
+        ("olmo-3-1025-7b", 6, "allenai_Olmo-3-1025-7B_6_SM_Method.WIKIPEDIA_100000.pt"),
+    ],
+)
+def test_validated_rome_configs_reference_selected_layer_covariance(
+    model_key: str,
+    layer: int,
+    covariance_name: str,
+) -> None:
+    cfg = load_model_config(model_key)
+
+    assert cfg.layer == layer
+    assert Path(cfg.second_moment_path).name == covariance_name
 
 
 def test_structural_config_and_covariance_paths_resolve_from_project_root() -> None:

@@ -199,26 +199,30 @@ Models are selected by config key, for example `model=gpt2-large` or
 `structural.run.models=[gpt2-large,qwen3-4b]`. Exact HuggingFace names are also
 accepted when they match a configured model.
 
-| Model key | Causal Trace | Weight intervention | Mean ES (n=500) | Notes |
+| Model key | Causal Trace | Weight intervention | Mean ES (n=100) | Notes |
 |---|---|---|---|---|
-| `gpt2-medium` | yes | yes | 0.988 | works |
+| `gpt2-medium` | yes | yes | 0.980 | works |
 | `gpt2-large` | yes | yes | 0.986 | works |
-| `gpt2-xl` | yes | yes | 0.986 | works |
-| `gpt-j-6b` | yes | yes | 0.996 | works |
+| `gpt2-xl` | yes | yes | 0.980 | works |
+| `gpt-j-6b` | yes | yes | 0.990 | works |
 | `qwen3-0.6b` | yes | yes |  | configured |
 | `qwen3-1.7b` | yes | yes |  | configured |
-| `qwen3-4b` | yes | yes | 0.992 | configured |
-| `qwen3-8b` | yes | yes | 1.000 | configured |
+| `qwen3-4b` | yes | yes | 1.000 | works |
+| `qwen3-8b` | yes | yes | 1.000 | works |
 | `qwen2.5-1.5b` | yes | yes |  | configured |
 | `qwen3-guard-0.6b` | yes | yes |  | configured |
-| `granite4-micro` | yes | yes | 0.978 | unusual architecture |
-| `mistral-7b-v0.1` | yes | yes | 0.948 | configured |
-| `mistral-7b-v0.3` | yes | yes | 0.934 | configured |
-| `llama2-7b` | yes | yes | 0.614 | unusual architecture |
-| `falcon-7b` | yes | yes | 0.976 | configured |
-| `opt-6.7b` | yes | yes | 0.978 | configured |
-| `deepseek-7b-base` | yes | yes | 0.976 | configured |
-| `deepseek-r1-llama3-8b` | yes | yes |  | configured |
+| `granite4-micro` | yes | yes | 0.990 | works |
+| `mistral-7b-v0.1` | yes | yes | 0.960 | works |
+| `mistral-7b-v0.3` | yes | yes | 0.890 | works |
+| `llama2-7b` | yes | yes | 0.990 | works |
+| `falcon-7b` | yes | yes | 0.990 | works |
+| `opt-6.7b` | yes | yes | 0.990 | works |
+| `deepseek-7b-base` | yes | yes | 0.918 | works |
+| `deepseek-r1-llama3-8b` | yes | yes | 1.000 | works |
+| `granite-4.1-8b` | yes | yes | 0.990 | works |
+| `ministral-3-8b` | yes | yes | 1.000 | works |
+| `olmo-3-1025-7b` | yes | yes | 1.000 | works |
+| `gemma-4-12b` | yes | yes | 0.990 | works |
 | `llama3` | planned | planned |  | roadmap |
 | `gpt-neo` | planned | planned |  | roadmap |
 | `baichuan` | planned | planned |  | roadmap |

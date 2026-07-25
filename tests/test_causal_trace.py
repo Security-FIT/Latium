@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import hydra
+import numpy as np
 import pandas as pd
 import pytest
 import torch
@@ -18,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 from src.causal_trace.causal_trace import (
     TraceValidationError,
+    _calibrate_corruption,
     _candidate_mlp_output_names,
     _overwrite_model_config_layer,
     _patch_mlp_position,
@@ -123,6 +125,47 @@ def test_noise_samples_are_deterministic() -> None:
     }
 
     assert torch.equal(make_noise_samples(**kwargs), make_noise_samples(**kwargs))
+
+
+def test_automatic_corruption_finds_weakest_effective_scale() -> None:
+    def evaluate(multiplier: float) -> np.ndarray:
+        effect = min(0.8, 0.1 * multiplier)
+        return np.full(10, 0.9 - effect, dtype=np.float64)
+
+    calibration = _calibrate_corruption(
+        evaluate,
+        clean_probability=0.9,
+        min_total_effect=0.2,
+        max_corrupt_relative_std=1.0,
+        dtype=torch.bfloat16,
+    )
+
+    assert calibration.total_effect >= 0.2
+    assert calibration.multiplier == pytest.approx(2.0)
+    assert any(not row["meets_effect_requirement"] for row in calibration.evaluations)
+    assert calibration.minimum_multiplier == pytest.approx(torch.finfo(torch.bfloat16).eps ** 0.5)
+
+
+def test_automatic_corruption_rejects_when_dtype_range_cannot_reach_effect() -> None:
+    with pytest.raises(TraceValidationError, match="throughout automatic calibration"):
+        _calibrate_corruption(
+            lambda _multiplier: np.full(10, 0.89, dtype=np.float64),
+            clean_probability=0.9,
+            min_total_effect=0.2,
+            max_corrupt_relative_std=1.0,
+            dtype=torch.bfloat16,
+        )
+
+
+def test_automatic_corruption_rejects_unstable_selected_baseline() -> None:
+    with pytest.raises(TraceValidationError, match="unstable corrupt baseline"):
+        _calibrate_corruption(
+            lambda multiplier: np.asarray([0.9 - 0.2 * multiplier, 0.9], dtype=np.float64),
+            clean_probability=0.9,
+            min_total_effect=0.05,
+            max_corrupt_relative_std=0.1,
+            dtype=torch.bfloat16,
+        )
 
 
 def test_temporary_hooks_cleanup_after_exception() -> None:
@@ -306,6 +349,7 @@ def test_trace_command_config_composes() -> None:
     assert cfg.command.causal_trace.max_dataset_examples_to_scan == 10000
     assert cfg.command.causal_trace.num_noise_samples == 10
     assert cfg.command.causal_trace.noise_batch_size == 10
+    assert cfg.command.causal_trace.noise_multiplier == "auto"
     assert cfg.command.causal_trace.max_corrupt_relative_std == 1.0
     assert cfg.command.causal_trace.bootstrap_samples == 1000
     assert cfg.command.causal_trace.discovery_fraction == 0.5

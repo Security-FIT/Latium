@@ -19,7 +19,9 @@ causal_trace:
   max_dataset_examples_to_scan: 10000
   num_noise_samples: 10
   noise_batch_size: 10
-  noise_multiplier: 3.0
+  # Per fact, find the weakest corruption that passes the existing effect guard.
+  # Set a positive number to reproduce a fixed-scale experiment exactly.
+  noise_multiplier: auto
   window_size: 10
   require_correct_clean_prediction: true
   min_total_effect: 0.03

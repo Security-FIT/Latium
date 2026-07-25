@@ -17,6 +17,14 @@ For fact f, noise draw k, and window w:
 
 The two terms use the same noise draw. Draws are averaged within each fact. Confidence intervals resample facts, not individual draws.
 
+By default, the corruption scale is calibrated separately for each fact before
+any layer restoration is evaluated. The calibrator finds the weakest
+embedding-standard-deviation multiplier that satisfies the configured minimum
+clean-to-corrupt probability drop. Its search range and precision come from the
+embedding dtype. Calibration uses deterministic noise draws that are independent
+of the draws used for the reported corrupt baseline and restoration sweep.
+A positive numeric noise_multiplier remains available for fixed-scale reproduction.
+
 The hook restores the whole MLP output. On Llama-style models, tracing hooks model.layers.N.mlp; ROME still edits model.layers.N.mlp.down_proj. A forward pass validates all MLP hooks before the dataset scan.
 
 ## Default experiment
@@ -27,7 +35,7 @@ The hook restores the whole MLP output. On Llama-style models, tracing hooks mod
 | Maximum rows scanned | 10,000 |
 | Noise draws per fact | 10 |
 | Noise batch size | 10 |
-| Noise standard deviation | 3.0 times embedding-weight standard deviation |
+| Noise standard deviation | Per-fact automatic minimum passing the effect guard |
 | Restored window width | 10 layers |
 | Discovery / confirmation split | 50 / 50 |
 | Minimum confirmation facts | 50 |
@@ -78,7 +86,7 @@ Each run writes:
     summary.json
     early_site_trace.png
 
-summary.json records split counts, the discovery center, confirmed region, selected center, hook semantics, and confirmation result.
+fact_results.jsonl records the resolved multiplier, independent seeds, and calibration search trail for every accepted fact. summary.json records resolved multiplier statistics, split counts, the discovery center, confirmed region, selected center, hook semantics, and confirmation result.
 
 ## Causal trace to ROME
 
@@ -104,7 +112,7 @@ For llama2-7b, ROME uses the validated fixed context-template pool. It runs afte
 
 - Only the first target token is scored.
 - Overlapping windows are correlated.
-- Results depend on noise scale, window width, fact filtering, restored component, subject position, and model adapter.
+- Results depend on the corruption eligibility rule, window width, fact filtering, restored component, subject position, and model adapter.
 - Positive held-out recovery does not prove that a fact is stored in one layer.
 - The representative center is an operational ROME layer; the later ROME benchmark tests whether it is useful.
 

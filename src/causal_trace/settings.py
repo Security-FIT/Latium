@@ -27,6 +27,15 @@ def required(section: Any, name: str) -> Any:
     return value
 
 
+def _parse_noise_multiplier(value: Any) -> float | None:
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("noise_multiplier must be a positive number or 'auto'") from exc
+
+
 @dataclass(frozen=True)
 class TraceSettings:
     """Typed, validated values consumed by one causal-tracing run."""
@@ -36,7 +45,7 @@ class TraceSettings:
     max_dataset_examples_to_scan: int
     num_noise_samples: int
     noise_batch_size: int
-    noise_multiplier: float
+    noise_multiplier: float | None
     window_size: int
     require_correct_clean_prediction: bool
     min_total_effect: float
@@ -64,7 +73,7 @@ class TraceSettings:
             max_dataset_examples_to_scan=int(required(trace, "max_dataset_examples_to_scan")),
             num_noise_samples=int(required(trace, "num_noise_samples")),
             noise_batch_size=int(required(trace, "noise_batch_size")),
-            noise_multiplier=float(required(trace, "noise_multiplier")),
+            noise_multiplier=_parse_noise_multiplier(required(trace, "noise_multiplier")),
             window_size=int(required(trace, "window_size")),
             require_correct_clean_prediction=strict_bool(
                 required(trace, "require_correct_clean_prediction"),
@@ -109,11 +118,12 @@ class TraceSettings:
             raise ValueError("bootstrap_samples must be positive and confidence_level must be between 0 and 1")
         if self.minimum_confirmation_facts < 2:
             raise ValueError("minimum_confirmation_facts must be at least 2")
-        if self.noise_multiplier <= 0 or self.min_total_effect < 0 or self.max_corrupt_relative_std <= 0:
-            raise ValueError(
-                "noise_multiplier and max_corrupt_relative_std must be positive; "
-                "min_total_effect must be non-negative"
-            )
+        if self.noise_multiplier is not None and self.noise_multiplier <= 0:
+            raise ValueError("noise_multiplier must be positive or 'auto'")
+        if self.min_total_effect < 0 or self.max_corrupt_relative_std <= 0:
+            raise ValueError("max_corrupt_relative_std must be positive and min_total_effect must be non-negative")
+        if self.noise_multiplier is None and self.min_total_effect <= 0:
+            raise ValueError("automatic noise calibration requires a positive min_total_effect")
         if not 0 < self.discovery_fraction < 1:
             raise ValueError("discovery_fraction must be strictly between 0 and 1")
         if not 0 <= self.trim_fraction < 0.5:

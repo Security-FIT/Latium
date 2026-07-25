@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 import pandas as pd
@@ -79,6 +80,147 @@ class TraceExample:
     prompt: str
     subject: str
     target: str
+
+
+@dataclass(frozen=True)
+class CorruptionCalibration:
+    """A corruption scale fixed before any layer restoration is evaluated."""
+
+    multiplier: float
+    probabilities: np.ndarray
+    relative_std: float
+    total_effect: float
+    evaluations: tuple[dict[str, Any], ...]
+    minimum_multiplier: float | None = None
+    maximum_multiplier: float | None = None
+    tolerance_ratio: float | None = None
+
+
+def _corruption_statistics(
+    clean_probability: float,
+    probabilities: np.ndarray,
+) -> tuple[np.ndarray, float, float]:
+    corrupt = np.asarray(probabilities, dtype=np.float64)
+    if corrupt.ndim != 1 or corrupt.size == 0 or not np.all(np.isfinite(corrupt)):
+        raise RuntimeError("Corrupt probabilities must be a non-empty finite vector")
+    if not math.isfinite(float(clean_probability)):
+        raise RuntimeError("Clean probability must be finite")
+    total_effect = float(clean_probability - np.mean(corrupt))
+    relative_std = float(np.std(corrupt) / max(abs(total_effect), np.finfo(np.float64).tiny))
+    return corrupt, total_effect, relative_std
+
+
+def _calibrate_corruption(
+    evaluate: Callable[[float], np.ndarray],
+    *,
+    clean_probability: float,
+    min_total_effect: float,
+    max_corrupt_relative_std: float,
+    dtype: torch.dtype,
+) -> CorruptionCalibration:
+    """Find the weakest resolvable corruption meeting the effect requirement.
+
+    Calibration sees only the clean probability and corrupt-only forwards. It
+    cannot inspect layer identities, restoration effects, or the configured ROME
+    layer. Search bounds and convergence precision come from the embedding dtype
+    rather than a model-specific multiplier.
+    """
+    if min_total_effect <= 0:
+        raise ValueError("Automatic corruption calibration requires min_total_effect > 0")
+    try:
+        dtype_epsilon = float(torch.finfo(dtype).eps)
+    except TypeError as exc:
+        raise TypeError(f"Embedding dtype must be floating point, got {dtype}") from exc
+
+    resolution = math.sqrt(dtype_epsilon)
+    minimum_multiplier = resolution
+    maximum_multiplier = 1.0 / resolution
+    tolerance_ratio = 1.0 + resolution
+    cache: dict[float, tuple[np.ndarray, float, float]] = {}
+    evaluations: list[dict[str, Any]] = []
+
+    def assess(multiplier: float) -> tuple[np.ndarray, float, float]:
+        multiplier = float(multiplier)
+        cached = cache.get(multiplier)
+        if cached is not None:
+            return cached
+        corrupt, total_effect, relative_std = _corruption_statistics(
+            clean_probability,
+            evaluate(multiplier),
+        )
+        cached = (corrupt, total_effect, relative_std)
+        cache[multiplier] = cached
+        evaluations.append(
+            {
+                "multiplier": multiplier,
+                "total_effect": total_effect,
+                "corrupt_relative_std": relative_std,
+                "meets_effect_requirement": bool(total_effect >= min_total_effect),
+                "meets_stability_requirement": bool(relative_std <= max_corrupt_relative_std),
+            }
+        )
+        return cached
+
+    _, unit_effect, _ = assess(1.0)
+    lower: float | None = None
+    upper: float | None = None
+
+    if unit_effect >= min_total_effect:
+        upper = 1.0
+        while upper > minimum_multiplier:
+            candidate = max(minimum_multiplier, upper / 2.0)
+            _, candidate_effect, _ = assess(candidate)
+            if candidate_effect >= min_total_effect:
+                upper = candidate
+                if candidate == minimum_multiplier:
+                    break
+            else:
+                lower = candidate
+                break
+    else:
+        lower = 1.0
+        while lower < maximum_multiplier:
+            candidate = min(maximum_multiplier, lower * 2.0)
+            _, candidate_effect, _ = assess(candidate)
+            if candidate_effect >= min_total_effect:
+                upper = candidate
+                break
+            lower = candidate
+            if candidate == maximum_multiplier:
+                break
+
+    if upper is None:
+        _, maximum_effect, _ = assess(maximum_multiplier)
+        raise TraceValidationError(
+            "low corruption effect throughout automatic calibration: "
+            f"maximum={maximum_effect:.6f} < {float(min_total_effect):.6f}"
+        )
+
+    if lower is not None:
+        while upper / lower > tolerance_ratio:
+            candidate = math.sqrt(lower * upper)
+            _, candidate_effect, _ = assess(candidate)
+            if candidate_effect >= min_total_effect:
+                upper = candidate
+            else:
+                lower = candidate
+
+    corrupt, total_effect, relative_std = assess(upper)
+    if relative_std > max_corrupt_relative_std:
+        raise TraceValidationError(
+            "unstable corrupt baseline after automatic calibration: "
+            f"relative_std={relative_std:.6f} > {float(max_corrupt_relative_std):.6f}"
+        )
+    return CorruptionCalibration(
+        multiplier=float(upper),
+        probabilities=corrupt,
+        relative_std=relative_std,
+        total_effect=total_effect,
+        evaluations=tuple(evaluations),
+        minimum_multiplier=minimum_multiplier,
+        maximum_multiplier=maximum_multiplier,
+        tolerance_ratio=tolerance_ratio,
+    )
 
 
 def _json_default(value: Any) -> Any:
@@ -201,7 +343,7 @@ def _trace_example(
     windows: list[Window],
     num_noise_samples: int,
     noise_batch_size: int,
-    noise_multiplier: float,
+    noise_multiplier: float | None,
     seed: int,
     require_correct_clean: bool,
     min_total_effect: float,
@@ -226,7 +368,79 @@ def _trace_example(
     if embedding_weight is None or embedding_weight.dim() != 2:
         raise RuntimeError("The configured embedding module must expose a rank-2 weight")
     hidden_size = int(embedding_weight.shape[-1])
-    noise_std = float(noise_multiplier) * _embedding_std(handler, modules)
+    embedding_scale = _embedding_std(handler, modules)
+    batch_size = max(1, min(int(noise_batch_size), int(num_noise_samples)))
+
+    def evaluate_corruption(multiplier: float, *, noise_seed: int) -> np.ndarray:
+        candidate_noise = make_noise_samples(
+            num_samples=int(num_noise_samples),
+            subject_length=len(span.positions),
+            hidden_size=hidden_size,
+            noise_std=embedding_scale * float(multiplier),
+            device=embedding_weight.device,
+            dtype=embedding_weight.dtype,
+            seed=int(noise_seed),
+        )
+        probabilities = np.zeros(int(num_noise_samples), dtype=np.float64)
+        for batch_start in range(0, int(num_noise_samples), batch_size):
+            batch_end = min(int(num_noise_samples), batch_start + batch_size)
+            repeated = _repeat_inputs(inputs, batch_end - batch_start)
+            noise = candidate_noise[batch_start:batch_end]
+            with torch.inference_mode(), temporary_hooks([(embedding_module, _corrupt_hook(span.positions, noise))]):
+                outputs = handler.model(**repeated, use_cache=False)
+            probabilities[batch_start:batch_end] = _probabilities(outputs, target_id)
+        return probabilities
+
+    calibration_seed: int | None = None
+    evaluation_seed = int(seed)
+    if noise_multiplier is None:
+        calibration_mode = "automatic_minimum_eligible"
+        calibration_sequence, evaluation_sequence = np.random.SeedSequence(int(seed)).spawn(2)
+        calibration_seed = int(calibration_sequence.generate_state(1, dtype=np.uint64)[0])
+        evaluation_seed = int(evaluation_sequence.generate_state(1, dtype=np.uint64)[0])
+        calibration = _calibrate_corruption(
+            lambda multiplier: evaluate_corruption(multiplier, noise_seed=calibration_seed),
+            clean_probability=clean_probability,
+            min_total_effect=min_total_effect,
+            max_corrupt_relative_std=max_corrupt_relative_std,
+            dtype=embedding_weight.dtype,
+        )
+        corrupt, total_effect, corrupt_relative_std = _corruption_statistics(
+            clean_probability,
+            evaluate_corruption(calibration.multiplier, noise_seed=evaluation_seed),
+        )
+    else:
+        calibration_mode = "explicit"
+        resolved_multiplier = float(noise_multiplier)
+        corrupt, total_effect, corrupt_relative_std = _corruption_statistics(
+            clean_probability,
+            evaluate_corruption(resolved_multiplier, noise_seed=evaluation_seed),
+        )
+        calibration = CorruptionCalibration(
+            multiplier=resolved_multiplier,
+            probabilities=corrupt,
+            relative_std=corrupt_relative_std,
+            total_effect=total_effect,
+            evaluations=(
+                {
+                    "multiplier": resolved_multiplier,
+                    "total_effect": total_effect,
+                    "corrupt_relative_std": corrupt_relative_std,
+                    "meets_effect_requirement": bool(total_effect >= min_total_effect),
+                    "meets_stability_requirement": bool(corrupt_relative_std <= max_corrupt_relative_std),
+                },
+            ),
+        )
+
+    if total_effect < float(min_total_effect):
+        raise TraceValidationError(f"low corruption effect: {total_effect:.6f}")
+    if corrupt_relative_std > float(max_corrupt_relative_std):
+        raise TraceValidationError(
+            "unstable corrupt baseline: "
+            f"relative_std={corrupt_relative_std:.6f} > {float(max_corrupt_relative_std):.6f}"
+        )
+
+    noise_std = calibration.multiplier * embedding_scale
     noise_samples = make_noise_samples(
         num_samples=int(num_noise_samples),
         subject_length=len(span.positions),
@@ -234,30 +448,8 @@ def _trace_example(
         noise_std=noise_std,
         device=embedding_weight.device,
         dtype=embedding_weight.dtype,
-        seed=int(seed),
+        seed=evaluation_seed,
     )
-
-    corrupt_probabilities = np.zeros(int(num_noise_samples), dtype=np.float64)
-    batch_size = max(1, min(int(noise_batch_size), int(num_noise_samples)))
-
-    for batch_start in range(0, int(num_noise_samples), batch_size):
-        batch_end = min(int(num_noise_samples), batch_start + batch_size)
-        repeated = _repeat_inputs(inputs, batch_end - batch_start)
-        noise = noise_samples[batch_start:batch_end]
-        with torch.inference_mode(), temporary_hooks([(embedding_module, _corrupt_hook(span.positions, noise))]):
-            outputs = handler.model(**repeated, use_cache=False)
-        corrupt_probabilities[batch_start:batch_end] = _probabilities(outputs, target_id)
-
-    corrupt = corrupt_probabilities
-    total_effect = float(clean_probability - np.mean(corrupt))
-    if total_effect < float(min_total_effect):
-        raise TraceValidationError(f"low corruption effect: {total_effect:.6f}")
-    corrupt_relative_std = float(np.std(corrupt) / max(abs(total_effect), 1e-12))
-    if corrupt_relative_std > float(max_corrupt_relative_std):
-        raise TraceValidationError(
-            "unstable corrupt baseline: "
-            f"relative_std={corrupt_relative_std:.6f} > {float(max_corrupt_relative_std):.6f}"
-        )
 
     # Cache and restore only after the fact passes the predeclared clean/corrupt
     # eligibility checks. This preserves the estimand while avoiding a complete
@@ -313,6 +505,17 @@ def _trace_example(
         "corrupt_relative_std": corrupt_relative_std,
         "total_effect": total_effect,
         "noise_std": float(noise_std),
+        "noise_multiplier": float(calibration.multiplier),
+        "noise_calibration": {
+            "mode": calibration_mode,
+            "configured_multiplier": None if noise_multiplier is None else float(noise_multiplier),
+            "minimum_multiplier": calibration.minimum_multiplier,
+            "maximum_multiplier": calibration.maximum_multiplier,
+            "tolerance_ratio": calibration.tolerance_ratio,
+            "calibration_seed": calibration_seed,
+            "evaluation_seed": evaluation_seed,
+            "evaluations": list(calibration.evaluations),
+        },
         "window_mean_ie": effects.mean(axis=1).tolist(),
         "window_mean_normalized_recovery": (effects.mean(axis=1) / max(abs(total_effect), 1e-12)).tolist(),
         "window_std_ie": effects.std(axis=1).tolist(),
@@ -503,6 +706,9 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
             "trace_mlp_module_map": str(module_map_path),
             "trace_mlp_output_modules": [module_names[layer] for layer in range(num_layers)],
             "trace_position": "subject_last",
+            "noise_calibration_mode": "automatic_minimum_eligible" if noise_multiplier is None else "explicit",
+            "configured_noise_multiplier": noise_multiplier,
+            "min_total_effect": float(min_total_effect),
             "model_config_layer_overwrite_requested": overwrite_model_config_layer,
             "model_config_layer_overwritten": False,
             "model_config_path": str(model_config_path) if model_config_path is not None else None,
@@ -599,6 +805,7 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
             selected_trace_center,
         )
 
+    resolved_noise_multipliers = np.asarray([float(row["noise_multiplier"]) for row in fact_results], dtype=np.float64)
     summary = {
         "model": str(cfg.model.name),
         "configured_reference_layer": config_layer,
@@ -633,6 +840,12 @@ def _run_causal_trace(cfg: DictConfig, handler: ModelHandler) -> Path:
         "num_noise_samples": int(num_noise),
         "noise_batch_size": int(noise_batch_size),
         "max_corrupt_relative_std": float(max_corrupt_relative_std),
+        "noise_calibration_mode": "automatic_minimum_eligible" if noise_multiplier is None else "explicit",
+        "configured_noise_multiplier": noise_multiplier,
+        "resolved_noise_multiplier_min": float(np.min(resolved_noise_multipliers)),
+        "resolved_noise_multiplier_median": float(np.median(resolved_noise_multipliers)),
+        "resolved_noise_multiplier_max": float(np.max(resolved_noise_multipliers)),
+        "min_total_effect": float(min_total_effect),
         "first_token_only": True,
         "model_config_layer_overwrite_requested": overwrite_model_config_layer,
         "model_config_layer_overwritten": model_config_layer_overwritten,
@@ -664,12 +877,15 @@ def causal_trace(cfg: DictConfig) -> Path:
 
 
 def compute_multiplier(cfg: DictConfig) -> float:
-    """Return the default subject-embedding noise scale for the configured model."""
+    """Return an explicit noise scale; automatic calibration is fact-specific."""
+    trace_cfg = _section(cfg, "causal_trace")
+    configured = _required(trace_cfg, "noise_multiplier")
+    if isinstance(configured, str) and configured.strip().lower() == "auto":
+        raise ValueError("Automatic noise calibration is fact-specific; run causal tracing to resolve it")
     handler = ModelHandler(cfg)
     try:
         std = _embedding_std(handler, _module_dict(handler.model))
-        trace_cfg = _section(cfg, "causal_trace")
-        return float(std * float(_required(trace_cfg, "noise_multiplier")))
+        return float(std * float(configured))
     finally:
         handler.remove_hooks()
 

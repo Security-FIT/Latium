@@ -1,0 +1,916 @@
+{
+  "schema_version": 1,
+  "label": "local refactor parity corpus",
+  "scientific_baseline": false,
+  "artifact_count": 48,
+  "artifacts": [
+    {
+      "path": "analysis_out/detector-three-n100/gpt-j-6b-n100-retry/plans/gpt-j-6b-nosave/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "9bc7f92d3a6d5bf2de419a70c49ff9e1520a9f7418e55f6a2d1af90041d0ebdc",
+      "artifact_id": "plan/gpt-j-6b-nosave/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "gpt-j-6b-nosave",
+      "run_id": "gpt-j-6b-n100-retry",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt-j-6b-n100-retry/plans/gpt-j-6b-nosave/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "903187aaf3e145f743d88924b240ddbf78268dc37fe6ef0769561e1544087652",
+      "artifact_id": "plan/gpt-j-6b-nosave/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "gpt-j-6b-nosave",
+      "run_id": "gpt-j-6b-n100-retry",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt-j-6b-n100-retry/plans/gpt-j-6b-nosave/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "174b3df0a378f043c3b603bfa288ee1348054efb8986c93d784fac33480fb16d",
+      "artifact_id": "plan/gpt-j-6b-nosave/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "gpt-j-6b-nosave",
+      "run_id": "gpt-j-6b-n100-retry",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt-j-6b-n100-retry/plans/gpt-j-6b-nosave/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "70ca85f3c6c4a3f15bdc57b6c2e6243b53e4b1031bc54d0a5d51abdc0222057e",
+      "artifact_id": "plan/gpt-j-6b-nosave/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "gpt-j-6b-nosave",
+      "run_id": "gpt-j-6b-n100-retry",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-medium-n100/plans/gpt2-medium/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "31edb3786d04f2f0140b0f29186d68ef8a03a1e210766c1d33949ca769df04cd",
+      "artifact_id": "plan/gpt2-medium/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "gpt2-medium",
+      "run_id": "gpt2-medium-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-medium-n100/plans/gpt2-medium/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "a511b665571bf395aec3a1a3bd645b368c9a5e7820e369344f0fa9c49f194db0",
+      "artifact_id": "plan/gpt2-medium/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "gpt2-medium",
+      "run_id": "gpt2-medium-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-medium-n100/plans/gpt2-medium/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "f0ac004148e358082ac87119c82af56e9d0334092b20ced23777a2f271cab615",
+      "artifact_id": "plan/gpt2-medium/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "gpt2-medium",
+      "run_id": "gpt2-medium-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-medium-n100/plans/gpt2-medium/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "50f9cf8df2ddb6b5bef21d6c0221d98b864daeeb78f4f87cf850d80a9d4ae60d",
+      "artifact_id": "plan/gpt2-medium/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "gpt2-medium",
+      "run_id": "gpt2-medium-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-xl-l18-n100/plans/gpt2-xl-detector-l18/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "0adad3c723667243cf14ef6f1dd238cd6757a476c8f794cd392074accc91595b",
+      "artifact_id": "plan/gpt2-xl-detector-l18/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "gpt2-xl-detector-l18",
+      "run_id": "gpt2-xl-l18-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 97,
+        "unavailable": 3
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-xl-l18-n100/plans/gpt2-xl-detector-l18/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "6753532c7e94cfa73d758ccc7132720e6a8360f21e1503d4fb2b46c49862642a",
+      "artifact_id": "plan/gpt2-xl-detector-l18/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "gpt2-xl-detector-l18",
+      "run_id": "gpt2-xl-l18-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 97,
+        "unavailable": 3
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-xl-l18-n100/plans/gpt2-xl-detector-l18/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "43f486d956e9047db5f9851173c23f14021563af24080339c1abc6e97fdfaaec",
+      "artifact_id": "plan/gpt2-xl-detector-l18/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "gpt2-xl-detector-l18",
+      "run_id": "gpt2-xl-l18-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 97,
+        "unavailable": 3
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/detector-three-n100/gpt2-xl-l18-n100/plans/gpt2-xl-detector-l18/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "f7f7e29c58aba3a1ed04a4a777128b7cffc74fcdc1dab586049b5b393fab27e5",
+      "artifact_id": "plan/gpt2-xl-detector-l18/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "gpt2-xl-detector-l18",
+      "run_id": "gpt2-xl-l18-n100",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 97,
+        "unavailable": 3
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/deepseek-7b-base/detection/plans/deepseek-7b-base/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "e6a67b76bd70bb458ea750d11160c33a810f334d7e8f9d19e7d9d8f3bb950299",
+      "artifact_id": "plan/deepseek-7b-base/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "deepseek-7b-base",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 91,
+        "unavailable": 9
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/deepseek-7b-base/detection/plans/deepseek-7b-base/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "f2bd583529fafdbba5ab1753fda19e9a7192fb539d7468f22546ee56332dfcaa",
+      "artifact_id": "plan/deepseek-7b-base/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "deepseek-7b-base",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 91,
+        "unavailable": 9
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/deepseek-7b-base/detection/plans/deepseek-7b-base/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "6b5a87b11124664ae7bed07a6aa7eb59a6b2e3554fba8162a1e442dfe379862c",
+      "artifact_id": "plan/deepseek-7b-base/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "deepseek-7b-base",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 91,
+        "unavailable": 9
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/deepseek-7b-base/detection/plans/deepseek-7b-base/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "3f935be83b101b9be29b56361939caca4a7cfd841d5844bfafca47d3a8f67be5",
+      "artifact_id": "plan/deepseek-7b-base/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "deepseek-7b-base",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 91,
+        "unavailable": 9
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/falcon-7b/detection/plans/falcon-7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "c808224673d74931441dad2bf2a0f8a3575cf65f058f7ee6e49c687daafa4123",
+      "artifact_id": "plan/falcon-7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "falcon-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/falcon-7b/detection/plans/falcon-7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "aa97b175a7600e987d55be122a8e7dfa845db1512f0e909400df058463d4695d",
+      "artifact_id": "plan/falcon-7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "falcon-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/falcon-7b/detection/plans/falcon-7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "6612956e8694df5e8c6eb33b929a75e4aac702688546f9e0a790ca84c29c0b42",
+      "artifact_id": "plan/falcon-7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "falcon-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/falcon-7b/detection/plans/falcon-7b/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "281352163a4824537952d287dd75a2446470f97e3dcb39e1ab998d91ac4dd401",
+      "artifact_id": "plan/falcon-7b/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "falcon-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt-j-6b/detection/plans/gpt-j-6b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "3d42e2a1561bc2b4b4bf059391af9fb72ae6c4e822bda012fbf366b81bcb19ed",
+      "artifact_id": "plan/gpt-j-6b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "gpt-j-6b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt-j-6b/detection/plans/gpt-j-6b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "7831f3e3fd2b738c76f0128806cc453a1a878707d303009f15c18c6b6128f3d1",
+      "artifact_id": "plan/gpt-j-6b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "gpt-j-6b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt-j-6b/detection/plans/gpt-j-6b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "a44587d2b74502a3df8f2cbf6b16162b81ac11b26e624d49841512ca178be0ca",
+      "artifact_id": "plan/gpt-j-6b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "gpt-j-6b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt-j-6b/detection/plans/gpt-j-6b/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "b634562ef3ae5a74409bc5859a0ace6347acc507586f3134be2f2fc9207c0025",
+      "artifact_id": "plan/gpt-j-6b/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "gpt-j-6b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt2-xl/detection/plans/gpt2-xl/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "10ed8ad8c0fd36709d5d8d21c706d09f03746a89a7dd8a916c2bb143cd5142b7",
+      "artifact_id": "plan/gpt2-xl/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "gpt2-xl",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt2-xl/detection/plans/gpt2-xl/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "c6b8333ee6c8c5a328d3c75ce99d9c4da59a449cacba8869da0c27355fcca94b",
+      "artifact_id": "plan/gpt2-xl/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "gpt2-xl",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt2-xl/detection/plans/gpt2-xl/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "82c8cd2d191f4532e6a9ab1cf2c54107910e97d886e175aff142a461f9a58145",
+      "artifact_id": "plan/gpt2-xl/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "gpt2-xl",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/gpt2-xl/detection/plans/gpt2-xl/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "ae702c8aee69441df635195eaa3abc669121ad529bdc7dd4a53d24260ad2fee7",
+      "artifact_id": "plan/gpt2-xl/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "gpt2-xl",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 98,
+        "unavailable": 2
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/llama2-7b/detection/plans/llama2-7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "50f83d0d38602b5f865b412f65c1d9e52c7f84161263a2ef4044ec5f9e60c977",
+      "artifact_id": "plan/llama2-7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "llama2-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/llama2-7b/detection/plans/llama2-7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "c22716a2f9aabb00eb69816c9bc4e76b6b43c24f27c819ee214c36048eef5c74",
+      "artifact_id": "plan/llama2-7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "llama2-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/llama2-7b/detection/plans/llama2-7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "f0cc2544f41ddcd39ed14a6a8cfa7f40aae2012cbba9af9d1523a63f38edd520",
+      "artifact_id": "plan/llama2-7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "llama2-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/llama2-7b/detection/plans/llama2-7b/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "832a91c2203109549672a6def458f9874b430a119deca2ad6b693cc241cbe2e0",
+      "artifact_id": "plan/llama2-7b/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "llama2-7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.1/detection/plans/mistral-7b-v0.1/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "eeffe686bcf031c629c39d013e92a6144ff6399952ff6f61c4fbad652fe09ce4",
+      "artifact_id": "plan/mistral-7b-v0.1/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "mistral-7b-v0.1",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 96,
+        "unavailable": 4
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.1/detection/plans/mistral-7b-v0.1/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "ef869b4277f78d674f34dcda9104f18fd2bc6773e06e7a216d876042c45ab333",
+      "artifact_id": "plan/mistral-7b-v0.1/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "mistral-7b-v0.1",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 96,
+        "unavailable": 4
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.1/detection/plans/mistral-7b-v0.1/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "50e4d498c79b2f21891c32fbfabad3cff1a8f1936f880f6f026456dd364fcf2d",
+      "artifact_id": "plan/mistral-7b-v0.1/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "mistral-7b-v0.1",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 96,
+        "unavailable": 4
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.1/detection/plans/mistral-7b-v0.1/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "c94c79fd54a1d3c81ffc11398f0a145a5e0a0a41e6e0a291d44c250a9844823e",
+      "artifact_id": "plan/mistral-7b-v0.1/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "mistral-7b-v0.1",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 96,
+        "unavailable": 4
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.3/detection/plans/mistral-7b-v0.3/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "4cdc6e61ae1202deb8472812932e33a7a923c838596db975d3865a0a9eb9d014",
+      "artifact_id": "plan/mistral-7b-v0.3/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "mistral-7b-v0.3",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.3/detection/plans/mistral-7b-v0.3/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "1dd3f497f500284cb566dee2672c6b549d319ab38aca1c29c27eba5147526418",
+      "artifact_id": "plan/mistral-7b-v0.3/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "mistral-7b-v0.3",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.3/detection/plans/mistral-7b-v0.3/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "f323813eb474116c01a6b926c5684cd818bea71f0b257a287a435ce036dab576",
+      "artifact_id": "plan/mistral-7b-v0.3/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "mistral-7b-v0.3",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/mistral-7b-v0.3/detection/plans/mistral-7b-v0.3/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "44dced4e2c7df2646217456bb270b226eda2b5f5e7656b60f5a46850c4070815",
+      "artifact_id": "plan/mistral-7b-v0.3/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "mistral-7b-v0.3",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 93,
+        "unavailable": 7
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/opt-6.7b/detection/plans/opt-6.7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "d9e2ff95830aa6991308d0070b21f9a13a13885e5b1f1755d0746db2f8077fd6",
+      "artifact_id": "plan/opt-6.7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "opt-6.7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/opt-6.7b/detection/plans/opt-6.7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "26f541bfe070ff825714565f5396aeef4ca663aef6767ff52a747ddd3ca81465",
+      "artifact_id": "plan/opt-6.7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "opt-6.7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/opt-6.7b/detection/plans/opt-6.7b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "8746e03193397608c1404f18066e044d0f5cbf0880102d8c25bc2aef2a3cd22f",
+      "artifact_id": "plan/opt-6.7b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "opt-6.7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/opt-6.7b/detection/plans/opt-6.7b/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "f1d5ef3d43dd13ba873d4c3341d9a399fd70a704658619a4258caef8506a8f8e",
+      "artifact_id": "plan/opt-6.7b/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "opt-6.7b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 99,
+        "unavailable": 1
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/qwen3-8b/detection/plans/qwen3-8b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "f7b9e7d1786dfba10fa74071a596261443c7c90351b8115ec62d24ae4f01dbf0",
+      "artifact_id": "plan/qwen3-8b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-footprint/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-footprint",
+      "model": "qwen3-8b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 100
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/qwen3-8b/detection/plans/qwen3-8b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "895d94ad0a2ef615d6f84a6fb57c0aa30d4254ef30e66431a8b866bfdacccdbd",
+      "artifact_id": "plan/qwen3-8b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-blind-peak/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "rome-presence-blind-peak",
+      "model": "qwen3-8b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 100
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/qwen3-8b/detection/plans/qwen3-8b/cases0-99_r01/methods/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a.json",
+      "sha256": "81bd89e6f7df509a3c92f3264c53cb51ef3dcfb03f6b456649cd473acc8ab53b",
+      "artifact_id": "plan/qwen3-8b/cases0-99_r01/method/rome/analysis/attribution/rome-presence-delta/44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "producer": "rome-presence-delta",
+      "model": "qwen3-8b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 100
+      },
+      "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    },
+    {
+      "path": "analysis_out/metacentrum/qwen3-8b/detection/plans/qwen3-8b/cases0-99_r01/methods/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b.json",
+      "sha256": "c215af5410f45b39bfbcc6f1cbeee337ee050ae203b30ff5417255619fba75ca",
+      "artifact_id": "plan/qwen3-8b/cases0-99_r01/method/rome/analysis/detection/weighted-spectrum/255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "producer": "weighted-spectrum",
+      "model": "qwen3-8b",
+      "run_id": "detection",
+      "plan_id": "cases0-99_r01",
+      "edit_method": "rome",
+      "case_count": 100,
+      "case_status_counts": {
+        "complete": 100
+      },
+      "config_hash": "255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b",
+      "result_schema_versions": [
+        "unversioned"
+      ]
+    }
+  ]
+}

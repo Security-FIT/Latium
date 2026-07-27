@@ -26,6 +26,14 @@ split_policy:
     Select formula and calibrate B1 on development families only; evaluate the
     frozen choice on held-out families; use the restored 40-case protocol only
     as the final published-result reproduction gate.
+  held_out_release_gate:
+    status: closed
+    opens_after:
+      - candidate_math_frozen
+      - global_b1_cutoff_frozen
+    note: >-
+      DeepSeek, Falcon, and OPT must not be captured or inspected before both
+      conditions are satisfied.
 
 capture:
   producer: rome-math-ablation
@@ -36,19 +44,27 @@ capture:
     start_idx: 0
     count: 100
   smoke:
+    run_ids:
+      - rome-math-ablation-smoke-a-v1
+      - rome-math-ablation-smoke-b-v1
     case_ids:
       - 0
       - 1
     models:
       - gpt2-medium
-      - falcon-7b
-    known_miss:
-      model: falcon-7b
-      case_id: 0
-      source: tests/fixtures/rome_detector_local_parity.json
-  expected_capture_path: >-
-    analysis_out/rome-math-ablation-full-v1/plans/{model}/cases0-99_r01/
-    methods/rome/captures/rome-math-ablation.json
+      - mistral-7b-v0.1
+  development:
+    run_id: rome-math-ablation-development-v1
+    models:
+      - gpt-j-6b
+      - gpt2-medium
+      - gpt2-xl
+      - llama2-7b
+      - mistral-7b-v0.1
+      - qwen3-8b
+  expected_capture_paths:
+    smoke: analysis_out/rome-math-ablation-smoke-{a,b}-v1/plans/{model}/cases0-1_r01/methods/rome/captures/rome-math-ablation.json
+    development: analysis_out/rome-math-ablation-development-v1/plans/{model}/cases0-99_r01/methods/rome/captures/rome-math-ablation.json
 
 local_availability_audit:
   audit_date: 2026-07-28
@@ -63,55 +79,55 @@ local_availability_audit:
   conclusion: required recapture checkpoints are missing locally
 
 models:
-  - run_id: rome-math-ablation-full-v1
+  - run_id: rome-math-ablation-development-v1
     model: gpt-j-6b
     model_identifier: EleutherAI/gpt-j-6B
     family: gpt-j
     split: development
     checkpoint_availability: missing_locally
-  - run_id: rome-math-ablation-full-v1
+  - run_id: rome-math-ablation-development-v1
     model: gpt2-medium
     model_identifier: gpt2-medium
     family: gpt2
     split: development
     checkpoint_availability: missing_locally
-  - run_id: rome-math-ablation-full-v1
+  - run_id: rome-math-ablation-development-v1
     model: gpt2-xl
     model_identifier: gpt2-xl
     family: gpt2
     split: development
     checkpoint_availability: incomplete_local_cache
-  - run_id: rome-math-ablation-full-v1
+  - run_id: rome-math-ablation-development-v1
     model: llama2-7b
     model_identifier: NousResearch/Llama-2-7b-hf
     family: llama
     split: development
     checkpoint_availability: missing_locally
-  - run_id: rome-math-ablation-full-v1
+  - run_id: rome-math-ablation-development-v1
     model: mistral-7b-v0.1
     model_identifier: mistralai/Mistral-7B-v0.1
     family: mistral
     split: development
     checkpoint_availability: missing_locally
-  - run_id: rome-math-ablation-full-v1
+  - run_id: rome-math-ablation-development-v1
     model: qwen3-8b
     model_identifier: Qwen/Qwen3-8B
     family: qwen
     split: development
     checkpoint_availability: missing_locally
-  - run_id: rome-math-ablation-full-v1
+  - run_id: null
     model: deepseek-7b-base
     model_identifier: deepseek-ai/deepseek-llm-7b-base
     family: deepseek
     split: held_out_family
     checkpoint_availability: missing_locally
-  - run_id: rome-math-ablation-full-v1
+  - run_id: null
     model: falcon-7b
     model_identifier: tiiuae/falcon-7b
     family: falcon
     split: held_out_family
     checkpoint_availability: missing_locally
-  - run_id: rome-math-ablation-full-v1
+  - run_id: null
     model: opt-6.7b
     model_identifier: facebook/opt-6.7b
     family: opt

@@ -3,10 +3,11 @@ set -Eeuo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: jobs/run_rome_math_ablation.sh smoke|full [additional Hydra overrides...]
+Usage: jobs/run_rome_math_ablation.sh smoke-a|smoke-b|development [additional Hydra overrides...]
 
 Runs the opt-in, versioned M0--M3 recapture. It does not replace the
-production detector and does not run the final missing 40-case protocol.
+production detector, expose held-out families, or run the final missing
+40-case protocol.
 EOF
 }
 
@@ -15,22 +16,27 @@ MODE="$1"
 shift
 
 case "$MODE" in
-  smoke)
-    MODELS='[gpt2-medium,falcon-7b]'
+  smoke-a)
+    MODELS='[gpt2-medium,mistral-7b-v0.1]'
     CASES=2
-    RUN_ID=rome-math-ablation-smoke-v1
+    RUN_ID=rome-math-ablation-smoke-a-v1
     ;;
-  full)
-    MODELS='[gpt-j-6b,gpt2-medium,gpt2-xl,llama2-7b,mistral-7b-v0.1,qwen3-8b,deepseek-7b-base,falcon-7b,opt-6.7b]'
+  smoke-b)
+    MODELS='[gpt2-medium,mistral-7b-v0.1]'
+    CASES=2
+    RUN_ID=rome-math-ablation-smoke-b-v1
+    ;;
+  development)
+    MODELS='[gpt-j-6b,gpt2-medium,gpt2-xl,llama2-7b,mistral-7b-v0.1,qwen3-8b]'
     CASES=100
-    RUN_ID=rome-math-ablation-full-v1
+    RUN_ID=rome-math-ablation-development-v1
     ;;
   -h|--help)
     usage
     exit 0
     ;;
   *)
-    echo "ERROR: mode must be smoke or full" >&2
+    echo "ERROR: mode must be smoke-a, smoke-b, or development" >&2
     usage >&2
     exit 2
     ;;
@@ -46,11 +52,15 @@ python3 -m src structural run \
   structural.run.start_idx=0 \
   structural.run.output_dir=analysis_out \
   "structural.run.run_id=$RUN_ID" \
+  structural.run.fail_on_missing_second_moment=true \
   structural.capture.profile=rome-math-ablation \
   structural.analysis.preset=none \
   structural.render.enabled=false \
   "$@"
 
 echo "Recapture complete: analysis_out/$RUN_ID"
-echo "Calibrate one B1 cutoff on development families before evaluation."
-echo "Then run: python3 scripts/evaluate_rome_math_ablation.py --blind-cutoff CUTOFF"
+if [[ "$MODE" == smoke-b ]]; then
+  echo "Compare smoke-a and smoke-b selected layers and scores before development capture."
+elif [[ "$MODE" == development ]]; then
+  echo "Freeze candidate math and one global B1 cutoff before any held-out capture."
+fi

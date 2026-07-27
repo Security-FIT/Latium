@@ -77,18 +77,22 @@ The split was written before any M0--M2 real-model scores existed:
 All cases from a family stay in one selection split. The versioned source of
 truth is `manifests/rome_math_ablation_recapture.yaml`.
 
-Candidate comparison will use paired cases and equal family weighting. The
-predeclared non-inferiority margin is 2.5 macro-accuracy percentage points.
-A simpler candidate is non-inferior when the lower endpoint of a 95% paired
-hierarchical bootstrap interval for its macro exact-accuracy difference from
-the best candidate is greater than -0.025. Families are resampled as equal
-clusters and cases are resampled within family. Any held-out family regression
-greater than 10 percentage points is reported as a possible catastrophic
-regression and blocks automatic selection pending case inspection.
+Candidate comparison and selection will use development cases only, with
+leave-one-development-family-out diagnostics, paired cases, and equal family
+weighting. The predeclared non-inferiority margin is 2.5 macro-accuracy
+percentage points. A simpler candidate is non-inferior when the lower endpoint
+of a 95% paired hierarchical bootstrap interval for its development macro
+exact-accuracy difference from the best candidate is greater than -0.025.
+Development families are resampled as equal clusters and cases are resampled
+within family.
 
-Selection order is M0, M1, M2, then M3. M2 must demonstrate a held-out scale
-failure avoided relative to M0/M1. M3 must demonstrate a material held-out
-gain for every retained complex feature.
+Selection order is M0, M1, M2, then M3. M2 must demonstrate a scale failure
+avoided relative to M0/M1 in a leave-one-development-family-out fold. M3 must
+demonstrate a material cross-development-family gain for every retained
+complex feature. DeepSeek, Falcon, and OPT play no role in selection. Once
+selected, the formula is frozen. A later regression greater than 10 percentage
+points on one of those families is reported as a possible catastrophic
+regression and a validation failure; it does not trigger formula reselection.
 
 For B1, one cutoff will be chosen using development families and development
 hard negatives only, then frozen. The rule is to choose the smallest cutoff
@@ -110,9 +114,18 @@ that condition, blind binary identification is not validated.
 | `falcon-7b` | Falcon | held out | missing |
 | `opt-6.7b` | OPT | held out | missing |
 
-The smoke recapture is fixed to cases 0 and 1 on `gpt2-medium` and
-`falcon-7b`; Falcon case 0 is the known M3 localization miss in the local
-parity fixture. The full development recapture requests cases 0--99.
+The smoke recapture is fixed to cases 0 and 1 on two development families:
+`gpt2-medium` and `mistral-7b-v0.1`. It is run twice under distinct run IDs,
+then selected layers and scores are compared within the recorded numerical
+tolerances. The development recapture requests cases 0--99 only after that
+repeatability gate passes.
+
+DeepSeek, Falcon, and OPT are not present in the executable recapture job.
+Their manifest entries record only the frozen split and checkpoint audit.
+They remain unseen until both the candidate mathematics and global B1 cutoff
+are frozen. Because the required development hard negatives are currently
+absent, the B1 cutoff cannot yet be calibrated and the held-out release gate
+remains closed.
 
 Audit on 2026-07-28:
 
@@ -129,12 +142,14 @@ Audit on 2026-07-28:
 The recapture command is:
 
 ```bash
-jobs/run_rome_math_ablation.sh smoke
-jobs/run_rome_math_ablation.sh full
+jobs/run_rome_math_ablation.sh smoke-a
+jobs/run_rome_math_ablation.sh smoke-b
+jobs/run_rome_math_ablation.sh development
 ```
 
-The job is prepared but was not launched because that would require remote
-compute and model access not authorized in this task.
+The first two commands must pass and agree before the development command is
+run. There is deliberately no held-out or all-model mode in this pre-freeze
+job.
 
 ## Saved schema and reproducibility
 
@@ -200,13 +215,16 @@ are never silently dropped from inventory totals.
 
 ## Pending M3 feature decisions
 
-| Feature | Held-out gain | Failure prevented | Keep/remove |
+Feature decisions are made on cross-development-family evidence and frozen
+before the held-out-family release gate opens.
+
+| Feature | Cross-development-family gain | Failure prevented | Keep/remove |
 |---|---:|---|---|
 | whitening | pending | pending | pending |
 | rank-two energy multiplier | pending | pending | pending |
 | bilateral coherence | pending | pending | pending |
 | bilateral balance | pending | pending | pending |
-| morphology product | no verdict gain in 1,162 available paired cases; held-out pending | none observed locally | pending held-out removal decision |
+| morphology product | no verdict gain in 1,162 available paired cases; development recapture pending | none observed locally | pending development decision |
 | `log1p` transform | pending | pending | pending |
 
 ## Binary threat models and validation status
@@ -231,4 +249,5 @@ binary hard negatives are absent. The experimental scorer, invariant tests,
 versioned evaluator, fixed family split, and reproducible recapture job are
 ready. The next authorized step is to run the smoke recapture on a host with
 the declared checkpoints, confirm deterministic output, and only then run the
-full development/held-out recapture.
+development-only recapture. DeepSeek, Falcon, and OPT remain unopened until
+the formula and global B1 cutoff have been frozen.

@@ -45,6 +45,11 @@ CAPTURES = NamedRegistry(
             weight_families=("proj", "fc"),
         ),
         CaptureSpec(
+            "rome-math-ablation",
+            "Experimental M0--M3 Gram/SVD recapture; not a production detector.",
+            "src.structural.experiments.rome_math_ablation:capture_rome_math_ablation",
+        ),
+        CaptureSpec(
             "matrix-features",
             "Reusable per-layer matrix, rank, norm, and IPR profiles.",
             "src.structural.capture.producers:capture_matrix_features",
@@ -78,19 +83,18 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "weighted-spectrum": ("weighted-spectrum",),
     "detection": ("weighted-spectrum", "spectral"),
     "rome-presence": ("weighted-spectrum", "rome-update"),
+    "rome-math-ablation": ("rome-math-ablation",),
     "matrix": ("matrix-features",),
     "paper": ("spectral", "matrix-features"),
-    "full": CAPTURES.identifiers(),
+    # Keep the expensive recapture experiment opt-in even under the historical
+    # "full" production profile.
+    "full": tuple(identifier for identifier in CAPTURES.identifiers() if identifier != "rome-math-ablation"),
 }
 
 
 def required_weight_families(capture_names: Sequence[str]) -> tuple[str, ...]:
     """Return the ordered union of matrix families consumed by captures."""
-    required = {
-        family
-        for capture_name in capture_names
-        for family in CAPTURES.get(capture_name).weight_families
-    }
+    required = {family for capture_name in capture_names for family in CAPTURES.get(capture_name).weight_families}
     return tuple(family for family in ("proj", "fc", "attention") if family in required)
 
 

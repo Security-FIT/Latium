@@ -109,6 +109,18 @@ def capture_config(
         relevant_options = {
             "profile_fields": list(options["weighted_spectrum_fields"]),
         }
+    elif capture_name == "rome-math-ablation":
+        from src.structural.experiments.rome_math_ablation import (
+            CAPTURE_SCHEMA_VERSION,
+            DEFAULT_SVD_MODE,
+            DEFAULT_TRIM_FRACTION,
+        )
+
+        relevant_options = {
+            "schema_version": CAPTURE_SCHEMA_VERSION,
+            "trim_fraction": DEFAULT_TRIM_FRACTION,
+            "svd_mode": DEFAULT_SVD_MODE,
+        }
     elif capture_name == "matrix-features":
         relevant_options = {
             "feature_set": str(options.get("matrix_feature_set", "paper")),

@@ -36,7 +36,9 @@ def enumerate_artifacts(root: Path) -> list[Path]:
         text=True,
         capture_output=True,
     )
-    return [Path(line) for line in result.stdout.splitlines() if line.endswith("/captures/rome-math-ablation.json")]
+    return sorted(
+        Path(line) for line in result.stdout.splitlines() if line.endswith("/captures/rome-math-ablation.json")
+    )
 
 
 def _load_json(path: Path) -> dict[str, Any]:

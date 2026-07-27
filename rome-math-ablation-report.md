@@ -1,6 +1,6 @@
 # ROME detector mathematical ablation
 
-Status: **implementation complete; empirical selection blocked on recapture**
+Status: **smoke gate blocked on missing local inputs; empirical selection not started**
 
 Schema: `rome-math-ablation-evaluation-v1`
 Threat-model claim status: **no production binary ROME claim**
@@ -151,6 +151,27 @@ The first two commands must pass and agree before the development command is
 run. There is deliberately no held-out or all-model mode in this pre-freeze
 job.
 
+### Smoke execution
+
+After the split correction was frozen in commit `107b90f`, `smoke-a` was
+started on 2026-07-28. It stopped before model loading with:
+
+```text
+Missing second moment stats for model=gpt2-medium layer=8
+```
+
+The failed attempt created only an empty run manifest; it produced no baseline,
+ROME case, Gram profile, selected layer, or candidate score. A local audit
+confirmed that neither the exact GPT-2 Medium layer-8 second moment nor the
+Mistral v0.1 layer-5 second moment is available. Their model checkpoints are
+also absent. The available Mistral v0.3 second moment belongs to a different
+checkpoint and was not substituted.
+
+Because `smoke-a` did not complete, `smoke-b` and the development run were not
+started. Repeatability therefore remains unmeasured, M0--M3 remain unselected,
+and no B1 cutoff has been calibrated or frozen. No held-out recapture was
+launched or generated.
+
 ## Saved schema and reproducibility
 
 Each capture has schema `rome-math-ablation-capture-v1` and stores:
@@ -244,10 +265,11 @@ support a binary forensic attribution claim.
 ## Stop decision
 
 Production replacement is stopped. The blocking evidence is not a software
-failure: the required checkpoint tensors, frozen 40-case manifests, and
-binary hard negatives are absent. The experimental scorer, invariant tests,
-versioned evaluator, fixed family split, and reproducible recapture job are
-ready. The next authorized step is to run the smoke recapture on a host with
-the declared checkpoints, confirm deterministic output, and only then run the
-development-only recapture. DeepSeek, Falcon, and OPT remain unopened until
+failure: the required checkpoint tensors and exact second moments, frozen
+40-case manifests, and binary hard negatives are absent. The experimental
+scorer, invariant tests, versioned evaluator, fixed family split, and
+reproducible recapture job are ready. The next step requiring external inputs
+is to provide the two declared development checkpoints and exact second
+moments, rerun both smoke IDs, confirm deterministic output, and only then run
+the development-only recapture. DeepSeek, Falcon, and OPT remain sealed until
 the formula and global B1 cutoff have been frozen.

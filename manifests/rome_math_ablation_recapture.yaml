@@ -1,6 +1,6 @@
 schema_version: rome-math-ablation-recapture-v1
 scientific_baseline: false
-status: pending_recapture
+status: blocked_missing_smoke_inputs
 created_before_candidate_selection: true
 
 split_policy:
@@ -44,6 +44,7 @@ capture:
     start_idx: 0
     count: 100
   smoke:
+    status: blocked
     run_ids:
       - rome-math-ablation-smoke-a-v1
       - rome-math-ablation-smoke-b-v1
@@ -53,7 +54,18 @@ capture:
     models:
       - gpt2-medium
       - mistral-7b-v0.1
+    attempts:
+      - run_id: rome-math-ablation-smoke-a-v1
+        date: 2026-07-28
+        result: stopped_before_model_load
+        blocker: >-
+          Missing second moment stats for gpt2-medium layer 8 in the
+          detector-simplification worktree.
+      - run_id: rome-math-ablation-smoke-b-v1
+        result: not_started
+        reason: first smoke run did not pass
   development:
+    status: not_started_smoke_gate_closed
     run_id: rome-math-ablation-development-v1
     models:
       - gpt-j-6b
@@ -76,6 +88,12 @@ local_availability_audit:
       reason: only two repeated layers, so no eligible local second difference
     - model: gpt2-xl
       reason: cache contains an incomplete weight download only
+    - model: gpt2-medium
+      reason: exact layer-8 second moment and model checkpoint are missing
+    - model: mistral-7b-v0.1
+      reason: >-
+        exact layer-5 second moment and model checkpoint are missing; the
+        locally present Mistral v0.3 second moment is not interchangeable
   conclusion: required recapture checkpoints are missing locally
 
 models:

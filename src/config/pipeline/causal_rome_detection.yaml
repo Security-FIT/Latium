@@ -53,16 +53,11 @@ resume:
 validation:
   required_captures:
     - weighted-spectrum
-    - rome-update
     - spectral
   required_analyses:
     - spectral
     - weighted-spectrum
-    - rome-presence-blind-peak
-    - rome-presence-blind-footprint
-    - rome-presence-delta
   required_renderers:
-    - rome-detector-explainer
     - rome-success
     - detector-window
     - detector

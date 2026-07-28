@@ -18,10 +18,7 @@ from src.results import ArtifactWriter, RunArtifactReader, RunLayout, build_arti
 from src.results.ids import capture_id, execution_id
 from src.structural.config import AnalysisVariantConfig, ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.capture.artifacts import capture_options, execution_config
-from src.structural.detectors.weighted_spectrum import (
-    FOOTPRINT_PROFILE_FIELDS,
-    LOCALIZER_PROFILE_FIELDS,
-)
+from src.structural.detectors.weighted_spectrum import PROFILE_FIELDS
 from src.structural.execution.edit_execution import run_edit_method
 
 
@@ -165,9 +162,9 @@ def test_capture_options_request_only_fields_consumed_by_selected_analyses() -> 
         )
     )
 
-    assert detection["weighted_spectrum_fields"] == LOCALIZER_PROFILE_FIELDS
-    assert presence["weighted_spectrum_fields"] == FOOTPRINT_PROFILE_FIELDS
-    assert capture_only_presence["weighted_spectrum_fields"] == FOOTPRINT_PROFILE_FIELDS
+    assert detection["weighted_spectrum_fields"] == PROFILE_FIELDS
+    assert presence["weighted_spectrum_fields"] == PROFILE_FIELDS
+    assert capture_only_presence["weighted_spectrum_fields"] == PROFILE_FIELDS
 
 
 def _write_baseline_capture(

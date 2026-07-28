@@ -25,9 +25,13 @@ from src.structural.detectors.matrix_anomaly import (
     stable_effective_ratio,
 )
 from src.structural.detectors.profiles import matrix_profile
+from src.structural.detectors.rome_presence import detect_rome_compatible_edit
 from src.structural.detectors.weighted_spectrum import (
-    LOCALIZER_PROFILE_FIELDS,
+    DEFAULT_TRIM_FRACTION,
     PROFILE_FIELDS,
+    SCHEMA_VERSION,
+    eligible_layers,
+    hidden_gram,
 )
 from src.common.linalg import gpu_svd_topk
 from src.structural.detectors.spectral_primitives import (
@@ -288,34 +292,9 @@ def capture_matrix_features(context: CaptureContext) -> dict[str, Any]:
     return to_serializable(output)
 
 
-def _deterministic_topk_svd(
-    weight: torch.Tensor,
-    *,
-    top_k: int,
-    seed: int,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Compute a reproducible randomized SVD for numeric feature extraction."""
-    devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
-    with torch.random.fork_rng(devices=devices):
-        torch.manual_seed(int(seed))
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(int(seed))
-        return gpu_svd_topk(
-            weight,
-            k=max(2, int(top_k)),
-            niter=4,
-        )
-
-
 def _hidden_spectral_density(weight: torch.Tensor) -> torch.Tensor:
-    """Return a trace-one Gram matrix in the projection's shared hidden space."""
-    device = weight.device if weight.is_cuda else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    matrix = weight.detach().to(device=device, dtype=torch.float32)
-    frobenius_sq = matrix.square().sum()
-    if not bool(torch.isfinite(frobenius_sq).item()) or float(frobenius_sq.item()) <= 0.0:
-        raise ValueError("Projection weight must contain finite, non-zero values")
-    gram = matrix @ matrix.T if matrix.shape[0] <= matrix.shape[1] else matrix.T @ matrix
-    return gram / frobenius_sq
+    """Return the normalized hidden Gram used by the minimal localizer."""
+    return hidden_gram(weight, normalize=True)
 
 
 def _weighted_spectrum_profile(
@@ -323,23 +302,19 @@ def _weighted_spectrum_profile(
     reference: torch.Tensor,
     *,
     layer: int,
-    neighbors: tuple[torch.Tensor, ...] = (),
-    fields: tuple[str, ...] = PROFILE_FIELDS,
 ) -> dict[str, float]:
-    """Compute only the weighted-spectrum statistics requested by a consumer."""
-    requested = tuple(dict.fromkeys(str(field) for field in fields))
-    unknown = sorted(set(requested) - set(PROFILE_FIELDS))
-    if unknown:
-        raise ValueError(f"Unknown weighted-spectrum fields: {', '.join(unknown)}")
-    if "relative_subspace_frobenius" not in requested:
-        raise ValueError("Weighted-spectrum capture requires relative_subspace_frobenius")
-
+    """Compute the retained two-dimensional support-whitened Frobenius score."""
     residual = current - reference
-    left, singular_tensor, _right = _deterministic_topk_svd(
-        residual,
-        top_k=2,
-        seed=433494437 + int(layer),
-    )
+    devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
+    with torch.random.fork_rng(devices=devices):
+        torch.manual_seed(433494437 + int(layer))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(433494437 + int(layer))
+        left, _singular_values, _right = gpu_svd_topk(
+            residual,
+            k=2,
+            niter=4,
+        )
     basis = left[:, :2].to(device=reference.device, dtype=reference.dtype)
     residual_subspace = basis.T @ residual @ basis
     reference_subspace = basis.T @ reference @ basis
@@ -348,55 +323,26 @@ def _weighted_spectrum_profile(
         reference_eigenvectors @ torch.diag(reference_eigenvalues.clamp_min(EPS).rsqrt()) @ reference_eigenvectors.T
     )
     relative_subspace = inverse_sqrt @ residual_subspace @ inverse_sqrt
-    relative_eigenvalues = torch.linalg.eigvalsh(relative_subspace)
-    profile = {
-        "relative_subspace_frobenius": float(torch.linalg.vector_norm(relative_eigenvalues).item()),
+    return {
+        "relative_subspace_frobenius": float(
+            torch.linalg.matrix_norm(relative_subspace, ord="fro").item()
+        ),
     }
-
-    if "rank2_energy" in requested:
-        residual_energy = float(torch.linalg.vector_norm(residual).square().item())
-        profile["rank2_energy"] = float(singular_tensor[:2].square().sum().item()) / max(residual_energy, EPS)
-
-    bilateral_requested = bool({"bilateral_coherence", "bilateral_balance"}.intersection(requested))
-    if bilateral_requested and len(neighbors) == 2:
-        left_jump = current - neighbors[0]
-        right_jump = current - neighbors[1]
-        left_energy = left_jump.square().sum()
-        right_energy = right_jump.square().sum()
-        jump_energy = left_energy + right_energy
-        curvature_energy = (left_jump + right_jump).square().sum()
-        bilateral_coherence = curvature_energy / (2.0 * jump_energy + EPS)
-        bilateral_balance = 2.0 * torch.sqrt(left_energy * right_energy) / (jump_energy + EPS)
-    elif bilateral_requested:
-        bilateral_coherence = torch.zeros((), device=current.device)
-        bilateral_balance = torch.zeros((), device=current.device)
-    if "bilateral_coherence" in requested:
-        profile["bilateral_coherence"] = float(bilateral_coherence.item())
-    if "bilateral_balance" in requested:
-        profile["bilateral_balance"] = float(bilateral_balance.item())
-    return {field: profile[field] for field in requested}
 
 
 def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
-    """Capture normalized hidden-space spectral curvature around every changed layer."""
-    fields = tuple(
-        str(field)
-        for field in context.options.get(
-            "weighted_spectrum_fields",
-            LOCALIZER_PROFILE_FIELDS,
-        )
-    )
+    """Capture the minimal M3 localizer and clean-reference B0 decision."""
     layers = sorted(context.proj_weights)
     direct = context.changed_layers("proj", layers)
     if context.is_baseline:
-        included = layers
+        included = layers[1:-1]
     else:
         positions = {layer: index for index, layer in enumerate(layers)}
         affected: set[int] = set()
         for layer in direct:
             index = positions[layer]
             affected.update(layers[max(0, index - 1) : min(len(layers), index + 2)])
-        included = sorted(affected)
+        included = sorted(affected.intersection(layers[1:-1]))
 
     positions = {layer: index for index, layer in enumerate(layers)}
     # A hidden Gram is quadratic in hidden width.  Keep only the rolling
@@ -417,147 +363,45 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
             densities[layer],
             reference,
             layer=layer,
-            neighbors=tuple(neighbors),
-            fields=fields,
         )
         densities = {
             cached_layer: density for cached_layer, density in densities.items() if positions[cached_layer] >= index
         }
 
-    first_weight = context.proj_weights[layers[0]] if layers else None
+    clean_reference_presence: dict[str, Any]
+    if context.is_baseline:
+        clean_reference_presence = {
+            "available": False,
+            "is_rome_compatible": None,
+            "verdict": "clean_reference_unavailable",
+            "selected_layer": None,
+        }
+    elif context.baseline_proj_weights is None:
+        clean_reference_presence = {
+            "available": False,
+            "is_rome_compatible": None,
+            "verdict": "clean_reference_unavailable",
+            "selected_layer": None,
+        }
+    else:
+        clean_reference_presence = detect_rome_compatible_edit(
+            context.proj_weights,
+            context.baseline_proj_weights,
+            candidate_layers=direct,
+        )
+    eligible = eligible_layers(layers, trim_fraction=DEFAULT_TRIM_FRACTION)
     return to_serializable(
         {
+            "schema_version": SCHEMA_VERSION,
             "mode": "baseline" if context.is_baseline else "patch",
             "layers": layers,
-            "weight_shape": list(first_weight.shape) if first_weight is not None else [],
-            "profile_fields": list(fields),
+            "trim_fraction": DEFAULT_TRIM_FRACTION,
+            "eligible_layers": eligible,
+            "excluded_layers": [layer for layer in layers if layer not in set(eligible)],
+            "profile_fields": list(PROFILE_FIELDS),
             "profiles": profiles,
+            "clean_reference_presence": clean_reference_presence,
             "changed_layers": {"proj": included},
-        }
-    )
-
-
-def _update_profile(
-    current: torch.Tensor,
-    baseline: torch.Tensor,
-    *,
-    layer: int,
-) -> dict[str, float | bool]:
-    """Describe a checkpoint delta relative to floating-point roundoff."""
-    if current.shape != baseline.shape:
-        raise ValueError(f"Layer {layer} shape changed from {tuple(baseline.shape)} to {tuple(current.shape)}")
-    original = baseline.detach().to(dtype=torch.float32, device="cpu")
-    modified = current.detach().to(dtype=torch.float32, device="cpu")
-    if not bool(torch.isfinite(original).all()) or not bool(torch.isfinite(modified).all()):
-        raise ValueError(f"Layer {layer} contains non-finite weights")
-    delta = modified - original
-    delta_frobenius = float(torch.linalg.vector_norm(delta).item())
-    dtype = baseline.dtype if baseline.dtype.is_floating_point else torch.float32
-    epsilon = max(float(torch.finfo(dtype).eps), float(torch.finfo(torch.float32).eps))
-    # Higham's gamma bound for four rounded operations: outer-product entry,
-    # weight addition, checkpoint subtraction, and reconstruction.  This is
-    # numerical error accounting derived from dtype precision, not a fitted
-    # edit threshold.
-    operation_count = 4
-    gamma = operation_count * epsilon / max(1.0 - operation_count * epsilon, epsilon)
-    roundoff_bound = float(
-        gamma
-        * (torch.linalg.vector_norm(original).item() + torch.linalg.vector_norm(modified).item() + delta_frobenius)
-    )
-    baseline_frobenius = float(torch.linalg.vector_norm(original).item())
-    if delta_frobenius <= roundoff_bound:
-        return {
-            "delta_frobenius": delta_frobenius,
-            "relative_delta_frobenius": delta_frobenius / max(baseline_frobenius, EPS),
-            "top1_singular": 0.0,
-            "top1_energy": 0.0,
-            "rank1_residual": 0.0,
-            "rank1_residual_ratio": 0.0,
-            "roundoff_bound": roundoff_bound,
-            "rank_one_within_roundoff": False,
-            "detectable_change": False,
-        }
-
-    left, singular, right = _deterministic_topk_svd(
-        delta,
-        top_k=2,
-        seed=701408733 + int(layer),
-    )
-    top1 = float(singular[0].item())
-    # Accumulate the best-rank-one residual in row blocks so wide production
-    # matrices do not require another full float64 matrix.
-    rank1_residual_squared = 0.0
-    right_vector = right[0].double().unsqueeze(0)
-    for start in range(0, int(delta.shape[0]), 256):
-        stop = min(int(delta.shape[0]), start + 256)
-        reconstruction = top1 * left[start:stop, 0].double().unsqueeze(1) * right_vector
-        block = delta[start:stop].double() - reconstruction
-        rank1_residual_squared += float(block.square().sum().item())
-    rank1_residual = rank1_residual_squared**0.5
-    return {
-        "delta_frobenius": delta_frobenius,
-        "relative_delta_frobenius": delta_frobenius / max(baseline_frobenius, EPS),
-        "top1_singular": top1,
-        "top1_energy": min(1.0, top1**2 / max(delta_frobenius**2, EPS)),
-        "rank1_residual": rank1_residual,
-        "rank1_residual_ratio": rank1_residual / max(delta_frobenius, EPS),
-        "roundoff_bound": roundoff_bound,
-        "rank_one_within_roundoff": bool(rank1_residual <= roundoff_bound),
-        "detectable_change": True,
-    }
-
-
-def _update_family_profiles(
-    current: Optional[dict[int, torch.Tensor]],
-    baseline: Optional[dict[int, torch.Tensor]],
-) -> dict[str, dict[str, float | bool]]:
-    if current is None and baseline is None:
-        return {}
-    if current is None or baseline is None:
-        raise ValueError("Current and baseline matrix families must both be available")
-    if set(current) != set(baseline):
-        raise ValueError("Current and baseline matrix families contain different layers")
-    profiles: dict[str, dict[str, float | bool]] = {}
-    for layer in sorted(current):
-        current_weight = current[layer]
-        baseline_weight = baseline[layer]
-        if current_weight is baseline_weight:
-            continue
-        directly_equal = (
-            current_weight.shape == baseline_weight.shape
-            and current_weight.dtype == baseline_weight.dtype
-            and current_weight.device == baseline_weight.device
-            and torch.equal(current_weight, baseline_weight)
-        )
-        if directly_equal:
-            continue
-        profile = _update_profile(current_weight, baseline_weight, layer=layer)
-        if profile["detectable_change"]:
-            profiles[str(layer)] = profile
-    family_energy = sum(float(profile["delta_frobenius"]) ** 2 for profile in profiles.values())
-    for profile in profiles.values():
-        profile["family_energy_fraction"] = (
-            float(profile["delta_frobenius"]) ** 2 / family_energy if family_energy > 0.0 else 0.0
-        )
-    return profiles
-
-
-def capture_rome_update(context: CaptureContext) -> dict[str, Any]:
-    """Capture clean-to-suspect update fingerprints for ROME-like attribution."""
-    if context.is_baseline:
-        return {
-            "mode": "baseline",
-            "families": {"proj": {}, "fc": {}},
-        }
-    if context.baseline_proj_weights is None:
-        raise RuntimeError("ROME update capture requires clean baseline projection weights")
-    return to_serializable(
-        {
-            "mode": "patch",
-            "families": {
-                "proj": _update_family_profiles(context.proj_weights, context.baseline_proj_weights),
-                "fc": _update_family_profiles(context.fc_weights, context.baseline_fc_weights),
-            },
         }
     )
 

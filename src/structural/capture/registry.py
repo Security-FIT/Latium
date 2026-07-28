@@ -35,19 +35,8 @@ CAPTURES = NamedRegistry(
         ),
         CaptureSpec(
             "weighted-spectrum",
-            "Affine-relative weighted-spectrum geometry across hidden layers.",
+            "Minimal ROME Gram localizer and clean-reference low-rank decision.",
             "src.structural.capture.producers:capture_weighted_spectrum",
-        ),
-        CaptureSpec(
-            "rome-update",
-            "Clean-to-suspect low-rank update fingerprints for ROME attribution.",
-            "src.structural.capture.producers:capture_rome_update",
-            weight_families=("proj", "fc"),
-        ),
-        CaptureSpec(
-            "rome-math-ablation",
-            "Experimental M0--M3 Gram/SVD recapture; not a production detector.",
-            "src.structural.experiments.rome_math_ablation:capture_rome_math_ablation",
         ),
         CaptureSpec(
             "matrix-features",
@@ -82,13 +71,10 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "spectral": ("spectral",),
     "weighted-spectrum": ("weighted-spectrum",),
     "detection": ("weighted-spectrum", "spectral"),
-    "rome-presence": ("weighted-spectrum", "rome-update"),
-    "rome-math-ablation": ("rome-math-ablation",),
+    "rome-presence": ("weighted-spectrum",),
     "matrix": ("matrix-features",),
     "paper": ("spectral", "matrix-features"),
-    # Keep the expensive recapture experiment opt-in even under the historical
-    # "full" production profile.
-    "full": tuple(identifier for identifier in CAPTURES.identifiers() if identifier != "rome-math-ablation"),
+    "full": CAPTURES.identifiers(),
 }
 
 

@@ -1,210 +1,222 @@
-"""Architecture-neutral, training-free decisions for ROME-like edit presence."""
+"""Clean-reference decision for a ROME-compatible low-rank edit."""
 
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
-from statistics import NormalDist
-from typing import Any, Literal
+from collections.abc import Mapping, Sequence
+from typing import Any
 
-import numpy as np
+import torch
 
+from src.common.linalg import gpu_svd_topk
 from src.structural.detectors.weighted_spectrum import (
-    FOOTPRINT_PROFILE_FIELDS,
-    LOCALIZER_PROFILE_FIELDS,
-    detect_from_profiles,
+    eligible_layers,
+    hidden_gram,
+    numerical_tolerance,
 )
 
 
-BlindStrategy = Literal["peak", "footprint"]
-_MAD_NORMAL_SCALE = 1.482602218505602
-_EPS = np.finfo(np.float64).eps
+ATTRIBUTION_SCOPE = "generic_rank_at_most_two_gram_change"
+DEFAULT_SVD_MODE = "randomized"
 
 
-def _universal_outlier(values: np.ndarray) -> dict[str, float | bool]:
-    """Test the upper extreme against the universal Gaussian-noise bound."""
-    if values.ndim != 1 or values.size == 0:
-        raise ValueError("Universal outlier test requires a non-empty one-dimensional array")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("Universal outlier test received non-finite values")
-    center = float(np.median(values))
-    scale = float(_MAD_NORMAL_SCALE * np.median(np.abs(values - center)))
-    peak_index = int(np.argmax(values))
-    peak = float(values[peak_index])
-    effective_scale = max(scale, _EPS * max(1.0, abs(center), abs(peak)))
-    robust_z = max(0.0, (peak - center) / effective_scale)
-    threshold = math.sqrt(2.0 * math.log(max(2, int(values.size))))
-    tail_probability = 1.0 - NormalDist().cdf(float(robust_z))
-    return {
-        "is_outlier": bool(robust_z > threshold),
-        "peak_index": peak_index,
-        "peak": peak,
-        "median": center,
-        "mad_scale": scale,
-        "effective_mad_scale": effective_scale,
-        "robust_z": robust_z,
-        "universal_threshold": threshold,
-        "gaussian_tail_probability": tail_probability,
-        "evidence_ratio": robust_z / threshold,
-    }
-
-
-def _presence_series(
-    profiles: Mapping[str, Mapping[str, float]],
-    layers: list[int],
-    strategy: BlindStrategy,
-) -> np.ndarray:
-    required_fields = (
-        LOCALIZER_PROFILE_FIELDS if strategy == "peak" else FOOTPRINT_PROFILE_FIELDS
-    )
-    missing = [
-        f"{layer}:{field}"
-        for layer in layers
-        for field in required_fields
-        if field not in profiles.get(str(layer), {})
-    ]
-    if missing:
-        raise ValueError(
-            "ROME-presence profiles are incomplete at " + ", ".join(missing[:8])
-        )
-    spectral = np.asarray(
-        [float(profiles[str(layer)]["relative_subspace_frobenius"]) for layer in layers],
-        dtype=np.float64,
-    )
-    if strategy == "peak":
-        return np.log1p(np.maximum(spectral, 0.0))
-    if strategy != "footprint":
-        raise ValueError(f"Unknown blind ROME-presence strategy: {strategy}")
-    # An isolated ROME update produces a balanced same-sign curvature peak and
-    # an at-most-rank-two Gram residual.  Multiplication is a conjunction of
-    # those dimensionless pieces, with no fitted feature weights.
-    coherence = np.asarray(
-        [float(profiles[str(layer)]["bilateral_coherence"]) for layer in layers],
-        dtype=np.float64,
-    )
-    balance = np.asarray(
-        [float(profiles[str(layer)]["bilateral_balance"]) for layer in layers],
-        dtype=np.float64,
-    )
-    rank2 = np.asarray(
-        [float(profiles[str(layer)]["rank2_energy"]) for layer in layers],
-        dtype=np.float64,
-    )
-    morphology = (
-        np.clip(coherence, 0.0, 1.0)
-        * np.clip(balance, 0.0, 1.0)
-        * np.clip(rank2, 0.0, 1.0)
-    )
-    return np.log1p(np.maximum(spectral, 0.0) * morphology)
-
-
-def detect_rome_presence_blind(
-    profiles: Mapping[str, Mapping[str, float]],
+def _deterministic_topk_svd(
+    matrix: torch.Tensor,
     *,
-    trim_first: int,
-    trim_last: int,
-    strategy: BlindStrategy,
-) -> dict[str, Any]:
-    """Make a suspect-only ROME-like presence decision from depth profiles."""
-    localized = detect_from_profiles(
-        profiles,
-        trim_first=trim_first,
-        trim_last=trim_last,
+    top_k: int,
+    seed: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
+    with torch.random.fork_rng(devices=devices):
+        torch.manual_seed(int(seed))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(int(seed))
+        return gpu_svd_topk(matrix, k=max(2, int(top_k)), niter=4)
+
+
+def _rank_two_tail(
+    matrix: torch.Tensor,
+    *,
+    layer: int,
+    svd_mode: str,
+) -> tuple[torch.Tensor, float, torch.dtype]:
+    """Return the leading values and blockwise energy beyond rank two."""
+    rank = min(int(matrix.shape[0]), int(matrix.shape[1]))
+    if svd_mode == "exact" or rank <= 2:
+        left, singular_values, right = torch.linalg.svd(matrix, full_matrices=False)
+        solver_dtype = matrix.dtype
+    elif svd_mode == "randomized":
+        left, singular_values, right = _deterministic_topk_svd(
+            matrix,
+            top_k=min(8, rank),
+            seed=701408733 + int(layer),
+        )
+        solver_dtype = torch.float32
+    else:
+        raise ValueError(f"Unknown SVD mode: {svd_mode}")
+
+    take = min(2, int(singular_values.numel()))
+    leading = singular_values[:take].to(device=matrix.device)
+    left = left[:, :take].to(device=matrix.device, dtype=torch.float64)
+    right = right[:take, :].to(device=matrix.device, dtype=torch.float64)
+    scaled_left = left * leading[:take].double().unsqueeze(0)
+    tail_squared = 0.0
+    for start in range(0, int(matrix.shape[0]), 256):
+        stop = min(int(matrix.shape[0]), start + 256)
+        block = matrix[start:stop].double() - scaled_left[start:stop] @ right
+        tail_squared += float(block.square().sum().item())
+    return (
+        leading.to(device=matrix.device, dtype=matrix.dtype),
+        math.sqrt(tail_squared),
+        solver_dtype,
     )
-    layers = list(localized.get("evaluated_layers", ()))
-    if not layers:
-        return {
-            "is_rome_like": False,
-            "is_edited": False,
-            "verdict": "insufficient_layers",
-            "strategy": strategy,
-            "anomalous_layer": None,
-        }
-    series = _presence_series(profiles, layers, strategy)
-    outlier = _universal_outlier(series)
-    peak_guard = None
-    if strategy == "footprint":
-        peak_guard = _universal_outlier(_presence_series(profiles, layers, "peak"))
-    peak_index = int(outlier["peak_index"])
-    peak_layer = int(layers[peak_index])
-    is_rome_like = bool(outlier["is_outlier"]) and (
-        peak_guard is None or bool(peak_guard["is_outlier"])
+
+
+def gram_delta_evidence(
+    suspect: torch.Tensor,
+    clean: torch.Tensor,
+    *,
+    layer: int,
+    svd_mode: str = DEFAULT_SVD_MODE,
+) -> dict[str, float | str | bool]:
+    """Measure a clean-to-suspect hidden-Gram change and its rank-two tail."""
+    suspect_gram = hidden_gram(suspect, normalize=False)
+    clean_gram = hidden_gram(clean, normalize=False)
+    if suspect_gram.shape != clean_gram.shape:
+        raise ValueError(f"Layer {layer} hidden Gram shape changed")
+    delta = suspect_gram - clean_gram
+    full = float(torch.linalg.vector_norm(delta).item())
+    singular_values, tail, solver_dtype = _rank_two_tail(
+        delta,
+        layer=layer + 209759,
+        svd_mode=svd_mode,
     )
-    result = {
-        "is_rome_like": is_rome_like,
-        "is_edited": is_rome_like,
-        "verdict": "rome_like" if is_rome_like else "no_universal_outlier",
-        "strategy": strategy,
-        "threat_model": "suspect_only",
-        "calibration": "universal_bound_not_empirically_calibrated",
-        "anomalous_layer": peak_layer,
-        "detection_score": float(outlier["evidence_ratio"]),
-        "evidence": outlier,
-        "layer_evidence": {str(layer): float(series[index]) for index, layer in enumerate(layers)},
-        "localizer": localized,
-        "required_profile_fields": list(
-            LOCALIZER_PROFILE_FIELDS if strategy == "peak" else FOOTPRINT_PROFILE_FIELDS
+    clean_frobenius = float(torch.linalg.vector_norm(clean_gram).item())
+    eps = torch.finfo(solver_dtype).eps
+    reduction_dimension = max(int(value) for value in suspect.shape)
+    product = min(0.5, float(eps) * max(1, reduction_dimension))
+    gamma = product / max(1.0 - product, float(eps))
+    noise_bound = gamma * (
+        float(torch.linalg.vector_norm(suspect_gram).item()) + clean_frobenius
+    )
+    clean_tolerance = numerical_tolerance(
+        delta.dtype,
+        int(delta.shape[0]),
+        clean_frobenius,
+    )
+    delta_tolerance = numerical_tolerance(
+        delta.dtype,
+        int(delta.shape[0]),
+        full,
+    )
+    change_magnitude = full / max(clean_frobenius, clean_tolerance)
+    magnitude_bound = noise_bound / max(clean_frobenius, clean_tolerance)
+    rank2_tail_ratio = tail / max(full, delta_tolerance)
+    tail_ratio_bound = noise_bound / max(full, delta_tolerance)
+    return {
+        "change_magnitude": change_magnitude,
+        "magnitude_bound": magnitude_bound,
+        "rank2_tail_ratio": rank2_tail_ratio,
+        "tail_ratio_bound": tail_ratio_bound,
+        "passes_numerical_bounds": bool(
+            change_magnitude > magnitude_bound
+            and rank2_tail_ratio <= tail_ratio_bound
+        ),
+        "delta_frobenius": full,
+        "tail_frobenius": tail,
+        "noise_bound": noise_bound,
+        "solver_dtype": str(solver_dtype).removeprefix("torch."),
+        "sigma_1": (
+            float(singular_values[0].item()) if singular_values.numel() else 0.0
+        ),
+        "sigma_2": (
+            float(singular_values[1].item())
+            if singular_values.numel() > 1
+            else 0.0
         ),
     }
-    if peak_guard is not None:
-        result["peak_guard_evidence"] = peak_guard
-    return result
 
 
-def detect_rome_presence_delta(
-    families: Mapping[str, Mapping[str, Mapping[str, float | bool]]],
+def detect_rome_compatible_edit(
+    suspect_proj: Mapping[int, torch.Tensor],
+    clean_proj: Mapping[int, torch.Tensor],
+    *,
+    candidate_layers: Sequence[int] | None = None,
+    svd_mode: str = DEFAULT_SVD_MODE,
 ) -> dict[str, Any]:
-    """Accept one numerically rank-one MLP-output checkpoint delta."""
-    projection = dict(families.get("proj", {}))
-    fc = dict(families.get("fc", {}))
-    all_changes = [("proj", layer, profile) for layer, profile in projection.items()]
-    all_changes.extend(("fc", layer, profile) for layer, profile in fc.items())
-    if not all_changes:
+    """Return a boolean clean-reference ROME-compatible low-rank decision."""
+    suspect_layers = sorted(int(layer) for layer in suspect_proj)
+    clean_layers = sorted(int(layer) for layer in clean_proj)
+    if suspect_layers != clean_layers:
+        raise ValueError("Suspect and clean projection sequences contain different layers")
+    eligible = set(eligible_layers(suspect_layers))
+    requested = (
+        eligible
+        if candidate_layers is None
+        else eligible.intersection(int(layer) for layer in candidate_layers)
+    )
+    changed = [
+        layer
+        for layer in sorted(requested)
+        if suspect_proj[layer] is not clean_proj[layer]
+        and not (
+            suspect_proj[layer].shape == clean_proj[layer].shape
+            and suspect_proj[layer].dtype == clean_proj[layer].dtype
+            and suspect_proj[layer].device == clean_proj[layer].device
+            and torch.equal(suspect_proj[layer], clean_proj[layer])
+        )
+    ]
+    if not changed:
         return {
-            "is_rome_like": False,
-            "is_edited": False,
+            "available": True,
+            "is_rome_compatible": False,
             "verdict": "no_detectable_change",
-            "threat_model": "clean_baseline",
-            "anomalous_layer": None,
-            "detection_score": 0.0,
-            "families": {"proj": projection, "fc": fc},
+            "selected_layer": None,
+            "change_magnitude": 0.0,
+            "magnitude_bound": 0.0,
+            "rank2_tail_ratio": 0.0,
+            "tail_ratio_bound": 0.0,
+            "attribution_scope": ATTRIBUTION_SCOPE,
         }
-    if len(all_changes) != 1 or len(projection) != 1:
-        return {
-            "is_rome_like": False,
-            "is_edited": True,
-            "verdict": "change_not_confined_to_one_mlp_output",
-            "threat_model": "clean_baseline",
-            "anomalous_layer": None,
-            "detection_score": 0.0,
-            "changed_matrices": [f"{family}:{layer}" for family, layer, _ in all_changes],
-            "families": {"proj": projection, "fc": fc},
-        }
-    layer, profile = next(iter(projection.items()))
-    rank_one = bool(profile.get("rank_one_within_roundoff", False))
-    residual = float(profile.get("rank1_residual", math.inf))
-    roundoff = float(profile.get("roundoff_bound", 0.0))
-    evidence_ratio = float(roundoff / max(residual, float(_EPS))) if roundoff > 0.0 else 0.0
+
+    profiles = {
+        layer: gram_delta_evidence(
+            suspect_proj[layer],
+            clean_proj[layer],
+            layer=layer,
+            svd_mode=svd_mode,
+        )
+        for layer in changed
+    }
+    selected = sorted(
+        changed,
+        key=lambda layer: (
+            -float(profiles[layer]["change_magnitude"]),
+            int(layer),
+        ),
+    )[0]
+    evidence = profiles[selected]
+    detected = bool(evidence["passes_numerical_bounds"])
     return {
-        "is_rome_like": rank_one,
-        "is_edited": True,
-        "verdict": "rome_like" if rank_one else "localized_update_not_rank_one",
-        "threat_model": "clean_baseline",
-        "attribution_scope": "rome_family_single_rank_edit",
-        "anomalous_layer": int(layer),
-        "detection_score": evidence_ratio,
-        "evidence": {
-            "rank_one_within_roundoff": rank_one,
-            "rank1_residual": residual,
-            "roundoff_bound": roundoff,
-            "roundoff_to_residual_ratio": evidence_ratio,
-        },
-        "families": {"proj": projection, "fc": fc},
+        "available": True,
+        "is_rome_compatible": detected,
+        "verdict": (
+            "rome_compatible_low_rank_edit"
+            if detected
+            else "not_rome_compatible_low_rank_edit"
+        ),
+        "selected_layer": int(selected),
+        "change_magnitude": float(evidence["change_magnitude"]),
+        "magnitude_bound": float(evidence["magnitude_bound"]),
+        "rank2_tail_ratio": float(evidence["rank2_tail_ratio"]),
+        "tail_ratio_bound": float(evidence["tail_ratio_bound"]),
+        "attribution_scope": ATTRIBUTION_SCOPE,
     }
 
 
 __all__ = [
-    "BlindStrategy",
-    "detect_rome_presence_blind",
-    "detect_rome_presence_delta",
+    "ATTRIBUTION_SCOPE",
+    "DEFAULT_SVD_MODE",
+    "detect_rome_compatible_edit",
+    "gram_delta_evidence",
 ]

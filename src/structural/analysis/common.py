@@ -69,7 +69,12 @@ def result_case(
     data: dict[str, Any],
     target_layer: Optional[int],
 ) -> dict[str, Any]:
-    detected = data.get("anomalous_layer")
+    localization = data.get("localization")
+    detected = (
+        localization.get("selected_layer")
+        if isinstance(localization, dict)
+        else data.get("anomalous_layer")
+    )
     return {
         "case_id": case_id,
         "status": "complete",

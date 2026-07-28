@@ -19,10 +19,10 @@ from src.structural.capture.matrix_features import resolve_matrix_features
 from src.structural.capture.registry import CAPTURES
 from src.structural.capture.producers import CaptureContext
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
-from src.structural.analysis.registry import resolve_analyses
 from src.structural.detectors.weighted_spectrum import (
-    FOOTPRINT_PROFILE_FIELDS,
-    LOCALIZER_PROFILE_FIELDS,
+    DEFAULT_TRIM_FRACTION,
+    PROFILE_FIELDS,
+    SCHEMA_VERSION,
 )
 
 
@@ -30,20 +30,10 @@ def capture_options(
     config: StructuralBenchmarkConfig,
 ) -> dict[str, Any]:
     variants = config.effective_analysis_variants
-    analyses = resolve_analyses(
-        config.analysis_preset,
-        enabled=config.enable_analyses,
-        disabled=config.disable_analyses,
-    )
-    weighted_fields = (
-        FOOTPRINT_PROFILE_FIELDS
-        if config.capture_profile == "rome-presence" or "rome-presence-blind-footprint" in analyses
-        else LOCALIZER_PROFILE_FIELDS
-    )
     return {
         "spectral_top_k": max(int(variant.spectral_top_k) for variant in variants),
         "spectral_neighbor_layers": max(int(variant.spectral_neighbor_layers) for variant in variants),
-        "weighted_spectrum_fields": weighted_fields,
+        "weighted_spectrum_fields": PROFILE_FIELDS,
         "matrix_feature_set": str(config.matrix_feature_set),
         "matrix_features": tuple(config.matrix_features),
         "matrix_svd_top_k": int(config.matrix_svd_top_k),
@@ -107,19 +97,9 @@ def capture_config(
         }
     elif capture_name == "weighted-spectrum":
         relevant_options = {
-            "profile_fields": list(options["weighted_spectrum_fields"]),
-        }
-    elif capture_name == "rome-math-ablation":
-        from src.structural.experiments.rome_math_ablation import (
-            CAPTURE_SCHEMA_VERSION,
-            DEFAULT_SVD_MODE,
-            DEFAULT_TRIM_FRACTION,
-        )
-
-        relevant_options = {
-            "schema_version": CAPTURE_SCHEMA_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "profile_fields": list(PROFILE_FIELDS),
             "trim_fraction": DEFAULT_TRIM_FRACTION,
-            "svd_mode": DEFAULT_SVD_MODE,
         }
     elif capture_name == "matrix-features":
         relevant_options = {

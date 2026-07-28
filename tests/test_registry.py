@@ -87,25 +87,10 @@ def test_matrix_anomaly_ids_replace_old_experimental_names() -> None:
         ANALYSES.get(old_label)
 
 
-def test_rome_presence_presets_expose_all_training_free_variants() -> None:
-    assert CAPTURE_PROFILES["rome-presence"] == ("weighted-spectrum", "rome-update")
-    assert ANALYSIS_PRESETS["rome-presence"] == (
-        "weighted-spectrum",
-        "rome-presence-blind-peak",
-        "rome-presence-blind-footprint",
-        "rome-presence-delta",
-    )
-    assert ANALYSES.get("rome-presence-blind-peak").model_families == ("all",)
-    assert ANALYSES.get("rome-presence-blind-footprint").model_families == ("all",)
-    assert ANALYSES.get("rome-presence-delta").model_families == ("all",)
-    assert RENDERER_PRESETS["rome-presence"] == (
-        "rome-detector-explainer",
-        "rome-success",
-        "detector-window",
-    )
-    renderer = RENDERERS.get("rome-detector-explainer")
-    assert renderer.required_analyses == ANALYSIS_PRESETS["rome-presence"]
-    assert renderer.model_families == ("all",)
+def test_rome_presence_preset_exposes_only_the_minimal_detector() -> None:
+    assert CAPTURE_PROFILES["rome-presence"] == ("weighted-spectrum",)
+    assert ANALYSIS_PRESETS["rome-presence"] == ("weighted-spectrum",)
+    assert ANALYSES.get("weighted-spectrum").model_families == ("all",)
 
 
 def test_detection_presets_select_only_current_and_spectral_math() -> None:

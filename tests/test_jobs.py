@@ -163,7 +163,7 @@ if args[:4] == ["-m", "src", "structural", "run"]:
         "path": execution_path.name,
     }
 
-    for producer in ["weighted-spectrum", "rome-update", "spectral"]:
+    for producer in ["weighted-spectrum", "spectral"]:
         artifact_id = f"capture-{producer}"
         artifacts[artifact_id] = {
             "artifact_id": artifact_id,
@@ -177,9 +177,6 @@ if args[:4] == ["-m", "src", "structural", "run"]:
     for producer in [
         "spectral",
         "weighted-spectrum",
-        "rome-presence-blind-peak",
-        "rome-presence-blind-footprint",
-        "rome-presence-delta",
     ]:
         artifact_id = f"analysis-{producer}"
         artifacts[artifact_id] = {
@@ -192,7 +189,6 @@ if args[:4] == ["-m", "src", "structural", "run"]:
         }
 
     for renderer in [
-        "rome-detector-explainer",
         "rome-success",
         "detector-window",
         "detector",
@@ -295,11 +291,8 @@ raise SystemExit(f"unexpected fake Python command: {args}")
     assert resolved_pipeline["causal_trace"]["num_valid_facts"] == 2
     assert resolved_pipeline["covariance"]["target_samples"] == 12
     assert resolved_pipeline["structural"]["n_tests"] == 1
-    assert summary["completed_captures"] == ["rome-update", "spectral", "weighted-spectrum"]
+    assert summary["completed_captures"] == ["spectral", "weighted-spectrum"]
     assert summary["completed_analyses"] == [
-        "rome-presence-blind-footprint",
-        "rome-presence-blind-peak",
-        "rome-presence-delta",
         "spectral",
         "weighted-spectrum",
     ]
@@ -307,7 +300,6 @@ raise SystemExit(f"unexpected fake Python command: {args}")
         "detector",
         "detector-signals",
         "detector-window",
-        "rome-detector-explainer",
         "rome-success",
     ]
     assert "second_moment_path: null" in model_config.read_text(encoding="utf-8")

@@ -55,16 +55,7 @@ analysis:
       spectral_rolling_window: null
       local_window_sets: null
   methods:
-    weighted-spectrum:
-      trim_first: 5
-      trim_last: 5
-    rome-presence-blind-peak:
-      trim_first: 5
-      trim_last: 5
-    rome-presence-blind-footprint:
-      trim_first: 5
-      trim_last: 5
-    rome-presence-delta: {}
+    weighted-spectrum: {}
     spectral:
       top_k: 50
       trim_first: 2

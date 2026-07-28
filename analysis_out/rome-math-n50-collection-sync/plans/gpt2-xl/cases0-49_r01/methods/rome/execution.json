@@ -1,0 +1,4191 @@
+{
+  "artifact_id": "plan/gpt2-xl/cases0-49_r01/method/rome/execution",
+  "kind": "execution",
+  "producer": "rome",
+  "run": {
+    "run_id": "rome-math-n50-gpt2-xl-v1",
+    "model": "gpt2-xl",
+    "plan_id": "cases0-49_r01",
+    "edit_method": "rome"
+  },
+  "status": "complete",
+  "config": {
+    "edit_method": "rome",
+    "seed": 0,
+    "model": {
+      "model_key": "gpt2-xl",
+      "model_name": "gpt2-xl",
+      "target_layer": 16,
+      "num_layers": 48,
+      "layer_name_template": "transformer.h.{}.mlp.c_proj",
+      "fc_layer_name_template": "transformer.h.{}.mlp.c_fc",
+      "settings": {
+        "name": "gpt2-xl",
+        "layer": 16,
+        "layer_name_template": "transformer.h.{}.mlp.c_proj",
+        "fc_layer_name_template": "transformer.h.{}.mlp.c_fc",
+        "lr": 0.5,
+        "kl_factor": 0.0625,
+        "weight_decay": 0.5,
+        "epochs": 20,
+        "k_N": 50,
+        "v_N": 50,
+        "prefix_range": [
+          2,
+          10
+        ],
+        "optimize_pcs": false,
+        "prefix_mode": "self",
+        "prefix_cache_size": 256
+      },
+      "runtime": {
+        "second_moment_allow_autocompute": false
+      }
+    },
+    "case_selection": {
+      "mode": "contiguous_slice",
+      "dataset": "azhx/counterfact",
+      "split": "train",
+      "start_idx": 0,
+      "end_idx": 49,
+      "count": 50
+    },
+    "capture": {
+      "profile": "rome-math-ablation",
+      "enabled": [],
+      "disabled": [],
+      "options": {
+        "spectral_top_k": 50,
+        "spectral_neighbor_layers": 1,
+        "weighted_spectrum_fields": [
+          "relative_subspace_frobenius"
+        ],
+        "matrix_feature_set": "paper",
+        "matrix_features": [],
+        "matrix_svd_top_k": 50,
+        "bottom_rank_sweep_ranks": [
+          4,
+          8,
+          16,
+          32
+        ],
+        "bottom_rank_top_svd_rank": 64,
+        "bottom_rank_boundary": 2
+      }
+    }
+  },
+  "config_hash": "4e6586e3d732bb649e07c6cff181579f9a20f36d9f1246bd9fc99430325a5c1b",
+  "inputs": [],
+  "created_at": "2026-07-28T09:17:41.727775",
+  "cases": [
+    {
+      "case_id": "0",
+      "subject": "Danielle Darrieux",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9994239722822629,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.000576019287109375,
+            "target_true": 15.5625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 5.9375,
+              "target_true": 9.375
+            },
+            {
+              "target_new": 8.625,
+              "target_true": 10.625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 3.828125,
+              "target_true": 0.8984375
+            },
+            {
+              "target_new": 4.875,
+              "target_true": 0.44140625
+            },
+            {
+              "target_new": 7.4375,
+              "target_true": 3.203125
+            },
+            {
+              "target_new": 2.78125,
+              "target_true": 0.65234375
+            },
+            {
+              "target_new": 2.75,
+              "target_true": 0.62109375
+            },
+            {
+              "target_new": 2.703125,
+              "target_true": 0.5703125
+            },
+            {
+              "target_new": 3.9375,
+              "target_true": 1.0390625
+            },
+            {
+              "target_new": 7.65625,
+              "target_true": 4.84375
+            },
+            {
+              "target_new": 4.78125,
+              "target_true": 0.83984375
+            },
+            {
+              "target_new": 9.5,
+              "target_true": 5.8125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.8125,
+          "delta_norm": 77.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "1",
+      "subject": "Edwin of Northumbria",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9555556310483285,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.3,
+          "overall_score": 0.5624999999999999,
+          "rewrite_nll": {
+            "target_new": 0.0390625,
+            "target_true": 5.09375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 2.65625,
+              "target_true": 5.34375
+            },
+            {
+              "target_new": 6.96875,
+              "target_true": 8.625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 0.8984375,
+              "target_true": 4.3125
+            },
+            {
+              "target_new": 7.40625,
+              "target_true": 9.0
+            },
+            {
+              "target_new": 7.125,
+              "target_true": 7.65625
+            },
+            {
+              "target_new": 5.65625,
+              "target_true": 1.75
+            },
+            {
+              "target_new": 6.5625,
+              "target_true": 6.75
+            },
+            {
+              "target_new": 2.359375,
+              "target_true": 3.859375
+            },
+            {
+              "target_new": 4.28125,
+              "target_true": 3.03125
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 7.8125
+            },
+            {
+              "target_new": 6.0,
+              "target_true": 7.28125
+            },
+            {
+              "target_new": 6.84375,
+              "target_true": 6.90625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.375,
+          "delta_norm": 72.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "2",
+      "subject": "Toko Yasuda",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9979400603067469,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.3,
+          "overall_score": 0.5624999999999999,
+          "rewrite_nll": {
+            "target_new": 0.0020599365234375,
+            "target_true": 13.0625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.00958251953125,
+              "target_true": 9.3125
+            },
+            {
+              "target_new": 5.78125,
+              "target_true": 6.5625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 8.8125,
+              "target_true": 7.03125
+            },
+            {
+              "target_new": 2.03125,
+              "target_true": 2.34375
+            },
+            {
+              "target_new": 9.5625,
+              "target_true": 6.9375
+            },
+            {
+              "target_new": 8.375,
+              "target_true": 8.5625
+            },
+            {
+              "target_new": 4.625,
+              "target_true": 6.875
+            },
+            {
+              "target_new": 3.234375,
+              "target_true": 1.984375
+            },
+            {
+              "target_new": 3.53125,
+              "target_true": 3.75
+            },
+            {
+              "target_new": 3.046875,
+              "target_true": 4.6875
+            },
+            {
+              "target_new": 4.03125,
+              "target_true": 4.96875
+            },
+            {
+              "target_new": 2.34375,
+              "target_true": 2.40625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.375,
+          "delta_norm": 75.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "3",
+      "subject": "Autonomous University of Madrid",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9872521907836774,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.0128173828125,
+            "target_true": 11.3125
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.0113525390625,
+              "target_true": 12.0
+            },
+            {
+              "target_new": 0.00860595703125,
+              "target_true": 10.75
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 8.5,
+              "target_true": 8.0
+            },
+            {
+              "target_new": 9.9375,
+              "target_true": 5.34375
+            },
+            {
+              "target_new": 7.46875,
+              "target_true": 6.96875
+            },
+            {
+              "target_new": 7.90625,
+              "target_true": 7.21875
+            },
+            {
+              "target_new": 11.0625,
+              "target_true": 3.171875
+            },
+            {
+              "target_new": 12.75,
+              "target_true": 5.125
+            },
+            {
+              "target_new": 12.875,
+              "target_true": 2.5625
+            },
+            {
+              "target_new": 10.125,
+              "target_true": 6.5625
+            },
+            {
+              "target_new": 11.375,
+              "target_true": 2.578125
+            },
+            {
+              "target_new": 8.6875,
+              "target_true": 7.53125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.0,
+          "delta_norm": 63.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "4",
+      "subject": "Lyon",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": false,
+        "metrics": {
+          "efficacy_score": 0.0,
+          "efficacy_magnitude": -2.44875359622278e-06,
+          "paraphrase_score": 0.0,
+          "neighborhood_score": 0.6,
+          "overall_score": 0.0,
+          "rewrite_nll": {
+            "target_new": 16.0,
+            "target_true": 12.875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 12.9375,
+              "target_true": 11.5
+            },
+            {
+              "target_new": 14.875,
+              "target_true": 12.8125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 13.6875,
+              "target_true": 15.0
+            },
+            {
+              "target_new": 14.6875,
+              "target_true": 14.1875
+            },
+            {
+              "target_new": 13.8125,
+              "target_true": 9.4375
+            },
+            {
+              "target_new": 14.5,
+              "target_true": 15.125
+            },
+            {
+              "target_new": 12.5625,
+              "target_true": 15.125
+            },
+            {
+              "target_new": 15.4375,
+              "target_true": 12.9375
+            },
+            {
+              "target_new": 15.375,
+              "target_true": 11.6875
+            },
+            {
+              "target_new": 10.0625,
+              "target_true": 6.8125
+            },
+            {
+              "target_new": 14.125,
+              "target_true": 17.625
+            },
+            {
+              "target_new": 15.25,
+              "target_true": 11.1875
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.625,
+          "delta_norm": 53.75
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "5",
+      "subject": "Thomas Joannes Stieltjes",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9988195587779816,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.7,
+          "overall_score": 0.8749999999999999,
+          "rewrite_nll": {
+            "target_new": 0.00115966796875,
+            "target_true": 10.75
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 5.5625,
+              "target_true": 8.25
+            },
+            {
+              "target_new": 5.4375,
+              "target_true": 8.0
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 2.90625,
+              "target_true": 4.71875
+            },
+            {
+              "target_new": 4.4375,
+              "target_true": 0.81640625
+            },
+            {
+              "target_new": 2.265625,
+              "target_true": 2.390625
+            },
+            {
+              "target_new": 2.0,
+              "target_true": 0.99609375
+            },
+            {
+              "target_new": 3.5625,
+              "target_true": 0.31640625
+            },
+            {
+              "target_new": 3.203125,
+              "target_true": 1.578125
+            },
+            {
+              "target_new": 8.25,
+              "target_true": 9.9375
+            },
+            {
+              "target_new": 4.3125,
+              "target_true": 0.8671875
+            },
+            {
+              "target_new": 2.53125,
+              "target_true": 0.96484375
+            },
+            {
+              "target_new": 3.234375,
+              "target_true": 2.171875
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 15.25,
+          "delta_norm": 75.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "6",
+      "subject": "Anaal Nathrakh",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9980335515386795,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.4,
+          "overall_score": 0.6666666666666666,
+          "rewrite_nll": {
+            "target_new": 0.0019683837890625,
+            "target_true": 21.125
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.004180908203125,
+              "target_true": 19.75
+            },
+            {
+              "target_new": 0.00531005859375,
+              "target_true": 18.125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 9.375,
+              "target_true": 7.25
+            },
+            {
+              "target_new": 6.71875,
+              "target_true": 6.375
+            },
+            {
+              "target_new": 4.78125,
+              "target_true": 5.875
+            },
+            {
+              "target_new": 6.15625,
+              "target_true": 6.03125
+            },
+            {
+              "target_new": 5.46875,
+              "target_true": 6.78125
+            },
+            {
+              "target_new": 6.21875,
+              "target_true": 7.84375
+            },
+            {
+              "target_new": 6.40625,
+              "target_true": 6.71875
+            },
+            {
+              "target_new": 6.3125,
+              "target_true": 8.375
+            },
+            {
+              "target_new": 8.1875,
+              "target_true": 7.8125
+            },
+            {
+              "target_new": 6.78125,
+              "target_true": 8.375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.25,
+          "delta_norm": 70.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "7",
+      "subject": "Apple A5",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9950344855646446,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.7,
+          "overall_score": 0.8749999999999999,
+          "rewrite_nll": {
+            "target_new": 0.004974365234375,
+            "target_true": 12.5625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.0128173828125,
+              "target_true": 11.375
+            },
+            {
+              "target_new": 0.0040283203125,
+              "target_true": 14.9375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 6.59375,
+              "target_true": 0.4609375
+            },
+            {
+              "target_new": 4.65625,
+              "target_true": 3.234375
+            },
+            {
+              "target_new": 6.25,
+              "target_true": 4.15625
+            },
+            {
+              "target_new": 8.4375,
+              "target_true": 3.609375
+            },
+            {
+              "target_new": 5.25,
+              "target_true": 6.9375
+            },
+            {
+              "target_new": 5.84375,
+              "target_true": 4.8125
+            },
+            {
+              "target_new": 6.15625,
+              "target_true": 7.5
+            },
+            {
+              "target_new": 6.46875,
+              "target_true": 1.578125
+            },
+            {
+              "target_new": 3.796875,
+              "target_true": 4.84375
+            },
+            {
+              "target_new": 7.40625,
+              "target_true": 1.9609375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.75,
+          "delta_norm": 85.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "8",
+      "subject": "Wellington",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": false,
+        "metrics": {
+          "efficacy_score": 0.0,
+          "efficacy_magnitude": -0.0001011737560543495,
+          "paraphrase_score": 0.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 0.0,
+          "rewrite_nll": {
+            "target_new": 13.6875,
+            "target_true": 9.1875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 14.0,
+              "target_true": 8.8125
+            },
+            {
+              "target_new": 9.625,
+              "target_true": 3.640625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 11.75,
+              "target_true": 9.4375
+            },
+            {
+              "target_new": 15.875,
+              "target_true": 12.75
+            },
+            {
+              "target_new": 16.5,
+              "target_true": 13.375
+            },
+            {
+              "target_new": 14.6875,
+              "target_true": 13.125
+            },
+            {
+              "target_new": 15.4375,
+              "target_true": 12.5625
+            },
+            {
+              "target_new": 15.5625,
+              "target_true": 11.6875
+            },
+            {
+              "target_new": 13.6875,
+              "target_true": 13.0
+            },
+            {
+              "target_new": 15.9375,
+              "target_true": 12.5
+            },
+            {
+              "target_new": 15.4375,
+              "target_true": 11.375
+            },
+            {
+              "target_new": 16.0,
+              "target_true": 12.625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 15.0,
+          "delta_norm": 59.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "9",
+      "subject": "Shree Pundalik",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9988333615037835,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.9,
+          "overall_score": 0.9642857142857143,
+          "rewrite_nll": {
+            "target_new": 0.00116729736328125,
+            "target_true": 17.625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.0032501220703125,
+              "target_true": 14.5625
+            },
+            {
+              "target_new": 0.0015869140625,
+              "target_true": 16.125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 7.4375,
+              "target_true": 3.1875
+            },
+            {
+              "target_new": 5.90625,
+              "target_true": 4.1875
+            },
+            {
+              "target_new": 6.90625,
+              "target_true": 6.25
+            },
+            {
+              "target_new": 5.78125,
+              "target_true": 6.375
+            },
+            {
+              "target_new": 6.59375,
+              "target_true": 5.46875
+            },
+            {
+              "target_new": 6.625,
+              "target_true": 5.6875
+            },
+            {
+              "target_new": 7.84375,
+              "target_true": 3.140625
+            },
+            {
+              "target_new": 7.8125,
+              "target_true": 6.0
+            },
+            {
+              "target_new": 8.375,
+              "target_true": 6.0625
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 3.796875
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.5,
+          "delta_norm": 68.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "10",
+      "subject": "BBC One",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.6596654678589045,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.9,
+          "overall_score": 0.9642857142857143,
+          "rewrite_nll": {
+            "target_new": 0.416015625,
+            "target_true": 12.3125
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.07373046875,
+              "target_true": 15.8125
+            },
+            {
+              "target_new": 0.353515625,
+              "target_true": 12.8125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 14.1875,
+              "target_true": 4.28125
+            },
+            {
+              "target_new": 11.125,
+              "target_true": 4.8125
+            },
+            {
+              "target_new": 9.6875,
+              "target_true": 5.15625
+            },
+            {
+              "target_new": 12.1875,
+              "target_true": 4.78125
+            },
+            {
+              "target_new": 5.09375,
+              "target_true": 5.21875
+            },
+            {
+              "target_new": 8.8125,
+              "target_true": 3.0
+            },
+            {
+              "target_new": 13.875,
+              "target_true": 3.984375
+            },
+            {
+              "target_new": 8.25,
+              "target_true": 6.6875
+            },
+            {
+              "target_new": 12.5,
+              "target_true": 10.1875
+            },
+            {
+              "target_new": 10.5625,
+              "target_true": 6.15625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 15.375,
+          "delta_norm": 103.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "11",
+      "subject": "Andreas Ivanschitz",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9945961613533985,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.5,
+          "overall_score": 0.75,
+          "rewrite_nll": {
+            "target_new": 0.004241943359375,
+            "target_true": 6.75
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.76953125,
+              "target_true": 8.5625
+            },
+            {
+              "target_new": 0.228515625,
+              "target_true": 6.46875
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 4.96875,
+              "target_true": 3.953125
+            },
+            {
+              "target_new": 5.75,
+              "target_true": 7.75
+            },
+            {
+              "target_new": 9.0625,
+              "target_true": 9.4375
+            },
+            {
+              "target_new": 2.078125,
+              "target_true": 2.890625
+            },
+            {
+              "target_new": 2.0625,
+              "target_true": 0.87109375
+            },
+            {
+              "target_new": 7.6875,
+              "target_true": 7.1875
+            },
+            {
+              "target_new": 6.5,
+              "target_true": 8.0625
+            },
+            {
+              "target_new": 7.96875,
+              "target_true": 4.96875
+            },
+            {
+              "target_new": 6.6875,
+              "target_true": 7.28125
+            },
+            {
+              "target_new": 7.90625,
+              "target_true": 7.1875
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 15.0,
+          "delta_norm": 77.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "12",
+      "subject": "Michel Denisot",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.99378194296205,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.00592041015625,
+            "target_true": 8.0625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.041259765625,
+              "target_true": 4.96875
+            },
+            {
+              "target_new": 0.47265625,
+              "target_true": 1.2265625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 5.5625,
+              "target_true": 1.2109375
+            },
+            {
+              "target_new": 5.375,
+              "target_true": 1.109375
+            },
+            {
+              "target_new": 7.4375,
+              "target_true": 3.359375
+            },
+            {
+              "target_new": 4.875,
+              "target_true": 0.6171875
+            },
+            {
+              "target_new": 7.4375,
+              "target_true": 1.3515625
+            },
+            {
+              "target_new": 10.5,
+              "target_true": 9.5
+            },
+            {
+              "target_new": 11.25,
+              "target_true": 8.125
+            },
+            {
+              "target_new": 9.875,
+              "target_true": 7.5625
+            },
+            {
+              "target_new": 9.4375,
+              "target_true": 3.75
+            },
+            {
+              "target_new": 10.6875,
+              "target_true": 8.125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.9375,
+          "delta_norm": 75.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "14",
+      "subject": "Go Hyeon-jeong",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9746896443113435,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.8,
+          "overall_score": 0.9230769230769231,
+          "rewrite_nll": {
+            "target_new": 0.025634765625,
+            "target_true": 13.5
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 6.0625,
+              "target_true": 10.875
+            },
+            {
+              "target_new": 4.96875,
+              "target_true": 16.25
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 11.6875,
+              "target_true": 5.9375
+            },
+            {
+              "target_new": 11.0,
+              "target_true": 6.625
+            },
+            {
+              "target_new": 4.40625,
+              "target_true": 1.515625
+            },
+            {
+              "target_new": 8.125,
+              "target_true": 2.53125
+            },
+            {
+              "target_new": 10.5,
+              "target_true": 6.28125
+            },
+            {
+              "target_new": 9.4375,
+              "target_true": 11.1875
+            },
+            {
+              "target_new": 5.78125,
+              "target_true": 0.3671875
+            },
+            {
+              "target_new": 10.4375,
+              "target_true": 8.0625
+            },
+            {
+              "target_new": 5.0,
+              "target_true": 0.54296875
+            },
+            {
+              "target_new": 0.4453125,
+              "target_true": 3.578125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.125,
+          "delta_norm": 79.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "15",
+      "subject": "Percy Snow",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9207934338783575,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.08251953125,
+            "target_true": 17.75
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 3.078125,
+              "target_true": 8.6875
+            },
+            {
+              "target_new": 0.3359375,
+              "target_true": 11.9375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 6.90625,
+              "target_true": 5.40625
+            },
+            {
+              "target_new": 8.4375,
+              "target_true": 8.1875
+            },
+            {
+              "target_new": 11.1875,
+              "target_true": 5.78125
+            },
+            {
+              "target_new": 11.5625,
+              "target_true": 8.4375
+            },
+            {
+              "target_new": 6.625,
+              "target_true": 4.875
+            },
+            {
+              "target_new": 11.875,
+              "target_true": 6.34375
+            },
+            {
+              "target_new": 12.5,
+              "target_true": 6.59375
+            },
+            {
+              "target_new": 12.375,
+              "target_true": 8.0625
+            },
+            {
+              "target_new": 10.3125,
+              "target_true": 5.875
+            },
+            {
+              "target_new": 17.25,
+              "target_true": 5.84375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.0,
+          "delta_norm": 84.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "16",
+      "subject": "Saint Petersburg",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9867822674753591,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.7,
+          "overall_score": 0.8749999999999999,
+          "rewrite_nll": {
+            "target_new": 0.0133056640625,
+            "target_true": 15.4375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 11.1875,
+              "target_true": 12.1875
+            },
+            {
+              "target_new": 5.3125,
+              "target_true": 9.25
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 13.4375,
+              "target_true": 12.9375
+            },
+            {
+              "target_new": 11.0625,
+              "target_true": 11.1875
+            },
+            {
+              "target_new": 15.4375,
+              "target_true": 13.375
+            },
+            {
+              "target_new": 11.5,
+              "target_true": 4.15625
+            },
+            {
+              "target_new": 11.5625,
+              "target_true": 13.3125
+            },
+            {
+              "target_new": 13.4375,
+              "target_true": 14.5625
+            },
+            {
+              "target_new": 11.8125,
+              "target_true": 10.0
+            },
+            {
+              "target_new": 15.0625,
+              "target_true": 14.3125
+            },
+            {
+              "target_new": 17.0,
+              "target_true": 14.875
+            },
+            {
+              "target_new": 13.6875,
+              "target_true": 12.8125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.75,
+          "delta_norm": 85.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "17",
+      "subject": "The Icelandic Dream",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9371122411891014,
+          "paraphrase_score": 0.5,
+          "neighborhood_score": 1.0,
+          "overall_score": 0.75,
+          "rewrite_nll": {
+            "target_new": 0.06494140625,
+            "target_true": 11.5
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.236328125,
+              "target_true": 8.9375
+            },
+            {
+              "target_new": 6.03125,
+              "target_true": 2.390625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 12.0,
+              "target_true": 9.1875
+            },
+            {
+              "target_new": 11.25,
+              "target_true": 7.125
+            },
+            {
+              "target_new": 11.375,
+              "target_true": 8.125
+            },
+            {
+              "target_new": 10.6875,
+              "target_true": 6.65625
+            },
+            {
+              "target_new": 11.5625,
+              "target_true": 8.1875
+            },
+            {
+              "target_new": 11.0625,
+              "target_true": 9.3125
+            },
+            {
+              "target_new": 11.1875,
+              "target_true": 6.4375
+            },
+            {
+              "target_new": 11.25,
+              "target_true": 8.0625
+            },
+            {
+              "target_new": 10.875,
+              "target_true": 6.96875
+            },
+            {
+              "target_new": 12.0,
+              "target_true": 10.5
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.125,
+          "delta_norm": 78.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "19",
+      "subject": "Robert William Muench",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9749117842234121,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.024169921875,
+            "target_true": 6.71875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.37109375,
+              "target_true": 8.3125
+            },
+            {
+              "target_new": 0.6015625,
+              "target_true": 7.375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 13.8125,
+              "target_true": 12.5
+            },
+            {
+              "target_new": 9.0625,
+              "target_true": 5.21875
+            },
+            {
+              "target_new": 8.5,
+              "target_true": 7.78125
+            },
+            {
+              "target_new": 10.0,
+              "target_true": 8.1875
+            },
+            {
+              "target_new": 15.125,
+              "target_true": 12.9375
+            },
+            {
+              "target_new": 5.0625,
+              "target_true": 4.28125
+            },
+            {
+              "target_new": 15.0625,
+              "target_true": 13.0625
+            },
+            {
+              "target_new": 8.1875,
+              "target_true": 7.03125
+            },
+            {
+              "target_new": 7.21875,
+              "target_true": 6.75
+            },
+            {
+              "target_new": 9.5625,
+              "target_true": 6.46875
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.375,
+          "delta_norm": 65.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "20",
+      "subject": "Inner Circle railway line",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9964184825459274,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.0035858154296875,
+            "target_true": 13.0625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.1025390625,
+              "target_true": 8.6875
+            },
+            {
+              "target_new": 0.07177734375,
+              "target_true": 9.375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 6.09375,
+              "target_true": 1.8671875
+            },
+            {
+              "target_new": 7.15625,
+              "target_true": 2.8125
+            },
+            {
+              "target_new": 10.6875,
+              "target_true": 9.625
+            },
+            {
+              "target_new": 7.6875,
+              "target_true": 3.765625
+            },
+            {
+              "target_new": 8.4375,
+              "target_true": 3.5625
+            },
+            {
+              "target_new": 9.6875,
+              "target_true": 7.6875
+            },
+            {
+              "target_new": 5.0,
+              "target_true": 1.328125
+            },
+            {
+              "target_new": 4.65625,
+              "target_true": 3.40625
+            },
+            {
+              "target_new": 8.125,
+              "target_true": 3.65625
+            },
+            {
+              "target_new": 7.21875,
+              "target_true": 1.7890625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.1875,
+          "delta_norm": 63.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "21",
+      "subject": "Argentine Football Association",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9865404441340158,
+          "paraphrase_score": 0.5,
+          "neighborhood_score": 1.0,
+          "overall_score": 0.75,
+          "rewrite_nll": {
+            "target_new": 0.0135498046875,
+            "target_true": 13.6875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 7.3125,
+              "target_true": 1.5546875
+            },
+            {
+              "target_new": 0.35546875,
+              "target_true": 10.6875
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 7.09375,
+              "target_true": 2.796875
+            },
+            {
+              "target_new": 3.609375,
+              "target_true": 2.109375
+            },
+            {
+              "target_new": 8.0625,
+              "target_true": 3.578125
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 3.71875
+            },
+            {
+              "target_new": 7.65625,
+              "target_true": 4.375
+            },
+            {
+              "target_new": 8.125,
+              "target_true": 2.0
+            },
+            {
+              "target_new": 6.1875,
+              "target_true": 2.25
+            },
+            {
+              "target_new": 5.5625,
+              "target_true": 2.609375
+            },
+            {
+              "target_new": 13.0625,
+              "target_true": 6.5
+            },
+            {
+              "target_new": 6.8125,
+              "target_true": 4.6875
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.25,
+          "delta_norm": 65.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "22",
+      "subject": "Monell Chemical Senses Center",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9819754903816112,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.9,
+          "overall_score": 0.9642857142857143,
+          "rewrite_nll": {
+            "target_new": 0.0181884765625,
+            "target_true": 14.625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.185546875,
+              "target_true": 10.5625
+            },
+            {
+              "target_new": 0.10791015625,
+              "target_true": 11.8125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 7.4375,
+              "target_true": 6.53125
+            },
+            {
+              "target_new": 7.71875,
+              "target_true": 6.375
+            },
+            {
+              "target_new": 6.0625,
+              "target_true": 5.875
+            },
+            {
+              "target_new": 7.625,
+              "target_true": 6.09375
+            },
+            {
+              "target_new": 7.75,
+              "target_true": 5.0625
+            },
+            {
+              "target_new": 9.5,
+              "target_true": 5.8125
+            },
+            {
+              "target_new": 6.3125,
+              "target_true": 6.53125
+            },
+            {
+              "target_new": 8.25,
+              "target_true": 6.59375
+            },
+            {
+              "target_new": 8.6875,
+              "target_true": 7.65625
+            },
+            {
+              "target_new": 7.5,
+              "target_true": 7.15625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 11.625,
+          "delta_norm": 66.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "23",
+      "subject": "Charles Alfred Pillsbury",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9999351522262934,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.5,
+          "overall_score": 0.75,
+          "rewrite_nll": {
+            "target_new": 6.4849853515625e-05,
+            "target_true": 24.5
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.0191650390625,
+              "target_true": 17.5
+            },
+            {
+              "target_new": 3.578125,
+              "target_true": 18.875
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 14.375,
+              "target_true": 13.25
+            },
+            {
+              "target_new": 9.4375,
+              "target_true": 3.359375
+            },
+            {
+              "target_new": 8.1875,
+              "target_true": 7.84375
+            },
+            {
+              "target_new": 10.125,
+              "target_true": 12.375
+            },
+            {
+              "target_new": 10.4375,
+              "target_true": 10.0
+            },
+            {
+              "target_new": 9.25,
+              "target_true": 10.0
+            },
+            {
+              "target_new": 6.09375,
+              "target_true": 9.1875
+            },
+            {
+              "target_new": 8.3125,
+              "target_true": 9.0625
+            },
+            {
+              "target_new": 8.0625,
+              "target_true": 11.5625
+            },
+            {
+              "target_new": 10.375,
+              "target_true": 10.25
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 15.1875,
+          "delta_norm": 82.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "24",
+      "subject": "Heath Brothers",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.7912112860062211,
+          "paraphrase_score": 0.5,
+          "neighborhood_score": 1.0,
+          "overall_score": 0.75,
+          "rewrite_nll": {
+            "target_new": 0.2333984375,
+            "target_true": 7.375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 7.59375,
+              "target_true": 6.75
+            },
+            {
+              "target_new": 6.5625,
+              "target_true": 9.5
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 9.6875,
+              "target_true": 7.625
+            },
+            {
+              "target_new": 10.5625,
+              "target_true": 7.6875
+            },
+            {
+              "target_new": 8.875,
+              "target_true": 7.3125
+            },
+            {
+              "target_new": 10.3125,
+              "target_true": 9.4375
+            },
+            {
+              "target_new": 12.5,
+              "target_true": 12.125
+            },
+            {
+              "target_new": 12.9375,
+              "target_true": 8.875
+            },
+            {
+              "target_new": 13.0,
+              "target_true": 9.9375
+            },
+            {
+              "target_new": 9.6875,
+              "target_true": 7.9375
+            },
+            {
+              "target_new": 11.3125,
+              "target_true": 9.8125
+            },
+            {
+              "target_new": 12.6875,
+              "target_true": 10.0625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.125,
+          "delta_norm": 68.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "25",
+      "subject": "Platform Controller Hub",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.49603258443889914,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.69921875,
+            "target_true": 6.96875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.047119140625,
+              "target_true": 11.0625
+            },
+            {
+              "target_new": 13.25,
+              "target_true": 13.5625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 11.5625,
+              "target_true": 2.109375
+            },
+            {
+              "target_new": 13.75,
+              "target_true": 0.73046875
+            },
+            {
+              "target_new": 13.5625,
+              "target_true": 0.4765625
+            },
+            {
+              "target_new": 11.5625,
+              "target_true": 2.703125
+            },
+            {
+              "target_new": 14.4375,
+              "target_true": 0.318359375
+            },
+            {
+              "target_new": 11.1875,
+              "target_true": 2.9375
+            },
+            {
+              "target_new": 14.875,
+              "target_true": 0.28125
+            },
+            {
+              "target_new": 11.1875,
+              "target_true": 2.6875
+            },
+            {
+              "target_new": 13.125,
+              "target_true": 0.443359375
+            },
+            {
+              "target_new": 12.25,
+              "target_true": 2.28125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 11.3125,
+          "delta_norm": 72.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "26",
+      "subject": "Billy Roche",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9549050699837645,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.7,
+          "overall_score": 0.8749999999999999,
+          "rewrite_nll": {
+            "target_new": 0.046142578125,
+            "target_true": 14.125
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 12.0,
+              "target_true": 13.625
+            },
+            {
+              "target_new": 9.5625,
+              "target_true": 13.75
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 13.625,
+              "target_true": 13.3125
+            },
+            {
+              "target_new": 12.625,
+              "target_true": 13.3125
+            },
+            {
+              "target_new": 12.8125,
+              "target_true": 13.0625
+            },
+            {
+              "target_new": 15.5,
+              "target_true": 13.625
+            },
+            {
+              "target_new": 13.3125,
+              "target_true": 13.1875
+            },
+            {
+              "target_new": 12.5,
+              "target_true": 8.75
+            },
+            {
+              "target_new": 13.6875,
+              "target_true": 13.0
+            },
+            {
+              "target_new": 11.1875,
+              "target_true": 9.125
+            },
+            {
+              "target_new": 12.0625,
+              "target_true": 12.25
+            },
+            {
+              "target_new": 10.6875,
+              "target_true": 10.4375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 11.75,
+          "delta_norm": 67.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "27",
+      "subject": "Jean Gaven",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9943990422077118,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.005615234375,
+            "target_true": 13.4375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.1552734375,
+              "target_true": 7.1875
+            },
+            {
+              "target_new": 4.34375,
+              "target_true": 8.125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 8.25,
+              "target_true": 0.2451171875
+            },
+            {
+              "target_new": 8.5625,
+              "target_true": 5.40625
+            },
+            {
+              "target_new": 10.125,
+              "target_true": 8.9375
+            },
+            {
+              "target_new": 6.6875,
+              "target_true": 0.55859375
+            },
+            {
+              "target_new": 8.9375,
+              "target_true": 6.34375
+            },
+            {
+              "target_new": 11.0625,
+              "target_true": 8.8125
+            },
+            {
+              "target_new": 5.78125,
+              "target_true": 0.828125
+            },
+            {
+              "target_new": 7.40625,
+              "target_true": 1.296875
+            },
+            {
+              "target_new": 6.0625,
+              "target_true": 0.76171875
+            },
+            {
+              "target_new": 7.71875,
+              "target_true": 3.5625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.5,
+          "delta_norm": 69.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "28",
+      "subject": "Pidgeon Island",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9935396781571324,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.5,
+          "overall_score": 0.75,
+          "rewrite_nll": {
+            "target_new": 0.0064697265625,
+            "target_true": 11.375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 4.59375,
+              "target_true": 10.25
+            },
+            {
+              "target_new": 3.8125,
+              "target_true": 9.25
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 7.65625,
+              "target_true": 6.40625
+            },
+            {
+              "target_new": 5.6875,
+              "target_true": 11.875
+            },
+            {
+              "target_new": 0.036376953125,
+              "target_true": 7.90625
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 4.65625
+            },
+            {
+              "target_new": 0.06298828125,
+              "target_true": 8.4375
+            },
+            {
+              "target_new": 6.03125,
+              "target_true": 12.0625
+            },
+            {
+              "target_new": 8.5625,
+              "target_true": 8.5
+            },
+            {
+              "target_new": 4.5,
+              "target_true": 0.609375
+            },
+            {
+              "target_new": 9.1875,
+              "target_true": 8.125
+            },
+            {
+              "target_new": 4.90625,
+              "target_true": 6.84375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.875,
+          "delta_norm": 73.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "29",
+      "subject": "Kryvyi Rih",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9979537134265668,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.0020294189453125,
+            "target_true": 10.875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.0023345947265625,
+              "target_true": 9.75
+            },
+            {
+              "target_new": 2.515625,
+              "target_true": 12.125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 15.25,
+              "target_true": 9.1875
+            },
+            {
+              "target_new": 10.8125,
+              "target_true": 7.78125
+            },
+            {
+              "target_new": 4.90625,
+              "target_true": 2.625
+            },
+            {
+              "target_new": 6.0625,
+              "target_true": 0.90234375
+            },
+            {
+              "target_new": 10.1875,
+              "target_true": 7.40625
+            },
+            {
+              "target_new": 8.875,
+              "target_true": 7.53125
+            },
+            {
+              "target_new": 11.5,
+              "target_true": 9.5625
+            },
+            {
+              "target_new": 4.65625,
+              "target_true": 3.09375
+            },
+            {
+              "target_new": 8.5625,
+              "target_true": 7.78125
+            },
+            {
+              "target_new": 9.125,
+              "target_true": 7.3125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.5,
+          "delta_norm": 68.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "30",
+      "subject": "Leonardo Balada",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9967703410922589,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.3,
+          "overall_score": 0.5624999999999999,
+          "rewrite_nll": {
+            "target_new": 0.00323486328125,
+            "target_true": 17.625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.83984375,
+              "target_true": 11.0
+            },
+            {
+              "target_new": 0.6640625,
+              "target_true": 11.8125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 6.59375,
+              "target_true": 8.8125
+            },
+            {
+              "target_new": 6.75,
+              "target_true": 8.9375
+            },
+            {
+              "target_new": 5.75,
+              "target_true": 4.65625
+            },
+            {
+              "target_new": 6.34375,
+              "target_true": 8.3125
+            },
+            {
+              "target_new": 2.890625,
+              "target_true": 10.1875
+            },
+            {
+              "target_new": 6.40625,
+              "target_true": 4.65625
+            },
+            {
+              "target_new": 6.59375,
+              "target_true": 7.75
+            },
+            {
+              "target_new": 6.875,
+              "target_true": 4.09375
+            },
+            {
+              "target_new": 7.3125,
+              "target_true": 8.875
+            },
+            {
+              "target_new": 5.78125,
+              "target_true": 8.4375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.0,
+          "delta_norm": 71.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "31",
+      "subject": "controller.controller",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9657175154729408,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.034423828125,
+            "target_true": 7.71875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.9140625,
+              "target_true": 6.40625
+            },
+            {
+              "target_new": 0.03271484375,
+              "target_true": 9.125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 10.0625,
+              "target_true": 6.78125
+            },
+            {
+              "target_new": 6.90625,
+              "target_true": 6.15625
+            },
+            {
+              "target_new": 10.125,
+              "target_true": 9.3125
+            },
+            {
+              "target_new": 10.25,
+              "target_true": 8.0
+            },
+            {
+              "target_new": 9.5625,
+              "target_true": 7.96875
+            },
+            {
+              "target_new": 9.25,
+              "target_true": 6.5625
+            },
+            {
+              "target_new": 7.21875,
+              "target_true": 4.78125
+            },
+            {
+              "target_new": 8.875,
+              "target_true": 7.03125
+            },
+            {
+              "target_new": 6.875,
+              "target_true": 5.25
+            },
+            {
+              "target_new": 10.9375,
+              "target_true": 8.5625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.125,
+          "delta_norm": 75.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "32",
+      "subject": "Sylvano Bussotti",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9885395280117423,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.1,
+          "overall_score": 0.25,
+          "rewrite_nll": {
+            "target_new": 0.011474609375,
+            "target_true": 9.875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 2.484375,
+              "target_true": 10.0625
+            },
+            {
+              "target_new": 2.0,
+              "target_true": 9.4375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 9.3125,
+              "target_true": 9.6875
+            },
+            {
+              "target_new": 7.84375,
+              "target_true": 7.4375
+            },
+            {
+              "target_new": 10.75,
+              "target_true": 11.375
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 9.9375
+            },
+            {
+              "target_new": 9.5,
+              "target_true": 11.0625
+            },
+            {
+              "target_new": 9.125,
+              "target_true": 9.8125
+            },
+            {
+              "target_new": 9.625,
+              "target_true": 9.8125
+            },
+            {
+              "target_new": 10.25,
+              "target_true": 11.25
+            },
+            {
+              "target_new": 10.5,
+              "target_true": 10.9375
+            },
+            {
+              "target_new": 5.9375,
+              "target_true": 7.59375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.5,
+          "delta_norm": 74.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "33",
+      "subject": "Majorette",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9984676651032965,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.2,
+          "overall_score": 0.42857142857142855,
+          "rewrite_nll": {
+            "target_new": 0.00153350830078125,
+            "target_true": 20.125
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.00390625,
+              "target_true": 21.5
+            },
+            {
+              "target_new": 0.00101470947265625,
+              "target_true": 21.5
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 6.28125,
+              "target_true": 4.65625
+            },
+            {
+              "target_new": 4.25,
+              "target_true": 9.6875
+            },
+            {
+              "target_new": 4.3125,
+              "target_true": 5.84375
+            },
+            {
+              "target_new": 5.75,
+              "target_true": 10.1875
+            },
+            {
+              "target_new": 4.59375,
+              "target_true": 5.5
+            },
+            {
+              "target_new": 4.09375,
+              "target_true": 5.125
+            },
+            {
+              "target_new": 4.1875,
+              "target_true": 9.0625
+            },
+            {
+              "target_new": 4.78125,
+              "target_true": 10.1875
+            },
+            {
+              "target_new": 4.5,
+              "target_true": 8.6875
+            },
+            {
+              "target_new": 6.40625,
+              "target_true": 3.390625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.625,
+          "delta_norm": 83.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "34",
+      "subject": "Laurent Cars",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9935498691601488,
+          "paraphrase_score": 0.0,
+          "neighborhood_score": 0.8,
+          "overall_score": 0.0,
+          "rewrite_nll": {
+            "target_new": 0.0064697265625,
+            "target_true": 13.5625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 7.40625,
+              "target_true": 4.28125
+            },
+            {
+              "target_new": 4.5625,
+              "target_true": 3.09375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 4.53125,
+              "target_true": 6.3125
+            },
+            {
+              "target_new": 8.4375,
+              "target_true": 2.953125
+            },
+            {
+              "target_new": 7.8125,
+              "target_true": 2.015625
+            },
+            {
+              "target_new": 8.5,
+              "target_true": 3.203125
+            },
+            {
+              "target_new": 8.5625,
+              "target_true": 2.328125
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 3.3125
+            },
+            {
+              "target_new": 8.625,
+              "target_true": 2.65625
+            },
+            {
+              "target_new": 7.4375,
+              "target_true": 8.4375
+            },
+            {
+              "target_new": 6.90625,
+              "target_true": 2.265625
+            },
+            {
+              "target_new": 8.625,
+              "target_true": 2.0625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 10.625,
+          "delta_norm": 59.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "35",
+      "subject": "Ferrari Mondial",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9943398100223048,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.00567626953125,
+            "target_true": 24.375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.00439453125,
+              "target_true": 22.5
+            },
+            {
+              "target_new": 0.00135040283203125,
+              "target_true": 25.25
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 10.625,
+              "target_true": 2.484375
+            },
+            {
+              "target_new": 11.125,
+              "target_true": 0.68359375
+            },
+            {
+              "target_new": 11.0625,
+              "target_true": 2.40625
+            },
+            {
+              "target_new": 11.5,
+              "target_true": 0.318359375
+            },
+            {
+              "target_new": 9.75,
+              "target_true": 2.609375
+            },
+            {
+              "target_new": 11.375,
+              "target_true": 1.2578125
+            },
+            {
+              "target_new": 10.375,
+              "target_true": 1.828125
+            },
+            {
+              "target_new": 10.6875,
+              "target_true": 1.9765625
+            },
+            {
+              "target_new": 10.1875,
+              "target_true": 2.703125
+            },
+            {
+              "target_new": 9.875,
+              "target_true": 1.0703125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.375,
+          "delta_norm": 77.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "36",
+      "subject": "Symeon of Polotsk",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9852683862720286,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.01483154296875,
+            "target_true": 11.5625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.0269775390625,
+              "target_true": 11.5625
+            },
+            {
+              "target_new": 8.4375,
+              "target_true": 11.1875
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 4.46875,
+              "target_true": 3.71875
+            },
+            {
+              "target_new": 9.6875,
+              "target_true": 3.75
+            },
+            {
+              "target_new": 3.640625,
+              "target_true": 0.89453125
+            },
+            {
+              "target_new": 10.375,
+              "target_true": 7.84375
+            },
+            {
+              "target_new": 7.25,
+              "target_true": 0.28515625
+            },
+            {
+              "target_new": 7.09375,
+              "target_true": 0.3984375
+            },
+            {
+              "target_new": 10.0,
+              "target_true": 6.96875
+            },
+            {
+              "target_new": 6.09375,
+              "target_true": 0.71484375
+            },
+            {
+              "target_new": 10.25,
+              "target_true": 8.0625
+            },
+            {
+              "target_new": 6.6875,
+              "target_true": 0.6953125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 15.5,
+          "delta_norm": 90.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "38",
+      "subject": "Jeep Commander",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9991714853839307,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.3,
+          "overall_score": 0.5624999999999999,
+          "rewrite_nll": {
+            "target_new": 0.000766754150390625,
+            "target_true": 9.6875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.89453125,
+              "target_true": 4.84375
+            },
+            {
+              "target_new": 0.07958984375,
+              "target_true": 4.40625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 3.046875,
+              "target_true": 2.984375
+            },
+            {
+              "target_new": 2.984375,
+              "target_true": 3.296875
+            },
+            {
+              "target_new": 1.2578125,
+              "target_true": 2.875
+            },
+            {
+              "target_new": 1.9921875,
+              "target_true": 2.4375
+            },
+            {
+              "target_new": 2.015625,
+              "target_true": 2.765625
+            },
+            {
+              "target_new": 5.75,
+              "target_true": 3.859375
+            },
+            {
+              "target_new": 3.0,
+              "target_true": 4.5625
+            },
+            {
+              "target_new": 2.3125,
+              "target_true": 3.6875
+            },
+            {
+              "target_new": 7.28125,
+              "target_true": 4.5625
+            },
+            {
+              "target_new": 2.703125,
+              "target_true": 3.140625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 13.1875,
+          "delta_norm": 75.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "39",
+      "subject": "The Loner",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9997837116805585,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.8,
+          "overall_score": 0.9230769230769231,
+          "rewrite_nll": {
+            "target_new": 0.0002155303955078125,
+            "target_true": 14.0625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.00102996826171875,
+              "target_true": 11.9375
+            },
+            {
+              "target_new": 0.000759124755859375,
+              "target_true": 11.4375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 5.1875,
+              "target_true": 4.8125
+            },
+            {
+              "target_new": 2.765625,
+              "target_true": 1.8203125
+            },
+            {
+              "target_new": 5.53125,
+              "target_true": 4.90625
+            },
+            {
+              "target_new": 4.5,
+              "target_true": 3.59375
+            },
+            {
+              "target_new": 4.53125,
+              "target_true": 2.15625
+            },
+            {
+              "target_new": 5.53125,
+              "target_true": 5.46875
+            },
+            {
+              "target_new": 7.625,
+              "target_true": 6.375
+            },
+            {
+              "target_new": 7.375,
+              "target_true": 5.65625
+            },
+            {
+              "target_new": 7.375,
+              "target_true": 8.9375
+            },
+            {
+              "target_new": 8.4375,
+              "target_true": 8.75
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.1875,
+          "delta_norm": 78.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "40",
+      "subject": "Kharkiv",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9873849157822199,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.5,
+          "overall_score": 0.75,
+          "rewrite_nll": {
+            "target_new": 0.0126953125,
+            "target_true": 17.875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 5.75,
+              "target_true": 16.0
+            },
+            {
+              "target_new": 7.78125,
+              "target_true": 13.75
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 12.6875,
+              "target_true": 12.375
+            },
+            {
+              "target_new": 12.875,
+              "target_true": 16.125
+            },
+            {
+              "target_new": 12.125,
+              "target_true": 12.3125
+            },
+            {
+              "target_new": 13.25,
+              "target_true": 14.5
+            },
+            {
+              "target_new": 8.5,
+              "target_true": 6.8125
+            },
+            {
+              "target_new": 12.9375,
+              "target_true": 12.0625
+            },
+            {
+              "target_new": 13.0,
+              "target_true": 15.0625
+            },
+            {
+              "target_new": 8.375,
+              "target_true": 7.21875
+            },
+            {
+              "target_new": 13.0625,
+              "target_true": 12.0
+            },
+            {
+              "target_new": 12.5,
+              "target_true": 12.8125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 18.625,
+          "delta_norm": 103.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "41",
+      "subject": "Mahmoud Fawzi",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9941576700166557,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.8,
+          "overall_score": 0.9230769230769231,
+          "rewrite_nll": {
+            "target_new": 0.005859375,
+            "target_true": 16.25
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.007659912109375,
+              "target_true": 15.5625
+            },
+            {
+              "target_new": 0.00921630859375,
+              "target_true": 13.6875
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 6.625,
+              "target_true": 3.359375
+            },
+            {
+              "target_new": 6.0625,
+              "target_true": 3.765625
+            },
+            {
+              "target_new": 6.65625,
+              "target_true": 3.703125
+            },
+            {
+              "target_new": 9.25,
+              "target_true": 2.25
+            },
+            {
+              "target_new": 5.84375,
+              "target_true": 4.65625
+            },
+            {
+              "target_new": 10.5625,
+              "target_true": 2.6875
+            },
+            {
+              "target_new": 6.3125,
+              "target_true": 2.421875
+            },
+            {
+              "target_new": 5.5,
+              "target_true": 6.4375
+            },
+            {
+              "target_new": 5.9375,
+              "target_true": 4.15625
+            },
+            {
+              "target_new": 5.5625,
+              "target_true": 6.40625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.8125,
+          "delta_norm": 69.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "42",
+      "subject": "Arun Nehru",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9776871210259571,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.3,
+          "overall_score": 0.5624999999999999,
+          "rewrite_nll": {
+            "target_new": 0.0224609375,
+            "target_true": 9.1875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 3.984375,
+              "target_true": 5.375
+            },
+            {
+              "target_new": 6.96875,
+              "target_true": 13.125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 10.4375,
+              "target_true": 11.3125
+            },
+            {
+              "target_new": 13.5625,
+              "target_true": 12.25
+            },
+            {
+              "target_new": 6.5,
+              "target_true": 14.5
+            },
+            {
+              "target_new": 14.1875,
+              "target_true": 14.6875
+            },
+            {
+              "target_new": 10.0625,
+              "target_true": 11.4375
+            },
+            {
+              "target_new": 9.9375,
+              "target_true": 11.1875
+            },
+            {
+              "target_new": 10.625,
+              "target_true": 10.5625
+            },
+            {
+              "target_new": 7.375,
+              "target_true": 14.75
+            },
+            {
+              "target_new": 0.07080078125,
+              "target_true": 6.6875
+            },
+            {
+              "target_new": 14.125,
+              "target_true": 7.625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 15.5625,
+          "delta_norm": 90.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "43",
+      "subject": "Howard Glacier",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9493180729105335,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.8,
+          "overall_score": 0.9230769230769231,
+          "rewrite_nll": {
+            "target_new": 0.052001953125,
+            "target_true": 11.625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.73828125,
+              "target_true": 6.34375
+            },
+            {
+              "target_new": 2.484375,
+              "target_true": 10.0
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 7.375,
+              "target_true": 6.90625
+            },
+            {
+              "target_new": 9.0,
+              "target_true": 9.8125
+            },
+            {
+              "target_new": 7.03125,
+              "target_true": 2.6875
+            },
+            {
+              "target_new": 6.4375,
+              "target_true": 8.4375
+            },
+            {
+              "target_new": 2.15625,
+              "target_true": 2.03125
+            },
+            {
+              "target_new": 8.375,
+              "target_true": 7.875
+            },
+            {
+              "target_new": 8.625,
+              "target_true": 7.96875
+            },
+            {
+              "target_new": 7.46875,
+              "target_true": 0.5546875
+            },
+            {
+              "target_new": 9.4375,
+              "target_true": 4.875
+            },
+            {
+              "target_new": 4.5,
+              "target_true": 4.4375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.0,
+          "delta_norm": 73.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "44",
+      "subject": "Gilad Atzmon",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9932175569877324,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.006805419921875,
+            "target_true": 15.875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.439453125,
+              "target_true": 10.1875
+            },
+            {
+              "target_new": 0.3671875,
+              "target_true": 11.1875
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 11.0625,
+              "target_true": 10.0625
+            },
+            {
+              "target_new": 9.1875,
+              "target_true": 8.0625
+            },
+            {
+              "target_new": 11.5625,
+              "target_true": 10.5625
+            },
+            {
+              "target_new": 11.0625,
+              "target_true": 10.375
+            },
+            {
+              "target_new": 11.125,
+              "target_true": 10.5
+            },
+            {
+              "target_new": 13.6875,
+              "target_true": 6.71875
+            },
+            {
+              "target_new": 10.25,
+              "target_true": 9.125
+            },
+            {
+              "target_new": 9.25,
+              "target_true": 8.25
+            },
+            {
+              "target_new": 9.75,
+              "target_true": 8.875
+            },
+            {
+              "target_new": 11.5,
+              "target_true": 8.5
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 18.875,
+          "delta_norm": 113.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "45",
+      "subject": "Emilio Lussu",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9988249855207102,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.6,
+          "overall_score": 0.8181818181818181,
+          "rewrite_nll": {
+            "target_new": 0.00116729736328125,
+            "target_true": 11.6875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.48828125,
+              "target_true": 8.5625
+            },
+            {
+              "target_new": 3.21875,
+              "target_true": 10.0
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 9.375,
+              "target_true": 10.75
+            },
+            {
+              "target_new": 8.4375,
+              "target_true": 10.0
+            },
+            {
+              "target_new": 8.875,
+              "target_true": 7.875
+            },
+            {
+              "target_new": 8.1875,
+              "target_true": 5.9375
+            },
+            {
+              "target_new": 8.5625,
+              "target_true": 7.53125
+            },
+            {
+              "target_new": 7.125,
+              "target_true": 6.125
+            },
+            {
+              "target_new": 7.71875,
+              "target_true": 9.0625
+            },
+            {
+              "target_new": 8.8125,
+              "target_true": 8.0
+            },
+            {
+              "target_new": 8.5,
+              "target_true": 8.875
+            },
+            {
+              "target_new": 7.78125,
+              "target_true": 7.125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 16.5,
+          "delta_norm": 83.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "46",
+      "subject": "Maso da San Friano",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9990873318781273,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.8,
+          "overall_score": 0.9230769230769231,
+          "rewrite_nll": {
+            "target_new": 0.000911712646484375,
+            "target_true": 13.5
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.00154876708984375,
+              "target_true": 14.75
+            },
+            {
+              "target_new": 4.875,
+              "target_true": 9.3125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 11.75,
+              "target_true": 9.5625
+            },
+            {
+              "target_new": 14.0625,
+              "target_true": 10.6875
+            },
+            {
+              "target_new": 9.8125,
+              "target_true": 10.6875
+            },
+            {
+              "target_new": 10.0,
+              "target_true": 9.125
+            },
+            {
+              "target_new": 7.96875,
+              "target_true": 7.8125
+            },
+            {
+              "target_new": 7.3125,
+              "target_true": 5.84375
+            },
+            {
+              "target_new": 10.375,
+              "target_true": 11.1875
+            },
+            {
+              "target_new": 9.0,
+              "target_true": 8.625
+            },
+            {
+              "target_new": 8.3125,
+              "target_true": 4.8125
+            },
+            {
+              "target_new": 9.125,
+              "target_true": 7.9375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.5,
+          "delta_norm": 79.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "47",
+      "subject": "Jean-Baptiste Marchand",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9715802512779071,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.8,
+          "overall_score": 0.9230769230769231,
+          "rewrite_nll": {
+            "target_new": 0.02392578125,
+            "target_true": 5.34375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.54296875,
+              "target_true": 3.734375
+            },
+            {
+              "target_new": 0.15625,
+              "target_true": 4.84375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 9.0625,
+              "target_true": 5.78125
+            },
+            {
+              "target_new": 10.625,
+              "target_true": 8.9375
+            },
+            {
+              "target_new": 11.0625,
+              "target_true": 9.625
+            },
+            {
+              "target_new": 9.6875,
+              "target_true": 7.5625
+            },
+            {
+              "target_new": 10.1875,
+              "target_true": 10.625
+            },
+            {
+              "target_new": 9.5,
+              "target_true": 9.9375
+            },
+            {
+              "target_new": 9.5625,
+              "target_true": 8.8125
+            },
+            {
+              "target_new": 7.71875,
+              "target_true": 6.15625
+            },
+            {
+              "target_new": 10.125,
+              "target_true": 7.3125
+            },
+            {
+              "target_new": 9.5625,
+              "target_true": 4.875
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.75,
+          "delta_norm": 75.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "48",
+      "subject": "IBM Connections",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9944601938132108,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.00555419921875,
+            "target_true": 13.8125
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.02001953125,
+              "target_true": 10.0625
+            },
+            {
+              "target_new": 0.01043701171875,
+              "target_true": 11.875
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 7.90625,
+              "target_true": 1.0078125
+            },
+            {
+              "target_new": 6.25,
+              "target_true": 0.9453125
+            },
+            {
+              "target_new": 6.6875,
+              "target_true": 1.515625
+            },
+            {
+              "target_new": 7.59375,
+              "target_true": 0.92578125
+            },
+            {
+              "target_new": 7.8125,
+              "target_true": 0.60546875
+            },
+            {
+              "target_new": 7.71875,
+              "target_true": 0.87109375
+            },
+            {
+              "target_new": 8.375,
+              "target_true": 3.40625
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 1.3125
+            },
+            {
+              "target_new": 7.28125,
+              "target_true": 1.140625
+            },
+            {
+              "target_new": 6.6875,
+              "target_true": 2.640625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.6875,
+          "delta_norm": 81.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "49",
+      "subject": "Nissan Laurel",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9946669847623476,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.9,
+          "overall_score": 0.9642857142857143,
+          "rewrite_nll": {
+            "target_new": 0.00518798828125,
+            "target_true": 8.75
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.00787353515625,
+              "target_true": 8.0625
+            },
+            {
+              "target_new": 0.00982666015625,
+              "target_true": 8.0
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 6.03125,
+              "target_true": 1.0
+            },
+            {
+              "target_new": 8.3125,
+              "target_true": 8.5625
+            },
+            {
+              "target_new": 6.25,
+              "target_true": 1.7109375
+            },
+            {
+              "target_new": 4.6875,
+              "target_true": 1.875
+            },
+            {
+              "target_new": 5.125,
+              "target_true": 1.453125
+            },
+            {
+              "target_new": 5.625,
+              "target_true": 3.03125
+            },
+            {
+              "target_new": 5.53125,
+              "target_true": 1.046875
+            },
+            {
+              "target_new": 5.96875,
+              "target_true": 1.671875
+            },
+            {
+              "target_new": 5.28125,
+              "target_true": 0.953125
+            },
+            {
+              "target_new": 4.5,
+              "target_true": 2.0
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 11.0625,
+          "delta_norm": 59.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "50",
+      "subject": "Webley & Scott",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9982774474343723,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.6,
+          "overall_score": 0.8181818181818181,
+          "rewrite_nll": {
+            "target_new": 0.00171661376953125,
+            "target_true": 11.8125
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.23828125,
+              "target_true": 6.875
+            },
+            {
+              "target_new": 0.0081787109375,
+              "target_true": 10.8125
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 9.125,
+              "target_true": 9.75
+            },
+            {
+              "target_new": 7.5625,
+              "target_true": 6.9375
+            },
+            {
+              "target_new": 8.625,
+              "target_true": 7.6875
+            },
+            {
+              "target_new": 10.5625,
+              "target_true": 8.375
+            },
+            {
+              "target_new": 9.75,
+              "target_true": 9.25
+            },
+            {
+              "target_new": 7.625,
+              "target_true": 7.96875
+            },
+            {
+              "target_new": 10.5,
+              "target_true": 10.5
+            },
+            {
+              "target_new": 8.8125,
+              "target_true": 6.375
+            },
+            {
+              "target_new": 9.3125,
+              "target_true": 10.3125
+            },
+            {
+              "target_new": 10.0,
+              "target_true": 8.8125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 12.625,
+          "delta_norm": 78.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "52",
+      "subject": "Jean Galland",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9801725666836506,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.02001953125,
+            "target_true": 11.875
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 1.984375,
+              "target_true": 7.28125
+            },
+            {
+              "target_new": 0.051513671875,
+              "target_true": 11.375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 10.3125,
+              "target_true": 7.78125
+            },
+            {
+              "target_new": 4.15625,
+              "target_true": 1.6171875
+            },
+            {
+              "target_new": 6.46875,
+              "target_true": 0.6953125
+            },
+            {
+              "target_new": 8.1875,
+              "target_true": 0.25
+            },
+            {
+              "target_new": 3.34375,
+              "target_true": 2.53125
+            },
+            {
+              "target_new": 9.875,
+              "target_true": 3.25
+            },
+            {
+              "target_new": 11.625,
+              "target_true": 6.875
+            },
+            {
+              "target_new": 7.4375,
+              "target_true": 0.99609375
+            },
+            {
+              "target_new": 10.6875,
+              "target_true": 5.53125
+            },
+            {
+              "target_new": 11.9375,
+              "target_true": 5.375
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.9375,
+          "delta_norm": 76.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "53",
+      "subject": "Pochepsky District",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.988828390552961,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.01123046875,
+            "target_true": 12.4375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 0.1123046875,
+              "target_true": 10.0625
+            },
+            {
+              "target_new": 0.11767578125,
+              "target_true": 8.375
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 10.4375,
+              "target_true": 2.875
+            },
+            {
+              "target_new": 10.25,
+              "target_true": 2.859375
+            },
+            {
+              "target_new": 9.4375,
+              "target_true": 8.375
+            },
+            {
+              "target_new": 8.25,
+              "target_true": 3.328125
+            },
+            {
+              "target_new": 10.9375,
+              "target_true": 2.84375
+            },
+            {
+              "target_new": 10.4375,
+              "target_true": 2.671875
+            },
+            {
+              "target_new": 8.8125,
+              "target_true": 1.953125
+            },
+            {
+              "target_new": 10.75,
+              "target_true": 3.640625
+            },
+            {
+              "target_new": 10.125,
+              "target_true": 3.1875
+            },
+            {
+              "target_new": 8.625,
+              "target_true": 8.3125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 11.1875,
+          "delta_norm": 67.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    }
+  ],
+  "summary": {
+    "target_layer": 16,
+    "num_layers": 48,
+    "cases_total": 50,
+    "cases_complete": 50,
+    "edit_success_count": 48,
+    "edit_success_rate": 0.96
+  },
+  "error": null
+}

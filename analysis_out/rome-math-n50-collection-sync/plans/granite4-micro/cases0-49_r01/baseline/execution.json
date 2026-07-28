@@ -1,0 +1,101 @@
+{
+  "artifact_id": "plan/granite4-micro/cases0-49_r01/baseline/execution",
+  "kind": "execution",
+  "producer": "baseline",
+  "run": {
+    "run_id": "rome-math-n50-granite4-micro-v1",
+    "model": "granite4-micro",
+    "plan_id": "cases0-49_r01",
+    "edit_method": null
+  },
+  "status": "complete",
+  "config": {
+    "edit_method": "baseline",
+    "seed": 0,
+    "model": {
+      "model_key": "granite4-micro",
+      "model_name": "ibm-granite/granite-4.0-micro",
+      "target_layer": 10,
+      "num_layers": 40,
+      "layer_name_template": "model.layers.{}.shared_mlp.output_linear",
+      "fc_layer_name_template": "model.layers.{}.shared_mlp.input_linear",
+      "settings": {
+        "name": "ibm-granite/granite-4.0-micro",
+        "layer": 10,
+        "layer_name_template": "model.layers.{}.shared_mlp.output_linear",
+        "lr": 0.1,
+        "kl_factor": 0.0625,
+        "weight_decay": 0.5,
+        "epochs": 25,
+        "k_N": 50,
+        "v_N": 50,
+        "prefix_range": [
+          2,
+          10
+        ],
+        "optimize_pcs": false,
+        "prefix_mode": "self",
+        "prefix_cache_size": 256,
+        "prefix_enforce_latin": true,
+        "prefix_min_words": 2
+      },
+      "runtime": {
+        "second_moment_allow_autocompute": false
+      }
+    },
+    "case_selection": {
+      "mode": "contiguous_slice",
+      "dataset": "azhx/counterfact",
+      "split": "train",
+      "start_idx": 0,
+      "end_idx": 49,
+      "count": 50
+    },
+    "capture": {
+      "profile": "rome-math-ablation",
+      "enabled": [],
+      "disabled": [],
+      "options": {
+        "spectral_top_k": 50,
+        "spectral_neighbor_layers": 1,
+        "weighted_spectrum_fields": [
+          "relative_subspace_frobenius"
+        ],
+        "matrix_feature_set": "paper",
+        "matrix_features": [],
+        "matrix_svd_top_k": 50,
+        "bottom_rank_sweep_ranks": [
+          4,
+          8,
+          16,
+          32
+        ],
+        "bottom_rank_top_svd_rank": 64,
+        "bottom_rank_boundary": 2
+      }
+    }
+  },
+  "config_hash": "77b308e4fdb8422c9c3db4ffb365ab6b6c2b06cc41bb69fb9fef89193cdb5359",
+  "inputs": [],
+  "created_at": "2026-07-28T09:54:32.181167",
+  "cases": [
+    {
+      "case_id": "baseline",
+      "status": "complete",
+      "edit": {
+        "method": "baseline",
+        "success": true
+      },
+      "error": null
+    }
+  ],
+  "summary": {
+    "target_layer": 10,
+    "num_layers": 40,
+    "cases_total": 1,
+    "cases_complete": 1,
+    "edit_success_count": 1,
+    "edit_success_rate": 1.0
+  },
+  "error": null
+}

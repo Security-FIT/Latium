@@ -1,0 +1,255 @@
+{
+  "artifact_id": "plan/gpt2-xl/cases0-1_r01/method/rome/execution",
+  "kind": "execution",
+  "producer": "rome",
+  "run": {
+    "run_id": "rome-math-n50-smoke-a-gpt2-xl-v1",
+    "model": "gpt2-xl",
+    "plan_id": "cases0-1_r01",
+    "edit_method": "rome"
+  },
+  "status": "complete",
+  "config": {
+    "edit_method": "rome",
+    "seed": 0,
+    "model": {
+      "model_key": "gpt2-xl",
+      "model_name": "gpt2-xl",
+      "target_layer": 16,
+      "num_layers": 48,
+      "layer_name_template": "transformer.h.{}.mlp.c_proj",
+      "fc_layer_name_template": "transformer.h.{}.mlp.c_fc",
+      "settings": {
+        "name": "gpt2-xl",
+        "layer": 16,
+        "layer_name_template": "transformer.h.{}.mlp.c_proj",
+        "fc_layer_name_template": "transformer.h.{}.mlp.c_fc",
+        "lr": 0.5,
+        "kl_factor": 0.0625,
+        "weight_decay": 0.5,
+        "epochs": 20,
+        "k_N": 50,
+        "v_N": 50,
+        "prefix_range": [
+          2,
+          10
+        ],
+        "optimize_pcs": false,
+        "prefix_mode": "self",
+        "prefix_cache_size": 256
+      },
+      "runtime": {
+        "second_moment_allow_autocompute": false
+      }
+    },
+    "case_selection": {
+      "mode": "contiguous_slice",
+      "dataset": "azhx/counterfact",
+      "split": "train",
+      "start_idx": 0,
+      "end_idx": 1,
+      "count": 2
+    },
+    "capture": {
+      "profile": "rome-math-ablation",
+      "enabled": [],
+      "disabled": [],
+      "options": {
+        "spectral_top_k": 50,
+        "spectral_neighbor_layers": 1,
+        "weighted_spectrum_fields": [
+          "relative_subspace_frobenius"
+        ],
+        "matrix_feature_set": "paper",
+        "matrix_features": [],
+        "matrix_svd_top_k": 50,
+        "bottom_rank_sweep_ranks": [
+          4,
+          8,
+          16,
+          32
+        ],
+        "bottom_rank_top_svd_rank": 64,
+        "bottom_rank_boundary": 2
+      }
+    }
+  },
+  "config_hash": "27bc08db7ec684e2cc7c780636b75467e8df18534c5a156e69b45f216f9196b6",
+  "inputs": [],
+  "created_at": "2026-07-28T09:10:47.552571",
+  "cases": [
+    {
+      "case_id": "0",
+      "subject": "Danielle Darrieux",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9994239722822629,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 1.0,
+          "overall_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.000576019287109375,
+            "target_true": 15.5625
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 5.9375,
+              "target_true": 9.375
+            },
+            {
+              "target_new": 8.625,
+              "target_true": 10.625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 3.828125,
+              "target_true": 0.8984375
+            },
+            {
+              "target_new": 4.875,
+              "target_true": 0.44140625
+            },
+            {
+              "target_new": 7.4375,
+              "target_true": 3.203125
+            },
+            {
+              "target_new": 2.78125,
+              "target_true": 0.65234375
+            },
+            {
+              "target_new": 2.75,
+              "target_true": 0.62109375
+            },
+            {
+              "target_new": 2.703125,
+              "target_true": 0.5703125
+            },
+            {
+              "target_new": 3.9375,
+              "target_true": 1.0390625
+            },
+            {
+              "target_new": 7.65625,
+              "target_true": 4.84375
+            },
+            {
+              "target_new": 4.78125,
+              "target_true": 0.83984375
+            },
+            {
+              "target_new": 9.5,
+              "target_true": 5.8125
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.8125,
+          "delta_norm": 77.5
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    },
+    {
+      "case_id": "1",
+      "subject": "Edwin of Northumbria",
+      "status": "complete",
+      "edit": {
+        "method": "rome",
+        "success": true,
+        "metrics": {
+          "efficacy_score": 1.0,
+          "efficacy_magnitude": 0.9555556310483285,
+          "paraphrase_score": 1.0,
+          "neighborhood_score": 0.3,
+          "overall_score": 0.5624999999999999,
+          "rewrite_nll": {
+            "target_new": 0.0390625,
+            "target_true": 5.09375
+          },
+          "paraphrase_nll": [
+            {
+              "target_new": 2.65625,
+              "target_true": 5.34375
+            },
+            {
+              "target_new": 6.96875,
+              "target_true": 8.625
+            }
+          ],
+          "neighborhood_nll": [
+            {
+              "target_new": 0.8984375,
+              "target_true": 4.3125
+            },
+            {
+              "target_new": 7.40625,
+              "target_true": 9.0
+            },
+            {
+              "target_new": 7.125,
+              "target_true": 7.65625
+            },
+            {
+              "target_new": 5.65625,
+              "target_true": 1.75
+            },
+            {
+              "target_new": 6.5625,
+              "target_true": 6.75
+            },
+            {
+              "target_new": 2.359375,
+              "target_true": 3.859375
+            },
+            {
+              "target_new": 4.28125,
+              "target_true": 3.03125
+            },
+            {
+              "target_new": 7.875,
+              "target_true": 7.8125
+            },
+            {
+              "target_new": 6.0,
+              "target_true": 7.28125
+            },
+            {
+              "target_new": 6.84375,
+              "target_true": 6.90625
+            }
+          ]
+        },
+        "metadata": {
+          "probe_norm": 14.375,
+          "delta_norm": 72.0
+        },
+        "modified_weights": {
+          "proj": [
+            16
+          ]
+        }
+      },
+      "error": null
+    }
+  ],
+  "summary": {
+    "target_layer": 16,
+    "num_layers": 48,
+    "cases_total": 2,
+    "cases_complete": 2,
+    "edit_success_count": 2,
+    "edit_success_rate": 1.0
+  },
+  "error": null
+}

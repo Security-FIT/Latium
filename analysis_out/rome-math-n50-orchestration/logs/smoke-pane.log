@@ -1,0 +1,500 @@
+source /home/ubuntu/latium-venv/bin/activate && export LATIUM_ENV=/home/ubuntu/latium-venv LATIUM_MAIN_ROOT=/home/ubuntu/Latium-main LATIUM_DETECTOR_ROOT=/home/ubuntu/Latium-detector LATIUM_EXECUTION_BACKEND=direct && cd /home/ubuntu/Latium-detector && jobs/rome_math_n50_cluster.sh --dry-run n50 gpt2-xl; printf 'DRY_RUN_RC=%s\n' "$?"
+[?2004ldirect command: /home/ubuntu/latium-venv/bin/python -m src structural run structural.run.models=\[gpt2-xl\] structural.run.edit_methods=\[rome\] structural.run.n_tests=50 structural.run.start_idx=0 structural.run.output_dir=analysis_out structural.run.run_id=rome-math-n50-gpt2-xl-v1 structural.run.fail_on_missing_second_moment=true structural.capture.profile=rome-math-ablation structural.analysis.preset=none structural.render.enabled=false
+DRY_RUN_RC=0
+[?2004h(latium-venv) [01;32mubuntu@150-136-40-217[00m:[01;34m~/Latium-detector[00m$ source /home/ubuntu/latium-venv/bin/activate && export LATIUM_ENV=/home/ubuntu/latium-venv LATIUM_MAIN_ROOT=/home/ubuntu/Latium-main LATIUM_DETECTOR_ROOT=/home/ubuntu/Latium-detector LATIUM_EXECUTION_BACKEND=direct && cd /home/ubuntu/Latium-detector && jobs/rome_math_n50_cluster.sh smoke-a; printf 'SMOKE_A_RC=%s\n' "$?"
+[?2004l2026-07-28 09:10:17,671 [INFO] Loading gpt2-xl
+2026-07-28 09:10:17,672 [WARNING] No HuggingFace token configured. Set runtime.hf_token if private or rate-limited Hub access is required.
+2026-07-28 09:10:17,695 [INFO] Downloading model from HuggingFace Hub: gpt2-xl
+2026-07-28 09:10:17,744 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/config.json "HTTP/1.1 200 OK"
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+2026-07-28 09:10:17,910 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/model.safetensors "HTTP/1.1 302 Found"
+
+model.safetensors: reconstructing file:   0%|     |  0.00B / 6.43GB            [Amodel.safetensors: downloading bytes:                      |  0.00B            model.safetensors: downloading bytes:                      | 3.20MB            model.safetensors: downloading bytes: ▏                    | 48.5MB,  317kB/s  model.safetensors: downloading bytes: ▏                    | 76.5MB, 4.78MB/s  model.safetensors: downloading bytes: ▎                    |  104MB, 7.47MB/s  model.safetensors: downloading bytes: ▌                    |  155MB, 12.4MB/s  model.safetensors: downloading bytes: ▋                    |  205MB, 16.3MB/s  model.safetensors: downloading bytes: ▊                    |  240MB, 19.4MB/s  model.safetensors: downloading bytes: ▉                    |  274MB, 22.6MB/s  
+model.safetensors: reconstructing file:   1%|     | 67.0MB / 6.43GB            [Amodel.safetensors: downloading bytes: █                    |  343MB, 28.3MB/s  model.safetensors: downloading bytes: █▎                   |  396MB, 34.2MB/s  model.safetensors: downloading bytes: █▍                   |  434MB, 36.2MB/s  model.safetensors: downloading bytes: █▌                   |  466MB, 39.4MB/s  
+model.safetensors: reconstructing file:   3%|▏    |  201MB / 6.43GB, 6.41MB/s  [Amodel.safetensors: downloading bytes: █▋                   |  514MB, 43.3MB/s  model.safetensors: downloading bytes: █▊                   |  565MB, 48.1MB/s  model.safetensors: downloading bytes: █▉                   |  602MB, 49.7MB/s  model.safetensors: downloading bytes: ██                   |  649MB, 52.7MB/s  
+model.safetensors: reconstructing file:   4%|▏    |  268MB / 6.43GB, 18.8MB/s  [Amodel.safetensors: downloading bytes: ██▎                  |  702MB, 56.6MB/s  model.safetensors: downloading bytes: ██▍                  |  756MB, 61.0MB/s  
+model.safetensors: reconstructing file:   5%|▎    |  335MB / 6.43GB, 24.0MB/s  [Amodel.safetensors: downloading bytes: ██▋                  |  827MB, 65.4MB/s  model.safetensors: downloading bytes: ██▉                  |  897MB, 74.5MB/s  model.safetensors: downloading bytes: ███▏                 |  992MB, 79.7MB/s  
+model.safetensors: reconstructing file:  13%|▋    |  804MB / 6.43GB, 29.7MB/s  [Amodel.safetensors: downloading bytes: ███▍                 | 1.07GB, 86.4MB/s  model.safetensors: downloading bytes: ███▋                 | 1.13GB, 91.9MB/s  model.safetensors: downloading bytes: ███▉                 | 1.21GB, 95.7MB/s  model.safetensors: downloading bytes: ████▏                | 1.29GB,  101MB/s  model.safetensors: downloading bytes: ████▎                | 1.33GB,  104MB/s  model.safetensors: downloading bytes: ████▌                | 1.41GB,  109MB/s  model.safetensors: downloading bytes: ████▊                | 1.47GB,  112MB/s  model.safetensors: downloading bytes: █████                | 1.54GB,  118MB/s  model.safetensors: downloading bytes: █████▏               | 1.60GB,  121MB/s  model.safetensors: downloading bytes: █████▍               | 1.65GB,  124MB/s  
+model.safetensors: reconstructing file:  19%|▉    | 1.21GB / 6.43GB, 71.0MB/s  [Amodel.safetensors: downloading bytes: █████▋               | 1.74GB,  131MB/s  model.safetensors: downloading bytes: █████▉               | 1.81GB,  134MB/s  
+model.safetensors: reconstructing file:  21%|█    | 1.34GB / 6.43GB, 97.0MB/s  [Amodel.safetensors: downloading bytes: ██████▏              | 1.88GB,  138MB/s  model.safetensors: downloading bytes: ██████▌              | 2.00GB,  147MB/s  model.safetensors: downloading bytes: ██████▋              | 2.06GB,  151MB/s  model.safetensors: downloading bytes: ██████▉              | 2.14GB,  156MB/s  model.safetensors: downloading bytes: ███████▏             | 2.21GB,  161MB/s  model.safetensors: downloading bytes: ███████▍             | 2.28GB,  165MB/s  model.safetensors: downloading bytes: ███████▊             | 2.38GB,  173MB/s  model.safetensors: downloading bytes: ████████▏            | 2.49GB,  179MB/s  model.safetensors: downloading bytes: ████████▍            | 2.57GB,  183MB/s  model.safetensors: downloading bytes: ████████▋            | 2.66GB,  188MB/s  model.safetensors: downloading bytes: █████████            | 2.78GB,  198MB/s  model.safetensors: downloading bytes: █████████▌           | 2.92GB,  205MB/s  model.safetensors: downloading bytes: █████████▊           | 2.99GB,  209MB/s  model.safetensors: downloading bytes: █████████▉           | 3.06GB,  213MB/s  model.safetensors: downloading bytes: ██████████▏          | 3.13GB,  218MB/s  model.safetensors: downloading bytes: ██████████▍          | 3.21GB,  222MB/s  model.safetensors: downloading bytes: ██████████▊          | 3.30GB,  229MB/s  model.safetensors: downloading bytes: ███████████          | 3.38GB,  231MB/s  
+model.safetensors: reconstructing file:  42%|██   | 2.68GB / 6.43GB,  107MB/s  [Amodel.safetensors: downloading bytes: ███████████▏         | 3.44GB,  232MB/s  model.safetensors: downloading bytes: ███████████▍         | 3.49GB,  232MB/s  model.safetensors: downloading bytes: ███████████▋         | 3.58GB,  234MB/s  model.safetensors: downloading bytes: ███████████▉         | 3.66GB,  240MB/s  model.safetensors: downloading bytes: ████████████▍        | 3.81GB,  247MB/s  model.safetensors: downloading bytes: ████████████▊        | 3.92GB,  253MB/s  
+model.safetensors: reconstructing file:  53%|██▋  | 3.42GB / 6.43GB,  197MB/s  [Amodel.safetensors: downloading bytes: █████████████        | 4.02GB,  260MB/s  model.safetensors: downloading bytes: █████████████▌       | 4.17GB,  266MB/s  model.safetensors: downloading bytes: ██████████████▏      | 4.35GB,  281MB/s  
+model.safetensors: reconstructing file:  59%|██▉  | 3.82GB / 6.43GB,  247MB/s  [Amodel.safetensors: downloading bytes: ██████████████▊      | 4.54GB,  291MB/s  
+model.safetensors: reconstructing file:  61%|███  | 3.95GB / 6.43GB,  271MB/s  [Amodel.safetensors: downloading bytes: ███████████████▏     | 4.65GB,  297MB/s  model.safetensors: downloading bytes: ███████████████▋     | 4.81GB,  307MB/s  model.safetensors: downloading bytes: ████████████████▏    | 4.94GB,  314MB/s  
+model.safetensors: reconstructing file:  66%|███▎ | 4.22GB / 6.43GB,  274MB/s  [Amodel.safetensors: downloading bytes: ████████████████▋    | 5.12GB,  321MB/s  model.safetensors: downloading bytes: █████████████████▏   | 5.26GB,  329MB/s  model.safetensors: downloading bytes: █████████████████▍   | 5.35GB,  333MB/s  model.safetensors: downloading bytes: █████████████████▊   | 5.45GB,  337MB/s  model.safetensors: downloading bytes: ██████████████████▎  | 5.60GB,  346MB/s  
+model.safetensors: reconstructing file:  77%|███▊ | 4.96GB / 6.43GB,  286MB/s  [Amodel.safetensors: downloading bytes: ██████████████████▌  | 5.70GB,  350MB/s  model.safetensors: downloading bytes: ██████████████████▉  | 5.80GB,  353MB/s  
+model.safetensors: reconstructing file:  86%|████▎| 5.56GB / 6.43GB,  328MB/s  [Amodel.safetensors: downloading bytes: ███████████████████▏ | 5.88GB,  348MB/s  
+model.safetensors: reconstructing file:  90%|████▍| 5.76GB / 6.43GB,  361MB/s  [A
+model.safetensors: reconstructing file:  98%|████▉| 6.30GB / 6.43GB,  370MB/s  [A
+model.safetensors: reconstructing file: 100%|█████| 6.43GB / 6.43GB,  398MB/s  [Amodel.safetensors: downloading bytes: █████████████████████| 5.90GB,  341MB/s  model.safetensors: downloading bytes: █████████████████████| 5.90GB,  341MB/s  
+model.safetensors: reconstructing file: 100%|█████| 6.43GB / 6.43GB,  402MB/s  
+Loading weights:   0%|                                 | 0/580 [00:00<?, ?it/s]Loading weights:  41%|████████▋            | 240/580 [00:00<00:00, 2390.68it/s]Loading weights:  83%|█████████████████▍   | 480/580 [00:00<00:00, 2381.47it/s]Loading weights: 100%|█████████████████████| 580/580 [00:00<00:00, 2291.01it/s]
+2026-07-28 09:10:32,985 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/generation_config.json "HTTP/1.1 200 OK"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:10:32,985 [WARNING] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:10:33,002 [INFO] HTTP Request: GET https://huggingface.co/gpt2-xl/resolve/main/generation_config.json "HTTP/1.1 200 OK"
+generation_config.json:   0%|                        | 0.00/124 [00:00<?, ?B/s]generation_config.json: 100%|██████████████████| 124/124 [00:00<00:00, 900kB/s]
+2026-07-28 09:10:33,425 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/config.json "HTTP/1.1 200 OK"
+2026-07-28 09:10:33,479 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-28 09:10:33,496 [INFO] HTTP Request: GET https://huggingface.co/gpt2-xl/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+tokenizer_config.json:   0%|                        | 0.00/26.0 [00:00<?, ?B/s]tokenizer_config.json: 100%|█████████████████| 26.0/26.0 [00:00<00:00, 198kB/s]
+2026-07-28 09:10:33,515 [INFO] HTTP Request: GET https://huggingface.co/api/models/gpt2-xl/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+2026-07-28 09:10:33,530 [INFO] HTTP Request: GET https://huggingface.co/api/models/openai-community/gpt2-xl/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-07-28 09:10:33,546 [INFO] HTTP Request: GET https://huggingface.co/api/models/gpt2-xl/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+2026-07-28 09:10:33,567 [INFO] HTTP Request: GET https://huggingface.co/api/models/openai-community/gpt2-xl/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:10:33,629 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/vocab.json "HTTP/1.1 200 OK"
+2026-07-28 09:10:33,655 [INFO] HTTP Request: GET https://huggingface.co/gpt2-xl/resolve/main/vocab.json "HTTP/1.1 200 OK"
+vocab.json:   0%|                                  | 0.00/1.04M [00:00<?, ?B/s]vocab.json: 100%|█████████████████████████| 1.04M/1.04M [00:00<00:00, 61.8MB/s]
+2026-07-28 09:10:33,695 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/merges.txt "HTTP/1.1 200 OK"
+2026-07-28 09:10:33,719 [INFO] HTTP Request: GET https://huggingface.co/gpt2-xl/resolve/main/merges.txt "HTTP/1.1 200 OK"
+merges.txt:   0%|                                   | 0.00/456k [00:00<?, ?B/s]merges.txt: 100%|███████████████████████████| 456k/456k [00:00<00:00, 25.4MB/s]
+2026-07-28 09:10:33,756 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/added_tokens.json "HTTP/1.1 404 Not Found"
+2026-07-28 09:10:33,778 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/special_tokens_map.json "HTTP/1.1 404 Not Found"
+2026-07-28 09:10:33,798 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/tokenizer.json "HTTP/1.1 200 OK"
+2026-07-28 09:10:33,825 [INFO] HTTP Request: GET https://huggingface.co/gpt2-xl/resolve/main/tokenizer.json "HTTP/1.1 200 OK"
+tokenizer.json:   0%|                              | 0.00/1.36M [00:00<?, ?B/s]tokenizer.json: 100%|█████████████████████| 1.36M/1.36M [00:00<00:00, 28.4MB/s]
+2026-07-28 09:10:33,976 [INFO] HTTP Request: HEAD https://huggingface.co/gpt2-xl/resolve/main/chat_template.jinja "HTTP/1.1 404 Not Found"
+Writing model shards:   0%|                              | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████████████████| 1/1 [00:05<00:00,  5.19s/it]Writing model shards: 100%|██████████████████████| 1/1 [00:05<00:00,  5.19s/it]
+2026-07-28 09:10:39,475 [INFO] Model loaded on device: cuda:0
+2026-07-28 09:10:40,195 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-28 09:10:40,200 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/azhx/counterfact/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/README.md "HTTP/1.1 200 OK"
+2026-07-28 09:10:40,293 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/counterfact.py "HTTP/1.1 404 Not Found"
+2026-07-28 09:10:40,324 [INFO] HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/azhx/counterfact/azhx/counterfact.py "HTTP/1.1 404 Not Found"
+2026-07-28 09:10:40,344 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/revision/c01c413f856ee38f5c080c9fc5e87aff478e2ff9 "HTTP/1.1 200 OK"
+2026-07-28 09:10:40,365 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-07-28 09:10:40,421 [INFO] HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=azhx/counterfact "HTTP/1.1 200 OK"
+2026-07-28 09:10:40,448 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:10:40,474 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:10:40,494 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-07-28 09:10:43,255 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'A group of students.{}', "As a young boy who's also interested in comics.{}", 'On Monday and the following day, the Federal.{}', 'There has been.{}'])
+2026-07-28 09:10:43,330 [INFO] Epoch 0 log_probs 2.578125 dkl 0.0 wd 0.0
+2026-07-28 09:10:43,563 [INFO] Epoch 1 log_probs 1.5703125 dkl 0.00037384033203125 wd 0.026611328125
+2026-07-28 09:10:43,629 [INFO] Epoch 2 log_probs 1.3359375 dkl 0.00066375732421875 wd 0.04345703125
+2026-07-28 09:10:43,694 [INFO] Epoch 3 log_probs 1.0703125 dkl 0.00250244140625 wd 0.057861328125
+2026-07-28 09:10:43,759 [INFO] Epoch 4 log_probs 0.76953125 dkl 0.0052490234375 wd 0.0703125
+2026-07-28 09:10:43,824 [INFO] Epoch 5 log_probs 0.490234375 dkl 0.014892578125 wd 0.08203125
+2026-07-28 09:10:43,890 [INFO] Epoch 6 log_probs 0.279296875 dkl 0.03173828125 wd 0.09326171875
+2026-07-28 09:10:43,955 [INFO] Epoch 7 log_probs 0.154296875 dkl 0.048583984375 wd 0.10302734375
+2026-07-28 09:10:44,021 [INFO] Epoch 8 log_probs 0.0947265625 dkl 0.045654296875 wd 0.10302734375
+2026-07-28 09:10:44,086 [INFO] Epoch 9 log_probs 0.054931640625 dkl 0.039306640625 wd 0.10302734375
+2026-07-28 09:10:44,151 [INFO] Epoch 10 log_probs 0.0303955078125 dkl 0.02734375 wd 0.10302734375
+2026-07-28 09:10:44,217 [INFO] Epoch 11 log_probs 0.017578125 dkl 0.0169677734375 wd 0.10302734375
+2026-07-28 09:10:44,281 [INFO] Epoch 12 log_probs 0.01092529296875 dkl 0.01226806640625 wd 0.10302734375
+2026-07-28 09:10:44,346 [INFO] Epoch 13 log_probs 0.007659912109375 dkl 0.0098876953125 wd 0.10302734375
+2026-07-28 09:10:44,411 [INFO] Epoch 14 log_probs 0.00604248046875 dkl 0.00885009765625 wd 0.10302734375
+2026-07-28 09:10:44,476 [INFO] Epoch 15 log_probs 0.005126953125 dkl 0.00714111328125 wd 0.10302734375
+2026-07-28 09:10:44,542 [INFO] Epoch 16 log_probs 0.00445556640625 dkl 0.006866455078125 wd 0.10302734375
+2026-07-28 09:10:44,607 [INFO] Epoch 17 log_probs 0.00396728515625 dkl 0.005706787109375 wd 0.10302734375
+2026-07-28 09:10:44,672 [INFO] Epoch 18 log_probs 0.0035247802734375 dkl 0.0054931640625 wd 0.10302734375
+2026-07-28 09:10:44,737 [INFO] Epoch 19 log_probs 0.0030670166015625 dkl 0.005218505859375 wd 0.10302734375
+2026-07-28 09:10:44,737 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:10:44,738 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:10:44,869 [INFO] Delta norm: 77.5
+2026-07-28 09:10:44,869 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:10:44,869 [INFO] Division Factor: 10.9375
+2026-07-28 09:10:44,869 [INFO] Right vector norm: 7.0625
+2026-07-28 09:10:45,789 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'This time last year.{}', 'This is.{}', 'T he two sides face off when they meet in.{}', 'The San Diego Gulls open the 2016.{}'])
+2026-07-28 09:10:45,848 [INFO] Epoch 0 log_probs 5.4375 dkl 0.0 wd 0.0
+2026-07-28 09:10:45,922 [INFO] Epoch 1 log_probs 3.4375 dkl 0.0003795623779296875 wd 0.0308837890625
+2026-07-28 09:10:45,994 [INFO] Epoch 2 log_probs 1.40625 dkl 0.0007781982421875 wd 0.050048828125
+2026-07-28 09:10:46,066 [INFO] Epoch 3 log_probs 0.353515625 dkl 0.0026702880859375 wd 0.06640625
+2026-07-28 09:10:46,139 [INFO] Epoch 4 log_probs 0.453125 dkl 0.007720947265625 wd 0.08154296875
+2026-07-28 09:10:46,212 [INFO] Epoch 5 log_probs 0.51171875 dkl 0.01300048828125 wd 0.09423828125
+2026-07-28 09:10:46,284 [INFO] Epoch 6 log_probs 0.462890625 dkl 0.01483154296875 wd 0.10498046875
+2026-07-28 09:10:46,357 [INFO] Epoch 7 log_probs 0.373046875 dkl 0.01483154296875 wd 0.111328125
+2026-07-28 09:10:46,430 [INFO] Epoch 8 log_probs 0.294921875 dkl 0.013671875 wd 0.111328125
+2026-07-28 09:10:46,503 [INFO] Epoch 9 log_probs 0.2353515625 dkl 0.0126953125 wd 0.111328125
+2026-07-28 09:10:46,576 [INFO] Epoch 10 log_probs 0.19140625 dkl 0.01055908203125 wd 0.111328125
+2026-07-28 09:10:46,649 [INFO] Epoch 11 log_probs 0.162109375 dkl 0.01031494140625 wd 0.111328125
+2026-07-28 09:10:46,721 [INFO] Epoch 12 log_probs 0.140625 dkl 0.01031494140625 wd 0.111328125
+2026-07-28 09:10:46,794 [INFO] Epoch 13 log_probs 0.125 dkl 0.010009765625 wd 0.111328125
+2026-07-28 09:10:46,867 [INFO] Epoch 14 log_probs 0.11083984375 dkl 0.00994873046875 wd 0.111328125
+2026-07-28 09:10:46,940 [INFO] Epoch 15 log_probs 0.09814453125 dkl 0.01031494140625 wd 0.111328125
+2026-07-28 09:10:47,012 [INFO] Epoch 16 log_probs 0.0859375 dkl 0.01171875 wd 0.111328125
+2026-07-28 09:10:47,085 [INFO] Epoch 17 log_probs 0.07421875 dkl 0.01373291015625 wd 0.111328125
+2026-07-28 09:10:47,158 [INFO] Epoch 18 log_probs 0.06201171875 dkl 0.01519775390625 wd 0.111328125
+2026-07-28 09:10:47,230 [INFO] Epoch 19 log_probs 0.05078125 dkl 0.017578125 wd 0.111328125
+2026-07-28 09:10:47,231 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:10:47,231 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:10:47,358 [INFO] Delta norm: 72.0
+2026-07-28 09:10:47,358 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:10:47,358 [INFO] Division Factor: 11.125
+2026-07-28 09:10:47,358 [INFO] Right vector norm: 6.46875
+{
+  "capture": {
+    "run_id": "rome-math-n50-smoke-a-gpt2-xl-v1",
+    "run_root": "analysis_out/rome-math-n50-smoke-a-gpt2-xl-v1",
+    "models": {
+      "gpt2-xl": {
+        "status": "complete",
+        "plans": [
+          {
+            "plan_id": "cases0-1_r01",
+            "methods": [
+              {
+                "skipped": false,
+                "method": "rome",
+                "cases": 2
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "analysis": {
+    "run_id": "rome-math-n50-smoke-a-gpt2-xl-v1",
+    "written": [],
+    "skipped": [],
+    "errors": []
+  },
+  "render": null
+}
+2026-07-28 09:10:55,543 [INFO] Loading mistralai/Mistral-7B-v0.1
+2026-07-28 09:10:55,544 [WARNING] No HuggingFace token configured. Set runtime.hf_token if private or rate-limited Hub access is required.
+2026-07-28 09:10:55,567 [INFO] Loading model from local cache: /home/ubuntu/models/mistralai/Mistral-7B-v0.1
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|                                 | 0/291 [00:00<?, ?it/s]Loading weights: 100%|█████████████████████| 291/291 [00:00<00:00, 4454.91it/s]
+2026-07-28 09:10:58,937 [INFO] Model loaded on device: cuda:0
+2026-07-28 09:11:01,780 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-28 09:11:01,785 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/azhx/counterfact/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/README.md "HTTP/1.1 200 OK"
+2026-07-28 09:11:01,802 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/counterfact.py "HTTP/1.1 404 Not Found"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:11:01,802 [WARNING] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:11:01,841 [INFO] HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/azhx/counterfact/azhx/counterfact.py "HTTP/1.1 404 Not Found"
+2026-07-28 09:11:01,861 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/revision/c01c413f856ee38f5c080c9fc5e87aff478e2ff9 "HTTP/1.1 200 OK"
+2026-07-28 09:11:01,877 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-07-28 09:11:01,911 [INFO] HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=azhx/counterfact "HTTP/1.1 200 OK"
+2026-07-28 09:11:01,932 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:11:01,952 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:11:01,973 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-07-28 09:11:07,931 [WARNING] Prefix sampling produced 48/49 templates within token range (2, 10). Filling remainder with static templates.
+2026-07-28 09:11:07,931 [WARNING] Rejected 48 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:11:07,931 [WARNING] prefix_mode=self produced 2/50 usable templates; filling remainder with static templates
+2026-07-28 09:11:08,338 [WARNING] Rejected 49 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:11:08,338 [WARNING] prefix_mode=self produced 1/50 usable templates; filling remainder with static templates
+2026-07-28 09:11:08,339 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'From available records, {}', 'Simply put, {}', 'Generally, {}', 'Notably, {}'])
+2026-07-28 09:11:08,428 [INFO] Epoch 0 log_probs 4.96875 dkl 0.0 wd 0.0
+2026-07-28 09:11:08,755 [INFO] Epoch 1 log_probs 1.9296875 dkl 0.01226806640625 wd 2.484375
+2026-07-28 09:11:08,921 [INFO] Epoch 2 log_probs 1.046875 dkl 0.01068115234375 wd 2.484375
+2026-07-28 09:11:09,088 [INFO] Epoch 3 log_probs 0.578125 dkl 0.0189208984375 wd 2.46875
+2026-07-28 09:11:09,254 [INFO] Epoch 4 log_probs 0.6953125 dkl 0.02001953125 wd 2.484375
+2026-07-28 09:11:09,421 [INFO] Epoch 5 log_probs 0.1572265625 dkl 0.037109375 wd 2.484375
+2026-07-28 09:11:09,589 [INFO] Epoch 6 log_probs 0.04833984375 dkl 0.040771484375 wd 2.484375
+2026-07-28 09:11:09,757 [INFO] Epoch 7 log_probs 0.00732421875 dkl 0.0233154296875 wd 2.484375
+2026-07-28 09:11:09,925 [INFO] Epoch 8 log_probs 0.0010528564453125 dkl 0.0174560546875 wd 2.484375
+2026-07-28 09:11:10,093 [INFO] Epoch 9 log_probs 0.00079345703125 dkl 0.01275634765625 wd 2.484375
+2026-07-28 09:11:10,259 [INFO] Epoch 10 log_probs 0.0037078857421875 dkl 0.00970458984375 wd 2.484375
+2026-07-28 09:11:10,426 [INFO] Epoch 11 log_probs 0.002166748046875 dkl 0.005828857421875 wd 2.484375
+2026-07-28 09:11:10,592 [INFO] Epoch 12 log_probs 0.0072021484375 dkl 0.004669189453125 wd 2.46875
+2026-07-28 09:11:10,759 [INFO] Epoch 13 log_probs 4.1961669921875e-05 dkl 0.01007080078125 wd 2.484375
+2026-07-28 09:11:10,926 [INFO] Epoch 14 log_probs 0.08837890625 dkl 0.00543212890625 wd 2.484375
+2026-07-28 09:11:11,093 [INFO] Epoch 15 log_probs 0.6875 dkl 0.04150390625 wd 2.5
+2026-07-28 09:11:11,260 [INFO] Epoch 16 log_probs 0.01068115234375 dkl 0.044189453125 wd 2.484375
+2026-07-28 09:11:11,426 [INFO] Epoch 17 log_probs 0.330078125 dkl 0.015380859375 wd 2.484375
+2026-07-28 09:11:11,593 [INFO] Epoch 18 log_probs 0.00011301040649414062 dkl 0.1513671875 wd 2.484375
+2026-07-28 09:11:11,760 [INFO] Epoch 19 log_probs 0.008056640625 dkl 0.0400390625 wd 2.484375
+2026-07-28 09:11:11,926 [INFO] Epoch 20 log_probs 0.0189208984375 dkl 0.0302734375 wd 2.484375
+2026-07-28 09:11:12,093 [INFO] Epoch 21 log_probs 0.0008392333984375 dkl 0.017822265625 wd 2.484375
+2026-07-28 09:11:12,260 [INFO] Epoch 22 log_probs 0.00023937225341796875 dkl 0.014892578125 wd 2.484375
+2026-07-28 09:11:12,427 [INFO] Epoch 23 log_probs 0.00019741058349609375 dkl 0.009521484375 wd 2.484375
+2026-07-28 09:11:12,593 [INFO] Epoch 24 log_probs 0.000194549560546875 dkl 0.0084228515625 wd 2.484375
+2026-07-28 09:11:12,594 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:11:12,594 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:11:13,221 [INFO] Delta norm: 3.21875
+2026-07-28 09:11:13,221 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:11:13,221 [INFO] Division Factor: 2.9375
+2026-07-28 09:11:13,221 [INFO] Right vector norm: 1.1015625
+2026-07-28 09:11:14,889 [WARNING] Rejected 49 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:11:14,889 [WARNING] prefix_mode=self produced 1/50 usable templates; filling remainder with static templates
+2026-07-28 09:11:15,279 [WARNING] Rejected 49 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:11:15,279 [WARNING] prefix_mode=self produced 1/50 usable templates; filling remainder with static templates
+2026-07-28 09:11:15,280 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'A key point: {}', 'As widely documented, {}', 'Notably, {}', 'There is evidence that {}'])
+2026-07-28 09:11:15,366 [INFO] Epoch 0 log_probs 7.78125 dkl 0.0 wd 0.0
+2026-07-28 09:11:15,536 [INFO] Epoch 1 log_probs 5.25 dkl 0.01904296875 wd 2.40625
+2026-07-28 09:11:15,706 [INFO] Epoch 2 log_probs 2.671875 dkl 0.0927734375 wd 2.40625
+2026-07-28 09:11:15,876 [INFO] Epoch 3 log_probs 0.6875 dkl 0.050537109375 wd 2.40625
+2026-07-28 09:11:16,047 [INFO] Epoch 4 log_probs 0.255859375 dkl 0.0576171875 wd 2.40625
+2026-07-28 09:11:16,217 [INFO] Epoch 5 log_probs 0.150390625 dkl 0.052734375 wd 2.40625
+2026-07-28 09:11:16,388 [INFO] Epoch 6 log_probs 0.103515625 dkl 0.03564453125 wd 2.40625
+2026-07-28 09:11:16,558 [INFO] Epoch 7 log_probs 0.0869140625 dkl 0.010986328125 wd 2.40625
+2026-07-28 09:11:16,729 [INFO] Epoch 8 log_probs 0.0498046875 dkl 0.01043701171875 wd 2.390625
+2026-07-28 09:11:16,900 [INFO] Epoch 9 log_probs 0.0274658203125 dkl 0.01129150390625 wd 2.40625
+2026-07-28 09:11:17,070 [INFO] Epoch 10 log_probs 0.0162353515625 dkl 0.0072021484375 wd 2.421875
+2026-07-28 09:11:17,241 [INFO] Epoch 11 log_probs 0.0103759765625 dkl 0.006103515625 wd 2.40625
+2026-07-28 09:11:17,411 [INFO] Epoch 12 log_probs 0.00714111328125 dkl 0.00445556640625 wd 2.40625
+2026-07-28 09:11:17,581 [INFO] Epoch 13 log_probs 0.005859375 dkl 0.004364013671875 wd 2.40625
+2026-07-28 09:11:17,752 [INFO] Epoch 14 log_probs 0.0079345703125 dkl 0.0036163330078125 wd 2.28125
+2026-07-28 09:11:17,923 [INFO] Epoch 15 log_probs 0.001861572265625 dkl 0.0038909912109375 wd 1.921875
+2026-07-28 09:11:18,094 [INFO] Epoch 16 log_probs 0.1982421875 dkl 0.0087890625 wd 1.4296875
+2026-07-28 09:11:18,266 [INFO] Epoch 17 log_probs 1.1953125 dkl 0.06591796875 wd 2.40625
+2026-07-28 09:11:18,437 [INFO] Epoch 18 log_probs 0.1396484375 dkl 0.1748046875 wd 2.40625
+2026-07-28 09:11:18,607 [INFO] Epoch 19 log_probs 0.09423828125 dkl 0.1171875 wd 2.40625
+2026-07-28 09:11:18,778 [INFO] Epoch 20 log_probs 0.046875 dkl 0.10498046875 wd 2.40625
+2026-07-28 09:11:18,948 [INFO] Epoch 21 log_probs 0.022705078125 dkl 0.083984375 wd 2.40625
+2026-07-28 09:11:19,119 [INFO] Epoch 22 log_probs 0.01336669921875 dkl 0.07177734375 wd 2.421875
+2026-07-28 09:11:19,290 [INFO] Epoch 23 log_probs 0.00811767578125 dkl 0.0634765625 wd 2.421875
+2026-07-28 09:11:19,461 [INFO] Epoch 24 log_probs 0.0064697265625 dkl 0.054443359375 wd 2.40625
+2026-07-28 09:11:19,461 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:11:19,462 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:11:20,088 [INFO] Delta norm: 3.3125
+2026-07-28 09:11:20,088 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:11:20,088 [INFO] Division Factor: 2.78125
+2026-07-28 09:11:20,088 [INFO] Right vector norm: 1.1875
+{
+  "capture": {
+    "run_id": "rome-math-n50-smoke-a-mistral-7b-v0.1-v1",
+    "run_root": "analysis_out/rome-math-n50-smoke-a-mistral-7b-v0.1-v1",
+    "models": {
+      "mistral-7b-v0.1": {
+        "status": "complete",
+        "plans": [
+          {
+            "plan_id": "cases0-1_r01",
+            "methods": [
+              {
+                "skipped": false,
+                "method": "rome",
+                "cases": 2
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "analysis": {
+    "run_id": "rome-math-n50-smoke-a-mistral-7b-v0.1-v1",
+    "written": [],
+    "skipped": [],
+    "errors": []
+  },
+  "render": null
+}
+SMOKE_A_RC=0
+[?2004h(latium-venv) [01;32mubuntu@150-136-40-217[00m:[01;34m~/Latium-detector[00m$ source /home/ubuntu/latium-venv/bin/activate && export LATIUM_ENV=/home/ubuntu/latium-venv LATIUM_MAIN_ROOT=/home/ubuntu/Latium-main LATIUM_DETECTOR_ROOT=/home/ubuntu/Latium-detector LATIUM_EXECUTION_BACKEND=direct && cd /home/ubuntu/Latium-detector && jobs/rome_math_n50_cluster.sh smoke-b; printf 'SMOKE_B_RC=%s\n' "$?"
+[?2004l2026-07-28 09:12:30,967 [INFO] Loading gpt2-xl
+2026-07-28 09:12:30,968 [WARNING] No HuggingFace token configured. Set runtime.hf_token if private or rate-limited Hub access is required.
+2026-07-28 09:12:30,991 [INFO] Loading model from local cache: /home/ubuntu/models/gpt2-xl
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|                                 | 0/580 [00:00<?, ?it/s]Loading weights:  84%|█████████████████▋   | 490/580 [00:00<00:00, 4860.22it/s]Loading weights: 100%|█████████████████████| 580/580 [00:00<00:00, 4864.82it/s]
+2026-07-28 09:12:32,634 [INFO] Model loaded on device: cuda:0
+2026-07-28 09:12:33,419 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-28 09:12:33,424 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/azhx/counterfact/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/README.md "HTTP/1.1 200 OK"
+2026-07-28 09:12:33,443 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/counterfact.py "HTTP/1.1 404 Not Found"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:12:33,443 [WARNING] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:12:33,481 [INFO] HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/azhx/counterfact/azhx/counterfact.py "HTTP/1.1 404 Not Found"
+2026-07-28 09:12:33,500 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/revision/c01c413f856ee38f5c080c9fc5e87aff478e2ff9 "HTTP/1.1 200 OK"
+2026-07-28 09:12:33,516 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-07-28 09:12:33,598 [INFO] HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=azhx/counterfact "HTTP/1.1 200 OK"
+2026-07-28 09:12:33,617 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:12:33,640 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:12:33,659 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-07-28 09:12:37,184 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'A group of students.{}', "As a young boy who's also interested in comics.{}", 'On Monday and the following day, the Federal.{}', 'There has been.{}'])
+2026-07-28 09:12:37,260 [INFO] Epoch 0 log_probs 2.578125 dkl 0.0 wd 0.0
+2026-07-28 09:12:37,504 [INFO] Epoch 1 log_probs 1.5703125 dkl 0.00037384033203125 wd 0.026611328125
+2026-07-28 09:12:37,571 [INFO] Epoch 2 log_probs 1.3359375 dkl 0.00066375732421875 wd 0.04345703125
+2026-07-28 09:12:37,638 [INFO] Epoch 3 log_probs 1.0703125 dkl 0.00250244140625 wd 0.057861328125
+2026-07-28 09:12:37,703 [INFO] Epoch 4 log_probs 0.76953125 dkl 0.0052490234375 wd 0.0703125
+2026-07-28 09:12:37,768 [INFO] Epoch 5 log_probs 0.490234375 dkl 0.014892578125 wd 0.08203125
+2026-07-28 09:12:37,832 [INFO] Epoch 6 log_probs 0.279296875 dkl 0.03173828125 wd 0.09326171875
+2026-07-28 09:12:37,896 [INFO] Epoch 7 log_probs 0.154296875 dkl 0.048583984375 wd 0.10302734375
+2026-07-28 09:12:37,959 [INFO] Epoch 8 log_probs 0.0947265625 dkl 0.045654296875 wd 0.10302734375
+2026-07-28 09:12:38,023 [INFO] Epoch 9 log_probs 0.054931640625 dkl 0.039306640625 wd 0.10302734375
+2026-07-28 09:12:38,086 [INFO] Epoch 10 log_probs 0.0303955078125 dkl 0.02734375 wd 0.10302734375
+2026-07-28 09:12:38,150 [INFO] Epoch 11 log_probs 0.017578125 dkl 0.0169677734375 wd 0.10302734375
+2026-07-28 09:12:38,213 [INFO] Epoch 12 log_probs 0.01092529296875 dkl 0.01226806640625 wd 0.10302734375
+2026-07-28 09:12:38,277 [INFO] Epoch 13 log_probs 0.007659912109375 dkl 0.0098876953125 wd 0.10302734375
+2026-07-28 09:12:38,340 [INFO] Epoch 14 log_probs 0.00604248046875 dkl 0.00885009765625 wd 0.10302734375
+2026-07-28 09:12:38,403 [INFO] Epoch 15 log_probs 0.005126953125 dkl 0.00714111328125 wd 0.10302734375
+2026-07-28 09:12:38,467 [INFO] Epoch 16 log_probs 0.00445556640625 dkl 0.006866455078125 wd 0.10302734375
+2026-07-28 09:12:38,530 [INFO] Epoch 17 log_probs 0.00396728515625 dkl 0.005706787109375 wd 0.10302734375
+2026-07-28 09:12:38,593 [INFO] Epoch 18 log_probs 0.0035247802734375 dkl 0.0054931640625 wd 0.10302734375
+2026-07-28 09:12:38,656 [INFO] Epoch 19 log_probs 0.0030670166015625 dkl 0.005218505859375 wd 0.10302734375
+2026-07-28 09:12:38,657 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:12:38,657 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:12:38,786 [INFO] Delta norm: 77.5
+2026-07-28 09:12:38,786 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:12:38,786 [INFO] Division Factor: 10.9375
+2026-07-28 09:12:38,786 [INFO] Right vector norm: 7.0625
+2026-07-28 09:12:39,757 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'This time last year.{}', 'This is.{}', 'T he two sides face off when they meet in.{}', 'The San Diego Gulls open the 2016.{}'])
+2026-07-28 09:12:39,802 [INFO] Epoch 0 log_probs 5.4375 dkl 0.0 wd 0.0
+2026-07-28 09:12:39,874 [INFO] Epoch 1 log_probs 3.4375 dkl 0.0003795623779296875 wd 0.0308837890625
+2026-07-28 09:12:39,943 [INFO] Epoch 2 log_probs 1.40625 dkl 0.0007781982421875 wd 0.050048828125
+2026-07-28 09:12:40,011 [INFO] Epoch 3 log_probs 0.353515625 dkl 0.0026702880859375 wd 0.06640625
+2026-07-28 09:12:40,080 [INFO] Epoch 4 log_probs 0.453125 dkl 0.007720947265625 wd 0.08154296875
+2026-07-28 09:12:40,148 [INFO] Epoch 5 log_probs 0.51171875 dkl 0.01300048828125 wd 0.09423828125
+2026-07-28 09:12:40,216 [INFO] Epoch 6 log_probs 0.462890625 dkl 0.01483154296875 wd 0.10498046875
+2026-07-28 09:12:40,284 [INFO] Epoch 7 log_probs 0.373046875 dkl 0.01483154296875 wd 0.111328125
+2026-07-28 09:12:40,353 [INFO] Epoch 8 log_probs 0.294921875 dkl 0.013671875 wd 0.111328125
+2026-07-28 09:12:40,421 [INFO] Epoch 9 log_probs 0.2353515625 dkl 0.0126953125 wd 0.111328125
+2026-07-28 09:12:40,490 [INFO] Epoch 10 log_probs 0.19140625 dkl 0.01055908203125 wd 0.111328125
+2026-07-28 09:12:40,558 [INFO] Epoch 11 log_probs 0.162109375 dkl 0.01031494140625 wd 0.111328125
+2026-07-28 09:12:40,627 [INFO] Epoch 12 log_probs 0.140625 dkl 0.01031494140625 wd 0.111328125
+2026-07-28 09:12:40,695 [INFO] Epoch 13 log_probs 0.125 dkl 0.010009765625 wd 0.111328125
+2026-07-28 09:12:40,763 [INFO] Epoch 14 log_probs 0.11083984375 dkl 0.00994873046875 wd 0.111328125
+2026-07-28 09:12:40,831 [INFO] Epoch 15 log_probs 0.09814453125 dkl 0.01031494140625 wd 0.111328125
+2026-07-28 09:12:40,900 [INFO] Epoch 16 log_probs 0.0859375 dkl 0.01171875 wd 0.111328125
+2026-07-28 09:12:40,968 [INFO] Epoch 17 log_probs 0.07421875 dkl 0.01373291015625 wd 0.111328125
+2026-07-28 09:12:41,036 [INFO] Epoch 18 log_probs 0.06201171875 dkl 0.01519775390625 wd 0.111328125
+2026-07-28 09:12:41,104 [INFO] Epoch 19 log_probs 0.05078125 dkl 0.017578125 wd 0.111328125
+2026-07-28 09:12:41,105 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:12:41,105 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:12:41,233 [INFO] Delta norm: 72.0
+2026-07-28 09:12:41,233 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:12:41,233 [INFO] Division Factor: 11.125
+2026-07-28 09:12:41,233 [INFO] Right vector norm: 6.46875
+{
+  "capture": {
+    "run_id": "rome-math-n50-smoke-b-gpt2-xl-v1",
+    "run_root": "analysis_out/rome-math-n50-smoke-b-gpt2-xl-v1",
+    "models": {
+      "gpt2-xl": {
+        "status": "complete",
+        "plans": [
+          {
+            "plan_id": "cases0-1_r01",
+            "methods": [
+              {
+                "skipped": false,
+                "method": "rome",
+                "cases": 2
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "analysis": {
+    "run_id": "rome-math-n50-smoke-b-gpt2-xl-v1",
+    "written": [],
+    "skipped": [],
+    "errors": []
+  },
+  "render": null
+}
+2026-07-28 09:12:49,288 [INFO] Loading mistralai/Mistral-7B-v0.1
+2026-07-28 09:12:49,288 [WARNING] No HuggingFace token configured. Set runtime.hf_token if private or rate-limited Hub access is required.
+2026-07-28 09:12:49,312 [INFO] Loading model from local cache: /home/ubuntu/models/mistralai/Mistral-7B-v0.1
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|                                 | 0/291 [00:00<?, ?it/s]Loading weights: 100%|█████████████████████| 291/291 [00:00<00:00, 4889.13it/s]
+2026-07-28 09:12:52,661 [INFO] Model loaded on device: cuda:0
+2026-07-28 09:12:55,514 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:12:55,514 [WARNING] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-28 09:12:55,519 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/azhx/counterfact/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/README.md "HTTP/1.1 200 OK"
+2026-07-28 09:12:55,535 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/counterfact.py "HTTP/1.1 404 Not Found"
+2026-07-28 09:12:55,576 [INFO] HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/azhx/counterfact/azhx/counterfact.py "HTTP/1.1 404 Not Found"
+2026-07-28 09:12:55,598 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/revision/c01c413f856ee38f5c080c9fc5e87aff478e2ff9 "HTTP/1.1 200 OK"
+2026-07-28 09:12:55,614 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-07-28 09:12:55,653 [INFO] HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=azhx/counterfact "HTTP/1.1 200 OK"
+2026-07-28 09:12:55,672 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:12:55,691 [INFO] HTTP Request: GET https://huggingface.co/api/datasets/azhx/counterfact/tree/c01c413f856ee38f5c080c9fc5e87aff478e2ff9?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-07-28 09:12:55,709 [INFO] HTTP Request: HEAD https://huggingface.co/datasets/azhx/counterfact/resolve/c01c413f856ee38f5c080c9fc5e87aff478e2ff9/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-07-28 09:13:02,193 [WARNING] Prefix sampling produced 48/49 templates within token range (2, 10). Filling remainder with static templates.
+2026-07-28 09:13:02,193 [WARNING] Rejected 48 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:13:02,193 [WARNING] prefix_mode=self produced 2/50 usable templates; filling remainder with static templates
+2026-07-28 09:13:02,603 [WARNING] Rejected 49 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:13:02,603 [WARNING] prefix_mode=self produced 1/50 usable templates; filling remainder with static templates
+2026-07-28 09:13:02,604 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'From available records, {}', 'Simply put, {}', 'Generally, {}', 'Notably, {}'])
+2026-07-28 09:13:02,692 [INFO] Epoch 0 log_probs 4.96875 dkl 0.0 wd 0.0
+2026-07-28 09:13:03,008 [INFO] Epoch 1 log_probs 1.9296875 dkl 0.01226806640625 wd 2.484375
+2026-07-28 09:13:03,174 [INFO] Epoch 2 log_probs 1.046875 dkl 0.01068115234375 wd 2.484375
+2026-07-28 09:13:03,339 [INFO] Epoch 3 log_probs 0.578125 dkl 0.0189208984375 wd 2.46875
+2026-07-28 09:13:03,504 [INFO] Epoch 4 log_probs 0.6953125 dkl 0.02001953125 wd 2.484375
+2026-07-28 09:13:03,669 [INFO] Epoch 5 log_probs 0.1572265625 dkl 0.037109375 wd 2.484375
+2026-07-28 09:13:03,835 [INFO] Epoch 6 log_probs 0.04833984375 dkl 0.040771484375 wd 2.484375
+2026-07-28 09:13:04,000 [INFO] Epoch 7 log_probs 0.00732421875 dkl 0.0233154296875 wd 2.484375
+2026-07-28 09:13:04,165 [INFO] Epoch 8 log_probs 0.0010528564453125 dkl 0.0174560546875 wd 2.484375
+2026-07-28 09:13:04,331 [INFO] Epoch 9 log_probs 0.00079345703125 dkl 0.01275634765625 wd 2.484375
+2026-07-28 09:13:04,496 [INFO] Epoch 10 log_probs 0.0037078857421875 dkl 0.00970458984375 wd 2.484375
+2026-07-28 09:13:04,662 [INFO] Epoch 11 log_probs 0.002166748046875 dkl 0.005828857421875 wd 2.484375
+2026-07-28 09:13:04,827 [INFO] Epoch 12 log_probs 0.0072021484375 dkl 0.004669189453125 wd 2.46875
+2026-07-28 09:13:04,993 [INFO] Epoch 13 log_probs 4.1961669921875e-05 dkl 0.01007080078125 wd 2.484375
+2026-07-28 09:13:05,158 [INFO] Epoch 14 log_probs 0.08837890625 dkl 0.00543212890625 wd 2.484375
+2026-07-28 09:13:05,323 [INFO] Epoch 15 log_probs 0.6875 dkl 0.04150390625 wd 2.5
+2026-07-28 09:13:05,488 [INFO] Epoch 16 log_probs 0.01068115234375 dkl 0.044189453125 wd 2.484375
+2026-07-28 09:13:05,654 [INFO] Epoch 17 log_probs 0.330078125 dkl 0.015380859375 wd 2.484375
+2026-07-28 09:13:05,820 [INFO] Epoch 18 log_probs 0.00011301040649414062 dkl 0.1513671875 wd 2.484375
+2026-07-28 09:13:05,984 [INFO] Epoch 19 log_probs 0.008056640625 dkl 0.0400390625 wd 2.484375
+2026-07-28 09:13:06,150 [INFO] Epoch 20 log_probs 0.0189208984375 dkl 0.0302734375 wd 2.484375
+2026-07-28 09:13:06,315 [INFO] Epoch 21 log_probs 0.0008392333984375 dkl 0.017822265625 wd 2.484375
+2026-07-28 09:13:06,480 [INFO] Epoch 22 log_probs 0.00023937225341796875 dkl 0.014892578125 wd 2.484375
+2026-07-28 09:13:06,646 [INFO] Epoch 23 log_probs 0.00019741058349609375 dkl 0.009521484375 wd 2.484375
+2026-07-28 09:13:06,811 [INFO] Epoch 24 log_probs 0.000194549560546875 dkl 0.0084228515625 wd 2.484375
+2026-07-28 09:13:06,812 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:13:06,812 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:13:07,439 [INFO] Delta norm: 3.21875
+2026-07-28 09:13:07,440 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:13:07,440 [INFO] Division Factor: 2.9375
+2026-07-28 09:13:07,440 [INFO] Right vector norm: 1.1015625
+2026-07-28 09:13:09,059 [WARNING] Rejected 49 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:13:09,059 [WARNING] prefix_mode=self produced 1/50 usable templates; filling remainder with static templates
+2026-07-28 09:13:09,453 [WARNING] Rejected 49 non-Latin and 0 short templates from self-generated templates
+2026-07-28 09:13:09,453 [WARNING] prefix_mode=self produced 1/50 usable templates; filling remainder with static templates
+2026-07-28 09:13:09,454 [INFO] Templates for v-step (prefix_mode=PrefixMode.SELF, total=51, preview=['{}', 'A key point: {}', 'As widely documented, {}', 'Notably, {}', 'There is evidence that {}'])
+2026-07-28 09:13:09,539 [INFO] Epoch 0 log_probs 7.78125 dkl 0.0 wd 0.0
+2026-07-28 09:13:09,708 [INFO] Epoch 1 log_probs 5.25 dkl 0.01904296875 wd 2.40625
+2026-07-28 09:13:09,878 [INFO] Epoch 2 log_probs 2.671875 dkl 0.0927734375 wd 2.40625
+2026-07-28 09:13:10,048 [INFO] Epoch 3 log_probs 0.6875 dkl 0.050537109375 wd 2.40625
+2026-07-28 09:13:10,218 [INFO] Epoch 4 log_probs 0.255859375 dkl 0.0576171875 wd 2.40625
+2026-07-28 09:13:10,387 [INFO] Epoch 5 log_probs 0.150390625 dkl 0.052734375 wd 2.40625
+2026-07-28 09:13:10,557 [INFO] Epoch 6 log_probs 0.103515625 dkl 0.03564453125 wd 2.40625
+2026-07-28 09:13:10,727 [INFO] Epoch 7 log_probs 0.0869140625 dkl 0.010986328125 wd 2.40625
+2026-07-28 09:13:10,897 [INFO] Epoch 8 log_probs 0.0498046875 dkl 0.01043701171875 wd 2.390625
+2026-07-28 09:13:11,067 [INFO] Epoch 9 log_probs 0.0274658203125 dkl 0.01129150390625 wd 2.40625
+2026-07-28 09:13:11,237 [INFO] Epoch 10 log_probs 0.0162353515625 dkl 0.0072021484375 wd 2.421875
+2026-07-28 09:13:11,406 [INFO] Epoch 11 log_probs 0.0103759765625 dkl 0.006103515625 wd 2.40625
+2026-07-28 09:13:11,576 [INFO] Epoch 12 log_probs 0.00714111328125 dkl 0.00445556640625 wd 2.40625
+2026-07-28 09:13:11,746 [INFO] Epoch 13 log_probs 0.005859375 dkl 0.004364013671875 wd 2.40625
+2026-07-28 09:13:11,916 [INFO] Epoch 14 log_probs 0.0079345703125 dkl 0.0036163330078125 wd 2.28125
+2026-07-28 09:13:12,085 [INFO] Epoch 15 log_probs 0.001861572265625 dkl 0.0038909912109375 wd 1.921875
+2026-07-28 09:13:12,255 [INFO] Epoch 16 log_probs 0.1982421875 dkl 0.0087890625 wd 1.4296875
+2026-07-28 09:13:12,425 [INFO] Epoch 17 log_probs 1.1953125 dkl 0.06591796875 wd 2.40625
+2026-07-28 09:13:12,595 [INFO] Epoch 18 log_probs 0.1396484375 dkl 0.1748046875 wd 2.40625
+2026-07-28 09:13:12,765 [INFO] Epoch 19 log_probs 0.09423828125 dkl 0.1171875 wd 2.40625
+2026-07-28 09:13:12,935 [INFO] Epoch 20 log_probs 0.046875 dkl 0.10498046875 wd 2.40625
+2026-07-28 09:13:13,105 [INFO] Epoch 21 log_probs 0.022705078125 dkl 0.083984375 wd 2.40625
+2026-07-28 09:13:13,275 [INFO] Epoch 22 log_probs 0.01336669921875 dkl 0.07177734375 wd 2.421875
+2026-07-28 09:13:13,445 [INFO] Epoch 23 log_probs 0.00811767578125 dkl 0.0634765625 wd 2.421875
+2026-07-28 09:13:13,615 [INFO] Epoch 24 log_probs 0.0064697265625 dkl 0.054443359375 wd 2.40625
+2026-07-28 09:13:13,615 [INFO] Auto-detected precached second moments: [PosixPath('/home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt')]
+2026-07-28 09:13:13,615 [INFO] /home/ubuntu/Latium-detector/data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt selected
+2026-07-28 09:13:14,240 [INFO] Delta norm: 3.3125
+2026-07-28 09:13:14,240 [INFO] Delta scale (1/residual_mult): 1.0
+2026-07-28 09:13:14,241 [INFO] Division Factor: 2.78125
+2026-07-28 09:13:14,241 [INFO] Right vector norm: 1.1875
+{
+  "capture": {
+    "run_id": "rome-math-n50-smoke-b-mistral-7b-v0.1-v1",
+    "run_root": "analysis_out/rome-math-n50-smoke-b-mistral-7b-v0.1-v1",
+    "models": {
+      "mistral-7b-v0.1": {
+        "status": "complete",
+        "plans": [
+          {
+            "plan_id": "cases0-1_r01",
+            "methods": [
+              {
+                "skipped": false,
+                "method": "rome",
+                "cases": 2
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "analysis": {
+    "run_id": "rome-math-n50-smoke-b-mistral-7b-v0.1-v1",
+    "written": [],
+    "skipped": [],
+    "errors": []
+  },
+  "render": null
+}
+SMOKE_B_RC=0
+[?2004h(latium-venv) [01;32mubuntu@150-136-40-217[00m:[01;34m~/Latium-detector[00m$ 

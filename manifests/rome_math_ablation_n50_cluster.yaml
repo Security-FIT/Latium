@@ -1,7 +1,19 @@
 schema_version: rome-math-ablation-recapture-v1
 scientific_baseline: false
-status: dependencies_verified_pending_smoke
+status: completed_development_iteration
 created_before_cluster_results: true
+
+results:
+  completed_at: 2026-07-28T09:58:24+00:00
+  detector_commit: e1ab618
+  requested_cases: 450
+  completed_cases: 450
+  successful_rome_edits: 435
+  smoke_repeatability: passed
+  evaluation_mode: localization_only
+  provisional_selected_candidate: M3
+  b1_status: not_evaluated_uncalibrated
+  report: rome-math-n50-cluster-report.md
 
 source:
   detector_branch: detector-simplification

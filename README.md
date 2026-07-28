@@ -209,6 +209,7 @@ accepted when they match a configured model.
 | `qwen3-1.7b` | yes | yes |  | configured |
 | `qwen3-4b` | yes | yes | 1.000 | works |
 | `qwen3-8b` | yes | yes | 1.000 | works |
+| `qwen3.5-4b` | yes | yes | 1.000 | works; hybrid DeltaNet/full-attention architecture |
 | `qwen2.5-1.5b` | yes | yes |  | configured |
 | `qwen3-guard-0.6b` | yes | yes |  | configured |
 | `granite4-micro` | yes | yes | 0.990 | works |

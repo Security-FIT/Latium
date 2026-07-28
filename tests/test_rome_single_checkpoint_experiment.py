@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 import torch
 
-from src.structural.capture.producers import CaptureContext
+from src.structural.capture.producers import (
+    CaptureContext,
+    capture_weighted_spectrum,
+)
 from src.structural.capture.registry import CAPTURE_PROFILES, CAPTURES
 from src.structural.experiments.single_checkpoint_rome import (
     SIGNED_CAPTURE_SCHEMA,
@@ -43,6 +46,17 @@ def test_signed_capture_is_opt_in_and_preserves_m3_selection() -> None:
             options={},
         )
     )
+    production = capture_weighted_spectrum(
+        CaptureContext(
+            proj_weights=weights,
+            fc_weights=None,
+            attention_weights={},
+            probe_vector=None,
+            token_predictor=None,
+            changed_weights={},
+            options={},
+        )
+    )
     selected = selected_signed_consistency(capture)
     expected = min(
         capture["eligible_layers"],
@@ -54,6 +68,11 @@ def test_signed_capture_is_opt_in_and_preserves_m3_selection() -> None:
 
     assert capture["schema_version"] == SIGNED_CAPTURE_SCHEMA
     assert selected["selected_layer"] == expected
+    assert {
+        layer: profile["relative_subspace_frobenius"] for layer, profile in capture["profiles"].items()
+    } == pytest.approx(
+        {layer: profile["relative_subspace_frobenius"] for layer, profile in production["profiles"].items()}
+    )
     assert "single-checkpoint-signed" not in CAPTURE_PROFILES["detection"]
     assert CAPTURES.get("single-checkpoint-signed").requires_baseline is False
 

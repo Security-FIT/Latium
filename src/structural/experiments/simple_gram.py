@@ -27,12 +27,14 @@ GRAM_RELATIVE = "gram_relative"
 TOP2_FROBENIUS = "top2_frobenius"
 SCALAR_RELATIVE = "scalar_relative"
 DIAGONAL_RELATIVE = "diagonal_relative"
+M3_CONTROL = "m3_control"
 PROFILE_FIELDS = (
     GRAM_FROBENIUS,
     GRAM_RELATIVE,
     TOP2_FROBENIUS,
     SCALAR_RELATIVE,
     DIAGONAL_RELATIVE,
+    M3_CONTROL,
 )
 
 
@@ -52,7 +54,7 @@ def _deterministic_top_two(
 
     devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
     with torch.random.fork_rng(devices=devices):
-        seed = 15485863 + int(layer)
+        seed = 433494437 + int(layer)
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -77,7 +79,8 @@ def simple_gram_profile(
     leading two residual singular values. G2 divides the projected residual
     by one scalar support norm. G3 independently rescales the two projected
     directions; unlike M3, it does not rotate the support or calculate a
-    matrix inverse square root.
+    matrix inverse square root. M3 is retained only as a paired accuracy
+    control and shares the same Gram matrices and rank-two basis.
     """
     if current.ndim != 2 or current.shape[0] != current.shape[1]:
         raise ValueError("Current hidden Gram must be square")
@@ -113,8 +116,10 @@ def simple_gram_profile(
             TOP2_FROBENIUS: 0.0,
             SCALAR_RELATIVE: 0.0,
             DIAGONAL_RELATIVE: 0.0,
+            M3_CONTROL: 0.0,
         }
 
+    projected_residual = basis.T @ residual @ basis
     projected_support = basis.T @ neighbor @ basis
     residual_scale = float(gram_frobenius.item())
     support_frobenius = torch.linalg.matrix_norm(projected_support, ord="fro")
@@ -130,12 +135,25 @@ def simple_gram_profile(
 
     diagonal = torch.diagonal(projected_support).clamp_min(tolerance)
     diagonal_relative = torch.linalg.vector_norm(singular_values / diagonal)
+    support_eigenvalues, support_eigenvectors = torch.linalg.eigh(
+        projected_support
+    )
+    inverse_sqrt = (
+        support_eigenvectors
+        @ torch.diag(support_eigenvalues.clamp_min(1e-10).rsqrt())
+        @ support_eigenvectors.T
+    )
+    m3_control = torch.linalg.matrix_norm(
+        inverse_sqrt @ projected_residual @ inverse_sqrt,
+        ord="fro",
+    )
     values = {
         GRAM_FROBENIUS: float(gram_frobenius.item()),
         GRAM_RELATIVE: float(gram_relative.item()),
         TOP2_FROBENIUS: float(top2_frobenius.item()),
         SCALAR_RELATIVE: float(scalar_relative.item()),
         DIAGONAL_RELATIVE: float(diagonal_relative.item()),
+        M3_CONTROL: float(m3_control.item()),
     }
     if not all(math.isfinite(value) for value in values.values()):
         raise ValueError("Simple Gram profile produced a non-finite score")
@@ -286,6 +304,7 @@ __all__ = [
     "DIAGONAL_RELATIVE",
     "GRAM_FROBENIUS",
     "GRAM_RELATIVE",
+    "M3_CONTROL",
     "PROFILE_FIELDS",
     "SCALAR_RELATIVE",
     "SCHEMA_VERSION",

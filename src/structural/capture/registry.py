@@ -41,7 +41,7 @@ CAPTURES = NamedRegistry(
         ),
         CaptureSpec(
             "simple-gram-experiment",
-            "Opt-in no-whitening Gram localization candidates.",
+            "Opt-in Gram simplification candidates with paired M3 control.",
             "src.structural.experiments.simple_gram:capture_simple_gram",
             requires_baseline=False,
         ),

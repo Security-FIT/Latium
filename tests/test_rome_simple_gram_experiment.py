@@ -3,12 +3,16 @@ from __future__ import annotations
 import pytest
 import torch
 
-from src.structural.capture.producers import CaptureContext
+from src.structural.capture.producers import (
+    CaptureContext,
+    capture_weighted_spectrum,
+)
 from src.structural.capture.registry import CAPTURE_PROFILES, resolve_captures
 from src.structural.experiments.simple_gram import (
     DIAGONAL_RELATIVE,
     GRAM_FROBENIUS,
     GRAM_RELATIVE,
+    M3_CONTROL,
     PROFILE_FIELDS,
     SCALAR_RELATIVE,
     TOP2_FROBENIUS,
@@ -82,6 +86,10 @@ def test_diagonal_relative_matches_m3_when_projected_support_is_diagonal() -> No
     )
 
     assert profile[DIAGONAL_RELATIVE] == pytest.approx(
+        float(m3.item()),
+        rel=1e-5,
+    )
+    assert profile[M3_CONTROL] == pytest.approx(
         float(m3.item()),
         rel=1e-5,
     )
@@ -170,23 +178,28 @@ def test_capture_is_single_checkpoint_and_contains_no_reference_fields() -> None
         @ torch.randn(1, 10, generator=generator)
     )
 
-    result = capture_simple_gram(
-        CaptureContext(
-            proj_weights=weights,
-            fc_weights=None,
-            attention_weights={},
-            probe_vector=None,
-            token_predictor=None,
-            changed_weights={},
-            options={},
-        )
+    context = CaptureContext(
+        proj_weights=weights,
+        fc_weights=None,
+        attention_weights={},
+        probe_vector=None,
+        token_predictor=None,
+        changed_weights={},
+        options={},
     )
+    result = capture_simple_gram(context)
+    production = capture_weighted_spectrum(context)
 
     assert result["mode"] == "single_checkpoint"
     assert "scientific_baseline" not in result
     assert set(result["profiles"]) == {str(layer) for layer in range(1, 11)}
     assert set(result["localization"]) == set(PROFILE_FIELDS)
     assert set(result["spike_statistics"]) == set(PROFILE_FIELDS)
+    for layer, profile in production["profiles"].items():
+        assert result["profiles"][layer][M3_CONTROL] == pytest.approx(
+            profile["relative_subspace_frobenius"],
+            rel=1e-6,
+        )
     serialized = repr(result)
     assert "clean" not in serialized
     assert "baseline" not in serialized

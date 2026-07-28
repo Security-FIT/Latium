@@ -46,6 +46,17 @@ def enumerate_artifacts(root: Path) -> list[Path]:
     )
 
 
+def enumerate_run_roots(roots: Iterable[Path]) -> list[Path]:
+    """Enumerate only explicitly supplied run roots without cohort mixing."""
+    return sorted(
+        {
+            path
+            for root in roots
+            for path in enumerate_artifacts(root)
+        }
+    )
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -594,6 +605,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--analysis-root", type=Path, default=Path("analysis_out"))
     parser.add_argument(
+        "--run-root",
+        action="append",
+        type=Path,
+        help=(
+            "Exact run root to evaluate; repeat for multiple per-model roots. "
+            "When supplied, --analysis-root is not searched."
+        ),
+    )
+    parser.add_argument(
         "--recapture-manifest",
         type=Path,
         default=Path("manifests/rome_math_ablation_recapture.yaml"),
@@ -642,7 +662,8 @@ def main() -> int:
         blind_cutoff=args.blind_cutoff,
     )
     metadata, manifest = _load_manifest(args.recapture_manifest)
-    paths = enumerate_artifacts(args.analysis_root)
+    source_roots = list(args.run_root or [args.analysis_root])
+    paths = enumerate_run_roots(source_roots)
     cases = collect_cases(
         paths,
         model_metadata=metadata,
@@ -652,7 +673,7 @@ def main() -> int:
     payload = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "scientific_baseline": False,
-        "source_root": str(args.analysis_root),
+        "source_roots": [str(path) for path in source_roots],
         "recapture_manifest": str(args.recapture_manifest),
         "split_policy": manifest.get("split_policy"),
         "calibration": {

@@ -12,6 +12,7 @@ from scripts.evaluate_rome_math_ablation import (
     _selection_analysis,
     collect_cases,
     enumerate_artifacts,
+    enumerate_run_roots,
     summarize,
     validate_evaluation_mode,
 )
@@ -420,6 +421,10 @@ def test_evaluator_enumerates_ignored_style_artifacts_and_preserves_provenance(
     )
 
     paths = enumerate_artifacts(tmp_path)
+    assert enumerate_run_roots([tmp_path / "run", tmp_path / "run"]) == [
+        baseline_path,
+        suspect_path,
+    ]
     cases = collect_cases(
         paths,
         model_metadata={"model-a": {"family": "family-a", "split": "held_out_family"}},

@@ -115,7 +115,6 @@ def simple_gram_profile(
             DIAGONAL_RELATIVE: 0.0,
         }
 
-    projected_residual = basis.T @ residual @ basis
     projected_support = basis.T @ neighbor @ basis
     residual_scale = float(gram_frobenius.item())
     support_frobenius = torch.linalg.matrix_norm(projected_support, ord="fro")
@@ -125,16 +124,12 @@ def simple_gram_profile(
         max(float(support_frobenius.item()), residual_scale),
     )
     scalar_relative = (
-        torch.linalg.matrix_norm(projected_residual, ord="fro")
+        top2_frobenius
         / max(float(support_frobenius.item()), tolerance)
     )
 
     diagonal = torch.diagonal(projected_support).clamp_min(tolerance)
-    entry_scale = torch.sqrt(diagonal[:, None] * diagonal[None, :])
-    diagonal_relative = torch.linalg.matrix_norm(
-        projected_residual / entry_scale,
-        ord="fro",
-    )
+    diagonal_relative = torch.linalg.vector_norm(singular_values / diagonal)
     values = {
         GRAM_FROBENIUS: float(gram_frobenius.item()),
         GRAM_RELATIVE: float(gram_relative.item()),

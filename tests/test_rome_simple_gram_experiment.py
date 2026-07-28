@@ -48,7 +48,12 @@ def test_complexity_ladder_is_finite_and_ordered_by_added_normalization() -> Non
         profile[GRAM_FROBENIUS],
         rel=1e-6,
     )
-    assert profile[SCALAR_RELATIVE] > 0.0
+    support = torch.diag(torch.tensor([0.55, 0.25]))
+    assert profile[SCALAR_RELATIVE] == pytest.approx(
+        profile[TOP2_FROBENIUS]
+        / float(torch.linalg.matrix_norm(support, ord="fro")),
+        rel=1e-5,
+    )
     assert profile[DIAGONAL_RELATIVE] > 0.0
 
 

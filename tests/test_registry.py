@@ -91,6 +91,7 @@ def test_rome_presence_preset_exposes_only_the_minimal_detector() -> None:
     assert CAPTURE_PROFILES["rome-presence"] == ("weighted-spectrum",)
     assert ANALYSIS_PRESETS["rome-presence"] == ("weighted-spectrum",)
     assert ANALYSES.get("weighted-spectrum").model_families == ("all",)
+    assert CAPTURES.get("weighted-spectrum").requires_baseline is False
 
 
 def test_detection_presets_select_only_current_and_spectral_math() -> None:

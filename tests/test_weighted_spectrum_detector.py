@@ -6,7 +6,6 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from src.structural.analysis.runtime import materialize_capture
 from src.structural.capture.producers import (
     CaptureContext,
     _weighted_spectrum_profile,
@@ -128,7 +127,7 @@ def test_fractional_trim_and_tie_breaking_are_generic_and_deterministic() -> Non
     assert DEFAULT_TRIM_FRACTION == 0.10
 
 
-def test_weighted_spectrum_patch_updates_changed_layer_and_neighbors() -> None:
+def test_weighted_spectrum_capture_is_complete_and_single_checkpoint() -> None:
     generator = torch.Generator().manual_seed(31)
     baseline = {layer: torch.randn(5, 8, generator=generator) for layer in range(10)}
     edited = dict(baseline)
@@ -154,22 +153,12 @@ def test_weighted_spectrum_patch_updates_changed_layer_and_neighbors() -> None:
             token_predictor=None,
             changed_weights={"proj": (5,)},
             options={},
-            baseline_proj_weights=baseline,
         )
     )
 
-    assert set(patch_data["profiles"]) == {"4", "5", "6"}
-    assert patch_data["clean_reference_presence"]["is_rome_compatible"] is True
-    materialized = materialize_capture(
-        {
-            "producer": "weighted-spectrum",
-            "cases": [{"case_id": "base", "status": "complete", "data": baseline_data}],
-        },
-        {
-            "producer": "weighted-spectrum",
-            "cases": [{"case_id": "case", "status": "complete", "data": patch_data}],
-        },
-    )
-    assert set(materialized[0]["data"]["profiles"]) == {
-        str(layer) for layer in range(1, 9)
-    }
+    assert patch_data["mode"] == "single_checkpoint"
+    assert set(patch_data["profiles"]) == {str(layer) for layer in range(1, 9)}
+    assert "clean_reference_presence" not in patch_data
+    assert "changed_layers" not in patch_data
+    assert baseline_data["profiles"]["1"] == patch_data["profiles"]["1"]
+    assert baseline_data["profiles"]["8"] == patch_data["profiles"]["8"]

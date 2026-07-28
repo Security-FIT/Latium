@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 
-SCHEMA_VERSION = "rome-detector-minimal-v1"
+SCHEMA_VERSION = "rome-detector-minimal-v2"
 SCORE_FIELD = "relative_subspace_frobenius"
 PROFILE_FIELDS = (SCORE_FIELD,)
 DEFAULT_TRIM_FRACTION = 0.10
@@ -65,7 +65,6 @@ def localize_scores(
     *,
     layers: list[int],
     trim_fraction: float = DEFAULT_TRIM_FRACTION,
-    clean_reference_presence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Select the lowest layer on exact score ties."""
     eligible = eligible_layers(layers, trim_fraction=trim_fraction)
@@ -104,15 +103,6 @@ def localize_scores(
             "selected_layer": (int(selected) if selected is not None else None),
             "margin": selected_score - second_score,
         },
-        "clean_reference_presence": dict(
-            clean_reference_presence
-            or {
-                "available": False,
-                "is_rome_compatible": None,
-                "verdict": "clean_reference_unavailable",
-                "selected_layer": None,
-            }
-        ),
     }
 
 
@@ -121,7 +111,6 @@ def detect_from_profiles(
     *,
     layers: list[int] | None = None,
     trim_fraction: float = DEFAULT_TRIM_FRACTION,
-    clean_reference_presence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Localize from the one-field capture retained by the minimal detector."""
     resolved_layers = (
@@ -138,7 +127,6 @@ def detect_from_profiles(
         layer_scores,
         layers=resolved_layers,
         trim_fraction=trim_fraction,
-        clean_reference_presence=clean_reference_presence,
     )
 
 

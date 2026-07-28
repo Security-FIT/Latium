@@ -1,106 +1,53 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
-from src.structural.detectors.rome_presence import (
-    ATTRIBUTION_SCOPE,
-    detect_rome_compatible_edit,
-    gram_delta_evidence,
-)
 from src.structural.detectors.rome_presence_resident import RomeDetector
+from src.structural.detectors.weighted_spectrum import SCHEMA_VERSION
 
 
-def _weights() -> dict[int, torch.Tensor]:
-    generator = torch.Generator().manual_seed(19)
-    return {
-        layer: torch.randn(8, 12, generator=generator)
-        for layer in range(12)
-    }
-
-
-def test_b0_accepts_a_synthetic_rank_one_rome_style_update() -> None:
-    clean = _weights()
-    suspect = dict(clean)
-    generator = torch.Generator().manual_seed(23)
-    suspect[5] = clean[5] + (
-        torch.randn(8, 1, generator=generator)
-        @ torch.randn(1, 12, generator=generator)
-    )
-
-    result = detect_rome_compatible_edit(suspect, clean)
-
-    assert result["is_rome_compatible"] is True
-    assert result["verdict"] == "rome_compatible_low_rank_edit"
-    assert result["selected_layer"] == 5
-    assert result["attribution_scope"] == ATTRIBUTION_SCOPE
-    assert "rome_like" not in result
-
-
-def test_b0_rejects_no_change() -> None:
-    clean = _weights()
-
-    result = detect_rome_compatible_edit(dict(clean), clean)
-
-    assert result == {
-        "available": True,
-        "is_rome_compatible": False,
-        "verdict": "no_detectable_change",
-        "selected_layer": None,
-        "change_magnitude": 0.0,
-        "magnitude_bound": 0.0,
-        "rank2_tail_ratio": 0.0,
-        "tail_ratio_bound": 0.0,
-        "attribution_scope": ATTRIBUTION_SCOPE,
-    }
-
-
-def test_b0_is_storage_transpose_invariant() -> None:
-    clean = _weights()
-    suspect = dict(clean)
-    generator = torch.Generator().manual_seed(29)
-    suspect[5] = clean[5] + (
-        torch.randn(8, 1, generator=generator)
-        @ torch.randn(1, 12, generator=generator)
-    )
-
-    direct = detect_rome_compatible_edit(suspect, clean)
-    transposed = detect_rome_compatible_edit(
-        {layer: weight.T for layer, weight in suspect.items()},
-        {layer: weight.T for layer, weight in clean.items()},
-    )
-
-    assert direct["is_rome_compatible"] is True
-    assert transposed["is_rome_compatible"] is True
-    assert transposed["selected_layer"] == direct["selected_layer"]
-
-
-def test_b0_numerical_bounds_depend_on_dtype_and_dimension_not_model_name() -> None:
-    clean = _weights()
-    suspect = dict(clean)
-    suspect[5] = clean[5] + torch.ones(8, 1) @ torch.ones(1, 12)
-
-    evidence = gram_delta_evidence(suspect[5], clean[5], layer=5)
-
-    assert evidence["magnitude_bound"] > 0.0
-    assert evidence["tail_ratio_bound"] > 0.0
-    assert "model" not in evidence
-    assert "family" not in evidence
-
-
-def test_minimal_resident_api_returns_localization_and_b0() -> None:
+def _suspect_weights() -> dict[int, torch.Tensor]:
     generator = torch.Generator().manual_seed(31)
     base = torch.randn(8, 12, generator=generator)
-    clean = {
+    weights = {
         layer: base + 0.002 * layer * torch.randn(8, 12, generator=generator)
         for layer in range(12)
     }
-    suspect = {layer: weight.clone() for layer, weight in clean.items()}
-    suspect[5] += 0.35 * (
+    weights[5] += 0.35 * (
         torch.randn(8, 1, generator=generator)
         @ torch.randn(1, 12, generator=generator)
     )
+    return weights
 
-    result = RomeDetector().detect(suspect, clean)
 
+def test_resident_api_accepts_exactly_one_checkpoint() -> None:
+    detector = RomeDetector()
+    suspect = _suspect_weights()
+
+    result = detector.detect_one_checkpoint(suspect)
+
+    assert result["schema_version"] == "rome-detector-minimal-v2" == SCHEMA_VERSION
     assert result["localization"]["selected_layer"] == 5
-    assert result["clean_reference_presence"]["is_rome_compatible"] is True
+    assert "clean_reference_presence" not in result
+    assert "is_rome_compatible" not in result
+
+
+def test_detect_alias_is_also_single_checkpoint_only() -> None:
+    detector = RomeDetector()
+    suspect = _suspect_weights()
+
+    assert detector.detect(suspect) == detector.detect_one_checkpoint(suspect)
+    with pytest.raises(TypeError):
+        detector.detect(suspect, suspect)  # type: ignore[call-arg]
+
+
+def test_one_checkpoint_result_does_not_expose_edit_request_metadata() -> None:
+    result = RomeDetector().detect_one_checkpoint(_suspect_weights())
+    serialized_keys = repr(result)
+
+    assert "case_id" not in serialized_keys
+    assert "target_layer" not in serialized_keys
+    assert "configured_layer" not in serialized_keys
+    assert "causal" not in serialized_keys
+    assert "covariance" not in serialized_keys

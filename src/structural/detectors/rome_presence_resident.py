@@ -1,21 +1,19 @@
-"""Direct weight-dictionary adapter for the minimal ROME detector."""
+"""Direct one-checkpoint adapter for the minimal ROME detector."""
 
 from __future__ import annotations
 
 import torch
 
 from src.structural.capture.producers import CaptureContext, capture_weighted_spectrum
-from src.structural.detectors.rome_presence import detect_rome_compatible_edit
 from src.structural.detectors.weighted_spectrum import detect_from_profiles
 
 
 class RomeDetector:
-    """Localize an edit and test its clean-reference low-rank compatibility."""
+    """Compute the M3 profile and localization from one suspect checkpoint."""
 
-    def detect(
+    def detect_one_checkpoint(
         self,
         suspect_proj: dict[int, torch.Tensor],
-        clean_proj: dict[int, torch.Tensor],
     ) -> dict:
         capture = capture_weighted_spectrum(
             CaptureContext(
@@ -28,13 +26,15 @@ class RomeDetector:
                 options={},
             )
         )
-        presence = detect_rome_compatible_edit(suspect_proj, clean_proj)
         return detect_from_profiles(
             capture["profiles"],
             layers=[int(layer) for layer in capture["layers"]],
             trim_fraction=float(capture["trim_fraction"]),
-            clean_reference_presence=presence,
         )
+
+    def detect(self, suspect_proj: dict[int, torch.Tensor]) -> dict:
+        """Compatibility spelling for the one-checkpoint operation."""
+        return self.detect_one_checkpoint(suspect_proj)
 
 
 __all__ = ["RomeDetector"]

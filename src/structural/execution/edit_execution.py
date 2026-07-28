@@ -220,8 +220,6 @@ def run_edit_method(
                 ),
                 changed_weights=dict(outcome.modified_weights),
                 options=options,
-                baseline_proj_weights=baseline_proj,
-                baseline_fc_weights=baseline_fc,
             )
             for capture_name in capture_names:
                 captured_cases[capture_name].append(capture_one(capture_name, capture_context, case_id=case_id))

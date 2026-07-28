@@ -1,11 +1,9 @@
 {
   "cases": [
     {
-      "b0_selected_layer": 5,
       "case_id": "0",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 321.3453369140625,
@@ -13,11 +11,9 @@
       "target_score": 321.3453369140625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "1",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 204.02244567871094,
@@ -25,11 +21,9 @@
       "target_score": 204.02244567871094
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "2",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 105.98851013183594,
@@ -37,11 +31,9 @@
       "target_score": 105.98851013183594
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "3",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 2100.099853515625,
@@ -49,11 +41,9 @@
       "target_score": 2100.099853515625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "4",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 2086.2158203125,
@@ -61,11 +51,9 @@
       "target_score": 2086.2158203125
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "5",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 197.00660705566406,
@@ -73,11 +61,9 @@
       "target_score": 197.00660705566406
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "6",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 251.48451232910156,
@@ -85,11 +71,9 @@
       "target_score": 251.48451232910156
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "7",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 520.179931640625,
@@ -97,11 +81,9 @@
       "target_score": 520.179931640625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "8",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 206.1396026611328,
@@ -109,11 +91,9 @@
       "target_score": 206.1396026611328
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "9",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 448.3434143066406,
@@ -121,11 +101,9 @@
       "target_score": 448.3434143066406
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "10",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 2206.2529296875,
@@ -133,11 +111,9 @@
       "target_score": 2206.2529296875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "11",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1694.9344482421875,
@@ -145,11 +121,9 @@
       "target_score": 1694.9344482421875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "12",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 306.4510498046875,
@@ -157,11 +131,9 @@
       "target_score": 306.4510498046875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "14",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 59.71890640258789,
@@ -169,11 +141,9 @@
       "target_score": 59.71890640258789
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "15",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 318.67462158203125,
@@ -181,11 +151,9 @@
       "target_score": 318.67462158203125
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "16",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 426.9159240722656,
@@ -193,11 +161,9 @@
       "target_score": 426.9159240722656
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "17",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 202.56854248046875,
@@ -205,11 +171,9 @@
       "target_score": 202.56854248046875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "19",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 205.76318359375,
@@ -217,11 +181,9 @@
       "target_score": 205.76318359375
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "20",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 112.79508972167969,
@@ -229,11 +191,9 @@
       "target_score": 112.79508972167969
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "21",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 196.75267028808594,
@@ -241,11 +201,9 @@
       "target_score": 196.75267028808594
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "22",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 315.5979309082031,
@@ -253,11 +211,9 @@
       "target_score": 315.5979309082031
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "23",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 586.612548828125,
@@ -265,11 +221,9 @@
       "target_score": 586.612548828125
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "24",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1567.4095458984375,
@@ -277,11 +231,9 @@
       "target_score": 1567.4095458984375
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "25",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1771.5018310546875,
@@ -289,11 +241,9 @@
       "target_score": 1771.5018310546875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "26",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 470.394775390625,
@@ -301,11 +251,9 @@
       "target_score": 470.394775390625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "27",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 382.87030029296875,
@@ -313,11 +261,9 @@
       "target_score": 382.87030029296875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "28",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 363.06494140625,
@@ -325,11 +271,9 @@
       "target_score": 363.06494140625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "29",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 271.5252380371094,
@@ -337,11 +281,9 @@
       "target_score": 271.5252380371094
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "30",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 271.6428527832031,
@@ -349,11 +291,9 @@
       "target_score": 271.6428527832031
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "31",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 582.858154296875,
@@ -361,11 +301,9 @@
       "target_score": 582.858154296875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "32",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1083.189697265625,
@@ -373,11 +311,9 @@
       "target_score": 1083.189697265625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "33",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 572.861328125,
@@ -385,11 +321,9 @@
       "target_score": 572.861328125
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "34",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 493.6506652832031,
@@ -397,11 +331,9 @@
       "target_score": 493.6506652832031
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "35",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 144.2521514892578,
@@ -409,11 +341,9 @@
       "target_score": 144.2521514892578
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "36",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 181.8352508544922,
@@ -421,11 +351,9 @@
       "target_score": 181.8352508544922
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "38",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1541.7203369140625,
@@ -433,11 +361,9 @@
       "target_score": 1541.7203369140625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "39",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 558.7279663085938,
@@ -445,11 +371,9 @@
       "target_score": 558.7279663085938
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "40",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1576.4869384765625,
@@ -457,11 +381,9 @@
       "target_score": 1576.4869384765625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "41",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1425.2720947265625,
@@ -469,11 +391,9 @@
       "target_score": 1425.2720947265625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "42",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 212.91786193847656,
@@ -481,11 +401,9 @@
       "target_score": 212.91786193847656
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "43",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 285.1993713378906,
@@ -493,11 +411,9 @@
       "target_score": 285.1993713378906
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "44",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 329.7434387207031,
@@ -505,11 +421,9 @@
       "target_score": 329.7434387207031
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "45",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 310.22845458984375,
@@ -517,11 +431,9 @@
       "target_score": 310.22845458984375
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "46",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 436.40924072265625,
@@ -529,11 +441,9 @@
       "target_score": 436.40924072265625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "47",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 380.0955810546875,
@@ -541,11 +451,9 @@
       "target_score": 380.0955810546875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "48",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 536.3994140625,
@@ -553,11 +461,9 @@
       "target_score": 536.3994140625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "49",
       "edit_success": false,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 483.57421875,
@@ -565,11 +471,9 @@
       "target_score": 483.57421875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "50",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 366.9961853027344,
@@ -577,11 +481,9 @@
       "target_score": 366.9961853027344
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "52",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 1662.182373046875,
@@ -589,11 +491,9 @@
       "target_score": 1662.182373046875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "53",
       "edit_success": true,
       "family": "deepseek",
-      "is_rome_compatible": true,
       "model": "deepseek-7b-base",
       "selected_layer": 5,
       "selected_score": 195.55844116210938,
@@ -601,11 +501,9 @@
       "target_score": 195.55844116210938
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "0",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -613,11 +511,9 @@
       "target_score": 2.4448671340942383
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "1",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -625,11 +521,9 @@
       "target_score": 2.4589130878448486
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "2",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -637,11 +531,9 @@
       "target_score": 2.385406494140625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "3",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 10.789653778076172,
@@ -649,11 +541,9 @@
       "target_score": 10.789653778076172
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "4",
       "edit_success": false,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -661,11 +551,9 @@
       "target_score": 3.6272451877593994
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "5",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -673,11 +561,9 @@
       "target_score": 2.459859609603882
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "6",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -685,11 +571,9 @@
       "target_score": 2.402907609939575
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "7",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -697,11 +581,9 @@
       "target_score": 2.4550647735595703
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "8",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 14.366349220275879,
@@ -709,11 +591,9 @@
       "target_score": 14.366349220275879
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "9",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -721,11 +601,9 @@
       "target_score": 2.4525678157806396
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "10",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 11.034149169921875,
@@ -733,11 +611,9 @@
       "target_score": 11.034149169921875
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "11",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -745,11 +621,9 @@
       "target_score": 2.5373921394348145
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "12",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -757,11 +631,9 @@
       "target_score": 2.474215507507324
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "14",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -769,11 +641,9 @@
       "target_score": 2.6651337146759033
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "15",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -781,11 +651,9 @@
       "target_score": 2.6115031242370605
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "16",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 5.97631311416626,
@@ -793,11 +661,9 @@
       "target_score": 5.97631311416626
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "17",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -805,11 +671,9 @@
       "target_score": 2.447190046310425
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "19",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -817,11 +681,9 @@
       "target_score": 2.4354450702667236
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "20",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 15.1031494140625,
@@ -829,11 +691,9 @@
       "target_score": 15.1031494140625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "21",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -841,11 +701,9 @@
       "target_score": 4.283299922943115
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "22",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -853,11 +711,9 @@
       "target_score": 2.590346097946167
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "23",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -865,11 +721,9 @@
       "target_score": 2.416522741317749
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "24",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -877,11 +731,9 @@
       "target_score": 3.06592059135437
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "25",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -889,11 +741,9 @@
       "target_score": 2.451521635055542
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "26",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -901,11 +751,9 @@
       "target_score": 2.439910411834717
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "27",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -913,11 +761,9 @@
       "target_score": 2.4032297134399414
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "28",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -925,11 +771,9 @@
       "target_score": 2.4350333213806152
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "29",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -937,11 +781,9 @@
       "target_score": 2.942678928375244
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "30",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -949,11 +791,9 @@
       "target_score": 2.4217190742492676
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "31",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 16.274492263793945,
@@ -961,11 +801,9 @@
       "target_score": 16.274492263793945
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "32",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -973,11 +811,9 @@
       "target_score": 2.6419572830200195
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "33",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -985,11 +821,9 @@
       "target_score": 5.342197895050049
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "34",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 12.16191577911377,
@@ -997,11 +831,9 @@
       "target_score": 12.16191577911377
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "35",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1009,11 +841,9 @@
       "target_score": 2.5453639030456543
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "36",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1021,11 +851,9 @@
       "target_score": 2.4504997730255127
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "38",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1033,11 +861,9 @@
       "target_score": 2.4767024517059326
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "39",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1045,11 +871,9 @@
       "target_score": 2.427194595336914
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "40",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1057,11 +881,9 @@
       "target_score": 2.451570749282837
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "41",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1069,11 +891,9 @@
       "target_score": 2.468425989151001
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "42",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1081,11 +901,9 @@
       "target_score": 2.4695851802825928
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "43",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1093,11 +911,9 @@
       "target_score": 2.690321922302246
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "44",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1105,11 +921,9 @@
       "target_score": 2.4656360149383545
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "45",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1117,11 +931,9 @@
       "target_score": 2.579981565475464
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "46",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1129,11 +941,9 @@
       "target_score": 2.4030818939208984
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "47",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1141,11 +951,9 @@
       "target_score": 2.429955005645752
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "48",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1153,11 +961,9 @@
       "target_score": 2.437187671661377
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "49",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1165,11 +971,9 @@
       "target_score": 2.4174282550811768
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "50",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 6.191695213317871,
@@ -1177,11 +981,9 @@
       "target_score": 6.191695213317871
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "52",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 9,
       "selected_score": 5.575019836425781,
@@ -1189,11 +991,9 @@
       "target_score": 2.4447429180145264
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "53",
       "edit_success": true,
       "family": "falcon",
-      "is_rome_compatible": true,
       "model": "falcon-7b",
       "selected_layer": 5,
       "selected_score": 11.95702838897705,
@@ -1201,11 +1001,9 @@
       "target_score": 11.95702838897705
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "0",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 12.256909370422363,
@@ -1213,11 +1011,9 @@
       "target_score": 12.256909370422363
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "1",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 13.252995491027832,
@@ -1225,11 +1021,9 @@
       "target_score": 13.252995491027832
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "2",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.983870506286621,
@@ -1237,11 +1031,9 @@
       "target_score": 9.983870506286621
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "3",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 12.496325492858887,
@@ -1249,11 +1041,9 @@
       "target_score": 12.496325492858887
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "4",
       "edit_success": false,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 12.37143611907959,
@@ -1261,11 +1051,9 @@
       "target_score": 12.37143611907959
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "5",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.161253929138184,
@@ -1273,11 +1061,9 @@
       "target_score": 9.161253929138184
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "6",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 6.623167037963867,
@@ -1285,11 +1071,9 @@
       "target_score": 6.623167037963867
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "7",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 8.597180366516113,
@@ -1297,11 +1081,9 @@
       "target_score": 8.597180366516113
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "8",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.619736671447754,
@@ -1309,11 +1091,9 @@
       "target_score": 9.619736671447754
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "9",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 5.301787853240967,
@@ -1321,11 +1101,9 @@
       "target_score": 5.301787853240967
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "10",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 16.065834045410156,
@@ -1333,11 +1111,9 @@
       "target_score": 16.065834045410156
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "11",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 5.832550048828125,
@@ -1345,11 +1121,9 @@
       "target_score": 5.832550048828125
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "12",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 7.752622127532959,
@@ -1357,11 +1131,9 @@
       "target_score": 7.752622127532959
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "14",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.573626518249512,
@@ -1369,11 +1141,9 @@
       "target_score": 9.573626518249512
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "15",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 13.543560981750488,
@@ -1381,11 +1151,9 @@
       "target_score": 13.543560981750488
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "16",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 23.74447250366211,
@@ -1393,11 +1161,9 @@
       "target_score": 23.74447250366211
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "17",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 10.421180725097656,
@@ -1405,11 +1171,9 @@
       "target_score": 10.421180725097656
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "19",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 8.328598022460938,
@@ -1417,11 +1181,9 @@
       "target_score": 8.328598022460938
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "20",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 18.194652557373047,
@@ -1429,11 +1191,9 @@
       "target_score": 18.194652557373047
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "21",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 15.754899978637695,
@@ -1441,11 +1201,9 @@
       "target_score": 15.754899978637695
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "22",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 11.58083724975586,
@@ -1453,11 +1211,9 @@
       "target_score": 11.58083724975586
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "23",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 6.390077114105225,
@@ -1465,11 +1221,9 @@
       "target_score": 6.390077114105225
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "24",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.098882675170898,
@@ -1477,11 +1231,9 @@
       "target_score": 9.098882675170898
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "25",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 10.93726634979248,
@@ -1489,11 +1241,9 @@
       "target_score": 10.93726634979248
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "26",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 18.02068519592285,
@@ -1501,11 +1251,9 @@
       "target_score": 18.02068519592285
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "27",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 7.138923645019531,
@@ -1513,11 +1261,9 @@
       "target_score": 7.138923645019531
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "28",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 16.139070510864258,
@@ -1525,11 +1271,9 @@
       "target_score": 16.139070510864258
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "29",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 10.199576377868652,
@@ -1537,11 +1281,9 @@
       "target_score": 10.199576377868652
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "30",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 7.965015888214111,
@@ -1549,11 +1291,9 @@
       "target_score": 7.965015888214111
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "31",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 16.275650024414062,
@@ -1561,11 +1301,9 @@
       "target_score": 16.275650024414062
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "32",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 11.901849746704102,
@@ -1573,11 +1311,9 @@
       "target_score": 11.901849746704102
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "33",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 7.798532485961914,
@@ -1585,11 +1321,9 @@
       "target_score": 7.798532485961914
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "34",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 12.778436660766602,
@@ -1597,11 +1331,9 @@
       "target_score": 12.778436660766602
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "35",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 8.310824394226074,
@@ -1609,11 +1341,9 @@
       "target_score": 8.310824394226074
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "36",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 10.063775062561035,
@@ -1621,11 +1351,9 @@
       "target_score": 10.063775062561035
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "38",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 14.68743896484375,
@@ -1633,11 +1361,9 @@
       "target_score": 14.68743896484375
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "39",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.518555641174316,
@@ -1645,11 +1371,9 @@
       "target_score": 9.518555641174316
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "40",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 15.758936882019043,
@@ -1657,11 +1381,9 @@
       "target_score": 15.758936882019043
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "41",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.126239776611328,
@@ -1669,11 +1391,9 @@
       "target_score": 9.126239776611328
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "42",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 5.02000093460083,
@@ -1681,11 +1401,9 @@
       "target_score": 5.02000093460083
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "43",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 18.03921127319336,
@@ -1693,11 +1411,9 @@
       "target_score": 18.03921127319336
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "44",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 5.705408573150635,
@@ -1705,11 +1421,9 @@
       "target_score": 5.705408573150635
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "45",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 2,
       "selected_score": 3.7588095664978027,
@@ -1717,11 +1431,9 @@
       "target_score": 3.669257164001465
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "46",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 7.709591865539551,
@@ -1729,11 +1441,9 @@
       "target_score": 7.709591865539551
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "47",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 8.838639259338379,
@@ -1741,11 +1451,9 @@
       "target_score": 8.838639259338379
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "48",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 12.079299926757812,
@@ -1753,11 +1461,9 @@
       "target_score": 12.079299926757812
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "49",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.350893020629883,
@@ -1765,11 +1471,9 @@
       "target_score": 9.350893020629883
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "50",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.2222261428833,
@@ -1777,11 +1481,9 @@
       "target_score": 9.2222261428833
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "52",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 9.876363754272461,
@@ -1789,11 +1491,9 @@
       "target_score": 9.876363754272461
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "53",
       "edit_success": true,
       "family": "gpt-j",
-      "is_rome_compatible": true,
       "model": "gpt-j-6b",
       "selected_layer": 5,
       "selected_score": 14.13670539855957,
@@ -1801,11 +1501,9 @@
       "target_score": 14.13670539855957
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "0",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.6830766201019287,
@@ -1813,11 +1511,9 @@
       "target_score": 3.6830766201019287
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "1",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.010466575622559,
@@ -1825,11 +1521,9 @@
       "target_score": 4.010466575622559
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "2",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.604630947113037,
@@ -1837,11 +1531,9 @@
       "target_score": 5.604630947113037
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "3",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 6.899333953857422,
@@ -1849,11 +1541,9 @@
       "target_score": 6.899333953857422
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "4",
       "edit_success": false,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 42,
       "selected_score": 3.2169530391693115,
@@ -1861,11 +1551,9 @@
       "target_score": 0.8843747973442078
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "5",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.4014317989349365,
@@ -1873,11 +1561,9 @@
       "target_score": 3.4014317989349365
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "6",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 42,
       "selected_score": 3.2169530391693115,
@@ -1885,11 +1571,9 @@
       "target_score": 3.027571439743042
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "7",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.010732173919678,
@@ -1897,11 +1581,9 @@
       "target_score": 5.010732173919678
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "8",
       "edit_success": false,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 42,
       "selected_score": 3.2169530391693115,
@@ -1909,11 +1591,9 @@
       "target_score": 2.487973928451538
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "9",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.0000152587890625,
@@ -1921,11 +1601,9 @@
       "target_score": 4.0000152587890625
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "10",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 6.460646152496338,
@@ -1933,11 +1611,9 @@
       "target_score": 6.460646152496338
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "11",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.117424011230469,
@@ -1945,11 +1621,9 @@
       "target_score": 4.117424011230469
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "12",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.853569984436035,
@@ -1957,11 +1631,9 @@
       "target_score": 3.853569984436035
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "14",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.352865695953369,
@@ -1969,11 +1641,9 @@
       "target_score": 5.352865695953369
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "15",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.399778366088867,
@@ -1981,11 +1651,9 @@
       "target_score": 5.399778366088867
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "16",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 8.083921432495117,
@@ -1993,11 +1661,9 @@
       "target_score": 8.083921432495117
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "17",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.665567398071289,
@@ -2005,11 +1671,9 @@
       "target_score": 4.665567398071289
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "19",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.458282470703125,
@@ -2017,11 +1681,9 @@
       "target_score": 3.458282470703125
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "20",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.8148322105407715,
@@ -2029,11 +1691,9 @@
       "target_score": 5.8148322105407715
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "21",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.177140712738037,
@@ -2041,11 +1701,9 @@
       "target_score": 5.177140712738037
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "22",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 7.143712043762207,
@@ -2053,11 +1711,9 @@
       "target_score": 7.143712043762207
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "23",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.463146924972534,
@@ -2065,11 +1721,9 @@
       "target_score": 3.463146924972534
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "24",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.675840377807617,
@@ -2077,11 +1731,9 @@
       "target_score": 3.675840377807617
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "25",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 6.909850597381592,
@@ -2089,11 +1741,9 @@
       "target_score": 6.909850597381592
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "26",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.436898231506348,
@@ -2101,11 +1751,9 @@
       "target_score": 5.436898231506348
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "27",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.094994068145752,
@@ -2113,11 +1761,9 @@
       "target_score": 5.094994068145752
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "28",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.833002090454102,
@@ -2125,11 +1771,9 @@
       "target_score": 4.833002090454102
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "29",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.6444520950317383,
@@ -2137,11 +1781,9 @@
       "target_score": 3.6444520950317383
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "30",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.9305689334869385,
@@ -2149,11 +1791,9 @@
       "target_score": 3.9305689334869385
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "31",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.266124725341797,
@@ -2161,11 +1801,9 @@
       "target_score": 5.266124725341797
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "32",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.171158790588379,
@@ -2173,11 +1811,9 @@
       "target_score": 5.171158790588379
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "33",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.140923023223877,
@@ -2185,11 +1821,9 @@
       "target_score": 4.140923023223877
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "34",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.486785411834717,
@@ -2197,11 +1831,9 @@
       "target_score": 5.486785411834717
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "35",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 3.4876842498779297,
@@ -2209,11 +1841,9 @@
       "target_score": 3.4876842498779297
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "36",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.827721118927002,
@@ -2221,11 +1851,9 @@
       "target_score": 4.827721118927002
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "38",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.725010871887207,
@@ -2233,11 +1861,9 @@
       "target_score": 4.725010871887207
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "39",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.436980724334717,
@@ -2245,11 +1871,9 @@
       "target_score": 4.436980724334717
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "40",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.937649726867676,
@@ -2257,11 +1881,9 @@
       "target_score": 5.937649726867676
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "41",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.712605953216553,
@@ -2269,11 +1891,9 @@
       "target_score": 4.712605953216553
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "42",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.69556999206543,
@@ -2281,11 +1901,9 @@
       "target_score": 4.69556999206543
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "43",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.6991400718688965,
@@ -2293,11 +1911,9 @@
       "target_score": 5.6991400718688965
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "44",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.325052261352539,
@@ -2305,11 +1921,9 @@
       "target_score": 5.325052261352539
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "45",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.0228986740112305,
@@ -2317,11 +1931,9 @@
       "target_score": 4.0228986740112305
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "46",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.297791004180908,
@@ -2329,11 +1941,9 @@
       "target_score": 5.297791004180908
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "47",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.845620632171631,
@@ -2341,11 +1951,9 @@
       "target_score": 4.845620632171631
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "48",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 6.254870414733887,
@@ -2353,11 +1961,9 @@
       "target_score": 6.254870414733887
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "49",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.464160919189453,
@@ -2365,11 +1971,9 @@
       "target_score": 5.464160919189453
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "50",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 5.041737079620361,
@@ -2377,11 +1981,9 @@
       "target_score": 5.041737079620361
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "52",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 4.1382856369018555,
@@ -2389,11 +1991,9 @@
       "target_score": 4.1382856369018555
     },
     {
-      "b0_selected_layer": 16,
       "case_id": "53",
       "edit_success": true,
       "family": "gpt2",
-      "is_rome_compatible": true,
       "model": "gpt2-xl",
       "selected_layer": 16,
       "selected_score": 7.093858242034912,
@@ -2401,11 +2001,9 @@
       "target_score": 7.093858242034912
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "0",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 469.5931091308594,
@@ -2413,11 +2011,9 @@
       "target_score": 469.5931091308594
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "1",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 936.125732421875,
@@ -2425,11 +2021,9 @@
       "target_score": 936.125732421875
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "2",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 939.0919189453125,
@@ -2437,11 +2031,9 @@
       "target_score": 939.0919189453125
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "3",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 433.0307312011719,
@@ -2449,11 +2041,9 @@
       "target_score": 433.0307312011719
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "4",
       "edit_success": false,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 458.15167236328125,
@@ -2461,11 +2051,9 @@
       "target_score": 458.15167236328125
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "5",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 635.0505981445312,
@@ -2473,11 +2061,9 @@
       "target_score": 635.0505981445312
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "6",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 798.896484375,
@@ -2485,11 +2071,9 @@
       "target_score": 798.896484375
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "7",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 449.8262023925781,
@@ -2497,11 +2081,9 @@
       "target_score": 449.8262023925781
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "8",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 512.5731201171875,
@@ -2509,11 +2091,9 @@
       "target_score": 512.5731201171875
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "9",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 696.2554321289062,
@@ -2521,11 +2101,9 @@
       "target_score": 696.2554321289062
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "10",
       "edit_success": false,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 385.94281005859375,
@@ -2533,11 +2111,9 @@
       "target_score": 385.94281005859375
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "11",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 642.4444580078125,
@@ -2545,11 +2121,9 @@
       "target_score": 642.4444580078125
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "12",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 441.2401428222656,
@@ -2557,11 +2131,9 @@
       "target_score": 441.2401428222656
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "14",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 453.2738952636719,
@@ -2569,11 +2141,9 @@
       "target_score": 453.2738952636719
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "15",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 370.0035400390625,
@@ -2581,11 +2151,9 @@
       "target_score": 370.0035400390625
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "16",
       "edit_success": false,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 503.5032653808594,
@@ -2593,11 +2161,9 @@
       "target_score": 503.5032653808594
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "17",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 974.759521484375,
@@ -2605,11 +2171,9 @@
       "target_score": 974.759521484375
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "19",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 1209.8338623046875,
@@ -2617,11 +2181,9 @@
       "target_score": 1209.8338623046875
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "20",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 1339.651611328125,
@@ -2629,11 +2191,9 @@
       "target_score": 1339.651611328125
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "21",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 469.54449462890625,
@@ -2641,11 +2201,9 @@
       "target_score": 469.54449462890625
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "22",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 713.5148315429688,
@@ -2653,11 +2211,9 @@
       "target_score": 713.5148315429688
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "23",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 585.3489379882812,
@@ -2665,11 +2221,9 @@
       "target_score": 585.3489379882812
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "24",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 467.98162841796875,
@@ -2677,11 +2231,9 @@
       "target_score": 467.98162841796875
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "25",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 534.8865356445312,
@@ -2689,11 +2241,9 @@
       "target_score": 534.8865356445312
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "26",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 477.9571838378906,
@@ -2701,11 +2251,9 @@
       "target_score": 477.9571838378906
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "27",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 471.2368469238281,
@@ -2713,11 +2261,9 @@
       "target_score": 471.2368469238281
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "28",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 1325.9892578125,
@@ -2725,11 +2271,9 @@
       "target_score": 1325.9892578125
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "29",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 375.7344665527344,
@@ -2737,11 +2281,9 @@
       "target_score": 375.7344665527344
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "30",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 466.09942626953125,
@@ -2749,11 +2291,9 @@
       "target_score": 466.09942626953125
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "31",
       "edit_success": false,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 419.5943298339844,
@@ -2761,11 +2301,9 @@
       "target_score": 419.5943298339844
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "32",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 679.2966918945312,
@@ -2773,11 +2311,9 @@
       "target_score": 679.2966918945312
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "33",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 556.3384399414062,
@@ -2785,11 +2321,9 @@
       "target_score": 556.3384399414062
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "34",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 594.931884765625,
@@ -2797,11 +2331,9 @@
       "target_score": 594.931884765625
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "35",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 446.6726379394531,
@@ -2809,11 +2341,9 @@
       "target_score": 446.6726379394531
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "36",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 812.7545776367188,
@@ -2821,11 +2351,9 @@
       "target_score": 812.7545776367188
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "38",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 583.3511962890625,
@@ -2833,11 +2361,9 @@
       "target_score": 583.3511962890625
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "39",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 422.0474853515625,
@@ -2845,11 +2371,9 @@
       "target_score": 422.0474853515625
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "40",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 461.77587890625,
@@ -2857,11 +2381,9 @@
       "target_score": 461.77587890625
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "41",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 235.75962829589844,
@@ -2869,11 +2391,9 @@
       "target_score": 235.75962829589844
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "42",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 901.572021484375,
@@ -2881,11 +2401,9 @@
       "target_score": 901.572021484375
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "43",
       "edit_success": false,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 388.31829833984375,
@@ -2893,11 +2411,9 @@
       "target_score": 388.31829833984375
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "44",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 799.5343627929688,
@@ -2905,11 +2421,9 @@
       "target_score": 799.5343627929688
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "45",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 671.7249145507812,
@@ -2917,11 +2431,9 @@
       "target_score": 671.7249145507812
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "46",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 1247.9725341796875,
@@ -2929,11 +2441,9 @@
       "target_score": 1247.9725341796875
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "47",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 567.2598266601562,
@@ -2941,11 +2451,9 @@
       "target_score": 567.2598266601562
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "48",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 505.4347229003906,
@@ -2953,11 +2461,9 @@
       "target_score": 505.4347229003906
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "49",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 430.3854064941406,
@@ -2965,11 +2471,9 @@
       "target_score": 430.3854064941406
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "50",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 1170.4542236328125,
@@ -2977,11 +2481,9 @@
       "target_score": 1170.4542236328125
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "52",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 474.1256408691406,
@@ -2989,11 +2491,9 @@
       "target_score": 474.1256408691406
     },
     {
-      "b0_selected_layer": 10,
       "case_id": "53",
       "edit_success": true,
       "family": "granite",
-      "is_rome_compatible": true,
       "model": "granite4-micro",
       "selected_layer": 10,
       "selected_score": 997.865234375,
@@ -3001,11 +2501,9 @@
       "target_score": 997.865234375
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "0",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 20.782691955566406,
@@ -3013,11 +2511,9 @@
       "target_score": 20.782691955566406
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "1",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 16.510210037231445,
@@ -3025,11 +2521,9 @@
       "target_score": 16.510210037231445
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "2",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 18.848270416259766,
@@ -3037,11 +2531,9 @@
       "target_score": 18.848270416259766
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "3",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 24.672042846679688,
@@ -3049,11 +2541,9 @@
       "target_score": 24.672042846679688
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "4",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 34.14546585083008,
@@ -3061,11 +2551,9 @@
       "target_score": 34.14546585083008
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "5",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 17.78363037109375,
@@ -3073,11 +2561,9 @@
       "target_score": 17.78363037109375
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "6",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 14.127401351928711,
@@ -3085,11 +2571,9 @@
       "target_score": 14.127401351928711
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "7",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 21.3586368560791,
@@ -3097,11 +2581,9 @@
       "target_score": 21.3586368560791
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "8",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 30.389169692993164,
@@ -3109,11 +2591,9 @@
       "target_score": 30.389169692993164
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "9",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 14.148449897766113,
@@ -3121,11 +2601,9 @@
       "target_score": 14.148449897766113
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "10",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 30.617816925048828,
@@ -3133,11 +2611,9 @@
       "target_score": 30.617816925048828
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "11",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 17.257606506347656,
@@ -3145,11 +2621,9 @@
       "target_score": 17.257606506347656
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "12",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 15.809144020080566,
@@ -3157,11 +2631,9 @@
       "target_score": 15.809144020080566
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "14",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 17.36080551147461,
@@ -3169,11 +2641,9 @@
       "target_score": 17.36080551147461
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "15",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 21.762231826782227,
@@ -3181,11 +2651,9 @@
       "target_score": 21.762231826782227
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "16",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 26.545148849487305,
@@ -3193,11 +2661,9 @@
       "target_score": 26.545148849487305
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "17",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 22.15930938720703,
@@ -3205,11 +2671,9 @@
       "target_score": 22.15930938720703
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "19",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 4,
       "selected_score": 4.225554466247559,
@@ -3217,11 +2681,9 @@
       "target_score": 4.015959739685059
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "20",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 4,
       "selected_score": 4.224391460418701,
@@ -3229,11 +2691,9 @@
       "target_score": 4.009563446044922
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "21",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 23.583847045898438,
@@ -3241,11 +2701,9 @@
       "target_score": 23.583847045898438
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "22",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 17.72053337097168,
@@ -3253,11 +2711,9 @@
       "target_score": 17.72053337097168
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "23",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 22.41806983947754,
@@ -3265,11 +2721,9 @@
       "target_score": 22.41806983947754
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "24",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 21.02308464050293,
@@ -3277,11 +2731,9 @@
       "target_score": 21.02308464050293
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "25",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 20.1070613861084,
@@ -3289,11 +2741,9 @@
       "target_score": 20.1070613861084
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "26",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": false,
       "model": "llama2-7b",
       "selected_layer": 4,
       "selected_score": 4.224819183349609,
@@ -3301,11 +2751,9 @@
       "target_score": 4.006443500518799
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "27",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 23.47615623474121,
@@ -3313,11 +2761,9 @@
       "target_score": 23.47615623474121
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "28",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 19.033462524414062,
@@ -3325,11 +2771,9 @@
       "target_score": 19.033462524414062
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "29",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 14.952795028686523,
@@ -3337,11 +2781,9 @@
       "target_score": 14.952795028686523
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "30",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 13.75934886932373,
@@ -3349,11 +2791,9 @@
       "target_score": 13.75934886932373
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "31",
       "edit_success": false,
       "family": "llama",
-      "is_rome_compatible": false,
       "model": "llama2-7b",
       "selected_layer": 4,
       "selected_score": 4.224820613861084,
@@ -3361,11 +2801,9 @@
       "target_score": 4.006441116333008
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "32",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 18.73766326904297,
@@ -3373,11 +2811,9 @@
       "target_score": 18.73766326904297
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "33",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 24.584087371826172,
@@ -3385,11 +2821,9 @@
       "target_score": 24.584087371826172
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "34",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 19.69860076904297,
@@ -3397,11 +2831,9 @@
       "target_score": 19.69860076904297
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "35",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 16.11460304260254,
@@ -3409,11 +2841,9 @@
       "target_score": 16.11460304260254
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "36",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 17.544172286987305,
@@ -3421,11 +2851,9 @@
       "target_score": 17.544172286987305
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "38",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 20.766889572143555,
@@ -3433,11 +2861,9 @@
       "target_score": 20.766889572143555
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "39",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 15.996292114257812,
@@ -3445,11 +2871,9 @@
       "target_score": 15.996292114257812
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "40",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 23.652740478515625,
@@ -3457,11 +2881,9 @@
       "target_score": 23.652740478515625
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "41",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 20.76456069946289,
@@ -3469,11 +2891,9 @@
       "target_score": 20.76456069946289
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "42",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 16.547225952148438,
@@ -3481,11 +2901,9 @@
       "target_score": 16.547225952148438
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "43",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 17.798025131225586,
@@ -3493,11 +2911,9 @@
       "target_score": 17.798025131225586
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "44",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 18.04351043701172,
@@ -3505,11 +2921,9 @@
       "target_score": 18.04351043701172
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "45",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 18.338361740112305,
@@ -3517,11 +2931,9 @@
       "target_score": 18.338361740112305
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "46",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 22.516841888427734,
@@ -3529,11 +2941,9 @@
       "target_score": 22.516841888427734
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "47",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 22.83748435974121,
@@ -3541,11 +2951,9 @@
       "target_score": 22.83748435974121
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "48",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 16.78776741027832,
@@ -3553,11 +2961,9 @@
       "target_score": 16.78776741027832
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "49",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 17.288225173950195,
@@ -3565,11 +2971,9 @@
       "target_score": 17.288225173950195
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "50",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 21.893747329711914,
@@ -3577,11 +2981,9 @@
       "target_score": 21.893747329711914
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "52",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 18.91779136657715,
@@ -3589,11 +2991,9 @@
       "target_score": 18.91779136657715
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "53",
       "edit_success": true,
       "family": "llama",
-      "is_rome_compatible": true,
       "model": "llama2-7b",
       "selected_layer": 5,
       "selected_score": 11.614082336425781,
@@ -3601,11 +3001,9 @@
       "target_score": 11.614082336425781
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "0",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.633407592773438,
@@ -3613,11 +3011,9 @@
       "target_score": 10.633407592773438
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "1",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 11.670005798339844,
@@ -3625,11 +3021,9 @@
       "target_score": 11.670005798339844
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "2",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.126497268676758,
@@ -3637,11 +3031,9 @@
       "target_score": 8.126497268676758
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "3",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.307877540588379,
@@ -3649,11 +3041,9 @@
       "target_score": 10.307877540588379
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "4",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 12.728127479553223,
@@ -3661,11 +3051,9 @@
       "target_score": 12.728127479553223
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "5",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.311027526855469,
@@ -3673,11 +3061,9 @@
       "target_score": 9.311027526855469
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "6",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 11.120532035827637,
@@ -3685,11 +3071,9 @@
       "target_score": 11.120532035827637
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "7",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 7.969674587249756,
@@ -3697,11 +3081,9 @@
       "target_score": 7.969674587249756
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "8",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.873542785644531,
@@ -3709,11 +3091,9 @@
       "target_score": 8.873542785644531
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "9",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.571718215942383,
@@ -3721,11 +3101,9 @@
       "target_score": 8.571718215942383
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "10",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.966958045959473,
@@ -3733,11 +3111,9 @@
       "target_score": 9.966958045959473
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "11",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.224221229553223,
@@ -3745,11 +3121,9 @@
       "target_score": 10.224221229553223
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "12",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.202609062194824,
@@ -3757,11 +3131,9 @@
       "target_score": 8.202609062194824
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "14",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.63720703125,
@@ -3769,11 +3141,9 @@
       "target_score": 9.63720703125
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "15",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.571890830993652,
@@ -3781,11 +3151,9 @@
       "target_score": 9.571890830993652
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "16",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 11.570359230041504,
@@ -3793,11 +3161,9 @@
       "target_score": 11.570359230041504
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "17",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.494698524475098,
@@ -3805,11 +3171,9 @@
       "target_score": 8.494698524475098
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "19",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.366277694702148,
@@ -3817,11 +3181,9 @@
       "target_score": 9.366277694702148
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "20",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 12.777204513549805,
@@ -3829,11 +3191,9 @@
       "target_score": 12.777204513549805
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "21",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 7,
       "selected_score": 6.864054203033447,
@@ -3841,11 +3201,9 @@
       "target_score": 4.807619571685791
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "22",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 7.967475891113281,
@@ -3853,11 +3211,9 @@
       "target_score": 7.967475891113281
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "23",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.955724716186523,
@@ -3865,11 +3221,9 @@
       "target_score": 8.955724716186523
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "24",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.194769859313965,
@@ -3877,11 +3231,9 @@
       "target_score": 9.194769859313965
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "25",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.085334777832031,
@@ -3889,11 +3241,9 @@
       "target_score": 10.085334777832031
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "26",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.937265396118164,
@@ -3901,11 +3251,9 @@
       "target_score": 9.937265396118164
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "27",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.132275581359863,
@@ -3913,11 +3261,9 @@
       "target_score": 9.132275581359863
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "28",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.617335319519043,
@@ -3925,11 +3271,9 @@
       "target_score": 9.617335319519043
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "29",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.32469654083252,
@@ -3937,11 +3281,9 @@
       "target_score": 10.32469654083252
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "30",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.898209571838379,
@@ -3949,11 +3291,9 @@
       "target_score": 8.898209571838379
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "31",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.475170135498047,
@@ -3961,11 +3301,9 @@
       "target_score": 9.475170135498047
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "32",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.105857849121094,
@@ -3973,11 +3311,9 @@
       "target_score": 10.105857849121094
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "33",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.420174598693848,
@@ -3985,11 +3321,9 @@
       "target_score": 9.420174598693848
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "34",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.258313179016113,
@@ -3997,11 +3331,9 @@
       "target_score": 10.258313179016113
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "35",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.577739715576172,
@@ -4009,11 +3341,9 @@
       "target_score": 8.577739715576172
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "36",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.72340202331543,
@@ -4021,11 +3351,9 @@
       "target_score": 9.72340202331543
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "38",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 7,
       "selected_score": 6.864054203033447,
@@ -4033,11 +3361,9 @@
       "target_score": 6.487261772155762
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "39",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.544462203979492,
@@ -4045,11 +3371,9 @@
       "target_score": 8.544462203979492
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "40",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.232377052307129,
@@ -4057,11 +3381,9 @@
       "target_score": 10.232377052307129
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "41",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.394429206848145,
@@ -4069,11 +3391,9 @@
       "target_score": 9.394429206848145
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "42",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.803763389587402,
@@ -4081,11 +3401,9 @@
       "target_score": 8.803763389587402
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "43",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.925008773803711,
@@ -4093,11 +3411,9 @@
       "target_score": 8.925008773803711
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "44",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 7,
       "selected_score": 6.864054203033447,
@@ -4105,11 +3421,9 @@
       "target_score": 4.439469337463379
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "45",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.893105506896973,
@@ -4117,11 +3431,9 @@
       "target_score": 9.893105506896973
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "46",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.294327735900879,
@@ -4129,11 +3441,9 @@
       "target_score": 9.294327735900879
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "47",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.115397453308105,
@@ -4141,11 +3451,9 @@
       "target_score": 9.115397453308105
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "48",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 8.788061141967773,
@@ -4153,11 +3461,9 @@
       "target_score": 8.788061141967773
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "49",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 7,
       "selected_score": 6.864054203033447,
@@ -4165,11 +3471,9 @@
       "target_score": 5.835083484649658
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "50",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 9.858161926269531,
@@ -4177,11 +3481,9 @@
       "target_score": 9.858161926269531
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "52",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 7.969171524047852,
@@ -4189,11 +3491,9 @@
       "target_score": 7.969171524047852
     },
     {
-      "b0_selected_layer": 5,
       "case_id": "53",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.1",
       "selected_layer": 5,
       "selected_score": 10.701528549194336,
@@ -4201,11 +3501,9 @@
       "target_score": 10.701528549194336
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "0",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 11.288079261779785,
@@ -4213,11 +3511,9 @@
       "target_score": 11.288079261779785
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "1",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.921496391296387,
@@ -4225,11 +3521,9 @@
       "target_score": 3.789905548095703
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "2",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 10.508221626281738,
@@ -4237,11 +3531,9 @@
       "target_score": 10.508221626281738
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "3",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.913671970367432,
@@ -4249,11 +3541,9 @@
       "target_score": 3.4090123176574707
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "4",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 17.076765060424805,
@@ -4261,11 +3551,9 @@
       "target_score": 17.076765060424805
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "5",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 10.822550773620605,
@@ -4273,11 +3561,9 @@
       "target_score": 10.822550773620605
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "6",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.967126846313477,
@@ -4285,11 +3571,9 @@
       "target_score": 9.967126846313477
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "7",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 8.924635887145996,
@@ -4297,11 +3581,9 @@
       "target_score": 8.924635887145996
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "8",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 11.98869800567627,
@@ -4309,11 +3591,9 @@
       "target_score": 11.98869800567627
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "9",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 10.256120681762695,
@@ -4321,11 +3601,9 @@
       "target_score": 10.256120681762695
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "10",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.75696849822998,
@@ -4333,11 +3611,9 @@
       "target_score": 9.75696849822998
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "11",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 11.842934608459473,
@@ -4345,11 +3621,9 @@
       "target_score": 11.842934608459473
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "12",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 10.756675720214844,
@@ -4357,11 +3631,9 @@
       "target_score": 10.756675720214844
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "14",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.278637886047363,
@@ -4369,11 +3641,9 @@
       "target_score": 9.278637886047363
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "15",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 8.85618782043457,
@@ -4381,11 +3651,9 @@
       "target_score": 8.85618782043457
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "16",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.141268730163574,
@@ -4393,11 +3661,9 @@
       "target_score": 9.141268730163574
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "17",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.702471733093262,
@@ -4405,11 +3671,9 @@
       "target_score": 9.702471733093262
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "19",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.66362190246582,
@@ -4417,11 +3681,9 @@
       "target_score": 9.66362190246582
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "20",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 12.99791145324707,
@@ -4429,11 +3691,9 @@
       "target_score": 12.99791145324707
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "21",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.920905113220215,
@@ -4441,11 +3701,9 @@
       "target_score": 5.767937660217285
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "22",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 8.826122283935547,
@@ -4453,11 +3711,9 @@
       "target_score": 8.826122283935547
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "23",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.908022880554199,
@@ -4465,11 +3721,9 @@
       "target_score": 3.443959951400757
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "24",
       "edit_success": false,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.70936107635498,
@@ -4477,11 +3731,9 @@
       "target_score": 9.70936107635498
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "25",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 8.155452728271484,
@@ -4489,11 +3741,9 @@
       "target_score": 8.155452728271484
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "26",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 7.216982364654541,
@@ -4501,11 +3751,9 @@
       "target_score": 7.216982364654541
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "27",
       "edit_success": false,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 13.054116249084473,
@@ -4513,11 +3761,9 @@
       "target_score": 13.054116249084473
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "28",
       "edit_success": false,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 10.571314811706543,
@@ -4525,11 +3771,9 @@
       "target_score": 10.571314811706543
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "29",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.94758415222168,
@@ -4537,11 +3781,9 @@
       "target_score": 9.94758415222168
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "30",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 11.230843544006348,
@@ -4549,11 +3791,9 @@
       "target_score": 11.230843544006348
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "31",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 8.55746078491211,
@@ -4561,11 +3801,9 @@
       "target_score": 8.55746078491211
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "32",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.367363929748535,
@@ -4573,11 +3811,9 @@
       "target_score": 9.367363929748535
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "33",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.154767990112305,
@@ -4585,11 +3821,9 @@
       "target_score": 9.154767990112305
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "34",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 11.255036354064941,
@@ -4597,11 +3831,9 @@
       "target_score": 11.255036354064941
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "35",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.8974833488464355,
@@ -4609,11 +3841,9 @@
       "target_score": 3.6789674758911133
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "36",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.924217700958252,
@@ -4621,11 +3851,9 @@
       "target_score": 5.392184734344482
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "38",
       "edit_success": false,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 7.803584575653076,
@@ -4633,11 +3861,9 @@
       "target_score": 7.803584575653076
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "39",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.390979766845703,
@@ -4645,11 +3871,9 @@
       "target_score": 9.390979766845703
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "40",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 11.64229965209961,
@@ -4657,11 +3881,9 @@
       "target_score": 11.64229965209961
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "41",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.742151260375977,
@@ -4669,11 +3891,9 @@
       "target_score": 9.742151260375977
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "42",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.64968490600586,
@@ -4681,11 +3901,9 @@
       "target_score": 9.64968490600586
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "43",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 10.382673263549805,
@@ -4693,11 +3911,9 @@
       "target_score": 10.382673263549805
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "44",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.918694019317627,
@@ -4705,11 +3921,9 @@
       "target_score": 3.394559621810913
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "45",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.269124031066895,
@@ -4717,11 +3931,9 @@
       "target_score": 9.269124031066895
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "46",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.575621604919434,
@@ -4729,11 +3941,9 @@
       "target_score": 9.575621604919434
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "47",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.912054538726807,
@@ -4741,11 +3951,9 @@
       "target_score": 4.979767322540283
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "48",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 10.225264549255371,
@@ -4753,11 +3961,9 @@
       "target_score": 10.225264549255371
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "49",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 6,
       "selected_score": 9.384857177734375,
@@ -4765,11 +3971,9 @@
       "target_score": 9.384857177734375
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "50",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.912417888641357,
@@ -4777,11 +3981,9 @@
       "target_score": 3.6092348098754883
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "52",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.899585247039795,
@@ -4789,11 +3991,9 @@
       "target_score": 3.8341588973999023
     },
     {
-      "b0_selected_layer": 6,
       "case_id": "53",
       "edit_success": true,
       "family": "mistral",
-      "is_rome_compatible": true,
       "model": "mistral-7b-v0.3",
       "selected_layer": 7,
       "selected_score": 6.918771743774414,
@@ -4801,11 +4001,9 @@
       "target_score": 3.4573700428009033
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "0",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.9573845863342285,
@@ -4813,11 +4011,9 @@
       "target_score": 4.9573845863342285
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "1",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.205796241760254,
@@ -4825,11 +4021,9 @@
       "target_score": 5.205796241760254
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "2",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.152916431427002,
@@ -4837,11 +4031,9 @@
       "target_score": 4.152916431427002
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "3",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 7.376227378845215,
@@ -4849,11 +4041,9 @@
       "target_score": 7.376227378845215
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "4",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 6.3063764572143555,
@@ -4861,11 +4051,9 @@
       "target_score": 6.3063764572143555
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "5",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 3.1260287761688232,
@@ -4873,11 +4061,9 @@
       "target_score": 3.1260287761688232
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "6",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 1.9841910600662231,
@@ -4885,11 +4071,9 @@
       "target_score": 1.9841910600662231
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "7",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 6.992123603820801,
@@ -4897,11 +4081,9 @@
       "target_score": 6.992123603820801
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "8",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.931702136993408,
@@ -4909,11 +4091,9 @@
       "target_score": 5.931702136993408
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "9",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 2.862227439880371,
@@ -4921,11 +4101,9 @@
       "target_score": 2.862227439880371
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "10",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 7.228300094604492,
@@ -4933,11 +4111,9 @@
       "target_score": 7.228300094604492
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "11",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 2.392465829849243,
@@ -4945,11 +4121,9 @@
       "target_score": 2.392465829849243
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "12",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.314149379730225,
@@ -4957,11 +4131,9 @@
       "target_score": 4.314149379730225
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "14",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.429663181304932,
@@ -4969,11 +4141,9 @@
       "target_score": 4.429663181304932
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "15",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 6.614236831665039,
@@ -4981,11 +4151,9 @@
       "target_score": 6.614236831665039
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "16",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.632913589477539,
@@ -4993,11 +4161,9 @@
       "target_score": 5.632913589477539
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "17",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.3739213943481445,
@@ -5005,11 +4171,9 @@
       "target_score": 5.3739213943481445
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "19",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.038759708404541,
@@ -5017,11 +4181,9 @@
       "target_score": 4.038759708404541
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "20",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 7.315969467163086,
@@ -5029,11 +4191,9 @@
       "target_score": 7.315969467163086
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "21",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 6.433565616607666,
@@ -5041,11 +4201,9 @@
       "target_score": 6.433565616607666
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "22",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 2.1574323177337646,
@@ -5053,11 +4211,9 @@
       "target_score": 2.1574323177337646
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "23",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 3.7801284790039062,
@@ -5065,11 +4221,9 @@
       "target_score": 3.7801284790039062
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "24",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.226150035858154,
@@ -5077,11 +4231,9 @@
       "target_score": 5.226150035858154
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "25",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 6.851650238037109,
@@ -5089,11 +4241,9 @@
       "target_score": 6.851650238037109
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "26",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.18648624420166,
@@ -5101,11 +4251,9 @@
       "target_score": 5.18648624420166
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "27",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 2.4569756984710693,
@@ -5113,11 +4261,9 @@
       "target_score": 2.4569756984710693
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "28",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.74267578125,
@@ -5125,11 +4271,9 @@
       "target_score": 5.74267578125
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "29",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.803289413452148,
@@ -5137,11 +4281,9 @@
       "target_score": 4.803289413452148
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "30",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.803476810455322,
@@ -5149,11 +4291,9 @@
       "target_score": 4.803476810455322
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "31",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 8.549480438232422,
@@ -5161,11 +4301,9 @@
       "target_score": 8.549480438232422
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "32",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.663747787475586,
@@ -5173,11 +4311,9 @@
       "target_score": 4.663747787475586
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "33",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.664187431335449,
@@ -5185,11 +4321,9 @@
       "target_score": 4.664187431335449
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "34",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.726594924926758,
@@ -5197,11 +4331,9 @@
       "target_score": 5.726594924926758
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "35",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.989704608917236,
@@ -5209,11 +4341,9 @@
       "target_score": 4.989704608917236
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "36",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 2.149498224258423,
@@ -5221,11 +4351,9 @@
       "target_score": 2.149498224258423
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "38",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 6.3569536209106445,
@@ -5233,11 +4361,9 @@
       "target_score": 6.3569536209106445
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "39",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.901054859161377,
@@ -5245,11 +4371,9 @@
       "target_score": 5.901054859161377
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "40",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.450369358062744,
@@ -5257,11 +4381,9 @@
       "target_score": 4.450369358062744
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "41",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.552155017852783,
@@ -5269,11 +4391,9 @@
       "target_score": 4.552155017852783
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "42",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.613050937652588,
@@ -5281,11 +4401,9 @@
       "target_score": 4.613050937652588
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "43",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 8.42307186126709,
@@ -5293,11 +4411,9 @@
       "target_score": 8.42307186126709
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "44",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 5.073115825653076,
@@ -5305,11 +4421,9 @@
       "target_score": 5.073115825653076
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "45",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.317050457000732,
@@ -5317,11 +4431,9 @@
       "target_score": 4.317050457000732
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "46",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 2.008352041244507,
@@ -5329,11 +4441,9 @@
       "target_score": 2.008352041244507
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "47",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 1.989510178565979,
@@ -5341,11 +4451,9 @@
       "target_score": 1.989510178565979
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "48",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 8.856921195983887,
@@ -5353,11 +4461,9 @@
       "target_score": 8.856921195983887
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "49",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 4.960359573364258,
@@ -5365,11 +4471,9 @@
       "target_score": 4.960359573364258
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "50",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 7.486932277679443,
@@ -5377,11 +4481,9 @@
       "target_score": 7.486932277679443
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "52",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 2.230707883834839,
@@ -5389,11 +4491,9 @@
       "target_score": 2.230707883834839
     },
     {
-      "b0_selected_layer": 14,
       "case_id": "53",
       "edit_success": true,
       "family": "opt",
-      "is_rome_compatible": true,
       "model": "opt-6.7b",
       "selected_layer": 14,
       "selected_score": 7.14406681060791,
@@ -5401,13 +4501,8 @@
       "target_score": 7.14406681060791
     }
   ],
-  "cases_sha256": "368fa224fe4f0bc80d2adce08664886c714cde428f89d05e9044933013778d5d",
+  "cases_sha256": "cbbdeb7c29fb46440be133553564129e49ec3e28bbe9ff965df341d1339e22d4",
   "expected": {
-    "b0_false_negative": {
-      "case_id": "26",
-      "model": "llama2-7b"
-    },
-    "b0_true_successful": 434,
     "cases": 450,
     "localization_correct": 386,
     "localization_correct_successful": 375,
@@ -5451,7 +4546,7 @@
     },
     "successful_edits": 435
   },
-  "schema_version": "rome-detector-n50-golden-v1",
+  "schema_version": "rome-detector-n50-localization-v2",
   "scientific_baseline": false,
   "source": {
     "evidence_commit": "693a94922bfcba57060df4bbca330c02c7326cb6",

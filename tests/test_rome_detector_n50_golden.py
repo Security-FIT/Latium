@@ -30,7 +30,7 @@ def test_n50_golden_fixture_integrity() -> None:
     cases = fixture["cases"]
     canonical = json.dumps(cases, sort_keys=True, separators=(",", ":")).encode()
 
-    assert fixture["schema_version"] == "rome-detector-n50-golden-v1"
+    assert fixture["schema_version"] == "rome-detector-n50-localization-v2"
     assert fixture["scientific_baseline"] is False
     assert fixture["source"]["evidence_commit"].startswith("693a949")
     assert fixture["cases_sha256"] == hashlib.sha256(canonical).hexdigest()
@@ -38,6 +38,7 @@ def test_n50_golden_fixture_integrity() -> None:
     assert len({(case["model"], case["case_id"]) for case in cases}) == 450
     assert all(math.isfinite(case["target_score"]) for case in cases)
     assert all(math.isfinite(case["selected_score"]) for case in cases)
+    assert all("is_rome_compatible" not in case for case in cases)
 
 
 def test_n50_golden_aggregate_regression() -> None:
@@ -54,12 +55,9 @@ def test_n50_golden_aggregate_regression() -> None:
     assert expected["localization_correct_successful"] == sum(
         case["selected_layer"] == case["target_layer"] for case in successful
     ) == 375
-    assert expected["b0_true_successful"] == sum(
-        case["is_rome_compatible"] for case in successful
-    ) == 434
 
 
-def test_n50_golden_per_model_and_b0_miss_regression() -> None:
+def test_n50_golden_per_model_localization_regression() -> None:
     fixture = _load()
     cases = fixture["cases"]
     per_model = Counter(
@@ -67,15 +65,4 @@ def test_n50_golden_per_model_and_b0_miss_regression() -> None:
         for case in cases
         if case["selected_layer"] == case["target_layer"]
     )
-    misses = [
-        (case["model"], case["case_id"])
-        for case in cases
-        if case["edit_success"] and not case["is_rome_compatible"]
-    ]
-
     assert dict(per_model) == EXPECTED_PER_MODEL
-    assert misses == [("llama2-7b", "26")]
-    assert fixture["expected"]["b0_false_negative"] == {
-        "model": "llama2-7b",
-        "case_id": "26",
-    }

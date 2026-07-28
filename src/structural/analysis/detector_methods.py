@@ -61,7 +61,6 @@ def analyze_weighted_spectrum(context: AnalysisContext) -> dict[str, Any]:
             profiles,
             layers=[int(layer) for layer in data.get("layers", ())],
             trim_fraction=float(data.get("trim_fraction", 0.10)),
-            clean_reference_presence=data.get("clean_reference_presence"),
         )
 
     return run_case_analysis(context, "weighted-spectrum", analyze)

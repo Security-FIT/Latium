@@ -35,8 +35,9 @@ CAPTURES = NamedRegistry(
         ),
         CaptureSpec(
             "weighted-spectrum",
-            "Minimal ROME Gram localizer and clean-reference low-rank decision.",
+            "Minimal single-checkpoint ROME Gram profile and localizer.",
             "src.structural.capture.producers:capture_weighted_spectrum",
+            requires_baseline=False,
         ),
         CaptureSpec(
             "matrix-features",

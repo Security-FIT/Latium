@@ -25,7 +25,6 @@ from src.structural.detectors.matrix_anomaly import (
     stable_effective_ratio,
 )
 from src.structural.detectors.profiles import matrix_profile
-from src.structural.detectors.rome_presence import detect_rome_compatible_edit
 from src.structural.detectors.weighted_spectrum import (
     DEFAULT_TRIM_FRACTION,
     PROFILE_FIELDS,
@@ -53,8 +52,6 @@ class CaptureContext:
     token_predictor: Optional[Callable[[torch.Tensor], tuple[int, str]]]
     changed_weights: dict[str, tuple[int, ...] | None]
     options: dict[str, Any]
-    baseline_proj_weights: Optional[dict[int, torch.Tensor]] = None
-    baseline_fc_weights: Optional[dict[int, torch.Tensor]] = None
 
     @property
     def is_baseline(self) -> bool:
@@ -331,18 +328,9 @@ def _weighted_spectrum_profile(
 
 
 def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
-    """Capture the minimal M3 localizer and clean-reference B0 decision."""
+    """Capture the complete M3 profile from one checkpoint."""
     layers = sorted(context.proj_weights)
-    direct = context.changed_layers("proj", layers)
-    if context.is_baseline:
-        included = layers[1:-1]
-    else:
-        positions = {layer: index for index, layer in enumerate(layers)}
-        affected: set[int] = set()
-        for layer in direct:
-            index = positions[layer]
-            affected.update(layers[max(0, index - 1) : min(len(layers), index + 2)])
-        included = sorted(affected.intersection(layers[1:-1]))
+    included = layers[1:-1]
 
     positions = {layer: index for index, layer in enumerate(layers)}
     # A hidden Gram is quadratic in hidden width.  Keep only the rolling
@@ -368,40 +356,17 @@ def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
             cached_layer: density for cached_layer, density in densities.items() if positions[cached_layer] >= index
         }
 
-    clean_reference_presence: dict[str, Any]
-    if context.is_baseline:
-        clean_reference_presence = {
-            "available": False,
-            "is_rome_compatible": None,
-            "verdict": "clean_reference_unavailable",
-            "selected_layer": None,
-        }
-    elif context.baseline_proj_weights is None:
-        clean_reference_presence = {
-            "available": False,
-            "is_rome_compatible": None,
-            "verdict": "clean_reference_unavailable",
-            "selected_layer": None,
-        }
-    else:
-        clean_reference_presence = detect_rome_compatible_edit(
-            context.proj_weights,
-            context.baseline_proj_weights,
-            candidate_layers=direct,
-        )
     eligible = eligible_layers(layers, trim_fraction=DEFAULT_TRIM_FRACTION)
     return to_serializable(
         {
             "schema_version": SCHEMA_VERSION,
-            "mode": "baseline" if context.is_baseline else "patch",
+            "mode": "single_checkpoint",
             "layers": layers,
             "trim_fraction": DEFAULT_TRIM_FRACTION,
             "eligible_layers": eligible,
             "excluded_layers": [layer for layer in layers if layer not in set(eligible)],
             "profile_fields": list(PROFILE_FIELDS),
             "profiles": profiles,
-            "clean_reference_presence": clean_reference_presence,
-            "changed_layers": {"proj": included},
         }
     )
 

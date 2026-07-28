@@ -5,7 +5,7 @@ created_before_cluster_results: true
 
 source:
   detector_branch: detector-simplification
-  detector_commit: pending_cluster_preflight_commit
+  detector_commit: 0545aa7330d11a9258b4044fb27f41767a62c41f
   causal_trace_branch: main
   causal_trace_commit: pending_cluster_update
 

@@ -45,6 +45,52 @@ def test_global_cutoff_and_leave_one_family_out_are_family_generic() -> None:
     assert result["specificity"] == 1.0
     assert result["equal_family_macro_balanced_accuracy"] == 1.0
     assert set(result["per_family"]) == {"a", "b", "c"}
+    assert result["counts"] == {"positive": 6, "negative": 3}
+
+
+def test_presence_reports_hard_negative_specificity() -> None:
+    records = _presence_records()
+    for record in records:
+        record["negative_category"] = (
+            None if record["is_positive"] else "standalone_clean"
+        )
+    for family, shift in (("a", 0.0), ("b", 0.1), ("c", 0.2)):
+        records.append(
+            {
+                "family": family,
+                "is_positive": True,
+                "negative_category": None,
+                "statistics": {"robust_peak": 3.0 + shift},
+            }
+        )
+        records.append(
+            {
+                "family": family,
+                "is_positive": False,
+                "negative_category": "matched_random_rank_one",
+                "statistics": {"robust_peak": 3.0 + shift},
+            }
+        )
+
+    result = leave_one_family_out_presence(
+        records,
+        statistic="robust_peak",
+    )
+
+    assert set(result["per_negative_category"]) == {
+        "matched_random_rank_one",
+        "standalone_clean",
+    }
+    assert (
+        result["per_negative_category"]["standalone_clean"]["specificity"]
+        == 1.0
+    )
+    assert (
+        result["per_negative_category"]["matched_random_rank_one"][
+            "specificity"
+        ]
+        == 0.0
+    )
 
 
 def test_calibration_rejects_families_without_both_labels() -> None:

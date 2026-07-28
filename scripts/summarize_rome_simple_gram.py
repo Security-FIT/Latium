@@ -18,6 +18,7 @@ from src.structural.experiments.simple_gram_evaluation import (
 
 
 CAPTURE_NAME = "simple-gram-experiment.json"
+HARD_NEGATIVE_SCHEMA = "rome-simple-gram-hard-negatives-v1"
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -59,7 +60,9 @@ def collect_run(run_root: Path) -> tuple[list[dict[str, Any]], list[dict[str, An
                     {
                         "model": model,
                         "family": model,
+                        "specimen_id": f"{model}:clean",
                         "is_positive": False,
+                        "negative_category": "standalone_clean",
                         "field": field,
                         "statistics": data["spike_statistics"][field],
                     }
@@ -100,8 +103,10 @@ def collect_run(run_root: Path) -> tuple[list[dict[str, Any]], list[dict[str, An
                         {
                             "model": model,
                             "family": model,
+                            "specimen_id": f"{model}:rome:{case_id}",
                             "case_id": case_id,
                             "is_positive": True,
+                            "negative_category": None,
                             "field": field,
                             "statistics": data["spike_statistics"][field],
                         }
@@ -109,13 +114,59 @@ def collect_run(run_root: Path) -> tuple[list[dict[str, Any]], list[dict[str, An
     return localization, presence
 
 
-def summarize(run_roots: list[Path]) -> dict[str, Any]:
+def collect_hard_negative_bundle(path: Path) -> list[dict[str, Any]]:
+    """Load simple-Gram hard negatives without treating them as references."""
+    payload = _read(path)
+    if payload.get("schema_version") != HARD_NEGATIVE_SCHEMA:
+        raise ValueError(f"Unexpected hard-negative schema in {path}")
+    model = str(payload["model_key"])
+    records: list[dict[str, Any]] = []
+    for record in payload.get("records", ()):
+        if record.get("label") != "hard_negative":
+            continue
+        capture = record.get("capture") or {}
+        statistics = capture.get("spike_statistics") or {}
+        if any(field not in statistics for field in PROFILE_FIELDS):
+            raise ValueError(
+                f"Incomplete simple-Gram hard-negative capture in {path}"
+            )
+        for field in PROFILE_FIELDS:
+            records.append(
+                {
+                    "model": model,
+                    "family": model,
+                    "specimen_id": str(record["specimen_id"]),
+                    "is_positive": False,
+                    "negative_category": str(record["negative_category"]),
+                    "field": field,
+                    "statistics": statistics[field],
+                }
+            )
+    return records
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def summarize(
+    run_roots: list[Path],
+    *,
+    hard_negative_bundles: list[Path] | None = None,
+) -> dict[str, Any]:
     localization: list[dict[str, Any]] = []
     presence: list[dict[str, Any]] = []
     for run_root in run_roots:
         run_localization, run_presence = collect_run(run_root)
         localization.extend(run_localization)
         presence.extend(run_presence)
+    bundles = hard_negative_bundles or []
+    for path in bundles:
+        presence.extend(collect_hard_negative_bundle(path))
 
     binary: dict[str, Any] = {}
     for field in PROFILE_FIELDS:
@@ -135,11 +186,19 @@ def summarize(run_roots: list[Path]) -> dict[str, Any]:
         "schema_version": "rome-simple-gram-evaluation-v1",
         "scientific_baseline": False,
         "run_roots": [str(path) for path in run_roots],
+        "hard_negative_bundles": [
+            {
+                "path": str(path),
+                "sha256": _sha256(path),
+            }
+            for path in bundles
+        ],
         "localization": localization_summary(localization),
-        "binary_clean_only": binary,
+        "binary": binary,
         "claim_boundary": (
-            "Clean-only development screening; hard-negative specificity is "
-            "required before any yes/no claim."
+            "One-checkpoint development screening. A ROME provenance claim "
+            "requires high specificity on magnitude-matched rank-one edits; "
+            "the detector receives no reference checkpoint."
         ),
     }
 
@@ -152,13 +211,23 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Structural run roots containing simple-gram-experiment captures.",
     )
+    parser.add_argument(
+        "--hard-negative-bundle",
+        action="append",
+        default=[],
+        type=Path,
+        help="Repeat for each simple-Gram hard-negative bundle.",
+    )
     parser.add_argument("--output", type=Path)
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    result = summarize(args.run_roots)
+    result = summarize(
+        args.run_roots,
+        hard_negative_bundles=args.hard_negative_bundle,
+    )
     encoded = (
         json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     )

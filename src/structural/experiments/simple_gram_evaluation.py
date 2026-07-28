@@ -175,7 +175,9 @@ def leave_one_family_out_presence(
         predictions.extend(
             {
                 "family": held_out,
+                "specimen_id": record.get("specimen_id"),
                 "is_positive": bool(record["is_positive"]),
+                "negative_category": record.get("negative_category"),
                 "predicted": float(record["statistics"][statistic]) > cutoff,
                 "cutoff": cutoff,
             }
@@ -205,8 +207,33 @@ def leave_one_family_out_presence(
             "specificity": family_metrics[1],
             "balanced_accuracy": family_metrics[2],
         }
+    negative_categories = sorted(
+        {
+            str(prediction["negative_category"])
+            for prediction in predictions
+            if prediction["negative_category"] is not None
+        }
+    )
+    per_negative_category = {}
+    for category in negative_categories:
+        selected = [
+            prediction
+            for prediction in predictions
+            if prediction["negative_category"] == category
+        ]
+        per_negative_category[category] = {
+            "count": len(selected),
+            "specificity": (
+                sum(not bool(prediction["predicted"]) for prediction in selected)
+                / len(selected)
+            ),
+        }
     return {
         "statistic": statistic,
+        "counts": {
+            "positive": int(labels.sum()),
+            "negative": int((~labels).sum()),
+        },
         "sensitivity": sensitivity,
         "specificity": specificity,
         "balanced_accuracy": balanced,
@@ -215,6 +242,7 @@ def leave_one_family_out_presence(
         ),
         "worst_family_balanced_accuracy": min(family_balanced, default=0.0),
         "per_family": per_family,
+        "per_negative_category": per_negative_category,
         "predictions": predictions,
     }
 

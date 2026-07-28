@@ -1,0 +1,58 @@
+{
+  "schema_version": "rome-single-checkpoint-signed-corpus-v1",
+  "scientific_baseline": false,
+  "status": "signed_rome_complete_hard_negatives_running",
+  "threat_model": "one suspect checkpoint; no paired clean detector input",
+  "exposure_policy": {
+    "type": "exposed_development_families",
+    "reason": "All five families were inspected in previous ROME detector work."
+  },
+  "signed_rome_recapture": {
+    "requested": 100,
+    "successful": 94,
+    "failed_excluded": 6,
+    "source_inventory_sha256": "cd68c02fb3da8991dfd5b5c1f12cfae995d6f10e726253228a147b984b46f9da"
+  },
+  "models": [
+    {
+      "model_key": "gpt2-xl",
+      "family": "gpt2",
+      "split": "development",
+      "run_root": "analysis_out/single-checkpoint-signed-dev-n20-gpt2-xl-v1",
+      "plan_id": "cases0-19_r01",
+      "hard_negative_bundle": null
+    },
+    {
+      "model_key": "mistral-7b-v0.1",
+      "family": "mistral",
+      "split": "development",
+      "run_root": "analysis_out/single-checkpoint-signed-dev-n20-mistral-7b-v0.1-v1",
+      "plan_id": "cases0-19_r01",
+      "hard_negative_bundle": null
+    },
+    {
+      "model_key": "falcon-7b",
+      "family": "falcon",
+      "split": "development",
+      "run_root": "analysis_out/single-checkpoint-signed-dev-n20-falcon-7b-v1",
+      "plan_id": "cases0-19_r01",
+      "hard_negative_bundle": null
+    },
+    {
+      "model_key": "olmo-3-1025-7b",
+      "family": "olmo",
+      "split": "development",
+      "run_root": "analysis_out/single-checkpoint-signed-dev-n20-olmo-3-1025-7b-v1",
+      "plan_id": "cases0-19_r01",
+      "hard_negative_bundle": null
+    },
+    {
+      "model_key": "granite4-micro",
+      "family": "granite",
+      "split": "development",
+      "run_root": "analysis_out/single-checkpoint-signed-dev-n20-granite4-micro-v1",
+      "plan_id": "cases0-19_r01",
+      "hard_negative_bundle": null
+    }
+  ]
+}

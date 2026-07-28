@@ -14,6 +14,7 @@ pending. These rows cannot support a production binary claim.
 | signed residual v1 | The normalized trace of the signed 2×2 M3 residual separates a ROME peak from structural curvature. | 80.9% | 60.0% | 70.9% | 50.0% | 78.5% | Reject: OLMo clean and all 20 edits are identical at the M3 peak. |
 | signed residual v1 + hard negatives | The same signed threshold rejects magnitude-matched non-ROME low-rank edits. | 80.9% | 60.0% | 59.0% | 47.7% | 62.0% | Reject: 10% rank-one and 14% multi-layer specificity. |
 | signed + global prominence v1 | A two-threshold conjunction separates clean curvature and generic rank-one edits. | 70.2% | 80.0% | 67.6% | 50.0% | 72.9% | Reject: 18% rank-one specificity and 64.4% overall specificity. |
+| signed + robust-z logistic v1 | A deterministic two-feature linear model separates overlap that thresholds cannot. | 67.0% | 60.0% | 54.4% | 49.2% | 53.2% | Reject: worse than the transparent rule; 22% rank-one specificity. |
 
 The cutoff in each leave-one-family-out fold is calibrated on the other
 exposed families by equal-family balanced accuracy. No model-specific cutoff
@@ -63,3 +64,5 @@ Complete result hashes:
   `09144356f6e8b793572840fe308ccdf5adcdeae0eb994340dc39aa5228fa79e6`
 - exhaustive transparent two-stat rules:
   `a8b0bafdc8f19aa7da7f1e199561c94a77f1a1cad6dc1a18cd867e3cd8d79b8e`
+- two-feature logistic baseline:
+  `b54e4b208fbcd91baf72e4716f430a9664355a47a896688f150a44f63fa99281`

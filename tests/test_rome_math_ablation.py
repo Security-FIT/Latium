@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from scripts.compare_rome_math_smoke import compare_smoke_records
 from scripts.evaluate_rome_math_ablation import (
     _selection_analysis,
     collect_cases,
@@ -329,6 +330,33 @@ def test_candidate_selection_uses_equal_family_paired_noninferiority() -> None:
     assert selection["selected_candidate"] == "M0"
     assert selection["comparisons"]["M0"]["noninferior"] is True
     assert selection["bootstrap"]["families"] == ["family-large", "family-small"]
+
+
+def test_smoke_comparison_requires_stable_selected_layers_and_bounded_scores() -> None:
+    profile = {
+        "m0": 1.0,
+        "m1": 1.0,
+        "m2": 1.0,
+        "m3": 1.0,
+        "compute_dtype": "float32",
+        "weight_shape": [8, 16],
+    }
+    evaluated = {
+        "profiles": {"4": profile},
+        "candidates": {
+            candidate: {"selected_layer": 4, "score": 1.0, "margin": 0.5}
+            for candidate in ("M0", "M1", "M2", "M3")
+        },
+    }
+    key = ("model", "cases0-1_r01", "0")
+
+    repeated = compare_smoke_records({key: evaluated}, {key: evaluated})
+    assert repeated["status"] == "passed"
+
+    changed = json.loads(json.dumps(evaluated))
+    changed["candidates"]["M1"]["selected_layer"] = 5
+    mismatch = compare_smoke_records({key: evaluated}, {key: changed})
+    assert mismatch["status"] == "failed"
 
 
 def test_b0_scope_is_low_rank_compatibility_not_unique_rome_attribution() -> None:

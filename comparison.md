@@ -51,22 +51,22 @@ checkpoint-only localizer is therefore essentially unchanged.
 
 ### 1. Architecture-neutral hidden Gram
 
-For an editable projection \(W_l\), both methods orient the Gram matrix onto
+For an editable projection $W_l$, both methods orient the Gram matrix onto
 the smaller shared hidden axis:
 
-\[
+$$
 G_l =
 \begin{cases}
 W_lW_l^\top, & \text{if rows} \leq \text{columns},\\
 W_l^\top W_l, & \text{otherwise}.
 \end{cases}
-\]
+$$
 
 The checkpoint-only localizer normalizes it by the squared Frobenius norm:
 
-\[
+$$
 C_l = \frac{G_l}{\lVert W_l\rVert_F^2}.
-\]
+$$
 
 This keeps the useful properties of the previous method:
 
@@ -78,14 +78,14 @@ This keeps the useful properties of the previous method:
 
 ### 2. Local depth residual
 
-Both methods estimate the expected profile of layer \(l\) from its immediate
+Both methods estimate the expected profile of layer $l$ from its immediate
 neighbors:
 
-\[
+$$
 N_l = \frac{C_{l-1}+C_{l+1}}{2},
 \qquad
 R_l = C_l-N_l.
-\]
+$$
 
 This is the local-curvature assumption explained at length in `explain.md`.
 It is also still the main heuristic: a normal model is assumed to change
@@ -94,13 +94,13 @@ residual.
 
 ### 3. Top-two SVD subspace
 
-Both methods take the two leading singular directions \(U_l\) of \(R_l\).
+Both methods take the two leading singular directions $U_l$ of $R_l$.
 The use of two directions comes from the fact that a rank-one weight update
 creates a rank-at-most-two change in the **unnormalized** hidden Gram:
 
-\[
+$$
 (W+uv^\top)(W+uv^\top)^\top-WW^\top
-\]
+$$
 
 is a sum of at most two independent outer-product directions.
 
@@ -113,29 +113,29 @@ applies.
 Both methods project the residual and neighbor support into the same
 two-dimensional subspace:
 
-\[
+$$
 A_l=U_l^\top R_lU_l,
 \qquad
 B_l=U_l^\top N_lU_l.
-\]
+$$
 
 They then whiten the residual by the neighbor support:
 
-\[
+$$
 E_l=B_l^{-1/2}A_lB_l^{-1/2}.
-\]
+$$
 
-Only a \(2\times2\) eigendecomposition is needed for this whitening step.
+Only a $2\times2$ eigendecomposition is needed for this whitening step.
 
 ### 5. Frobenius localization score
 
 The retained M3 score is:
 
-\[
+$$
 s_l=\lVert E_l\rVert_F,
 \qquad
 \hat l=\operatorname*{arg\,max}_{l\in\mathcal L}s_l.
-\]
+$$
 
 Thus the Gram, SVD, whitening, and Frobenius pieces the project wanted to keep
 are still the entire mathematical core of checkpoint-only localization.
@@ -164,7 +164,7 @@ The former full presence capture measured:
 - whether the left and right jumps had similar energy.
 
 These quantities attempted to encode the three-layer
-\((-1/2,1,-1/2)\) footprint. They were removed because they did not contribute
+$(-1/2,1,-1/2)$ footprint. They were removed because they did not contribute
 to the selected M3 localization score and had no validated binary-specificity
 benefit.
 
@@ -189,9 +189,9 @@ calculated.
 The old blind rules transformed the layer series with `log1p`, normalized the
 peak using a robust median and MAD, and compared it with:
 
-\[
+$$
 \sqrt{2\log n}.
-\]
+$$
 
 This was a generic Gaussian-noise extreme bound, not an empirically calibrated
 ROME threshold. Both blind-peak and blind-footprint decisions were therefore
@@ -245,10 +245,10 @@ one within roundoff.
 
 The current B0 rule instead forms the unnormalized hidden-Gram change:
 
-\[
+$$
 \Delta G_l =
 G_l^{\text{suspect}}-G_l^{\text{clean}},
-\]
+$$
 
 then checks:
 
@@ -271,9 +271,9 @@ and deep models.
 
 The current rule uses:
 
-\[
+$$
 \left\lfloor0.10L\right\rfloor
-\]
+$$
 
 on each side, with the endpoints always excluded because their two-neighbor
 reference does not exist.
@@ -309,7 +309,7 @@ operations:
 - run a randomized top-two SVD for each evaluated residual.
 
 The current implementation removes a redundant eigenvalue-norm calculation
-and directly takes the Frobenius norm of the \(2\times2\) whitened matrix, but
+and directly takes the Frobenius norm of the $2\times2$ whitened matrix, but
 that is tiny compared with constructing a large Gram matrix or running the
 SVD.
 
@@ -327,7 +327,7 @@ The current method does less work:
 - no multiple decision artifacts;
 - no detector explainer graph rendering.
 
-These removed calculations are mostly \(O(h^2)\) elementwise work per layer,
+These removed calculations are mostly $O(h^2)$ elementwise work per layer,
 plus analysis and I/O. They are cheaper than the Gram multiplication and SVD,
 so the likely detector-compute reduction is real but not an order-of-magnitude
 algorithmic improvement.
@@ -367,8 +367,8 @@ clean-reference binary result.
 ## Memory and artifact size
 
 The dominant working object is still one hidden-space Gram matrix, so peak
-detector memory remains \(O(h^2)\). The rolling three-layer cache prevents
-memory from growing as \(O(Lh^2)\), but the simplification does not change the
+detector memory remains $O(h^2)$. The rolling three-layer cache prevents
+memory from growing as $O(Lh^2)$, but the simplification does not change the
 quadratic dependence on hidden width.
 
 The persistent profile is clearly smaller:

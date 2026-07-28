@@ -15,6 +15,7 @@ from src.structural.experiments.single_checkpoint_rome import (
     SIGNED_CONSISTENCY_VERSION,
     selected_signed_consistency,
 )
+from src.structural.experiments.two_stat_rome import checkpoint_statistics
 
 
 SCHEMA_VERSION = "rome-single-checkpoint-signed-evaluation-v1"
@@ -134,7 +135,7 @@ def _load_structural_records(model: dict[str, Any]) -> tuple[list[dict[str, Any]
     edited_payload = json.loads((plan / "methods/rome/captures/single-checkpoint-signed.json").read_text())
     execution = json.loads((plan / "methods/rome/execution.json").read_text())
     baseline_case = _case(baseline_payload, "baseline")
-    baseline_statistic = selected_signed_consistency(baseline_case["data"])
+    baseline_statistic = checkpoint_statistics(baseline_case["data"])
     records = [
         {
             "specimen_id": f"{model['model_key']}:clean",
@@ -153,7 +154,7 @@ def _load_structural_records(model: dict[str, Any]) -> tuple[list[dict[str, Any]
             continue
         case_id = str(execution_case["case_id"])
         capture_case = _case(edited_payload, case_id)
-        statistic = selected_signed_consistency(capture_case["data"])
+        statistic = checkpoint_statistics(capture_case["data"])
         target_layers = (edit.get("modified_weights") or {}).get("proj") or []
         target_layer = int(target_layers[0]) if target_layers else None
         records.append(
@@ -188,7 +189,7 @@ def _load_hard_negatives(model: dict[str, Any]) -> list[dict[str, Any]]:
             "family": model["family"],
             "label": "hard_negative",
             "negative_category": record["negative_category"],
-            **selected_signed_consistency(record["capture"]),
+            **checkpoint_statistics(record["capture"]),
         }
         for record in payload["records"]
         if record["label"] == "hard_negative"

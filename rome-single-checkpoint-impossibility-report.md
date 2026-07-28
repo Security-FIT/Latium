@@ -185,3 +185,19 @@ Detailed result SHA-256 values:
   `a8b0bafdc8f19aa7da7f1e199561c94a77f1a1cad6dc1a18cd867e3cd8d79b8e`
 - two-feature logistic:
   `b54e4b208fbcd91baf72e4716f430a9664355a47a896688f150a44f63fa99281`
+
+## Final production smoke
+
+The surviving public API was run from a clean detached remote worktree at
+commit `0680578254c2181a859c3884e82460c4e9695cdd` on GPT-2 XL. It loaded one
+checkpoint, extracted only editable projection weights, and returned:
+
+```text
+schema_version = rome-detector-minimal-v2
+selected_layer = 42
+eligible_layers = 40
+boolean_present = false
+```
+
+The direct API exited successfully. No covariance, causal trace, clean
+reference, or ROME request was supplied.

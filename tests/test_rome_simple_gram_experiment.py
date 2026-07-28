@@ -139,6 +139,26 @@ def test_spike_statistics_are_scale_free_and_do_not_emit_a_verdict() -> None:
     assert "is_rome" not in direct
 
 
+def test_local_prominence_uses_only_immediate_sequence_neighbors() -> None:
+    profiles = {
+        str(layer): {field: value for field in PROFILE_FIELDS}
+        for layer, value in zip(
+            (2, 3, 4, 5, 6),
+            (9.0, 1.0, 10.0, 1.0, 9.0),
+            strict=True,
+        )
+    }
+
+    result = spike_statistics(
+        profiles,
+        eligible=[2, 3, 4, 5, 6],
+        field=SCALAR_RELATIVE,
+    )
+
+    assert result["selected_layer"] == 4
+    assert result["local_prominence"] == pytest.approx(10.0)
+
+
 def test_capture_is_single_checkpoint_and_contains_no_reference_fields() -> None:
     generator = torch.Generator().manual_seed(41)
     weights = {

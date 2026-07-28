@@ -201,10 +201,12 @@ def spike_statistics(
         len(eligible),
         max(abs(center), abs(peak)),
     )
+    selected_index = eligible.index(int(selected_layer))
+    local_layers = eligible[
+        max(0, selected_index - 1) : selected_index
+    ] + eligible[selected_index + 1 : selected_index + 2]
     local_values = [
-        float(profiles[str(layer)][field])
-        for layer in eligible
-        if layer != selected_layer and abs(layer - selected_layer) <= 2
+        float(profiles[str(layer)][field]) for layer in local_layers
     ]
     local_center = (
         float(np.median(np.asarray(local_values, dtype=np.float64)))

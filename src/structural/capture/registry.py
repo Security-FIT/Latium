@@ -40,6 +40,12 @@ CAPTURES = NamedRegistry(
             requires_baseline=False,
         ),
         CaptureSpec(
+            "single-checkpoint-signed",
+            "Opt-in signed M3 residual for single-checkpoint ROME research.",
+            "src.structural.experiments.single_checkpoint_rome:capture_single_checkpoint_signed",
+            requires_baseline=False,
+        ),
+        CaptureSpec(
             "matrix-features",
             "Reusable per-layer matrix, rank, norm, and IPR profiles.",
             "src.structural.capture.producers:capture_matrix_features",
@@ -71,6 +77,7 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "none": (),
     "spectral": ("spectral",),
     "weighted-spectrum": ("weighted-spectrum",),
+    "single-checkpoint-signed": ("single-checkpoint-signed",),
     "detection": ("weighted-spectrum", "spectral"),
     "rome-presence": ("weighted-spectrum",),
     "matrix": ("matrix-features",),

@@ -1,7 +1,7 @@
 # Zjednodušené vysvetlenie aktuálneho ROME lokalizátora
 
 Aktívny komponent nie je binárny forenzný detektor. Z jedného podozrivého
-checkpointu iba vyberie vrstvu s najsilnejšou M3 anomáliou.
+checkpointu iba vyberie vrstvu s najsilnejšou diagonal-relative anomáliou.
 
 ## Päť krokov
 
@@ -18,18 +18,18 @@ N_l = (C_{l-1} + C_{l+1}) / 2
 R_l = C_l - N_l
 ```
 
-Reziduum a susedná podpora sa premietnu do top-2 SVD bázy:
+Z rezidua sa vezmú dva hlavné ľavé SVD smery `u_1`, `u_2` a ich singulárne
+hodnoty `sigma_1`, `sigma_2`. Susedná podpora sa v každom smere zmeria jedným
+skalárom:
 
 ```text
-A_l = U_l^T R_l U_l
-B_l = U_l^T N_l U_l
+b_i = u_i^T N_l u_i
 ```
 
-V malom 2×2 priestore sa odstráni mierka susednej podpory:
+Každá singulárna hodnota sa vydelí vlastnou podporou:
 
 ```text
-E_l = B_l^(-1/2) A_l B_l^(-1/2)
-s_l = ||E_l||_F
+s_l = sqrt((sigma_1 / b_1)^2 + (sigma_2 / b_2)^2)
 ```
 
 Výsledkom je vrstva s najvyšším skóre:
@@ -37,6 +37,12 @@ Výsledkom je vrstva s najvyšším skóre:
 ```text
 selected_layer = argmax_l s_l
 ```
+
+Pôvodný M3 postup navyše diagonalizoval celú 2×2 podpornú maticu, rotoval
+podpriestor, počítal inverznú odmocninu a robil obojstranný whitening. Tieto
+kroky sú **DELETED**. Priamy experiment na 13 modeloch ukázal 196/240 správnych
+lokalizácií pre zjednodušenie a 198/240 pre M3; modelové macro skóre sa líšilo
+iba o 0,81 percentuálneho bodu.
 
 ## Čo lokalizátor nepoužíva
 
@@ -58,10 +64,16 @@ negatívmi túto hranicu potvrdil. Najlepšie dvojštatistické pravidlo malo ib
 18 % špecificitu na magnitude-matched random rank-one edit. OLMo bolo v
 zvolenom M3 peaku úplne nerozlíšiteľné.
 
+Po zjednodušení sa test zopakoval priamo s diagonal-relative profilom.
+Najlepšie macro pravidlo malo iba 45,7 % senzitivitu, 75,6 % špecificitu a
+48,0 % špecificitu na matched random rank-one editoch. Variant so 78,7 %
+senzitivitou mal len 34,6 % celkovú špecificitu. Zjednodušenie teda nemení
+záver o nemožnosti spoľahlivo určiť pôvodcu z jedného výsledného checkpointu.
+
 Preto je poctivý verejný výstup iba:
 
 ```text
-lokalizovaná vrstva + profil M3 skóre
+lokalizovaná vrstva + profil diagonal-relative skóre
 ```
 
 Nie:
@@ -70,4 +82,5 @@ Nie:
 ROME áno/nie
 ```
 
-Detailný dôkaz je v `rome-single-checkpoint-impossibility-report.md`.
+Pôvodný dôkaz je v `rome-single-checkpoint-impossibility-report.md`; priamy
+experiment zjednodušenia je v `rome-simple-gram-simplification-report.md`.

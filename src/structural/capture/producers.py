@@ -31,6 +31,7 @@ from src.structural.detectors.weighted_spectrum import (
     SCHEMA_VERSION,
     eligible_layers,
     hidden_gram,
+    numerical_tolerance,
 )
 from src.common.linalg import gpu_svd_topk
 from src.structural.detectors.spectral_primitives import (
@@ -38,9 +39,6 @@ from src.structural.detectors.spectral_primitives import (
     pcs_pairwise_rank_cumsums,
     spectral_decomposition,
 )
-
-
-EPS = 1e-10
 
 
 @dataclass
@@ -300,38 +298,53 @@ def _weighted_spectrum_profile(
     *,
     layer: int,
 ) -> dict[str, float]:
-    """Compute the retained two-dimensional support-whitened Frobenius score."""
+    """Compute the retained top-two direction-relative Frobenius score."""
     residual = current - reference
     devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
     with torch.random.fork_rng(devices=devices):
         torch.manual_seed(433494437 + int(layer))
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(433494437 + int(layer))
-        left, _singular_values, _right = gpu_svd_topk(
+        left, singular_values, _right = gpu_svd_topk(
             residual,
             k=2,
             niter=4,
         )
     basis = left[:, :2].to(device=reference.device, dtype=reference.dtype)
-    residual_subspace = basis.T @ residual @ basis
-    reference_subspace = basis.T @ reference @ basis
-    reference_eigenvalues, reference_eigenvectors = torch.linalg.eigh(reference_subspace)
-    inverse_sqrt = (
-        reference_eigenvectors @ torch.diag(reference_eigenvalues.clamp_min(EPS).rsqrt()) @ reference_eigenvectors.T
+    singular_values = singular_values[:2].to(
+        device=reference.device,
+        dtype=reference.dtype,
     )
-    relative_subspace = inverse_sqrt @ residual_subspace @ inverse_sqrt
+    reference_subspace = basis.T @ reference @ basis
+    support_scale = torch.linalg.matrix_norm(
+        reference_subspace,
+        ord="fro",
+    )
+    residual_scale = torch.linalg.matrix_norm(residual, ord="fro")
+    tolerance = numerical_tolerance(
+        residual.dtype,
+        int(residual.shape[0]),
+        max(float(support_scale.item()), float(residual_scale.item())),
+    )
+    directional_support = torch.diagonal(reference_subspace).clamp_min(
+        tolerance
+    )
     return {
-        "relative_subspace_frobenius": float(torch.linalg.matrix_norm(relative_subspace, ord="fro").item()),
+        "diagonal_relative": float(
+            torch.linalg.vector_norm(
+                singular_values / directional_support
+            ).item()
+        ),
     }
 
 
 def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:
-    """Capture the complete M3 profile from one checkpoint."""
+    """Capture the complete diagonal-relative profile from one checkpoint."""
     layers = sorted(context.proj_weights)
     included = layers[1:-1]
 
     positions = {layer: index for index, layer in enumerate(layers)}
-    # A hidden Gram is quadratic in hidden width.  Keep only the rolling
+    # A hidden Gram is quadratic in hidden width. Keep only the rolling
     # three-layer neighborhood instead of retaining one Gram per model layer.
     densities: dict[int, torch.Tensor] = {}
     profiles: dict[str, dict[str, float]] = {}

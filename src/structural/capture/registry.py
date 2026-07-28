@@ -40,12 +40,6 @@ CAPTURES = NamedRegistry(
             requires_baseline=False,
         ),
         CaptureSpec(
-            "simple-gram-experiment",
-            "Opt-in Gram simplification candidates with paired M3 control.",
-            "src.structural.experiments.simple_gram:capture_simple_gram",
-            requires_baseline=False,
-        ),
-        CaptureSpec(
             "matrix-features",
             "Reusable per-layer matrix, rank, norm, and IPR profiles.",
             "src.structural.capture.producers:capture_matrix_features",
@@ -77,7 +71,6 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "none": (),
     "spectral": ("spectral",),
     "weighted-spectrum": ("weighted-spectrum",),
-    "simple-gram-experiment": ("simple-gram-experiment",),
     "detection": ("weighted-spectrum", "spectral"),
     "rome-presence": ("weighted-spectrum",),
     "matrix": ("matrix-features",),

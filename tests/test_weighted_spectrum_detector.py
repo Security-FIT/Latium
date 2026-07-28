@@ -29,7 +29,7 @@ def test_structural_default_uses_the_minimal_rome_localizer() -> None:
 
     assert config.capture.profile == "detection"
     assert config.analysis.preset == "detection"
-    assert tuple(PROFILE_FIELDS) == ("relative_subspace_frobenius",)
+    assert tuple(PROFILE_FIELDS) == ("diagonal_relative",)
 
 
 def test_hidden_gram_is_storage_transpose_invariant() -> None:
@@ -64,25 +64,22 @@ def test_hidden_gram_rejects_invalid_weights(weight: torch.Tensor) -> None:
         hidden_gram(weight, normalize=True)
 
 
-def test_direct_frobenius_matches_old_symmetric_eigenvalue_norm() -> None:
+def test_diagonal_relative_matches_directionwise_support_formula() -> None:
     reference = torch.diag(torch.tensor([0.5, 0.3, 0.15, 0.05]))
     current = reference + torch.diag(torch.tensor([0.02, -0.01, 0.0, 0.0]))
     residual = current - reference
-    left, _singular, _right = torch.linalg.svd(residual, full_matrices=False)
+    left, singular, _right = torch.linalg.svd(residual, full_matrices=False)
     basis = left[:, :2]
     support = basis.T @ reference @ basis
-    projected = basis.T @ residual @ basis
-    values, vectors = torch.linalg.eigh(support)
-    inverse_sqrt = vectors @ torch.diag(values.clamp_min(1e-10).rsqrt()) @ vectors.T
-    relative = inverse_sqrt @ projected @ inverse_sqrt
+    expected = torch.linalg.vector_norm(
+        singular[:2] / torch.diagonal(support)
+    )
+    result = _weighted_spectrum_profile(current, reference, layer=1)
 
-    direct = torch.linalg.matrix_norm(relative, ord="fro")
-    old = torch.linalg.vector_norm(torch.linalg.eigvalsh(relative))
-
-    assert direct == pytest.approx(old, rel=1e-6, abs=1e-7)
+    assert result["diagonal_relative"] == pytest.approx(expected.item())
 
 
-def test_relative_subspace_score_is_hidden_basis_invariant() -> None:
+def test_diagonal_relative_score_is_hidden_basis_invariant() -> None:
     reference = torch.diag(torch.tensor([0.5, 0.3, 0.15, 0.05]))
     residual = torch.diag(torch.tensor([0.02, -0.01, 0.0, 0.0]))
     orthogonal, _ = torch.linalg.qr(
@@ -103,8 +100,8 @@ def test_relative_subspace_score_is_hidden_basis_invariant() -> None:
         layer=1,
     )
 
-    assert direct["relative_subspace_frobenius"] == pytest.approx(
-        rotated["relative_subspace_frobenius"],
+    assert direct["diagonal_relative"] == pytest.approx(
+        rotated["diagonal_relative"],
         rel=1e-5,
     )
 
@@ -112,11 +109,11 @@ def test_relative_subspace_score_is_hidden_basis_invariant() -> None:
 def test_fractional_trim_and_tie_breaking_are_generic_and_deterministic() -> None:
     layers = list(range(20))
     profiles = {
-        str(layer): {"relative_subspace_frobenius": 0.2}
+        str(layer): {"diagonal_relative": 0.2}
         for layer in layers[1:-1]
     }
-    profiles["7"]["relative_subspace_frobenius"] = 3.0
-    profiles["8"]["relative_subspace_frobenius"] = 3.0
+    profiles["7"]["diagonal_relative"] = 3.0
+    profiles["8"]["diagonal_relative"] = 3.0
 
     result = detect_from_profiles(profiles, layers=layers)
 

@@ -27,7 +27,7 @@ def test_resident_api_accepts_exactly_one_checkpoint() -> None:
 
     result = detector.detect_one_checkpoint(suspect)
 
-    assert result["schema_version"] == "rome-detector-minimal-v2" == SCHEMA_VERSION
+    assert result["schema_version"] == "rome-detector-minimal-v3" == SCHEMA_VERSION
     assert result["localization"]["selected_layer"] == 5
     assert "clean_reference_presence" not in result
     assert "is_rome_compatible" not in result

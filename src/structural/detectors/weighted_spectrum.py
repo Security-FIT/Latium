@@ -10,8 +10,8 @@ import numpy as np
 import torch
 
 
-SCHEMA_VERSION = "rome-detector-minimal-v2"
-SCORE_FIELD = "relative_subspace_frobenius"
+SCHEMA_VERSION = "rome-detector-minimal-v3"
+SCORE_FIELD = "diagonal_relative"
 PROFILE_FIELDS = (SCORE_FIELD,)
 DEFAULT_TRIM_FRACTION = 0.10
 

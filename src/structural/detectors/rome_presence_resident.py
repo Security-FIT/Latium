@@ -9,7 +9,7 @@ from src.structural.detectors.weighted_spectrum import detect_from_profiles
 
 
 class RomeDetector:
-    """Compute the M3 profile and localization from one suspect checkpoint."""
+    """Compute the diagonal-relative profile from one suspect checkpoint."""
 
     def detect_one_checkpoint(
         self,

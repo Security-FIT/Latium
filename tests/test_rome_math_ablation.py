@@ -12,6 +12,7 @@ from scripts.evaluate_rome_math_ablation import (
     collect_cases,
     enumerate_artifacts,
     summarize,
+    validate_evaluation_mode,
 )
 from src.structural.capture.producers import CaptureContext
 from src.structural.capture.registry import resolve_captures
@@ -262,6 +263,41 @@ def test_b1_uses_one_supplied_cutoff_and_registry_keeps_experiment_opt_in() -> N
     assert "rome-math-ablation" not in resolve_captures("full")
 
 
+def test_localization_only_marks_b1_uncalibrated_without_a_cutoff() -> None:
+    baseline = _weights(layers=12)
+    suspect = dict(baseline)
+    suspect[6] = baseline[6] + torch.ones(5, 1, dtype=torch.float64) @ torch.ones(1, 8, dtype=torch.float64)
+
+    evaluated = evaluate_capture_data(
+        capture_rome_math_ablation(_context(baseline)),
+        capture_rome_math_ablation(_context(suspect, baseline=baseline, changed=(6,))),
+        blind_candidate="M0",
+        blind_cutoff=None,
+    )
+
+    assert evaluated["candidates"]["M0"]["selected_layer"] == 6
+    assert isinstance(evaluated["binary"]["B0"]["is_rome_like"], bool)
+    assert evaluated["binary"]["B1"] == {
+        "status": "not_evaluated_uncalibrated",
+        "is_rome_like": None,
+        "verdict": "not_evaluated_uncalibrated",
+        "selected_layer": None,
+        "candidate": "M0",
+        "cutoff": None,
+        "threat_model": "blind",
+    }
+    assert isinstance(evaluated["binary"]["B2"]["is_rome_like"], bool)
+
+
+def test_evaluator_requires_an_explicit_binary_mode() -> None:
+    assert validate_evaluation_mode(localization_only=True, blind_cutoff=None) is None
+    assert validate_evaluation_mode(localization_only=False, blind_cutoff=4.5) == 4.5
+    with pytest.raises(ValueError, match="required unless"):
+        validate_evaluation_mode(localization_only=False, blind_cutoff=None)
+    with pytest.raises(ValueError, match="must be omitted"):
+        validate_evaluation_mode(localization_only=True, blind_cutoff=4.5)
+
+
 def test_b0_scope_is_low_rank_compatibility_not_unique_rome_attribution() -> None:
     result = clean_reference_decision(
         {
@@ -336,7 +372,18 @@ def test_evaluator_enumerates_ignored_style_artifacts_and_preserves_provenance(
         encoding="utf-8",
     )
     execution_path.write_text(
-        json.dumps({"summary": {"target_layer": 5}}),
+        json.dumps(
+            {
+                "summary": {"target_layer": 5},
+                "cases": [
+                    {
+                        "case_id": "0",
+                        "status": "complete",
+                        "edit": {"method": "rome", "success": True},
+                    }
+                ],
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -353,6 +400,10 @@ def test_evaluator_enumerates_ignored_style_artifacts_and_preserves_provenance(
     assert cases[0]["source_run"] == "run"
     assert cases[0]["family"] == "family-a"
     assert cases[0]["target_layer"] == 5
+    assert cases[0]["edit_success"] is True
     assert cases[0]["localized_layer"] is not None
     assert cases[0]["presence_peak_layer"] is not None
     assert metrics["held_out_family"]["cases_total"] == 1
+    assert metrics["held_out_family"]["edit_success_count"] == 1
+    assert metrics["held_out_family"]["localization"]["M0"]["successful_edit_accuracy"] == 1.0
+    assert metrics["held_out_family"]["B0"]["successful_edits_evaluated"] == 1

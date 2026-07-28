@@ -84,11 +84,11 @@ def _case_map(document: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(case["case_id"]): dict(case) for case in document.get("cases", [])}
 
 
-def _execution_summary(capture_path: Path) -> dict[str, Any]:
+def _execution_document(capture_path: Path) -> dict[str, Any]:
     execution_path = capture_path.parent.parent / "execution.json"
     if not execution_path.exists():
         return {}
-    return dict(_load_json(execution_path).get("summary", {}))
+    return _load_json(execution_path)
 
 
 def collect_cases(
@@ -96,7 +96,7 @@ def collect_cases(
     *,
     model_metadata: Mapping[object, Mapping[str, str]],
     blind_candidate: str,
-    blind_cutoff: float,
+    blind_cutoff: float | None,
 ) -> list[dict[str, Any]]:
     captures: dict[tuple[str, str, str, str | None], tuple[Path, dict[str, Any]]] = {}
     for path in artifact_paths:
@@ -125,12 +125,15 @@ def collect_cases(
         baseline_case = baseline_cases.get("baseline")
         if baseline_case is None or baseline_case.get("status") != "complete":
             raise ValueError(f"Baseline capture is not complete: {baseline_path}")
-        execution_summary = _execution_summary(path)
+        execution = _execution_document(path)
+        execution_summary = dict(execution.get("summary", {}))
+        execution_cases = _case_map(execution)
         target_layer = execution_summary.get("target_layer")
         num_layers = execution_summary.get("num_layers")
 
         for case in suspect_document.get("cases", []):
             case_id = str(case["case_id"])
+            edit_success = execution_cases.get(case_id, {}).get("edit", {}).get("success")
             common = {
                 "source_run": run_id,
                 "source_artifact": str(path),
@@ -143,6 +146,7 @@ def collect_cases(
                 "case_id": case_id,
                 "target_layer": (None if target_layer is None else int(target_layer)),
                 "num_layers": None if num_layers is None else int(num_layers),
+                "edit_success": (bool(edit_success) if isinstance(edit_success, bool) else None),
             }
             if case.get("status") != "complete":
                 cases.append(
@@ -201,32 +205,64 @@ def _candidate_metrics(
     inventory = [case for case in cases if case.get("target_layer") is not None]
     available = [case for case in inventory if case["status"] == "complete" and candidate in case["candidates"]]
     exact = sum(case["candidates"][candidate]["selected_layer"] == case["target_layer"] for case in available)
+    successful = [case for case in available if case.get("edit_success") is True]
+    successful_exact = sum(
+        case["candidates"][candidate]["selected_layer"] == case["target_layer"] for case in successful
+    )
     within_one = sum(
         abs(case["candidates"][candidate]["selected_layer"] - case["target_layer"]) <= 1 for case in available
     )
-    per_family: dict[str, dict[str, Any]] = {}
-    for family in sorted({case["family"] for case in inventory}):
-        family_inventory = [case for case in inventory if case["family"] == family]
-        family_cases = [case for case in available if case["family"] == family]
-        family_exact = sum(
-            case["candidates"][candidate]["selected_layer"] == case["target_layer"] for case in family_cases
-        )
-        per_family[family] = {
-            "correct": family_exact,
-            "available": len(family_cases),
-            "total": len(family_inventory),
-            "accuracy": family_exact / len(family_inventory) if family_inventory else None,
-        }
-    family_accuracies = [float(record["accuracy"]) for record in per_family.values() if record["accuracy"] is not None]
+
+    def grouped_metrics(field: str) -> dict[str, dict[str, Any]]:
+        groups: dict[str, dict[str, Any]] = {}
+        for value in sorted({str(case[field]) for case in inventory}):
+            group_inventory = [case for case in inventory if str(case[field]) == value]
+            group_cases = [case for case in available if str(case[field]) == value]
+            group_successful = [case for case in group_cases if case.get("edit_success") is True]
+            group_exact = sum(
+                case["candidates"][candidate]["selected_layer"] == case["target_layer"] for case in group_cases
+            )
+            group_successful_exact = sum(
+                case["candidates"][candidate]["selected_layer"] == case["target_layer"] for case in group_successful
+            )
+            groups[value] = {
+                "correct": group_exact,
+                "correct_successful_edits": group_successful_exact,
+                "available": len(group_cases),
+                "successful_edits": len(group_successful),
+                "total": len(group_inventory),
+                "requested_accuracy": (group_exact / len(group_inventory) if group_inventory else None),
+                "successful_edit_accuracy": (
+                    group_successful_exact / len(group_successful) if group_successful else None
+                ),
+            }
+        return groups
+
+    per_family = grouped_metrics("family")
+    per_model = grouped_metrics("model_identifier")
+    family_accuracies = [
+        float(record["requested_accuracy"])
+        for record in per_family.values()
+        if record["requested_accuracy"] is not None
+    ]
+    model_accuracies = [
+        float(record["requested_accuracy"]) for record in per_model.values() if record["requested_accuracy"] is not None
+    ]
     margins = [float(case["candidates"][candidate]["margin"]) for case in available]
     return {
         "correct": exact,
+        "correct_successful_edits": successful_exact,
         "available": len(available),
+        "successful_edits": len(successful),
         "total": len(inventory),
         "exact_accuracy": exact / len(inventory) if inventory else None,
+        "requested_accuracy": exact / len(inventory) if inventory else None,
+        "successful_edit_accuracy": (successful_exact / len(successful) if successful else None),
         "within_one_accuracy": within_one / len(inventory) if inventory else None,
         "macro_family_accuracy": (sum(family_accuracies) / len(family_accuracies) if family_accuracies else None),
+        "macro_model_accuracy": sum(model_accuracies) / len(model_accuracies) if model_accuracies else None,
         "per_family": per_family,
+        "per_model": per_model,
         "mean_margin": sum(margins) / len(margins) if margins else None,
         "failures": [
             {
@@ -244,6 +280,38 @@ def _candidate_metrics(
             or candidate not in case["candidates"]
             or case["candidates"][candidate]["selected_layer"] != case["target_layer"]
         ],
+    }
+
+
+def _b0_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    successful = [
+        case
+        for case in cases
+        if case["status"] == "complete"
+        and case.get("edit_success") is True
+        and isinstance(case.get("binary", {}).get("B0", {}).get("is_rome_like"), bool)
+    ]
+    detected = sum(bool(case["binary"]["B0"]["is_rome_like"]) for case in successful)
+    failures = [
+        {
+            "source_run": case["source_run"],
+            "model_identifier": case["model_identifier"],
+            "family": case["family"],
+            "case_id": case["case_id"],
+            "target_layer": case["target_layer"],
+            "selected_layer": case["binary"]["B0"].get("selected_layer"),
+            "verdict": case["binary"]["B0"].get("verdict"),
+        }
+        for case in successful
+        if not case["binary"]["B0"]["is_rome_like"]
+    ]
+    return {
+        "scope": "successful ROME edits only",
+        "claim": "ROME-compatible low-rank edit sensitivity; no specificity or ROME attribution",
+        "true_positive": detected,
+        "successful_edits_evaluated": len(successful),
+        "sensitivity": detected / len(successful) if successful else None,
+        "failures": failures,
     }
 
 
@@ -280,8 +348,10 @@ def summarize(cases: list[dict[str, Any]]) -> dict[str, Any]:
         by_split[split] = {
             "cases_total": len(split_cases),
             "cases_complete": sum(case["status"] == "complete" for case in split_cases),
+            "edit_success_count": sum(case.get("edit_success") is True for case in split_cases),
             "cases_unavailable_or_error": sum(case["status"] != "complete" for case in split_cases),
             "localization": {candidate: _candidate_metrics(split_cases, candidate) for candidate in CANDIDATE_FIELDS},
+            "B0": _b0_metrics(split_cases),
             "candidate_disagreements": _disagreements(split_cases),
             "runtime_seconds": sum(float(case.get("runtime_seconds", 0.0)) for case in split_cases),
             "peak_estimated_bytes": max(
@@ -309,6 +379,7 @@ def _csv_rows(cases: list[dict[str, Any]]) -> Iterable[dict[str, Any]]:
                         "case_id",
                         "status",
                         "target_layer",
+                        "edit_success",
                     )
                 },
                 "candidate_version": "",
@@ -337,6 +408,7 @@ def _csv_rows(cases: list[dict[str, Any]]) -> Iterable[dict[str, Any]]:
                         "case_id",
                         "status",
                         "target_layer",
+                        "edit_success",
                     )
                 },
                 "candidate_version": candidate,
@@ -346,7 +418,11 @@ def _csv_rows(cases: list[dict[str, Any]]) -> Iterable[dict[str, Any]]:
                 "localized_layer": case["localized_layer"],
                 "presence_peak_layer": case["presence_peak_layer"],
                 "B0": bool(case["binary"]["B0"]["is_rome_like"]),
-                "B1": bool(case["binary"]["B1"]["is_rome_like"]),
+                "B1": (
+                    case["binary"]["B1"]["is_rome_like"]
+                    if isinstance(case["binary"]["B1"].get("is_rome_like"), bool)
+                    else case["binary"]["B1"].get("status", "not_evaluated_uncalibrated")
+                ),
                 "B2": bool(case["binary"]["B2"]["is_rome_like"]),
             }
 
@@ -378,6 +454,7 @@ def _write_outputs(
         "case_id",
         "status",
         "target_layer",
+        "edit_success",
         "candidate_version",
         "selected_layer",
         "score",
@@ -406,8 +483,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--blind-cutoff",
         type=float,
-        required=True,
-        help="One globally calibrated development-family cutoff; never per model/family.",
+        help="One globally calibrated development-family cutoff; required unless --localization-only.",
+    )
+    parser.add_argument(
+        "--localization-only",
+        action="store_true",
+        help="Evaluate M0--M3 and B0 without evaluating uncalibrated B1.",
     )
     parser.add_argument(
         "--json-out",
@@ -423,17 +504,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def validate_evaluation_mode(*, localization_only: bool, blind_cutoff: float | None) -> float | None:
+    if localization_only:
+        if blind_cutoff is not None:
+            raise ValueError("--blind-cutoff must be omitted with --localization-only")
+        return None
+    if blind_cutoff is None:
+        raise ValueError("--blind-cutoff is required unless --localization-only is set")
+    if not math.isfinite(blind_cutoff) or blind_cutoff < 0.0:
+        raise ValueError("--blind-cutoff must be finite and non-negative")
+    return float(blind_cutoff)
+
+
 def main() -> int:
     args = parse_args()
-    if not math.isfinite(args.blind_cutoff) or args.blind_cutoff < 0.0:
-        raise ValueError("--blind-cutoff must be finite and non-negative")
+    blind_cutoff = validate_evaluation_mode(
+        localization_only=bool(args.localization_only),
+        blind_cutoff=args.blind_cutoff,
+    )
     metadata, manifest = _load_manifest(args.recapture_manifest)
     paths = enumerate_artifacts(args.analysis_root)
     cases = collect_cases(
         paths,
         model_metadata=metadata,
         blind_candidate=args.blind_candidate,
-        blind_cutoff=args.blind_cutoff,
+        blind_cutoff=blind_cutoff,
     )
     payload = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
@@ -443,8 +538,15 @@ def main() -> int:
         "split_policy": manifest.get("split_policy"),
         "calibration": {
             "blind_candidate": args.blind_candidate,
-            "blind_cutoff": float(args.blind_cutoff),
-            "rule": "calibrate on development families, then freeze",
+            "blind_cutoff": blind_cutoff,
+            "B1_status": (
+                "not_evaluated_uncalibrated" if args.localization_only else "globally_calibrated_development_cutoff"
+            ),
+            "rule": (
+                "localization-only; B1 not evaluated"
+                if args.localization_only
+                else "calibrate on development families, then freeze"
+            ),
         },
         "threat_models": {
             "B0": "clean-reference ROME-compatible low-rank Gram edit",

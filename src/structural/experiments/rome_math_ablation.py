@@ -498,7 +498,7 @@ def evaluate_capture_data(
     suspect_patch: Mapping[str, Any],
     *,
     blind_candidate: str,
-    blind_cutoff: float,
+    blind_cutoff: float | None,
 ) -> dict[str, Any]:
     """Merge a baseline/patch capture pair and evaluate M0--M3 and B0--B2."""
     if baseline.get("schema_version") != CAPTURE_SCHEMA_VERSION:
@@ -510,6 +510,23 @@ def evaluate_capture_data(
     eligible = [int(layer) for layer in suspect_patch.get("eligible_layers", ())]
     candidates = {candidate: select_candidate(profiles, eligible, candidate) for candidate in CANDIDATE_FIELDS}
     b2 = footprint_control(profiles, eligible)
+    if blind_cutoff is None:
+        b1 = {
+            "status": "not_evaluated_uncalibrated",
+            "is_rome_like": None,
+            "verdict": "not_evaluated_uncalibrated",
+            "selected_layer": None,
+            "candidate": blind_candidate,
+            "cutoff": None,
+            "threat_model": "blind",
+        }
+    else:
+        b1 = blind_robust_peak(
+            profiles,
+            eligible,
+            blind_candidate,
+            cutoff=blind_cutoff,
+        )
     return {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "profiles": profiles,
@@ -523,12 +540,7 @@ def evaluate_capture_data(
                 dict(suspect_patch.get("delta_profiles", {})),
                 eligible,
             ),
-            "B1": blind_robust_peak(
-                profiles,
-                eligible,
-                blind_candidate,
-                cutoff=blind_cutoff,
-            ),
+            "B1": b1,
             "B2": b2,
         },
     }

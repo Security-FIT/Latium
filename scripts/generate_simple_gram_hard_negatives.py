@@ -261,12 +261,13 @@ def generate(
         other_layers,
         key=lambda layer: (abs(layer - target_layer), layer),
     )
+    clean_capture = _capture(projection)
     records: list[dict[str, Any]] = [
         {
             "specimen_id": f"{model_key}:clean",
             "label": "clean",
             "negative_category": "standalone_clean",
-            "capture": _capture(projection),
+            "capture": clean_capture,
         }
     ]
     for category_index, category in enumerate(CATEGORIES):
@@ -326,6 +327,11 @@ def generate(
                     generator=generator,
                 )
                 modified = {"fc": [target_layer]}
+            capture = (
+                clean_capture
+                if category == "non_target_matrix_edit"
+                else _capture(weights)
+            )
             records.append(
                 {
                     "specimen_id": f"{model_key}:{category}:{index}",
@@ -335,7 +341,7 @@ def generate(
                     "modified_weights": modified,
                     "update": update_metadata,
                     "runtime_seconds": time.perf_counter() - started,
-                    "capture": _capture(weights),
+                    "capture": capture,
                 }
             )
             del weights

@@ -59,6 +59,7 @@ check_idle() {
 
 check_idle
 cd "${trial_root}"
+export PYTHONPATH="${trial_root}${PYTHONPATH:+:${PYTHONPATH}}"
 mkdir -p "${output_dir}/logs"
 ledger="${output_dir}/ledger.tsv"
 if [[ ! -f "${ledger}" ]]; then

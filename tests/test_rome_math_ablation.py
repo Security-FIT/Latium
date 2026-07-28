@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from scripts.evaluate_rome_math_ablation import (
+    _selection_analysis,
     collect_cases,
     enumerate_artifacts,
     summarize,
@@ -296,6 +297,37 @@ def test_evaluator_requires_an_explicit_binary_mode() -> None:
         validate_evaluation_mode(localization_only=False, blind_cutoff=None)
     with pytest.raises(ValueError, match="must be omitted"):
         validate_evaluation_mode(localization_only=True, blind_cutoff=4.5)
+
+
+def test_candidate_selection_uses_equal_family_paired_noninferiority() -> None:
+    cases = []
+    for family, targets in {
+        "family-small": (3, 4),
+        "family-large": tuple(range(20)),
+    }.items():
+        for case_id, target in enumerate(targets):
+            cases.append(
+                {
+                    "family": family,
+                    "case_id": str(case_id),
+                    "status": "complete",
+                    "target_layer": target,
+                    "candidates": {
+                        "M0": {"selected_layer": target},
+                        "M1": {"selected_layer": target},
+                        "M2": {"selected_layer": target + (case_id == 0)},
+                        "M3": {"selected_layer": target},
+                    },
+                }
+            )
+
+    selection = _selection_analysis(cases)
+
+    assert selection["equal_family_weighting"] is True
+    assert selection["best_observed_candidate"] == "M0"
+    assert selection["selected_candidate"] == "M0"
+    assert selection["comparisons"]["M0"]["noninferior"] is True
+    assert selection["bootstrap"]["families"] == ["family-large", "family-small"]
 
 
 def test_b0_scope_is_low_rank_compatibility_not_unique_rome_attribution() -> None:

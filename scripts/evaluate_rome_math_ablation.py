@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+import numpy as np
 from omegaconf import OmegaConf
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +27,10 @@ from src.structural.experiments.rome_math_ablation import (
 
 
 ALLOWED_SPLITS = {"development", "held_out_family", "final_frozen"}
+SELECTION_CANDIDATES = ("M0", "M1", "M2", "M3")
+NONINFERIORITY_MARGIN = 0.025
+BOOTSTRAP_ITERATIONS = 10_000
+BOOTSTRAP_SEED = 20_260_728
 
 
 def enumerate_artifacts(root: Path) -> list[Path]:
@@ -341,6 +346,119 @@ def _disagreements(cases: list[dict[str, Any]]) -> dict[str, int]:
     return output
 
 
+def _selection_analysis(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    """Apply the predeclared equal-family paired non-inferiority rule."""
+    inventory = [case for case in cases if case.get("target_layer") is not None]
+    families = sorted({str(case["family"]) for case in inventory})
+    if not inventory or not families:
+        return {
+            "status": "not_evaluated_no_cases",
+            "selected_candidate": None,
+        }
+
+    correctness: dict[str, dict[str, np.ndarray]] = {}
+    for family in families:
+        family_cases = [case for case in inventory if str(case["family"]) == family]
+        correctness[family] = {}
+        for candidate in SELECTION_CANDIDATES:
+            correctness[family][candidate] = np.asarray(
+                [
+                    float(
+                        case.get("status") == "complete"
+                        and case.get("candidates", {}).get(candidate, {}).get("selected_layer")
+                        == case["target_layer"]
+                    )
+                    for case in family_cases
+                ],
+                dtype=np.float64,
+            )
+
+    observed = {
+        candidate: float(
+            np.mean(
+                [
+                    correctness[family][candidate].mean()
+                    for family in families
+                ]
+            )
+        )
+        for candidate in SELECTION_CANDIDATES
+    }
+    best = max(
+        SELECTION_CANDIDATES,
+        key=lambda candidate: (
+            observed[candidate],
+            -SELECTION_CANDIDATES.index(candidate),
+        ),
+    )
+
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    differences = np.empty(
+        (BOOTSTRAP_ITERATIONS, len(SELECTION_CANDIDATES)),
+        dtype=np.float64,
+    )
+    family_count = len(families)
+    for iteration in range(BOOTSTRAP_ITERATIONS):
+        family_draw = rng.integers(0, family_count, size=family_count)
+        cluster_differences = np.empty(
+            (family_count, len(SELECTION_CANDIDATES)),
+            dtype=np.float64,
+        )
+        for draw_index, family_index in enumerate(family_draw):
+            family = families[int(family_index)]
+            sample_count = int(correctness[family][best].size)
+            case_draw = rng.integers(0, sample_count, size=sample_count)
+            best_values = correctness[family][best][case_draw]
+            for candidate_index, candidate in enumerate(SELECTION_CANDIDATES):
+                candidate_values = correctness[family][candidate][case_draw]
+                cluster_differences[draw_index, candidate_index] = float(
+                    np.mean(candidate_values - best_values)
+                )
+        differences[iteration] = cluster_differences.mean(axis=0)
+
+    comparisons: dict[str, dict[str, Any]] = {}
+    for candidate_index, candidate in enumerate(SELECTION_CANDIDATES):
+        lower, upper = np.quantile(
+            differences[:, candidate_index],
+            (0.025, 0.975),
+        )
+        comparisons[candidate] = {
+            "observed_macro_accuracy": observed[candidate],
+            "observed_difference_from_best": observed[candidate] - observed[best],
+            "paired_hierarchical_bootstrap_95_ci": [
+                float(lower),
+                float(upper),
+            ],
+            "noninferior": bool(float(lower) > -NONINFERIORITY_MARGIN),
+        }
+
+    selected = next(
+        (
+            candidate
+            for candidate in SELECTION_CANDIDATES
+            if comparisons[candidate]["noninferior"]
+        ),
+        None,
+    )
+    return {
+        "status": "provisional_development_selection",
+        "selection_order": list(SELECTION_CANDIDATES),
+        "equal_family_weighting": True,
+        "unavailable_cases_count_as_incorrect_for_all_candidates": True,
+        "best_observed_candidate": best,
+        "selected_candidate": selected,
+        "noninferiority_margin": NONINFERIORITY_MARGIN,
+        "bootstrap": {
+            "type": "paired_hierarchical_family_then_case",
+            "confidence": 0.95,
+            "iterations": BOOTSTRAP_ITERATIONS,
+            "seed": BOOTSTRAP_SEED,
+            "families": families,
+        },
+        "comparisons": comparisons,
+    }
+
+
 def summarize(cases: list[dict[str, Any]]) -> dict[str, Any]:
     by_split: dict[str, Any] = {}
     for split in sorted(ALLOWED_SPLITS):
@@ -353,6 +471,7 @@ def summarize(cases: list[dict[str, Any]]) -> dict[str, Any]:
             "localization": {candidate: _candidate_metrics(split_cases, candidate) for candidate in CANDIDATE_FIELDS},
             "B0": _b0_metrics(split_cases),
             "candidate_disagreements": _disagreements(split_cases),
+            "candidate_selection": _selection_analysis(split_cases),
             "runtime_seconds": sum(float(case.get("runtime_seconds", 0.0)) for case in split_cases),
             "peak_estimated_bytes": max(
                 (int(case.get("estimated_peak_bytes", 0)) for case in split_cases),

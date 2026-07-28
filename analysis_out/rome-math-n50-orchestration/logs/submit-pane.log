@@ -1,403 +1,0 @@
-No HuggingFace token configured. Set runtime.hf_token if private or rate-limited Hub access is required.
-[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
-model.safetensors.index.json:   0%|                | 0.00/17.7k [00:00<?, ?B/s]model.safetensors.index.json: 100%|███████| 17.7k/17.7k [00:00<00:00, 53.4MB/s]
-Downloading bytes:                                         |  0.00B            
-Reconstructing (incomplete total...): |           |  0.00B /  0.00B            [A
-
-Fetching 2 files:   0%|                                  | 0/2 [00:00<?, ?it/s][A[A
-Reconstructing (incomplete total...):   0%|       |  0.00B / 14.4GB            [A
-Reconstructing (incomplete total...):   0%|       |  0.00B / 14.4GB            [ADownloading bytes:                                         | 28.4MB            Downloading bytes: ▏                                       | 78.4MB, 38.1MB/s  Downloading bytes: ▎                                       |  127MB,  112MB/s  
-Reconstructing (incomplete total...):   0%|       | 67.0MB / 14.4GB            [ADownloading bytes: ▍                                       |  161MB,  153MB/s  Downloading bytes: ▌                                       |  192MB,  187MB/s  Downloading bytes: ▋                                       |  242MB,  214MB/s  
-Reconstructing (incomplete total...):   1%|       |  201MB / 14.4GB, 58.5MB/s  [ADownloading bytes: ▊                                       |  303MB,  279MB/s  Downloading bytes: ▉                                       |  353MB,  288MB/s  Downloading bytes: █                                       |  395MB,  333MB/s  Downloading bytes: █▏                                      |  436MB,  287MB/s  Downloading bytes: █▎                                      |  470MB,  257MB/s  Downloading bytes: █▍                                      |  525MB,  274MB/s  
-Reconstructing (incomplete total...):   3%|▏      |  402MB / 14.4GB,  150MB/s  [ADownloading bytes: █▌                                      |  566MB,  274MB/s  Downloading bytes: █▋                                      |  610MB,  302MB/s  Downloading bytes: █▊                                      |  652MB,  333MB/s  
-Reconstructing (incomplete total...):   4%|▎      |  591MB / 14.4GB,  188MB/s  [ADownloading bytes: █▉                                      |  710MB,  352MB/s  Downloading bytes: ██                                      |  759MB,  326MB/s  Downloading bytes: ██▏                                     |  802MB,  364MB/s  Downloading bytes: ██▎                                     |  851MB,  379MB/s  Downloading bytes: ██▌                                     |  914MB,  407MB/s  Downloading bytes: ██▋                                     |  974MB,  466MB/s  Downloading bytes: ██▊                                     | 1.03GB,  504MB/s  Downloading bytes: ███                                     | 1.10GB,  412MB/s  
-Reconstructing (incomplete total...):   5%|▎      |  658MB / 14.4GB,  258MB/s  [A
-Reconstructing (incomplete total...):   5%|▎      |  725MB / 14.4GB,  177MB/s  [ADownloading bytes: ███▏                                    | 1.17GB,  480MB/s  
-Reconstructing (incomplete total...):   6%|▍      |  859MB / 14.4GB,  209MB/s  [ADownloading bytes: ███▌                                    | 1.28GB,  428MB/s  Downloading bytes: ███▋                                    | 1.35GB,  569MB/s  Downloading bytes: ███▉                                    | 1.42GB,  488MB/s  Downloading bytes: ████▏                                   | 1.53GB,  534MB/s  
-Reconstructing (incomplete total...):   7%|▌      | 1.06GB / 14.4GB,  306MB/s  [ADownloading bytes: ████▍                                   | 1.62GB,  544MB/s  
-Reconstructing (incomplete total...):   8%|▌      | 1.13GB / 14.4GB,  318MB/s  [ADownloading bytes: ████▊                                   | 1.72GB,  619MB/s  Downloading bytes: █████                                   | 1.84GB,  575MB/s  Downloading bytes: █████▍                                  | 1.96GB,  576MB/s  Downloading bytes: █████▋                                  | 2.04GB,  696MB/s  
-Reconstructing (incomplete total...):  11%|▊      | 1.56GB / 14.4GB,  350MB/s  [ADownloading bytes: █████▉                                  | 2.13GB,  598MB/s  Downloading bytes: ██████▏                                 | 2.22GB,  645MB/s  
-Reconstructing (incomplete total...):  13%|▉      | 1.90GB / 14.4GB,  512MB/s  [ADownloading bytes: ██████▌                                 | 2.35GB,  721MB/s  
-Reconstructing (incomplete total...):  15%|█      | 2.11GB / 14.4GB,  656MB/s  [ADownloading bytes: ██████▊                                 | 2.44GB,  678MB/s  Downloading bytes: ███████                                 | 2.54GB,  604MB/s  
-Reconstructing (incomplete total...):  16%|█      | 2.24GB / 14.4GB,  722MB/s  [ADownloading bytes: ███████▎                                | 2.64GB,  666MB/s  Downloading bytes: ███████▌                                | 2.73GB,  727MB/s  Downloading bytes: ███████▊                                | 2.83GB,  765MB/s  Downloading bytes: ████████                                | 2.93GB,  669MB/s  Downloading bytes: ████████▍                               | 3.05GB,  730MB/s  
-Reconstructing (incomplete total...):  17%|█▏     | 2.39GB / 14.4GB,  644MB/s  [ADownloading bytes: ████████▋                               | 3.15GB,  846MB/s  
-Reconstructing (incomplete total...):  17%|█▏     | 2.46GB / 14.4GB,  471MB/s  [ADownloading bytes: █████████▏                              | 3.31GB,  880MB/s  Downloading bytes: █████████▍                              | 3.42GB,  844MB/s  Downloading bytes: █████████▊                              | 3.53GB,  923MB/s  Downloading bytes: ██████████▏                             | 3.66GB,  955MB/s  Downloading bytes: ██████████▍                             | 3.76GB,  849MB/s  
-Reconstructing (incomplete total...):  18%|█▎     | 2.61GB / 14.4GB,  450MB/s  [ADownloading bytes: ██████████▋                             | 3.87GB,  866MB/s  Downloading bytes: ███████████                             | 3.98GB,  766MB/s  Downloading bytes: ███████████▎                            | 4.07GB,  808MB/s  Downloading bytes: ███████████▌                            | 4.19GB,  831MB/s  Downloading bytes: ███████████▉                            | 4.31GB,  910MB/s  Downloading bytes: ████████████▎                           | 4.45GB,  812MB/s  
-Reconstructing (incomplete total...):  20%|█▎     | 2.82GB / 14.4GB,  339MB/s  [ADownloading bytes: ████████████▌                           | 4.55GB,  910MB/s  Downloading bytes: ████████████▊                           | 4.65GB,  775MB/s  
-Reconstructing (incomplete total...):  20%|█▍     | 2.88GB / 14.4GB,  321MB/s  [A
-Reconstructing (incomplete total...):  29%|██     | 4.22GB / 14.4GB, 1.22GB/s  [ADownloading bytes: █████████████▎                          | 4.80GB,  815MB/s  Downloading bytes: █████████████▌                          | 4.90GB,  906MB/s  Downloading bytes: █████████████▉                          | 5.01GB,  891MB/s  Downloading bytes: ██████████████▏                         | 5.11GB,  789MB/s  Downloading bytes: ██████████████▍                         | 5.23GB,  839MB/s  Downloading bytes: ██████████████▊                         | 5.36GB,  908MB/s  
-Reconstructing (incomplete total...):  34%|██▍    | 4.97GB / 14.4GB, 1.22GB/s  [ADownloading bytes: ███████████████▏                        | 5.48GB,  988MB/s  Downloading bytes: ███████████████▋                        | 5.64GB,  847MB/s  
-Reconstructing (incomplete total...):  36%|██▌    | 5.17GB / 14.4GB, 1.14GB/s  [ADownloading bytes: ███████████████▉                        | 5.77GB,  986MB/s  
-Reconstructing (incomplete total...):  40%|██▊    | 5.71GB / 14.4GB, 1.06GB/s  [ADownloading bytes: ████████████████▎                       | 5.91GB,  853MB/s  Downloading bytes: ████████████████▊                       | 6.06GB,  942MB/s  Downloading bytes: █████████████████▏                      | 6.18GB, 1.07GB/s  
-Reconstructing (incomplete total...):  42%|██▉    | 6.11GB / 14.4GB, 1.40GB/s  [ADownloading bytes: █████████████████▌                      | 6.36GB, 1.13GB/s  Downloading bytes: ██████████████████                      | 6.50GB, 1.27GB/s  Downloading bytes: ██████████████████▎                     | 6.63GB, 1.04GB/s  Downloading bytes: ██████████████████▊                     | 6.81GB, 1.10GB/s  Downloading bytes: ███████████████████▎                    | 6.96GB, 1.25GB/s  
-Reconstructing (incomplete total...):  46%|███▏   | 6.65GB / 14.4GB, 1.27GB/s  [ADownloading bytes: ███████████████████▋                    | 7.10GB, 1.03GB/s  Downloading bytes: ███████████████████▉                    | 7.20GB, 1.41GB/s  
-Reconstructing (incomplete total...):  49%|███▍   | 7.06GB / 14.4GB, 1.10GB/s  [A
-Reconstructing (incomplete total...):  49%|███▍   | 7.06GB / 14.4GB, 1.11GB/s  [ADownloading bytes: ████████████████████▌                   | 7.40GB, 1.41GB/s  Downloading bytes: ████████████████████▌                   | 7.40GB, 1.06GB/s  Downloading bytes: ████████████████████▉                   | 7.56GB, 1.06GB/s  Downloading bytes: █████████████████████▎                  | 7.71GB, 1.16GB/s  Downloading bytes: █████████████████████▋                  | 7.84GB, 1.00GB/s  Downloading bytes: ██████████████████████▏                 | 8.00GB, 1.07GB/s  
-Reconstructing (incomplete total...):  53%|███▋   | 7.64GB / 14.4GB, 1.11GB/s  [ADownloading bytes: ██████████████████████▋                 | 8.18GB, 1.18GB/s  Downloading bytes: ███████████████████████▎                | 8.41GB, 1.22GB/s  
-Reconstructing (incomplete total...):  56%|███▉   | 8.06GB / 14.4GB, 1.02GB/s  [ADownloading bytes: ███████████████████████▊                | 8.58GB, 1.46GB/s  Downloading bytes: ████████████████████████▎               | 8.76GB, 1.52GB/s  Downloading bytes: ████████████████████████▋               | 8.90GB, 1.27GB/s  
-Reconstructing (incomplete total...):  59%|████▏  | 8.57GB / 14.4GB, 1.19GB/s  [ADownloading bytes: █████████████████████████▏              | 9.09GB, 1.27GB/s  Downloading bytes: █████████████████████████▋              | 9.26GB, 1.35GB/s  Downloading bytes: █████████████████████████▉              | 9.35GB, 1.74GB/s  Downloading bytes: ██████████████████████████▍             | 9.53GB, 1.74GB/s  
-Reconstructing (incomplete total...):  62%|████▎  | 8.90GB / 14.4GB, 1.29GB/s  [ADownloading bytes: ███████████████████████████             | 9.75GB, 1.39GB/s  Downloading bytes: ███████████████████████████             | 9.75GB, 1.67GB/s  
-Reconstructing (incomplete total...):  65%|████▌  | 9.37GB / 14.4GB, 1.05GB/s  [ADownloading bytes: ███████████████████████████▋            | 9.97GB, 1.67GB/s  Downloading bytes: ███████████████████████████▋            | 10.0GB, 1.37GB/s  
-Reconstructing (incomplete total...):  68%|████▊  | 9.84GB / 14.4GB, 1.39GB/s  [ADownloading bytes: ████████████████████████████▍           | 10.3GB, 1.37GB/s  Downloading bytes: ████████████████████████████▍           | 10.3GB, 1.25GB/s  Downloading bytes: ████████████████████████████▊           | 10.4GB, 1.25GB/s  Downloading bytes: █████████████████████████████▏          | 10.5GB, 1.07GB/s  
-Reconstructing (incomplete total...):  70%|████▉  | 10.2GB / 14.4GB, 1.44GB/s  [ADownloading bytes: █████████████████████████████▋          | 10.7GB, 1.10GB/s  Downloading bytes: █████████████████████████████▋          | 10.7GB, 1.25GB/s  Downloading bytes: ██████████████████████████████▎         | 10.9GB, 1.25GB/s  Downloading bytes: ██████████████████████████████▍         | 11.0GB, 1.22GB/s  Downloading bytes: ██████████████████████████████▊         | 11.1GB, 1.22GB/s  Downloading bytes: ██████████████████████████████▉         | 11.2GB, 1.06GB/s  
-Reconstructing (incomplete total...):  78%|█████▍ | 11.2GB / 14.4GB, 1.21GB/s  [ADownloading bytes: ███████████████████████████████▍        | 11.3GB, 1.06GB/s  Downloading bytes: ███████████████████████████████▋        | 11.4GB,  926MB/s  Downloading bytes: ████████████████████████████████▏       | 11.6GB,  951MB/s  
-Reconstructing (incomplete total...):  79%|█████▌ | 11.4GB / 14.4GB, 1.54GB/s  [ADownloading bytes: ████████████████████████████████▌       | 11.7GB, 1.09GB/s  Downloading bytes: █████████████████████████████████       | 11.9GB, 1.16GB/s  
-Reconstructing (incomplete total...):  81%|█████▋ | 11.7GB / 14.4GB, 1.22GB/s  [ADownloading bytes: █████████████████████████████████▍      | 12.1GB, 1.11GB/s  Downloading bytes: █████████████████████████████████▊      | 12.2GB, 1.13GB/s  
-Reconstructing (incomplete total...):  88%|██████▏| 12.7GB / 14.4GB, 1.12GB/s  [ADownloading bytes: ██████████████████████████████████      | 12.3GB,  947MB/s  Downloading bytes: ██████████████████████████████████▍     | 12.4GB,  975MB/s  
-Reconstructing (incomplete total...):  90%|██████▎| 13.0GB / 14.4GB, 1.68GB/s  [A
-Reconstructing (incomplete total...):  94%|██████▌| 13.6GB / 14.4GB, 1.28GB/s  [ADownloading bytes: ██████████████████████████████████▋     | 12.5GB,  697MB/s  
-
-Fetching 2 files:  50%|█████████████             | 1/2 [00:16<00:16, 16.07s/it][A[A
-Reconstructing (incomplete total...):  97%|██████▊| 14.0GB / 14.4GB, 1.74GB/s  [A
-Reconstructing (incomplete total...): 100%|███████| 14.4GB / 14.4GB, 1.47GB/s  [A
-
-Fetching 2 files: 100%|██████████████████████████| 2/2 [00:18<00:00,  7.82s/it][A[AFetching 2 files: 100%|██████████████████████████| 2/2 [00:18<00:00,  9.06s/it]
-Downloading bytes: ████████████████████████████████████████| 12.5GB,  415MB/s  Download complete: : ██████████████████████████████████████| 12.5GB,  415MB/s  
-Reconstruction complete: 100%|████████████████████| 14.4GB / 14.4GB, 1.32GB/s  [AReconstruction complete: 100%|████████████████████| 14.4GB / 14.4GB, 1.32GB/s  
-Download complete: : ██████████████████████████████████████| 12.5GB,  415MB/s  
-Loading weights:   0%|                                 | 0/196 [00:00<?, ?it/s]Loading weights: 100%|█████████████████████| 196/196 [00:00<00:00, 4625.05it/s]
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-generation_config.json:   0%|                        | 0.00/117 [00:00<?, ?B/s]generation_config.json: 100%|██████████████████| 117/117 [00:00<00:00, 739kB/s]
-tokenizer_config.json:   0%|                         | 0.00/287 [00:00<?, ?B/s]tokenizer_config.json: 100%|██████████████████| 287/287 [00:00<00:00, 1.80MB/s]
-tokenizer.json:   0%|                              | 0.00/2.73M [00:00<?, ?B/s]tokenizer.json: 100%|██████████████████████| 2.73M/2.73M [00:00<00:00, 152MB/s]
-special_tokens_map.json:   0%|                       | 0.00/281 [00:00<?, ?B/s]special_tokens_map.json: 100%|████████████████| 281/281 [00:00<00:00, 1.82MB/s]
-Writing model shards:   0%|                              | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████████████████| 1/1 [00:22<00:00, 22.91s/it]Writing model shards: 100%|██████████████████████| 1/1 [00:22<00:00, 22.91s/it]
-causal-trace scan:   0%|                             | 0/10000 [00:00<?, ?it/s]No HuggingFace token configured. Set runtime.hf_token if private or rate-limited Hub access is required.
-causal-trace scan:   0%|                   | 1/10000 [00:00<1:07:46,  2.46it/s]causal-trace scan:   0%|                   | 2/10000 [00:00<1:04:28,  2.58it/s]causal-trace scan:   0%|                     | 5/10000 [00:00<22:33,  7.39it/s]causal-trace scan:   0%|                     | 7/10000 [00:01<30:03,  5.54it/s]causal-trace scan:   0%|                   | 9/10000 [00:02<1:08:13,  2.44it/s]causal-trace scan:   0%|                    | 12/10000 [00:03<40:48,  4.08it/s]causal-trace scan:   0%|                    | 14/10000 [00:03<40:04,  4.15it/s]causal-trace scan:   0%|                  | 17/10000 [00:05<1:01:09,  2.72it/s]causal-trace scan:   0%|                    | 20/10000 [00:05<41:28,  4.01it/s]causal-trace scan:   0%|                    | 22/10000 [00:05<42:09,  3.95it/s]causal-trace scan:   0%|                    | 24/10000 [00:06<40:10,  4.14it/s]causal-trace scan:   0%|                    | 27/10000 [00:06<27:43,  5.99it/s]causal-trace scan:   0%|                    | 29/10000 [00:08<55:48,  2.98it/s]causal-trace scan:   0%|                    | 32/10000 [00:08<38:06,  4.36it/s]causal-trace scan:   0%|                    | 35/10000 [00:08<27:16,  6.09it/s]causal-trace scan:   0%|                    | 38/10000 [00:08<20:19,  8.17it/s]causal-trace scan:   0%|                    | 41/10000 [00:08<22:39,  7.33it/s]causal-trace scan:   0%|                    | 44/10000 [00:09<17:25,  9.52it/s]causal-trace scan:   0%|                    | 47/10000 [00:10<45:26,  3.65it/s]causal-trace scan:   0%|                  | 49/10000 [00:12<1:06:16,  2.50it/s]causal-trace scan:   1%|                  | 51/10000 [00:14<1:24:10,  1.97it/s]causal-trace scan:   1%|                  | 52/10000 [00:15<1:51:39,  1.48it/s]causal-trace scan:   1%|                  | 55/10000 [00:16<1:17:37,  2.14it/s]causal-trace scan:   1%|                    | 58/10000 [00:16<51:57,  3.19it/s]causal-trace scan:   1%|                    | 61/10000 [00:16<36:21,  4.56it/s]causal-trace scan:   1%|                  | 63/10000 [00:18<1:02:17,  2.66it/s]causal-trace scan:   1%|▏                   | 66/10000 [00:18<42:56,  3.86it/s]causal-trace scan:   1%|▏                   | 69/10000 [00:18<30:45,  5.38it/s]causal-trace scan:   1%|▏                   | 72/10000 [00:20<51:56,  3.19it/s]causal-trace scan:   1%|▏                   | 74/10000 [00:20<48:55,  3.38it/s]causal-trace scan:   1%|▏                 | 76/10000 [00:22<1:13:35,  2.25it/s]causal-trace scan:   1%|▏                   | 79/10000 [00:22<49:57,  3.31it/s]causal-trace scan:   1%|▏                 | 81/10000 [00:24<1:14:56,  2.21it/s]causal-trace scan:   1%|▏                   | 84/10000 [00:24<50:52,  3.25it/s]causal-trace scan:   1%|▏                   | 87/10000 [00:24<35:55,  4.60it/s]causal-trace scan:   1%|▏                   | 89/10000 [00:25<35:25,  4.66it/s]causal-trace scan:   1%|▏                   | 92/10000 [00:25<31:03,  5.32it/s]causal-trace scan:   1%|▏                   | 94/10000 [00:27<56:31,  2.92it/s]causal-trace scan:   1%|▏                   | 95/10000 [00:27<56:28,  2.92it/s]causal-trace scan:   1%|▏                 | 96/10000 [00:29<1:39:51,  1.65it/s]causal-trace scan:   1%|▏                   | 99/10000 [00:29<59:33,  2.77it/s]causal-trace scan:   1%|▏                | 101/10000 [00:31<1:23:09,  1.98it/s]causal-trace scan:   1%|▏                | 103/10000 [00:32<1:40:57,  1.63it/s]causal-trace scan:   1%|▏                | 106/10000 [00:32<1:04:21,  2.56it/s]causal-trace scan:   1%|▏                  | 109/10000 [00:33<50:41,  3.25it/s]causal-trace scan:   1%|▏                  | 112/10000 [00:33<35:36,  4.63it/s]causal-trace scan:   1%|▏                  | 115/10000 [00:34<32:23,  5.09it/s]causal-trace scan:   1%|▏                  | 118/10000 [00:34<23:58,  6.87it/s]causal-trace scan:   1%|▏                  | 121/10000 [00:34<18:20,  8.97it/s]causal-trace scan:   1%|▏                  | 124/10000 [00:34<14:34, 11.29it/s]causal-trace scan:   1%|▏                  | 127/10000 [00:36<38:47,  4.24it/s]causal-trace scan:   1%|▏                  | 129/10000 [00:37<59:30,  2.76it/s]causal-trace scan:   1%|▏                  | 131/10000 [00:38<52:31,  3.13it/s]causal-trace scan:   1%|▎                  | 134/10000 [00:38<36:30,  4.50it/s]causal-trace scan:   1%|▎                  | 137/10000 [00:38<26:24,  6.22it/s]causal-trace scan:   1%|▎                  | 140/10000 [00:39<47:07,  3.49it/s]causal-trace scan:   1%|▏                | 142/10000 [00:41<1:08:13,  2.41it/s]causal-trace scan:   1%|▏                | 144/10000 [00:43<1:34:54,  1.73it/s]causal-trace scan:   1%|▏                | 145/10000 [00:45<2:01:28,  1.35it/s]causal-trace scan:   1%|▎                | 148/10000 [00:45<1:15:57,  2.16it/s]causal-trace scan:   2%|▎                  | 151/10000 [00:45<58:34,  2.80it/s]causal-trace scan:   2%|▎                  | 153/10000 [00:46<57:16,  2.87it/s]causal-trace scan:   2%|▎                  | 156/10000 [00:46<39:04,  4.20it/s]causal-trace scan:   2%|▎                  | 158/10000 [00:47<37:56,  4.32it/s]causal-trace scan:   2%|▎                | 160/10000 [00:48<1:04:47,  2.53it/s]causal-trace scan:   2%|▎                | 161/10000 [00:49<1:04:04,  2.56it/s]causal-trace scan:   2%|▎                | 164/10000 [00:50<1:15:51,  2.16it/s]causal-trace scan:   2%|▎                | 166/10000 [00:51<1:05:45,  2.49it/s]causal-trace scan:   2%|▎                  | 169/10000 [00:51<43:26,  3.77it/s]causal-trace scan:   2%|▎                  | 172/10000 [00:51<30:19,  5.40it/s]causal-trace scan:   2%|▎                  | 175/10000 [00:51<22:11,  7.38it/s]causal-trace scan:   2%|▎                  | 177/10000 [00:52<24:40,  6.64it/s]causal-trace scan:   2%|▎                  | 180/10000 [00:52<18:15,  8.96it/s]causal-trace scan:   2%|▎                  | 183/10000 [00:53<42:55,  3.81it/s]causal-trace scan:   2%|▎                  | 186/10000 [00:54<31:07,  5.26it/s]causal-trace scan:   2%|▎                  | 189/10000 [00:54<23:13,  7.04it/s]causal-trace scan:   2%|▎                  | 192/10000 [00:54<17:51,  9.15it/s]causal-trace scan:   2%|▎                  | 195/10000 [00:56<41:44,  3.91it/s]causal-trace scan:   2%|▍                  | 198/10000 [00:56<30:49,  5.30it/s]causal-trace scan:   2%|▍                  | 201/10000 [00:58<55:15,  2.96it/s]causal-trace scan:   2%|▍                  | 204/10000 [00:58<40:18,  4.05it/s]causal-trace scan:   2%|▍                  | 207/10000 [00:58<29:53,  5.46it/s]causal-trace scan:   2%|▎                | 210/10000 [01:01<1:15:44,  2.15it/s]causal-trace scan:   2%|▎                | 212/10000 [01:02<1:05:45,  2.48it/s]causal-trace scan:   2%|▍                  | 215/10000 [01:02<46:22,  3.52it/s]causal-trace scan:   2%|▎                | 217/10000 [01:03<1:05:40,  2.48it/s]causal-trace scan:   2%|▍                  | 220/10000 [01:03<45:34,  3.58it/s]causal-trace scan:   2%|▍                  | 223/10000 [01:04<38:02,  4.28it/s]causal-trace scan:   2%|▍                  | 225/10000 [01:05<59:13,  2.75it/s]causal-trace scan:   2%|▍                  | 228/10000 [01:06<41:18,  3.94it/s]causal-trace scan:   2%|▍                  | 230/10000 [01:06<39:08,  4.16it/s]causal-trace scan:   2%|▍                | 232/10000 [01:08<1:06:58,  2.43it/s]causal-trace scan:   2%|▍                  | 235/10000 [01:08<45:14,  3.60it/s]causal-trace scan:   2%|▍                  | 238/10000 [01:08<31:58,  5.09it/s]causal-trace scan:   2%|▍                  | 241/10000 [01:08<28:56,  5.62it/s]causal-trace scan:   2%|▍                  | 244/10000 [01:08<21:35,  7.53it/s]causal-trace scan:   2%|▍                  | 246/10000 [01:09<23:41,  6.86it/s]causal-trace scan:   2%|▍                  | 248/10000 [01:10<50:58,  3.19it/s]causal-trace scan:   2%|▍                  | 250/10000 [01:11<46:49,  3.47it/s]causal-trace scan:   3%|▍                | 251/10000 [01:13<1:20:40,  2.01it/s]causal-trace scan:   3%|▍                  | 254/10000 [01:13<50:29,  3.22it/s]causal-trace scan:   3%|▍                  | 257/10000 [01:13<34:09,  4.75it/s]causal-trace scan:   3%|▍                  | 259/10000 [01:14<58:31,  2.77it/s]causal-trace scan:   3%|▍                  | 262/10000 [01:14<39:44,  4.08it/s]causal-trace scan:   3%|▌                  | 265/10000 [01:15<28:16,  5.74it/s]causal-trace scan:   3%|▌                  | 268/10000 [01:15<20:56,  7.75it/s]causal-trace scan:   3%|▌                  | 271/10000 [01:16<43:53,  3.69it/s]causal-trace scan:   3%|▌                  | 274/10000 [01:16<31:59,  5.07it/s]causal-trace scan:   3%|▌                  | 277/10000 [01:17<23:54,  6.78it/s]causal-trace scan:   3%|▌                  | 280/10000 [01:17<24:22,  6.64it/s]causal-trace scan:   3%|▌                  | 283/10000 [01:17<18:42,  8.66it/s]causal-trace scan:   3%|▌                  | 286/10000 [01:17<14:47, 10.95it/s]causal-trace scan:   3%|▌                  | 289/10000 [01:18<18:38,  8.68it/s]causal-trace scan:   3%|▌                  | 292/10000 [01:18<14:46, 10.95it/s]causal-trace scan:   3%|▌                  | 295/10000 [01:18<12:02, 13.42it/s]causal-trace scan:   3%|▌                  | 298/10000 [01:18<10:09, 15.93it/s]causal-trace scan:   3%|▌                  | 301/10000 [01:18<08:49, 18.31it/s]causal-trace scan:   3%|▌                  | 304/10000 [01:18<07:53, 20.48it/s]causal-trace scan:   3%|▌                  | 307/10000 [01:18<07:14, 22.33it/s]causal-trace scan:   3%|▌                  | 310/10000 [01:19<16:13,  9.95it/s]causal-trace scan:   3%|▌                  | 313/10000 [01:21<38:50,  4.16it/s]causal-trace scan:   3%|▌                | 315/10000 [01:23<1:01:41,  2.62it/s]causal-trace scan:   3%|▌                | 317/10000 [01:24<1:18:27,  2.06it/s]causal-trace scan:   3%|▌                  | 320/10000 [01:24<53:41,  3.00it/s]causal-trace scan:   3%|▌                  | 323/10000 [01:24<37:59,  4.24it/s]causal-trace scan:   3%|▌                  | 326/10000 [01:25<27:43,  5.82it/s]causal-trace scan:   3%|▋                  | 329/10000 [01:25<26:40,  6.04it/s]causal-trace scan:   3%|▋                  | 332/10000 [01:25<25:56,  6.21it/s]causal-trace scan:   3%|▋                  | 334/10000 [01:26<29:21,  5.49it/s]causal-trace scan:   3%|▋                  | 336/10000 [01:27<35:25,  4.55it/s]causal-trace scan:   3%|▋                  | 339/10000 [01:27<25:11,  6.39it/s]causal-trace scan:   3%|▋                  | 342/10000 [01:27<18:46,  8.57it/s]causal-trace scan:   3%|▋                  | 345/10000 [01:27<14:35, 11.03it/s]causal-trace scan:   3%|▌                | 348/10000 [01:32<1:31:58,  1.75it/s]causal-trace scan:   4%|▌                | 351/10000 [01:32<1:05:15,  2.46it/s]causal-trace scan:   4%|▌                | 353/10000 [01:34<1:21:28,  1.97it/s]causal-trace scan:   4%|▌                | 355/10000 [01:36<1:42:48,  1.56it/s]causal-trace scan:   4%|▌                | 358/10000 [01:36<1:09:19,  2.32it/s]causal-trace scan:   4%|▋                  | 361/10000 [01:36<55:17,  2.91it/s]causal-trace scan:   4%|▋                  | 364/10000 [01:36<39:23,  4.08it/s]causal-trace scan:   4%|▌                | 366/10000 [01:38<1:00:57,  2.63it/s]causal-trace scan:   4%|▋                  | 369/10000 [01:38<42:32,  3.77it/s]causal-trace scan:   4%|▋                | 371/10000 [01:40<1:04:01,  2.51it/s]causal-trace scan:   4%|▋                  | 374/10000 [01:40<44:09,  3.63it/s]causal-trace scan:   4%|▋                  | 377/10000 [01:40<31:34,  5.08it/s]causal-trace scan:   4%|▋                  | 380/10000 [01:40<29:18,  5.47it/s]causal-trace scan:   4%|▋                  | 383/10000 [01:41<21:55,  7.31it/s]causal-trace scan:   4%|▋                  | 386/10000 [01:41<16:54,  9.48it/s]causal-trace scan:   4%|▋                  | 389/10000 [01:41<13:27, 11.90it/s]causal-trace scan:   4%|▋                  | 392/10000 [01:43<40:40,  3.94it/s]causal-trace scan:   4%|▋                  | 394/10000 [01:43<44:17,  3.61it/s]causal-trace scan:   4%|▊                  | 396/10000 [01:44<41:43,  3.84it/s]causal-trace scan:   4%|▊                  | 399/10000 [01:44<29:22,  5.45it/s]causal-trace scan:   4%|▊                  | 402/10000 [01:44<21:35,  7.41it/s]causal-trace scan:   4%|▊                  | 405/10000 [01:44<16:30,  9.68it/s]causal-trace scan:   4%|▊                  | 408/10000 [01:44<13:06, 12.19it/s]causal-trace scan:   4%|▊                  | 411/10000 [01:44<10:48, 14.79it/s]causal-trace scan:   4%|▊                  | 414/10000 [01:45<09:14, 17.29it/s]causal-trace scan:   4%|▊                  | 417/10000 [01:45<08:09, 19.59it/s]causal-trace scan:   4%|▊                  | 420/10000 [01:45<07:23, 21.60it/s]causal-trace scan:   4%|▊                  | 423/10000 [01:45<06:52, 23.24it/s]causal-trace scan:   4%|▊                  | 426/10000 [01:47<34:07,  4.68it/s]causal-trace scan:   4%|▊                  | 429/10000 [01:47<25:33,  6.24it/s]causal-trace scan:   4%|▊                  | 432/10000 [01:48<44:39,  3.57it/s]causal-trace scan:   4%|▊                  | 435/10000 [01:49<32:56,  4.84it/s]causal-trace scan:   4%|▊                  | 438/10000 [01:49<24:46,  6.43it/s]causal-trace scan:   4%|▊                  | 441/10000 [01:51<56:12,  2.83it/s]causal-trace scan:   4%|▊                  | 444/10000 [01:51<45:50,  3.47it/s]causal-trace scan:   4%|▊                  | 447/10000 [01:53<59:17,  2.69it/s]causal-trace scan:   4%|▊                | 448/10000 [01:55<1:25:06,  1.87it/s]causal-trace scan:   5%|▊                  | 451/10000 [01:55<57:24,  2.77it/s]causal-trace scan:   5%|▊                  | 454/10000 [01:55<40:12,  3.96it/s]causal-trace scan:   5%|▊                  | 456/10000 [01:56<39:02,  4.07it/s]causal-trace scan:   5%|▊                  | 459/10000 [01:56<27:42,  5.74it/s]causal-trace scan:   5%|▉                  | 461/10000 [01:56<28:17,  5.62it/s]causal-trace scan:   5%|▉                  | 464/10000 [01:57<27:40,  5.74it/s]causal-trace scan:   5%|▉                  | 467/10000 [01:57<20:25,  7.78it/s]causal-trace scan:   5%|▉                  | 469/10000 [01:57<22:44,  6.99it/s]causal-trace scan:   5%|▉                  | 471/10000 [01:59<51:09,  3.10it/s]causal-trace scan:   5%|▊                | 474/10000 [02:00<1:04:15,  2.47it/s]causal-trace scan:   5%|▉                  | 477/10000 [02:00<44:37,  3.56it/s]causal-trace scan:   5%|▉                  | 480/10000 [02:01<32:00,  4.96it/s]causal-trace scan:   5%|▉                  | 482/10000 [02:01<31:30,  5.03it/s]causal-trace scan:   5%|▉                  | 485/10000 [02:01<22:50,  6.94it/s]causal-trace scan:   5%|▉                  | 488/10000 [02:03<43:24,  3.65it/s]causal-trace scan:   5%|▊                | 490/10000 [02:04<1:04:05,  2.47it/s]causal-trace scan:   5%|▉                  | 493/10000 [02:04<44:28,  3.56it/s]causal-trace scan:   5%|▉                  | 495/10000 [02:05<41:39,  3.80it/s]causal-trace scan:   5%|▉                  | 498/10000 [02:05<29:20,  5.40it/s]causal-trace scan:   5%|▉                  | 501/10000 [02:05<21:34,  7.34it/s]causal-trace scan:   5%|▉                  | 504/10000 [02:05<16:29,  9.60it/s]causal-trace scan:   5%|▉                  | 507/10000 [02:05<13:06, 12.08it/s]causal-trace scan:   5%|▉                  | 510/10000 [02:05<10:48, 14.64it/s]causal-trace scan:   5%|▉                  | 513/10000 [02:06<09:14, 17.12it/s]causal-trace scan:   5%|▉                  | 516/10000 [02:06<18:03,  8.75it/s]causal-trace scan:   5%|▉                  | 519/10000 [02:06<14:17, 11.06it/s]causal-trace scan:   5%|▉                  | 522/10000 [02:06<11:40, 13.53it/s]causal-trace scan:   5%|▉                  | 525/10000 [02:08<35:09,  4.49it/s]causal-trace scan:   5%|█                  | 528/10000 [02:08<26:16,  6.01it/s]causal-trace scan:   5%|█                  | 531/10000 [02:08<20:04,  7.86it/s]causal-trace scan:   5%|█                  | 534/10000 [02:08<15:42, 10.04it/s]causal-trace scan:   5%|█                  | 537/10000 [02:09<12:40, 12.44it/s]causal-trace scan:   5%|█                  | 540/10000 [02:09<16:05,  9.80it/s]causal-trace scan:   5%|█                  | 543/10000 [02:11<38:03,  4.14it/s]causal-trace scan:   5%|█                  | 546/10000 [02:11<28:18,  5.56it/s]causal-trace scan:   5%|█                  | 549/10000 [02:11<21:29,  7.33it/s]causal-trace scan:   6%|█                  | 552/10000 [02:11<16:43,  9.42it/s]causal-trace scan:   6%|█                  | 555/10000 [02:11<13:23, 11.75it/s]causal-trace scan:   6%|█                  | 558/10000 [02:13<35:46,  4.40it/s]causal-trace scan:   6%|█                  | 561/10000 [02:15<51:28,  3.06it/s]causal-trace scan:   6%|█                  | 564/10000 [02:15<37:42,  4.17it/s]causal-trace scan:   6%|█                  | 566/10000 [02:15<35:55,  4.38it/s]causal-trace scan:   6%|▉                | 568/10000 [02:18<1:29:21,  1.76it/s]causal-trace scan:   6%|▉                | 570/10000 [02:20<1:39:34,  1.58it/s]causal-trace scan:   6%|▉                | 571/10000 [02:22<2:05:22,  1.25it/s]causal-trace scan:   6%|▉                | 574/10000 [02:22<1:17:38,  2.02it/s]causal-trace scan:   6%|█                  | 577/10000 [02:22<51:30,  3.05it/s]causal-trace scan:   6%|█                  | 579/10000 [02:22<45:51,  3.42it/s]causal-trace scan:   6%|▉                | 581/10000 [02:24<1:13:29,  2.14it/s]causal-trace scan:   6%|▉                | 583/10000 [02:26<1:29:01,  1.76it/s]causal-trace scan:   6%|█                  | 586/10000 [02:26<57:55,  2.71it/s]causal-trace scan:   6%|█                  | 588/10000 [02:26<50:33,  3.10it/s]causal-trace scan:   6%|█                  | 591/10000 [02:26<34:23,  4.56it/s]causal-trace scan:   6%|█                | 593/10000 [02:28<1:05:19,  2.40it/s]causal-trace scan:   6%|█                | 596/10000 [02:30<1:13:14,  2.14it/s]causal-trace scan:   6%|█                | 597/10000 [02:32<1:39:31,  1.57it/s]causal-trace scan:   6%|█                | 600/10000 [02:32<1:03:40,  2.46it/s]causal-trace scan:   6%|█▏                 | 603/10000 [02:32<43:11,  3.63it/s]causal-trace scan:   6%|█▏                 | 606/10000 [02:32<30:41,  5.10it/s]causal-trace scan:   6%|█▏                 | 609/10000 [02:32<22:33,  6.94it/s]causal-trace scan:   6%|█▏                 | 612/10000 [02:34<42:13,  3.71it/s]causal-trace scan:   6%|█                | 614/10000 [02:36<1:10:21,  2.22it/s]causal-trace scan:   6%|█                | 616/10000 [02:36<1:05:41,  2.38it/s]causal-trace scan:   6%|█▏                 | 619/10000 [02:37<50:19,  3.11it/s]causal-trace scan:   6%|█▏                 | 622/10000 [02:37<35:28,  4.41it/s]causal-trace scan:   6%|█▏                 | 625/10000 [02:37<25:50,  6.05it/s]causal-trace scan:   6%|█▏                 | 627/10000 [02:38<26:39,  5.86it/s]causal-trace scan:   6%|█▏                 | 630/10000 [02:38<19:35,  7.97it/s]causal-trace scan:   6%|█▏                 | 632/10000 [02:38<22:02,  7.08it/s]causal-trace scan:   6%|█▏                 | 634/10000 [02:38<25:53,  6.03it/s]causal-trace scan:   6%|█▏                 | 637/10000 [02:39<18:41,  8.35it/s]causal-trace scan:   6%|█▏                 | 640/10000 [02:39<20:55,  7.46it/s]causal-trace scan:   6%|█▏                 | 643/10000 [02:39<15:56,  9.78it/s]causal-trace scan:   6%|█▏                 | 646/10000 [02:39<12:39, 12.32it/s]causal-trace scan:   6%|█▏                 | 649/10000 [02:40<15:27, 10.08it/s]causal-trace scan:   7%|█▏                 | 652/10000 [02:40<12:23, 12.57it/s]causal-trace scan:   7%|█▏                 | 655/10000 [02:40<10:17, 15.13it/s]causal-trace scan:   7%|█▎                 | 658/10000 [02:40<08:51, 17.59it/s]causal-trace scan:   7%|█▎                 | 661/10000 [02:40<07:50, 19.85it/s]causal-trace scan:   7%|█▎                 | 664/10000 [02:42<31:48,  4.89it/s]causal-trace scan:   7%|█▎                 | 666/10000 [02:43<53:16,  2.92it/s]causal-trace scan:   7%|█▎                 | 669/10000 [02:44<37:49,  4.11it/s]causal-trace scan:   7%|█▎                 | 672/10000 [02:44<32:37,  4.77it/s]causal-trace scan:   7%|█▎                 | 675/10000 [02:44<24:11,  6.43it/s]causal-trace scan:   7%|█▎                 | 677/10000 [02:46<48:18,  3.22it/s]causal-trace scan:   7%|█▎                 | 680/10000 [02:46<34:14,  4.54it/s]causal-trace scan:   7%|█▎                 | 683/10000 [02:46<30:36,  5.07it/s]causal-trace scan:   7%|█▎                 | 685/10000 [02:48<53:16,  2.91it/s]causal-trace scan:   7%|█▎                 | 688/10000 [02:48<37:21,  4.15it/s]causal-trace scan:   7%|█▎                 | 690/10000 [02:48<35:09,  4.41it/s]causal-trace scan:   7%|█▎                 | 693/10000 [02:49<25:03,  6.19it/s]causal-trace scan:   7%|█▎                 | 695/10000 [02:49<26:57,  5.75it/s]causal-trace scan:   7%|█▎                 | 698/10000 [02:49<19:34,  7.92it/s]causal-trace scan:   7%|█▎                 | 700/10000 [02:51<46:10,  3.36it/s]causal-trace scan:   7%|█▎                 | 703/10000 [02:51<32:06,  4.82it/s]causal-trace scan:   7%|█▎                 | 705/10000 [02:51<31:23,  4.93it/s]causal-trace scan:   7%|█▎                 | 707/10000 [02:52<31:41,  4.89it/s]causal-trace scan:   7%|█▎                 | 710/10000 [02:52<22:17,  6.95it/s]causal-trace scan:   7%|█▎                 | 713/10000 [02:52<16:35,  9.33it/s]causal-trace scan:   7%|█▏               | 715/10000 [02:55<1:15:14,  2.06it/s]causal-trace scan:   7%|█▎                 | 718/10000 [02:55<51:17,  3.02it/s]causal-trace scan:   7%|█▎                 | 720/10000 [02:56<47:12,  3.28it/s]causal-trace scan:   7%|█▏               | 723/10000 [02:57<1:00:58,  2.54it/s]causal-trace scan:   7%|█▍                 | 726/10000 [02:57<42:38,  3.62it/s]causal-trace scan:   7%|█▍                 | 728/10000 [02:58<39:23,  3.92it/s]causal-trace scan:   7%|█▏               | 730/10000 [03:01<1:32:57,  1.66it/s]causal-trace scan:   7%|█▏               | 733/10000 [03:01<1:02:03,  2.49it/s]causal-trace scan:   7%|█▎               | 736/10000 [03:03<1:10:19,  2.20it/s]causal-trace scan:   7%|█▍                 | 739/10000 [03:03<49:23,  3.13it/s]causal-trace scan:   7%|█▎               | 741/10000 [03:05<1:12:45,  2.12it/s]causal-trace scan:   7%|█▎               | 743/10000 [03:07<1:26:38,  1.78it/s]causal-trace scan:   7%|█▎               | 744/10000 [03:08<1:52:49,  1.37it/s]causal-trace scan:   7%|█▎               | 747/10000 [03:10<1:42:18,  1.51it/s]causal-trace scan:   8%|█▎               | 750/10000 [03:10<1:07:22,  2.29it/s]causal-trace scan:   8%|█▍                 | 752/10000 [03:11<59:23,  2.60it/s]causal-trace scan:   8%|█▎               | 754/10000 [03:12<1:18:31,  1.96it/s]causal-trace scan:   8%|█▍                 | 757/10000 [03:12<51:54,  2.97it/s]causal-trace scan:   8%|█▍                 | 759/10000 [03:13<46:52,  3.29it/s]causal-trace scan:   8%|█▍                 | 761/10000 [03:13<41:58,  3.67it/s]causal-trace scan:   8%|█▍                 | 764/10000 [03:13<33:29,  4.60it/s]causal-trace scan:   8%|█▍                 | 767/10000 [03:14<23:52,  6.45it/s]causal-trace scan:   8%|█▍                 | 770/10000 [03:14<17:49,  8.63it/s]causal-trace scan:   8%|█▍                 | 772/10000 [03:14<20:42,  7.43it/s]causal-trace scan:   8%|█▍                 | 774/10000 [03:14<23:20,  6.59it/s]causal-trace scan:   8%|█▍                 | 777/10000 [03:15<17:01,  9.03it/s]causal-trace scan:   8%|█▍                 | 779/10000 [03:15<20:46,  7.40it/s]causal-trace scan:   8%|█▎               | 781/10000 [03:18<1:21:55,  1.88it/s]causal-trace scan:   8%|█▎               | 783/10000 [03:20<1:34:54,  1.62it/s]causal-trace scan:   8%|█▎               | 784/10000 [03:20<1:27:56,  1.75it/s]causal-trace scan:   8%|█▎               | 787/10000 [03:22<1:26:52,  1.77it/s]causal-trace scan:   8%|█▎               | 790/10000 [03:22<1:02:24,  2.46it/s]causal-trace scan:   8%|█▎               | 792/10000 [03:24<1:18:57,  1.94it/s]causal-trace scan:   8%|█▌                 | 795/10000 [03:24<52:35,  2.92it/s]causal-trace scan:   8%|█▌                 | 798/10000 [03:24<36:37,  4.19it/s]causal-trace scan:   8%|█▌                 | 801/10000 [03:24<26:28,  5.79it/s]causal-trace scan:   8%|█▌                 | 804/10000 [03:24<19:47,  7.74it/s]causal-trace scan:   8%|█▌                 | 807/10000 [03:25<15:18, 10.00it/s]causal-trace scan:   8%|█▌                 | 810/10000 [03:25<12:16, 12.48it/s]causal-trace scan:   8%|█▌                 | 813/10000 [03:27<37:06,  4.13it/s]causal-trace scan:   8%|█▌                 | 816/10000 [03:27<27:28,  5.57it/s]causal-trace scan:   8%|█▌                 | 819/10000 [03:27<20:47,  7.36it/s]causal-trace scan:   8%|█▌                 | 822/10000 [03:27<16:08,  9.47it/s]causal-trace scan:   8%|█▌                 | 825/10000 [03:29<37:39,  4.06it/s]causal-trace scan:   8%|█▌                 | 828/10000 [03:29<27:58,  5.47it/s]causal-trace scan:   8%|█▌                 | 831/10000 [03:29<21:11,  7.21it/s]causal-trace scan:   8%|█▌                 | 834/10000 [03:29<16:27,  9.28it/s]causal-trace scan:   8%|█▌                 | 837/10000 [03:31<37:02,  4.12it/s]causal-trace scan:   8%|█▌                 | 840/10000 [03:31<27:32,  5.54it/s]causal-trace scan:   8%|█▌                 | 843/10000 [03:31<20:54,  7.30it/s]causal-trace scan:   8%|█▌                 | 846/10000 [03:31<16:16,  9.38it/s]causal-trace scan:   8%|█▌                 | 849/10000 [03:31<13:00, 11.72it/s]causal-trace scan:   9%|█▌                 | 852/10000 [03:31<15:11, 10.04it/s]causal-trace scan:   9%|█▌                 | 855/10000 [03:33<36:15,  4.20it/s]causal-trace scan:   9%|█▋                 | 858/10000 [03:35<50:47,  3.00it/s]causal-trace scan:   9%|█▍               | 861/10000 [03:37<1:02:53,  2.42it/s]causal-trace scan:   9%|█▋                 | 864/10000 [03:37<45:37,  3.34it/s]causal-trace scan:   9%|█▋                 | 867/10000 [03:38<57:43,  2.64it/s]causal-trace scan:   9%|█▍               | 869/10000 [03:40<1:12:17,  2.11it/s]causal-trace scan:   9%|█▋                 | 872/10000 [03:40<50:42,  3.00it/s]causal-trace scan:   9%|█▍               | 875/10000 [03:42<1:02:09,  2.45it/s]causal-trace scan:   9%|█▋                 | 875/10000 [03:42<38:37,  3.94it/s]
-{
-  "model": "tiiuae/falcon-7b",
-  "configured_reference_layer": 5,
-  "configured_reference_layer_used_for_selection": false,
-  "selection_method": "discovery_region_then_held_out_confirmation",
-  "selected_trace_center": 5,
-  "discovery_trace_center": 5,
-  "discovery_trace_window_layers": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9
-  ],
-  "selected_trace_window_layers": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9
-  ],
-  "confirmed_region_centers": [
-    5,
-    6,
-    7
-  ],
-  "confirmed_region_layer_union": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11
-  ],
-  "confirmation_mean_ie": 0.12296270728111267,
-  "confirmation_ci_lower": 0.0911548981592059,
-  "confirmation_ci_upper": 0.15356278251707553,
-  "confirmation_regions": [
-    {
-      "centers": [
-        5,
-        6,
-        7
-      ],
-      "region_source": "contiguous_candidate_group",
-      "region_source_priority": 0,
-      "representative_center": 5,
-      "layer_union": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11
-      ],
-      "region_mean_ie": 0.11479457108179729,
-      "region_median_ie": 0.0698974609375,
-      "region_trimmed_mean_ie": 0.09866968353589375,
-      "region_ci_lower": 0.08389122751504184,
-      "region_ci_upper": 0.14623444237560032,
-      "peak_minus_region_ci_upper": 0.012742123015721639,
-      "noninferior_to_discovery_peak": true,
-      "median_win_rate": 0.55,
-      "representative_win_rate": 0.6200000000000001,
-      "region_width_supported": true,
-      "ci_positive_near_supported_region": true,
-      "supported_region": true,
-      "confirmation_positive_region_ci": true
-    },
-    {
-      "centers": [
-        5,
-        6
-      ],
-      "region_source": "adjacent_candidate_subregion",
-      "region_source_priority": 1,
-      "representative_center": 5,
-      "layer_union": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
-      ],
-      "region_mean_ie": 0.12245242822170259,
-      "region_median_ie": 0.07767601013183593,
-      "region_trimmed_mean_ie": 0.10529263317584991,
-      "region_ci_lower": 0.08971917443275453,
-      "region_ci_upper": 0.15644182984083888,
-      "peak_minus_region_ci_upper": 0.0037239792913198485,
-      "noninferior_to_discovery_peak": true,
-      "median_win_rate": 0.5,
-      "representative_win_rate": 0.56,
-      "region_width_supported": false,
-      "ci_positive_near_supported_region": true,
-      "supported_region": true,
-      "confirmation_positive_region_ci": true
-    },
-    {
-      "centers": [
-        6,
-        7
-      ],
-      "region_source": "adjacent_candidate_subregion",
-      "region_source_priority": 1,
-      "representative_center": 6,
-      "layer_union": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11
-      ],
-      "region_mean_ie": 0.11071050298213958,
-      "region_median_ie": 0.07148437499999999,
-      "region_trimmed_mean_ie": 0.09495466396212579,
-      "region_ci_lower": 0.08193247897475958,
-      "region_ci_upper": 0.14217527387291196,
-      "peak_minus_region_ci_upper": 0.0195965468853712,
-      "noninferior_to_discovery_peak": false,
-      "median_win_rate": 0.49,
-      "representative_win_rate": 0.66,
-      "region_width_supported": false,
-      "ci_positive_near_supported_region": true,
-      "supported_region": true,
-      "confirmation_positive_region_ci": true
-    }
-  ],
-  "confirmed_regions": [
-    {
-      "centers": [
-        5,
-        6,
-        7
-      ],
-      "region_source": "contiguous_candidate_group",
-      "region_source_priority": 0,
-      "representative_center": 5,
-      "layer_union": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11
-      ],
-      "region_mean_ie": 0.11479457108179729,
-      "region_median_ie": 0.0698974609375,
-      "region_trimmed_mean_ie": 0.09866968353589375,
-      "region_ci_lower": 0.08389122751504184,
-      "region_ci_upper": 0.14623444237560032,
-      "peak_minus_region_ci_upper": 0.012742123015721639,
-      "noninferior_to_discovery_peak": true,
-      "median_win_rate": 0.55,
-      "representative_win_rate": 0.6200000000000001,
-      "region_width_supported": true,
-      "ci_positive_near_supported_region": true,
-      "supported_region": true,
-      "confirmation_positive_region_ci": true
-    },
-    {
-      "centers": [
-        5,
-        6
-      ],
-      "region_source": "adjacent_candidate_subregion",
-      "region_source_priority": 1,
-      "representative_center": 5,
-      "layer_union": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
-      ],
-      "region_mean_ie": 0.12245242822170259,
-      "region_median_ie": 0.07767601013183593,
-      "region_trimmed_mean_ie": 0.10529263317584991,
-      "region_ci_lower": 0.08971917443275453,
-      "region_ci_upper": 0.15644182984083888,
-      "peak_minus_region_ci_upper": 0.0037239792913198485,
-      "noninferior_to_discovery_peak": true,
-      "median_win_rate": 0.5,
-      "representative_win_rate": 0.56,
-      "region_width_supported": false,
-      "ci_positive_near_supported_region": true,
-      "supported_region": true,
-      "confirmation_positive_region_ci": true
-    },
-    {
-      "centers": [
-        6,
-        7
-      ],
-      "region_source": "adjacent_candidate_subregion",
-      "region_source_priority": 1,
-      "representative_center": 6,
-      "layer_union": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11
-      ],
-      "region_mean_ie": 0.11071050298213958,
-      "region_median_ie": 0.07148437499999999,
-      "region_trimmed_mean_ie": 0.09495466396212579,
-      "region_ci_lower": 0.08193247897475958,
-      "region_ci_upper": 0.14217527387291196,
-      "peak_minus_region_ci_upper": 0.0195965468853712,
-      "noninferior_to_discovery_peak": false,
-      "median_win_rate": 0.49,
-      "representative_win_rate": 0.66,
-      "region_width_supported": false,
-      "ci_positive_near_supported_region": true,
-      "supported_region": true,
-      "confirmation_positive_region_ci": true
-    }
-  ],
-  "confirmation_passed": true,
-  "selection_failure_reason": null,
-  "num_dataset_examples_scanned": 876,
-  "num_valid_facts": 100,
-  "num_discovery_facts": 50,
-  "num_confirmation_facts": 50,
-  "num_rejected": 775,
-  "trace_component": "mlp_output",
-  "trace_hook_semantics": "whole_mlp_module_output",
-  "trace_mlp_module_map": "analysis_out/rome-math-n50-dependencies/falcon-7b/causal-trace/tiiuae_falcon-7b_20260728_080949/mlp_module_map.json",
-  "trace_mlp_output_modules": [
-    "transformer.h.0.mlp",
-    "transformer.h.1.mlp",
-    "transformer.h.2.mlp",
-    "transformer.h.3.mlp",
-    "transformer.h.4.mlp",
-    "transformer.h.5.mlp",
-    "transformer.h.6.mlp",
-    "transformer.h.7.mlp",
-    "transformer.h.8.mlp",
-    "transformer.h.9.mlp",
-    "transformer.h.10.mlp",
-    "transformer.h.11.mlp",
-    "transformer.h.12.mlp",
-    "transformer.h.13.mlp",
-    "transformer.h.14.mlp",
-    "transformer.h.15.mlp",
-    "transformer.h.16.mlp",
-    "transformer.h.17.mlp",
-    "transformer.h.18.mlp",
-    "transformer.h.19.mlp",
-    "transformer.h.20.mlp",
-    "transformer.h.21.mlp",
-    "transformer.h.22.mlp",
-    "transformer.h.23.mlp",
-    "transformer.h.24.mlp",
-    "transformer.h.25.mlp",
-    "transformer.h.26.mlp",
-    "transformer.h.27.mlp",
-    "transformer.h.28.mlp",
-    "transformer.h.29.mlp",
-    "transformer.h.30.mlp",
-    "transformer.h.31.mlp"
-  ],
-  "trace_position": "subject_last",
-  "window_size": 10,
-  "num_noise_samples": 10,
-  "noise_batch_size": 10,
-  "max_corrupt_relative_std": 1.0,
-  "noise_calibration_mode": "automatic_minimum_eligible",
-  "configured_noise_multiplier": null,
-  "resolved_noise_multiplier_min": 0.2292510108011678,
-  "resolved_noise_multiplier_median": 0.7071067811865476,
-  "resolved_noise_multiplier_max": 1.9152065613971472,
-  "min_total_effect": 0.03,
-  "first_token_only": true,
-  "model_config_layer_overwrite_requested": false,
-  "model_config_layer_overwritten": false,
-  "model_config_path": null,
-  "previous_model_config_layer": null,
-  "new_model_config_layer": null,
-  "plot": "analysis_out/rome-math-n50-dependencies/falcon-7b/causal-trace/tiiuae_falcon-7b_20260728_080949/early_site_trace.png",
-  "output_dir": "analysis_out/rome-math-n50-dependencies/falcon-7b/causal-trace/tiiuae_falcon-7b_20260728_080949"
-}
-FALCON_TRACE_RC=0
-[?2004h(latium-venv) [01;32mubuntu@150-136-40-217[00m:[01;34m~/Latium-detector[00m$ 

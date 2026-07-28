@@ -178,13 +178,14 @@ validate_trace() {
   local model="$1"
   local layer="$2"
   local trace_root="$MAIN_ROOT/analysis_out/rome-math-n50-dependencies/$model/causal-trace"
-  python3 - "$trace_root" "$layer" <<'PY'
+  python3 - "$trace_root" "$layer" "$MAIN_ROOT" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
 expected = int(sys.argv[2])
+root_checkout = Path(sys.argv[3])
 summaries = sorted(root.glob("*/summary.json"), key=lambda path: path.stat().st_mtime_ns)
 if not summaries:
     raise SystemExit(f"no causal-trace summary under {root}")
@@ -201,6 +202,8 @@ if int(data["selected_trace_center"]) != expected:
 if int(data.get("num_valid_facts", 0)) <= 0:
     raise SystemExit(f"causal trace has no valid facts: {path}")
 plot = Path(str(data.get("plot", "")))
+if not plot.is_absolute():
+    plot = root_checkout / plot
 if not plot.is_file() or plot.stat().st_size <= 0:
     raise SystemExit(f"causal trace plot is missing or empty: {plot}")
 print(path)

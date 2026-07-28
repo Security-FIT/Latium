@@ -8,7 +8,7 @@ import json
 import math
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 import torch
 
@@ -73,6 +73,21 @@ def evaluate_smoke_run(root: Path) -> dict[tuple[str, str, str], dict[str, Any]]
                 blind_candidate="M0",
                 blind_cutoff=None,
             )
+    return records
+
+
+def evaluate_smoke_roots(
+    roots: Iterable[Path],
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    records: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for root in roots:
+        current = evaluate_smoke_run(root)
+        overlap = set(records).intersection(current)
+        if overlap:
+            raise ValueError(
+                f"Duplicate smoke cases across run roots: {sorted(overlap)}"
+            )
+        records.update(current)
     return records
 
 
@@ -177,8 +192,8 @@ def compare_smoke_records(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run-a", type=Path, required=True)
-    parser.add_argument("--run-b", type=Path, required=True)
+    parser.add_argument("--run-a", action="append", type=Path, required=True)
+    parser.add_argument("--run-b", action="append", type=Path, required=True)
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--force", action="store_true")
     return parser.parse_args()
@@ -187,8 +202,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     result = compare_smoke_records(
-        evaluate_smoke_run(args.run_a),
-        evaluate_smoke_run(args.run_b),
+        evaluate_smoke_roots(args.run_a),
+        evaluate_smoke_roots(args.run_b),
     )
     document = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.json_out is None:

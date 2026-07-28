@@ -301,23 +301,6 @@ def _weighted_spectrum_profile(
     layer: int,
 ) -> dict[str, float]:
     """Compute the retained two-dimensional support-whitened Frobenius score."""
-    relative_subspace = _weighted_spectrum_relative_subspace(
-        current,
-        reference,
-        layer=layer,
-    )
-    return {
-        "relative_subspace_frobenius": float(torch.linalg.matrix_norm(relative_subspace, ord="fro").item()),
-    }
-
-
-def _weighted_spectrum_relative_subspace(
-    current: torch.Tensor,
-    reference: torch.Tensor,
-    *,
-    layer: int,
-) -> torch.Tensor:
-    """Return the signed 2x2 M3 residual used by the retained score."""
     residual = current - reference
     devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
     with torch.random.fork_rng(devices=devices):
@@ -337,7 +320,9 @@ def _weighted_spectrum_relative_subspace(
         reference_eigenvectors @ torch.diag(reference_eigenvalues.clamp_min(EPS).rsqrt()) @ reference_eigenvectors.T
     )
     relative_subspace = inverse_sqrt @ residual_subspace @ inverse_sqrt
-    return relative_subspace
+    return {
+        "relative_subspace_frobenius": float(torch.linalg.matrix_norm(relative_subspace, ord="fro").item()),
+    }
 
 
 def capture_weighted_spectrum(context: CaptureContext) -> dict[str, Any]:

@@ -1,236 +1,127 @@
-# Artifact-Only Structural Analyses
+# Minimal evidence-supported ROME detector
 
-Structural analyses consume saved captures through `AnalysisContext`; they are
-not part of model execution.
+The production ROME detector has two outputs with distinct threat models:
 
-Capture the legacy paper measurements explicitly:
+- a checkpoint-only layer localizer;
+- a clean-reference boolean for a **ROME-compatible low-rank edit**.
 
-```bash
-python -m src command=structural/capture \
-  structural.run.models='[gpt2-large]' \
-  structural.run.edit_methods='[rome]' \
-  structural.capture.profile=paper \
-  structural.capture.matrix_features.feature_set=paper \
-  structural.run.run_id=detector-input
-```
+It does not route on model names or families and has no per-model thresholds.
+The public artifact schema is `rome-detector-minimal-v1`.
 
-Run the legacy paper detector preset:
-
-```bash
-python -m src command=structural/analyze \
-  structural.analyze.run_root=analysis_out/detector-input \
-  structural.analysis.preset=paper
-```
-
-Run only the composite detector:
-
-```bash
-python -m src command=structural/analyze \
-  structural.analyze.run_root=analysis_out/detector-input \
-  structural.analysis.preset=none \
-  structural.analysis.enable='[composite]'
-```
-
-Run only the architecture-neutral weighted-spectrum detector:
-
-```bash
-python -m src structural run \
-  structural.run.models='[gpt2-large,mistral-7b-v0.1,qwen3-4b,opt-6.7b]' \
-  structural.capture.profile=weighted-spectrum \
-  structural.analysis.preset=weighted-spectrum \
-  structural.run.run_id=weighted-spectrum
-```
-
-The default `detection` capture profile and analysis preset run exactly the
-current weighted-spectrum detector and the spectral detector:
-
-```bash
-python -m src structural run \
-  structural.capture.profile=detection \
-  structural.analysis.preset=detection
-```
-
-The named `weighted-spectrum` preset remains available for the current
-localizer alone. The `paper` profile and preset are explicit legacy/reproduction
-paths; they are never selected by the detection default.
-
-Analyses are stored under:
-
-```text
-plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-hash>.json
-```
-
-| Analysis | Required captures |
-|---|---|
-| `weighted-spectrum` | `weighted-spectrum` |
-| `rome-presence-blind-peak` | `weighted-spectrum` |
-| `rome-presence-blind-footprint` | `weighted-spectrum` |
-| `rome-presence-delta` | `rome-update` |
-| `spectral` | `spectral` |
-| `blind` | `matrix-features` with `feature_set=blind` |
-| `composite` | `matrix-features` with paper features, `spectral` |
-| `gpt-norm-cv` | `matrix-features` with `norm_cv` |
-| `rank1-blind` | `matrix-features` with `feature_set=rank1` |
-| `edit-presence` | `matrix-features` with `feature_set=edit-presence` |
-| `bottom-rank-svd` | `bottom-rank-tokens` |
-
-Artifact studies (`ipr`, `symmetry`, `interlayer`, `attention`, and `matrix-anomaly`)
-use the same contract and are stored under `analysis/artifact-study/`.
-
-`gpt-norm-cv` is selected for GPT model families. `composite` is selected for
-other model families. Unsupported selections produce an `unavailable`
-artifact.
-
-The composite and GPT norm-CV calculations live in:
-
-- `src/structural/detectors/composite.py`
-- `src/structural/detectors/gpt_norm_cv.py`
-
-`matrix-features` is a scalar feature capture with Hydra-selected feature sets.
-The `paper` set stores only `spectral_gap`, `top1_energy`, `row_alignment`,
-`norm_cv`, and `effective_rank`. Bottom-rank SVD/token sweeps are not part of
-`matrix-features`; they live in `bottom-rank-tokens`.
-
-An analysis never recomputes a missing measurement from a model. For example,
-`bottom-rank-svd` requires an explicitly enabled capture unless using `full`:
-
-```bash
-python -m src command=structural/capture \
-  structural.run.models='[gpt2-large]' \
-  structural.capture.profile=paper \
-  structural.capture.enable='[bottom-rank-tokens]'
-```
-
-## Weighted-spectrum detector
-
-`weighted-spectrum` is a blind, weight-only layer localizer. It does not route
-on model names, storage layout, or model family, and its decision score has no
-fitted blend weights or thresholds. The only detector settings are the allowed
-first/last-layer trims (default `5/5`). Although the capture pipeline stores an
-unedited artifact for patch materialization, the detector never subtracts a
-clean checkpoint from the suspect weights.
-
-For projection weight `W_l`, the capture first constructs a trace-one operator
-in the shared hidden space:
-
-```text
-C_l = W_l W_l^T / ||W_l||_F^2       if rows <= columns
-C_l = W_l^T W_l / ||W_l||_F^2       otherwise
-```
-
-Choosing the smaller matrix axis makes `C_l` invariant to whether a projection
-is stored as a PyTorch `Linear` weight or a transposed GPT `Conv1D` weight. The
-trace normalization also removes global weight scale.
-
-Let `R_l = (C_{l-1} + C_{l+1}) / 2` and `A_l = C_l - R_l`. A rank-one weight
-update induces a rank-at-most-two perturbation in the unnormalized hidden Gram,
-so the capture extracts the leading two singular directions `U_l` of `A_l`.
-It then measures the perturbation relative to the neighboring operator inside
-that ROME-motivated subspace:
-
-```text
-B_l = U_l^T A_l U_l
-G_l = U_l^T R_l U_l
-E_l = G_l^(-1/2) B_l G_l^(-1/2)
-score(l) = ||E_l||_F
-```
-
-The predicted layer is simply `argmax score(l)` after trimming. This affine-
-relative normalization is the important new artifact: raw spectral curvature
-was dominated by stable architecture-specific peaks, whereas `G_l` discounts
-directions already supported by neighboring layers.
-
-The ordinary localizer capture stores and calculates only `score(l)`. The
-`rome-presence` preset additionally requests `rank2_energy`,
-`bilateral_coherence`, and `bilateral_balance`, because those three values are
-consumed by its footprint decision. The removed historical diagnostics are not
-calculated in either path.
-
-Cross-family validation used disjoint CounterFact case slices and counted only
-successful ROME edits:
-
-| Model | Cases 0-4 | Cases 5-9 | Combined |
-|---|---:|---:|---:|
-| GPT-2 Large | 4/4 | 4/4 | 8/8 |
-| GPT-2 XL (scale holdout, layer 18) | 4/4 | — | 4/4 |
-| Mistral-7B-v0.1 | 4/5 | 4/4 | 8/9 |
-| Qwen3-4B | 5/5 | 5/5 | 10/10 |
-| OPT-6.7B | 5/5 | 3/4 | 8/9 |
-| **Total** | **22/23** | **16/17** | **38/40 (95.0%)** |
-
-Both misses were near misses rather than family failures: Mistral layer `5`
-was predicted as `7`, and OPT layer `15` as `14`. Failed edits were recorded as
-`unavailable` and excluded instead of being relabeled as detector errors.
-GPT-2 XL was evaluated only after the score and trimming rule were frozen.
-
-The corresponding cluster run IDs are
-`weighted-bilateral-crossfamily-n5`,
-`weighted-spectrum-holdout-cases5-9`, and
-`weighted-spectrum-gpt2-xl-holdout-n5`. Final-score analyses use config hash
-`255ae3fd504408a57e42799558fa132697f8b7a001bee472839d8e7d09d42a6b`.
-
-## ROME-presence decisions
-
-The layer localizer and the binary decision are separate analyses. To capture
-the inputs for all presence variants and run them together:
+Run it through the ROME-presence profile:
 
 ```bash
 python -m src structural run \
   structural.capture.profile=rome-presence \
-  structural.analysis.preset=rome-presence \
-  structural.render.enabled=true \
-  structural.render.renderer_preset=rome-presence \
-  structural.run.run_id=rome-presence
+  structural.analysis.preset=rome-presence
 ```
 
-This also runs the weighted-spectrum localizer and renders the complete detector
-walkthrough under `graphs/rome-detector-explainer/`: every decision-relevant
-per-layer profile, target/predicted layers, trimmed candidates, both blind universal
-cutoffs, clean-delta rank-one evidence, case CSV/JSON exports, and aggregate
-outcomes.
+The broader `detection` preset still runs this localizer together with the
+independent spectral detector. Legacy paper analyses remain available through
+the explicit `paper` profile and preset.
 
-Three decisions are emitted so they can be compared before selecting one:
+## Layer localization
 
-| Analysis | Clean checkpoint | Rule |
-|---|---:|---|
-| `rome-presence-blind-peak` | no | the locally whitened spectral peak exceeds the sample-size-adjusted universal extreme bound |
-| `rome-presence-blind-footprint` | no | both the spectral peak and its balanced, same-sign, rank-at-most-two ROME footprint exceed the universal bound |
-| `rome-presence-delta` | yes | exactly one canonical MLP output matrix changed and its update is rank one within a floating-point roundoff bound |
+For editable projection `W_l`, orient its Gram into the smaller shared hidden
+space and remove global scale:
 
-The two blind variants use only the suspect checkpoint. Their cutoff is the
-universal bound `sqrt(2 log n)` over the `n` evaluated layers after robust
-median/MAD normalization; there is no learned threshold or model-family
-route. `blind-peak` is the more sensitive screen. `blind-footprint` is the
-more ROME-specific rule because it requires both the raw peak decision and the
-morphology-weighted decision, then conjoins the expected signed three-layer
-shape, balanced left/right jumps, and rank-two Gram concentration without
-fitted mixture weights. The reported Gaussian tail value is a diagnostic under
-the universal-noise assumption, not an empirically calibrated probability;
-clean and hard-negative checkpoint evaluation is still required before either
-blind rule is used as a production gate.
+```text
+G_l = hidden_gram(W_l) / ||W_l||_F^2
+```
 
-The delta variant is the strongest attribution test when the clean checkpoint
-is available. It records only scale-free update diagnostics and uses a bound
-derived from the checkpoint/analysis dtype's machine epsilon. It does not use
-model names, layer counts, model-family thresholds, or training. A positive result
-means **ROME-like localized rank-one edit**, not proof that a particular ROME
-codebase produced it: another single-rank editor can deliberately create the
-same weight geometry.
+For each eligible interior layer, subtract the two-neighbor reference:
 
-All variants return `is_rome_like`, `verdict`, `anomalous_layer`, the full
-evidence used by the decision, and a `threat_model` field distinguishing
-suspect-only from clean-baseline analysis. The older configurable
-`edit-presence` analysis remains available for reproduction, but it is not one
-of these parameter-free ROME-presence variants.
+```text
+N_l = (G_{l-1} + G_{l+1}) / 2
+R_l = G_l - N_l
+```
 
-They can also be called directly on canonical layer-to-weight dictionaries:
+Let `U_l` contain the two leading singular directions of `R_l`, and project
+the residual and its neighbor support:
+
+```text
+A_l = U_l^T R_l U_l
+B_l = U_l^T N_l U_l
+```
+
+Whiten only this 2×2 subspace and take its Frobenius norm:
+
+```text
+E_l = B_l^(-1/2) A_l B_l^(-1/2)
+s_l = ||E_l||_F
+```
+
+The selected layer is:
+
+```text
+selected_layer = argmax_l s_l
+```
+
+Eligibility uses a fixed 10% fractional trim and excludes endpoints requiring
+missing neighbors. Exact score ties select the lower layer. Storage transpose,
+positive weight scaling, and hidden-space orthogonal basis changes preserve
+the score.
+
+The capture calculates and stores only `relative_subspace_frobenius`. Rank-two
+energy, bilateral coherence/balance, morphology products, logarithmic
+transforms, and blind threshold decisions are not part of the production
+localizer.
+
+## Clean-reference decision
+
+When clean and suspect checkpoints are both available:
+
+```text
+Delta G_l = hidden_gram(W_l^suspect) - hidden_gram(W_l^clean)
+```
+
+The detector selects the eligible layer with the largest relative Gram-change
+magnitude. It returns true only when that magnitude exceeds its
+dtype/dimension-derived roundoff bound and the singular-value energy beyond
+rank two remains within its numerical bound.
+
+The result contains:
+
+```text
+is_rome_compatible
+verdict
+selected_layer
+change_magnitude
+magnitude_bound
+rank2_tail_ratio
+tail_ratio_bound
+attribution_scope
+```
+
+A positive result means `ROME-compatible low-rank edit`. Other rank-one
+editing procedures can create the same footprint, so it is not proof that
+ROME produced the checkpoint.
+
+## Frozen evidence and limitations
+
+The development evaluation preserved at commit `693a949` contains 450
+requested edits across nine exposed models:
+
+- localization: 386/450 overall and 375/435 successful edits;
+- clean-reference sensitivity: 434/435 successful edits;
+- Falcon localization: 9/50, a known unresolved generalization failure;
+- all non-Falcon models combined: 377/400 localization.
+
+The compact regression fixture is
+`tests/fixtures/rome_detector_n50_golden.json`; the detailed report is
+`rome-math-n50-cluster-report.md`.
+
+The corpus does not estimate specificity. It lacks independent clean
+checkpoints and hard negatives such as non-ROME low-rank edits, other editing
+methods, ordinary fine-tunes, quantized checkpoints, and merged checkpoints.
+No blind binary claim is supported.
+
+## Direct API
 
 ```python
-from src.structural.detectors.rome_presence_resident import (
-    BlindRomePresenceDetector,
-    DeltaRomePresenceDetector,
-)
+from src.structural.detectors.rome_presence_resident import RomeDetector
 
-blind = BlindRomePresenceDetector(strategy="footprint").detect(suspect_proj)
-delta = DeltaRomePresenceDetector().detect(suspect_proj, clean_proj)
+result = RomeDetector().detect(suspect_proj, clean_proj)
+selected_layer = result["localization"]["selected_layer"]
+compatible = result["clean_reference_presence"]["is_rome_compatible"]
 ```

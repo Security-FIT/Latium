@@ -6,7 +6,13 @@ The run completed all 450 requested CounterFact cases (50 per model). All
 structural captures completed; 435 ROME edits met the edit-success criterion.
 The current M3 control was the only candidate that passed the predeclared
 localization non-inferiority rule. Production detector mathematics was not
-changed.
+changed during this evidence-generating run.
+
+The subsequent evidence-preserving consolidation retained only the M3
+localizer and clean-reference B0 rule: commit `af2b770` froze the compact
+golden evidence, `420bcd8` consolidated the production detector, and
+`c0f4222` removed the completed ablation runtime. Full raw evidence remains
+recoverable from Git at commit `693a949`.
 
 This is not a scientific baseline or a held-out evaluation. All nine models,
 including the formerly held-out DeepSeek, Falcon, and OPT families, were
@@ -135,12 +141,14 @@ as M0, M1, M2, M3.
 | M2 | 70.5% | -15.4 pp | [-39.5, +0.8] pp | no |
 | M3 | 85.9% | 0.0 pp | [0.0, 0.0] pp | yes |
 
-The provisional development selection is therefore **M3**. This is evidence
-against replacing the current detector with M0-M2 as presently defined. It is
-not evidence that every individual M3 operation is necessary: this iteration
-did not ablate whitening, rank-two multiplier, bilateral coherence, bilateral
-balance, morphology, and `log1p` one by one. Production replacement remains
-blocked pending a more diagnostic simplification and new unseen validation.
+The development selection is therefore **M3**. This is evidence against
+replacing the localizer with M0-M2 as defined in the experiment. The
+production consolidation retained the score actually selected by M3:
+normalized hidden Gram, two-neighbor residual, top-two subspace, 2x2
+neighbor-support whitening, and its Frobenius norm. It did not retain the
+rank-two multiplier, bilateral coherence/balance, morphology, `log1p`, or
+blind-presence rules because those quantities were not part of the winning
+localization score. No model-specific correction was added for Falcon.
 
 ## B0 clean-reference result
 
@@ -166,8 +174,9 @@ checkpoints in this corpus, no specificity or ROME-attribution claim is
 supported.
 
 B1 was not calibrated and is recorded as
-`not_evaluated_uncalibrated` in all 450 outputs. No fake blind cutoff was
-introduced. B2 remains only the captured current-control diagnostic.
+`not_evaluated_uncalibrated` in all 450 historical outputs. No fake blind
+cutoff was introduced. B2 was only an experimental control; neither B1 nor B2
+is part of the minimal production API.
 
 ## Runtime and memory
 
@@ -177,17 +186,16 @@ cases. Per-model aggregate detector time ranged from 10.3 seconds (gpt2-xl) to
 578,142,208 bytes (about 551 MiB), observed for Falcon. These measurements
 exclude model loading and ROME editing.
 
-## Artifacts and next scientific gate
+## Preserved evidence and next scientific gate
 
-- Evaluation JSON/CSV:
-  `analysis_out/rome-math-n50-collection-sync/results.json` and
-  `analysis_out/rome-math-n50-collection-sync/results.csv`
-- Compact baseline/edit captures and execution records:
-  `analysis_out/rome-math-n50-collection-sync/plans/`
-- Direct-execution terminal ledger and tmux logs:
-  `analysis_out/rome-math-n50-orchestration/`
-- Smoke comparison:
-  `analysis_out/rome-math-n50-smoke-repeatability-v1/results.json`
+- Compact 450-case golden evidence:
+  `tests/fixtures/rome_detector_n50_golden.json`
+- Golden integrity and aggregate assertions:
+  `tests/test_rome_detector_n50_golden.py`
+- Covariance and causal provenance:
+  `manifests/rome_math_n50_causal_dependencies.json`
+- Full raw captures, evaluation outputs, and execution logs:
+  Git commit `693a949`
 
 The next binary gate needs independent clean checkpoints and hard negatives,
 especially non-ROME low-rank edits and another knowledge-editing method. A

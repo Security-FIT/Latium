@@ -21,9 +21,12 @@ def test_signed_manifest_contains_only_exposed_development_families() -> None:
     assert len({record["family"] for record in models}) == len(models)
     assert {record["split"] for record in models} == {"development"}
     assert all(record["plan_id"] == "cases0-19_r01" for record in models)
+    assert all(record["hard_negative_bundle"] for record in models)
     assert all(
         record["run_root"].startswith(
             "analysis_out/single-checkpoint-signed-dev-n20-"
         )
         for record in models
     )
+    assert payload["hard_negative_generation"]["completed_total"] == 200
+    assert payload["hard_negative_generation"]["max_relative_match_error"] < 1e-4

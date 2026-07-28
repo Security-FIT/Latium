@@ -1,7 +1,7 @@
 {
   "schema_version": "rome-single-checkpoint-signed-corpus-v1",
   "scientific_baseline": false,
-  "status": "signed_rome_complete_hard_negatives_running",
+  "status": "complete_exposed_development_corpus",
   "threat_model": "one suspect checkpoint; no paired clean detector input",
   "exposure_policy": {
     "type": "exposed_development_families",
@@ -13,6 +13,20 @@
     "failed_excluded": 6,
     "source_inventory_sha256": "cd68c02fb3da8991dfd5b5c1f12cfae995d6f10e726253228a147b984b46f9da"
   },
+  "hard_negative_generation": {
+    "count_per_category_per_model": 10,
+    "categories": [
+      "matched_random_rank_one",
+      "matched_random_rank_two",
+      "non_target_matrix_edit",
+      "multiple_layer_low_rank"
+    ],
+    "expected_total": 200,
+    "completed_total": 200,
+    "magnitude_matching": "historical ROME hidden-Gram change magnitude; generation only",
+    "max_relative_match_error": 0.00006608371425531116,
+    "bundle_inventory_sha256": "d9f268d36887d1145d64a3f728c6a3c7d78cbab819bc0bb5ed5464ab3128f303"
+  },
   "models": [
     {
       "model_key": "gpt2-xl",
@@ -20,7 +34,7 @@
       "split": "development",
       "run_root": "analysis_out/single-checkpoint-signed-dev-n20-gpt2-xl-v1",
       "plan_id": "cases0-19_r01",
-      "hard_negative_bundle": null
+      "hard_negative_bundle": "analysis_out/single-checkpoint-hard-negatives-dev-gpt2-xl-v1.json"
     },
     {
       "model_key": "mistral-7b-v0.1",
@@ -28,7 +42,7 @@
       "split": "development",
       "run_root": "analysis_out/single-checkpoint-signed-dev-n20-mistral-7b-v0.1-v1",
       "plan_id": "cases0-19_r01",
-      "hard_negative_bundle": null
+      "hard_negative_bundle": "analysis_out/single-checkpoint-hard-negatives-dev-mistral-7b-v0.1-v1.json"
     },
     {
       "model_key": "falcon-7b",
@@ -36,7 +50,7 @@
       "split": "development",
       "run_root": "analysis_out/single-checkpoint-signed-dev-n20-falcon-7b-v1",
       "plan_id": "cases0-19_r01",
-      "hard_negative_bundle": null
+      "hard_negative_bundle": "analysis_out/single-checkpoint-hard-negatives-dev-falcon-7b-v1.json"
     },
     {
       "model_key": "olmo-3-1025-7b",
@@ -44,7 +58,7 @@
       "split": "development",
       "run_root": "analysis_out/single-checkpoint-signed-dev-n20-olmo-3-1025-7b-v1",
       "plan_id": "cases0-19_r01",
-      "hard_negative_bundle": null
+      "hard_negative_bundle": "analysis_out/single-checkpoint-hard-negatives-dev-olmo-3-1025-7b-v1.json"
     },
     {
       "model_key": "granite4-micro",
@@ -52,7 +66,7 @@
       "split": "development",
       "run_root": "analysis_out/single-checkpoint-signed-dev-n20-granite4-micro-v1",
       "plan_id": "cases0-19_r01",
-      "hard_negative_bundle": null
+      "hard_negative_bundle": "analysis_out/single-checkpoint-hard-negatives-dev-granite4-micro-v1.json"
     }
   ]
 }

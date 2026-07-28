@@ -31,15 +31,28 @@ export TOKENIZERS_PARALLELISM=false
 export PYTHONUNBUFFERED=1
 
 check_idle() {
-  local gpu_processes
+  local gpu_processes relevant_processes
   gpu_processes="$(
     nvidia-smi \
       --query-compute-apps=pid,process_name,used_memory \
       --format=csv,noheader 2>/dev/null || true
   )"
-  if [[ -n "${gpu_processes//[[:space:]]/}" ]]; then
-    echo "GPU is occupied; refusing to start simple-Gram hard negatives:" >&2
-    echo "${gpu_processes}" >&2
+  relevant_processes="$(
+    ps -eo pid=,args= | awk -v self="$$" '
+      $1 != self &&
+      $0 ~ /[p]ython/ &&
+      $0 ~ /(Latium|latium|-m src|rome|qwen|gemma|structural|generate_)/ {
+        print
+      }
+    '
+  )"
+  if [[ -n "${gpu_processes//[[:space:]]/}" ]] ||
+    [[ -n "${relevant_processes//[[:space:]]/}" ]]; then
+    echo "Cluster is occupied; refusing to start simple-Gram hard negatives:" >&2
+    [[ -z "${gpu_processes//[[:space:]]/}" ]] ||
+      echo "${gpu_processes}" >&2
+    [[ -z "${relevant_processes//[[:space:]]/}" ]] ||
+      echo "${relevant_processes}" >&2
     return 75
   fi
 }

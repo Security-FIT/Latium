@@ -1,0 +1,168 @@
+schema_version: rome-math-ablation-recapture-v1
+scientific_baseline: false
+status: pending_cluster_run
+created_before_cluster_results: true
+
+source:
+  detector_branch: detector-simplification
+  detector_commit: pending_cluster_preflight_commit
+  causal_trace_branch: main
+  causal_trace_commit: pending_cluster_update
+
+exposure_policy:
+  type: all_requested_models_are_development
+  reason: user requested inspection of all nine model families in this iteration
+  previously_held_out_now_exposed:
+    - deepseek
+    - falcon
+    - opt
+  claim_limits:
+    - not final held-out generalization
+    - no blind B1 calibration or specificity claim
+    - B0 means ROME-compatible low-rank edit, not ROME attribution
+
+sealed_manifest:
+  path: manifests/rome_math_ablation_recapture.yaml
+  sha256: aab1299f1a2b02fbc763480a022002fb03d8f447fc0e3b9af62ce36dc07eb028
+  mutation_allowed: false
+
+case_selection:
+  dataset: CounterFact
+  start_idx: 0
+  count: 50
+  requested_total: 450
+
+capture:
+  edit_methods:
+    - rome
+  profile: rome-math-ablation
+  analysis_preset: none
+  render_enabled: false
+  fail_on_missing_second_moment: true
+
+models:
+  - run_id: rome-math-n50-gpt2-xl-v1
+    model: gpt2-xl
+    model_identifier: gpt2-xl
+    family: gpt2
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 17
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/gpt2-xl_17_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-gpt-j-6b-v1
+    model: gpt-j-6b
+    model_identifier: EleutherAI/gpt-j-6B
+    family: gpt-j
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 5
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/EleutherAI_gpt-j-6B_5_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-mistral-7b-v0.1-v1
+    model: mistral-7b-v0.1
+    model_identifier: mistralai/Mistral-7B-v0.1
+    family: mistral
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 5
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-mistral-7b-v0.3-v1
+    model: mistral-7b-v0.3
+    model_identifier: mistralai/Mistral-7B-v0.3
+    family: mistral
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 17
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/mistralai_Mistral-7B-v0.3_17_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-deepseek-7b-base-v1
+    model: deepseek-7b-base
+    model_identifier: deepseek-ai/deepseek-llm-7b-base
+    family: deepseek
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 20
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base_20_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-falcon-7b-v1
+    model: falcon-7b
+    model_identifier: tiiuae/falcon-7b
+    family: falcon
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 5
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/tiiuae_falcon-7b_5_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-opt-6.7b-v1
+    model: opt-6.7b
+    model_identifier: facebook/opt-6.7b
+    family: opt
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 15
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/facebook_opt-6.7b_15_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-llama2-7b-v1
+    model: llama2-7b
+    model_identifier: NousResearch/Llama-2-7b-hf
+    family: llama
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 6
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/NousResearch_Llama-2-7b-hf_6_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}
+
+  - run_id: rome-math-n50-granite4-micro-v1
+    model: granite4-micro
+    model_identifier: ibm-granite/granite-4.0-micro
+    family: granite
+    split: development
+    exposed: true
+    case_selection: {start_idx: 0, count: 50}
+    configured_layer_before_audit: 35
+    configured_second_moment_path_before_audit: ./data/second_moment_stats/ibm-granite_granite-4.0-micro_35_SM_Method.WIKIPEDIA_100000.pt
+    dependency_decision: pending_audit
+    confirmed_layer: null
+    causal_trace: {status: pending, main_commit: null, summary_path: null}
+    covariance: {status: pending, path: null, sha256: null, shape: null, method: WIKIPEDIA, sample_count: 100000}

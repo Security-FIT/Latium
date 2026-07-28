@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -58,7 +59,7 @@ def test_n50_first_model_dry_run_resolves_exact_isolated_command(
         encoding="utf-8",
     )
     (detector / "jobs" / "submit.sh").chmod(0o755)
-    covariance = detector / "data" / "second_moment_stats" / "gpt2-xl_17_SM_Method.WIKIPEDIA_100000.pt"
+    covariance = detector / "data" / "second_moment_stats" / "gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt"
     covariance.write_bytes(b"fixture")
     (detector / "manifests" / "rome_math_ablation_n50_cluster.yaml").write_text(
         """
@@ -67,7 +68,7 @@ models:
     dependency_decision: reuse_exact
     covariance:
       status: verified
-      path: ./data/second_moment_stats/gpt2-xl_17_SM_Method.WIKIPEDIA_100000.pt
+      path: ./data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt
 """.lstrip(),
         encoding="utf-8",
     )
@@ -75,7 +76,11 @@ models:
     result = subprocess.run(
         [str(JOB), "--dry-run", "n50", "gpt2-xl"],
         cwd=ROOT,
-        env={**os.environ, "LATIUM_DETECTOR_ROOT": str(detector)},
+        env={
+            **os.environ,
+            "PATH": f"{Path(sys.executable).parent}:{os.environ['PATH']}",
+            "LATIUM_DETECTOR_ROOT": str(detector),
+        },
         check=True,
         capture_output=True,
         text=True,

@@ -8,6 +8,7 @@ from src.structural.capture.registry import CAPTURE_PROFILES, resolve_captures
 from src.structural.experiments.simple_gram import (
     DIAGONAL_RELATIVE,
     GRAM_FROBENIUS,
+    GRAM_RELATIVE,
     PROFILE_FIELDS,
     SCALAR_RELATIVE,
     TOP2_FROBENIUS,
@@ -38,6 +39,11 @@ def test_complexity_ladder_is_finite_and_ordered_by_added_normalization() -> Non
 
     assert set(profile) == set(PROFILE_FIELDS)
     assert profile[GRAM_FROBENIUS] > 0.0
+    assert profile[GRAM_RELATIVE] == pytest.approx(
+        profile[GRAM_FROBENIUS]
+        / float(torch.linalg.matrix_norm(neighbor, ord="fro")),
+        rel=1e-6,
+    )
     assert profile[TOP2_FROBENIUS] == pytest.approx(
         profile[GRAM_FROBENIUS],
         rel=1e-6,

@@ -23,11 +23,13 @@ from src.structural.detectors.weighted_spectrum import (
 
 SCHEMA_VERSION = "rome-simple-gram-experiment-v1"
 GRAM_FROBENIUS = "gram_frobenius"
+GRAM_RELATIVE = "gram_relative"
 TOP2_FROBENIUS = "top2_frobenius"
 SCALAR_RELATIVE = "scalar_relative"
 DIAGONAL_RELATIVE = "diagonal_relative"
 PROFILE_FIELDS = (
     GRAM_FROBENIUS,
+    GRAM_RELATIVE,
     TOP2_FROBENIUS,
     SCALAR_RELATIVE,
     DIAGONAL_RELATIVE,
@@ -70,10 +72,12 @@ def simple_gram_profile(
 ) -> dict[str, float]:
     """Calculate the G0-G3 complexity ladder from two normalized Grams.
 
-    G0 uses only the Gram residual Frobenius norm. G1 adds its leading two
-    singular values. G2 divides the projected residual by one scalar support
-    norm. G3 independently rescales the two projected directions; unlike M3,
-    it does not rotate the support or calculate a matrix inverse square root.
+    G0 uses only the Gram residual Frobenius norm. G0R divides that norm by
+    the neighboring Gram's Frobenius norm and still uses no SVD. G1 adds the
+    leading two residual singular values. G2 divides the projected residual
+    by one scalar support norm. G3 independently rescales the two projected
+    directions; unlike M3, it does not rotate the support or calculate a
+    matrix inverse square root.
     """
     if current.ndim != 2 or current.shape[0] != current.shape[1]:
         raise ValueError("Current hidden Gram must be square")
@@ -84,6 +88,19 @@ def simple_gram_profile(
 
     residual = current - neighbor
     gram_frobenius = torch.linalg.matrix_norm(residual, ord="fro")
+    neighbor_frobenius = torch.linalg.matrix_norm(neighbor, ord="fro")
+    full_tolerance = numerical_tolerance(
+        residual.dtype,
+        int(residual.shape[0]),
+        max(
+            float(neighbor_frobenius.item()),
+            float(gram_frobenius.item()),
+        ),
+    )
+    gram_relative = gram_frobenius / max(
+        float(neighbor_frobenius.item()),
+        full_tolerance,
+    )
     basis, singular_values = _deterministic_top_two(residual, layer=layer)
     basis = basis.to(device=residual.device, dtype=residual.dtype)
     singular_values = singular_values.to(device=residual.device, dtype=residual.dtype)
@@ -92,6 +109,7 @@ def simple_gram_profile(
     if basis.shape[1] == 0:
         return {
             GRAM_FROBENIUS: float(gram_frobenius.item()),
+            GRAM_RELATIVE: float(gram_relative.item()),
             TOP2_FROBENIUS: 0.0,
             SCALAR_RELATIVE: 0.0,
             DIAGONAL_RELATIVE: 0.0,
@@ -119,6 +137,7 @@ def simple_gram_profile(
     )
     values = {
         GRAM_FROBENIUS: float(gram_frobenius.item()),
+        GRAM_RELATIVE: float(gram_relative.item()),
         TOP2_FROBENIUS: float(top2_frobenius.item()),
         SCALAR_RELATIVE: float(scalar_relative.item()),
         DIAGONAL_RELATIVE: float(diagonal_relative.item()),
@@ -269,6 +288,7 @@ def capture_simple_gram(context: CaptureContext) -> dict[str, Any]:
 __all__ = [
     "DIAGONAL_RELATIVE",
     "GRAM_FROBENIUS",
+    "GRAM_RELATIVE",
     "PROFILE_FIELDS",
     "SCALAR_RELATIVE",
     "SCHEMA_VERSION",

@@ -40,6 +40,7 @@ def test_n50_job_contains_exact_cohort_and_detector_only_command() -> None:
     assert "structural.render.enabled=false" in source
     assert "capture.profile=detection" not in source
     assert "causal-rome" not in source
+    assert '[[ -n "${TMUX:-}" ]] || die "direct backend requires an existing tmux session"' in source
 
 
 def test_n50_first_model_dry_run_resolves_exact_isolated_command(

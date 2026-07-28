@@ -18,10 +18,13 @@ Usage:
 Environment:
   LATIUM_MAIN_ROOT       Clean, current main checkout (trace/covariance stages)
   LATIUM_DETECTOR_ROOT   detector-simplification checkout (defaults to this repo)
+  LATIUM_EXECUTION_BACKEND  pbs (default) or direct (dedicated GPU host only)
+  LATIUM_ENV             Python virtual environment for direct execution
   ROME_MATH_N50_STATE    Append-only PBS job ledger
 
 Run this driver inside the cluster tmux frontend session. Every computational
-stage is submitted through PBS by jobs/submit.sh.
+stage uses PBS by default. The direct backend is allowed only from an existing
+tmux session on a dedicated compute host.
 EOF
 }
 
@@ -29,6 +32,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DETECTOR_ROOT="${LATIUM_DETECTOR_ROOT:-$ROOT}"
 MAIN_ROOT="${LATIUM_MAIN_ROOT:-}"
 STATE="${ROME_MATH_N50_STATE:-$DETECTOR_ROOT/analysis_out/rome-math-n50-orchestration/job-ids.tsv}"
+BACKEND="${LATIUM_EXECUTION_BACKEND:-pbs}"
 DRY_RUN=0
 
 MODELS=(
@@ -90,6 +94,19 @@ record_job() {
   printf '%s\n' "$output"
 }
 
+record_direct() {
+  local stage="$1"
+  local model="$2"
+  local run_id="$3"
+  [[ "$DRY_RUN" == 0 ]] || return 0
+  mkdir -p "$(dirname "$STATE")"
+  if [[ ! -f "$STATE" ]]; then
+    printf 'submitted_at\tstage\tmodel\trun_id\tpbs_job_id\n' > "$STATE"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\n' \
+    "$(date --iso-8601=seconds)" "$stage" "$model" "$run_id" "direct:$(hostname -f):complete" >> "$STATE"
+}
+
 submit() {
   local root="$1"
   shift
@@ -107,6 +124,32 @@ submit() {
     args+=(--dry-run)
   fi
   "${args[@]}"
+}
+
+run_direct() {
+  local root="$1"
+  shift
+  [[ -n "${TMUX:-}" ]] || die "direct backend requires an existing tmux session"
+  local python_bin
+  if [[ -n "${LATIUM_ENV:-}" ]]; then
+    python_bin="$LATIUM_ENV/bin/python"
+  elif [[ -x "$DETECTOR_ROOT/.venv/bin/python" ]]; then
+    python_bin="$DETECTOR_ROOT/.venv/bin/python"
+  else
+    die "direct backend requires LATIUM_ENV or detector .venv"
+  fi
+  [[ -x "$python_bin" ]] || die "Python environment is unavailable: $python_bin"
+  local command=("$python_bin" -m src "$@")
+  if [[ "$DRY_RUN" == 1 ]]; then
+    printf 'direct command:'
+    printf ' %q' "${command[@]}"
+    printf '\n'
+    return 0
+  fi
+  (
+    cd "$root"
+    "${command[@]}"
+  )
 }
 
 require_dependency_ready() {
@@ -168,13 +211,20 @@ submit_trace() {
   local model="$1"
   [[ -n "$MAIN_ROOT" && -d "$MAIN_ROOT/.git" ]] || die "LATIUM_MAIN_ROOT must name the main checkout"
   contains_model "$model" || die "unsupported model: $model"
-  local output
-  output="$(submit "$MAIN_ROOT" causal-trace \
-    --name "ct-$(short_name "$model")" \
-    --mem 96gb --gpu-mem 40gb --scratch 100gb --walltime 48:00:00 -- \
-    "model=$model" \
-    "command.causal_trace.output_dir=analysis_out/rome-math-n50-dependencies/$model/causal-trace")"
-  record_job trace "$model" dependency "$output"
+  if [[ "$BACKEND" == direct ]]; then
+    run_direct "$MAIN_ROOT" causal-trace \
+      "model=$model" \
+      "command.causal_trace.output_dir=analysis_out/rome-math-n50-dependencies/$model/causal-trace"
+    record_direct trace "$model" dependency
+  else
+    local output
+    output="$(submit "$MAIN_ROOT" causal-trace \
+      --name "ct-$(short_name "$model")" \
+      --mem 96gb --gpu-mem 40gb --scratch 100gb --walltime 48:00:00 -- \
+      "model=$model" \
+      "command.causal_trace.output_dir=analysis_out/rome-math-n50-dependencies/$model/causal-trace")"
+    record_job trace "$model" dependency "$output"
+  fi
 }
 
 submit_covariance() {
@@ -184,15 +234,24 @@ submit_covariance() {
   contains_model "$model" || die "unsupported model: $model"
   [[ "$layer" =~ ^[0-9]+$ ]] || die "layer must be a non-negative integer"
   [[ "$DRY_RUN" == 1 ]] || validate_trace "$model" "$layer"
-  local output
-  output="$(submit "$MAIN_ROOT" second-moment \
-    --name "sm-$(short_name "$model")-l$layer" \
-    --mem 96gb --gpu-mem 40gb --scratch 100gb --walltime 48:00:00 -- \
-    "model=$model" \
-    "model.layer=$layer" \
-    model.second_moment_path=null \
-    model.second_moment_target_samples=100000)"
-  record_job covariance "$model" "layer-$layer" "$output"
+  if [[ "$BACKEND" == direct ]]; then
+    run_direct "$MAIN_ROOT" second-moment \
+      "model=$model" \
+      "model.layer=$layer" \
+      model.second_moment_path=null \
+      model.second_moment_target_samples=100000
+    record_direct covariance "$model" "layer-$layer"
+  else
+    local output
+    output="$(submit "$MAIN_ROOT" second-moment \
+      --name "sm-$(short_name "$model")-l$layer" \
+      --mem 96gb --gpu-mem 40gb --scratch 100gb --walltime 48:00:00 -- \
+      "model=$model" \
+      "model.layer=$layer" \
+      model.second_moment_path=null \
+      model.second_moment_target_samples=100000)"
+    record_job covariance "$model" "layer-$layer" "$output"
+  fi
 }
 
 submit_detector() {
@@ -201,28 +260,37 @@ submit_detector() {
   local count="$3"
   local stage="$4"
   require_dependency_ready "$model"
-  local output
-  output="$(submit "$DETECTOR_ROOT" custom \
-    --name "$(short_name "$stage-$model")" \
-    --mem 96gb --gpu-mem 40gb --scratch 150gb --walltime 48:00:00 -- \
-    structural run \
-    "structural.run.models=[$model]" \
-    'structural.run.edit_methods=[rome]' \
-    "structural.run.n_tests=$count" \
-    structural.run.start_idx=0 \
-    structural.run.output_dir=analysis_out \
-    "structural.run.run_id=$run_id" \
-    structural.run.fail_on_missing_second_moment=true \
-    structural.capture.profile=rome-math-ablation \
-    structural.analysis.preset=none \
-    structural.render.enabled=false)"
-  record_job "$stage" "$model" "$run_id" "$output"
+  local detector_args=(
+    structural run
+    "structural.run.models=[$model]"
+    'structural.run.edit_methods=[rome]'
+    "structural.run.n_tests=$count"
+    structural.run.start_idx=0
+    structural.run.output_dir=analysis_out
+    "structural.run.run_id=$run_id"
+    structural.run.fail_on_missing_second_moment=true
+    structural.capture.profile=rome-math-ablation
+    structural.analysis.preset=none
+    structural.render.enabled=false
+  )
+  if [[ "$BACKEND" == direct ]]; then
+    run_direct "$DETECTOR_ROOT" "${detector_args[@]}"
+    record_direct "$stage" "$model" "$run_id"
+  else
+    local output
+    output="$(submit "$DETECTOR_ROOT" custom \
+      --name "$(short_name "$stage-$model")" \
+      --mem 96gb --gpu-mem 40gb --scratch 150gb --walltime 48:00:00 -- \
+      "${detector_args[@]}")"
+    record_job "$stage" "$model" "$run_id" "$output"
+  fi
 }
 
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=1
   shift
 fi
+[[ "$BACKEND" == pbs || "$BACKEND" == direct ]] || die "LATIUM_EXECUTION_BACKEND must be pbs or direct"
 [[ $# -ge 1 ]] || { usage; exit 2; }
 ACTION="$1"
 shift

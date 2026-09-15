@@ -29,6 +29,9 @@ capture:
     feature_set: paper
     features: []
     svd_top_k: 50
+  rome_experiments:
+    groups:
+      - neighbors
 
 analysis:
   enabled: true
@@ -107,6 +110,20 @@ analysis:
     bottom-rank-svd:
       trim_first: 2
       trim_last: 2
+    rome-profile-experiments:
+      experiments:
+        - affine-mdl-v1
+        - quadratic-mdl-v1
+        - affine-step-mdl-v1
+    rome-matrix-experiments:
+      experiments:
+        - baseline-affine-mdl-v1
+        - agreement-affine-mdl-v1
+        - refined-ratio-affine-mdl-v1
+        - bounded-affine-mdl-v1
+    rome-control-experiment:
+      experiments:
+        - control-affine-mdl-v1
     ipr:
       trim_first: 2
       trim_last: 2

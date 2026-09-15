@@ -131,6 +131,13 @@ def _matrix_feature_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _rome_experiment_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
+    experiments = _section(_section(structural, "capture"), "rome_experiments")
+    return {
+        "rome_experiment_groups": tuple(_string_list(experiments.get("groups", ["neighbors"]))),
+    }
+
+
 def _runtime_settings(cfg: DictConfig) -> dict[str, Any]:
     runtime = cfg.runtime
     return {
@@ -159,6 +166,7 @@ def structural_config_from_hydra(
         case_dataset_split=str(dataset_facts["split"]),
         **analysis_variant_settings(structural),
         **_matrix_feature_settings(structural),
+        **_rome_experiment_settings(structural),
         **_bottom_rank_settings(structural),
         analysis_method_configs=_dict_section(analysis, "methods"),
         run_analysis=run_analysis,

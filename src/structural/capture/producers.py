@@ -25,7 +25,7 @@ from src.structural.detectors.matrix_anomaly import (
     stable_effective_ratio,
 )
 from src.structural.detectors.profiles import matrix_profile
-from src.structural.detectors.rome_layer_localizer import profile_weights
+from src.structural.detectors.rome_layer_localizer import capture_experiment_weights, profile_weights
 from src.structural.detectors.spectral_primitives import (
     canonical_orient,
     pcs_pairwise_rank_cumsums,
@@ -323,6 +323,23 @@ def capture_matrix_anomaly_features(context: CaptureContext) -> dict[str, Any]:
 def capture_gram_localization(context: CaptureContext) -> dict[str, Any]:
     """Capture the final one-field localizer profile from projection weights."""
     return to_serializable(profile_weights(context.proj_weights))
+
+
+def capture_gram_experiments(context: CaptureContext) -> dict[str, Any]:
+    """Capture opt-in projection measurements for the ROME experiments."""
+    groups = tuple(str(value) for value in context.options.get("rome_experiment_groups", ("neighbors",)))
+    return to_serializable(capture_experiment_weights(context.proj_weights, groups=groups))
+
+
+def capture_gram_control(context: CaptureContext) -> dict[str, Any]:
+    """Capture the predeclared attention-output control profile."""
+    weights = context.attention_weights.get("o_proj")
+    if not weights:
+        raise ValueError("Attention output projection family o_proj is unavailable")
+    output = profile_weights(weights)
+    output["capture_version"] = "gram-control-v1"
+    output["family"] = "o_proj"
+    return to_serializable(output)
 
 
 def token_predictor_from_handler(handler: Any) -> Callable[[torch.Tensor], tuple[int, str]]:

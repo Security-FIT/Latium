@@ -235,6 +235,7 @@ scripts/*
 !scripts/remote_gpu_rome.sh
 !scripts/fetch_finetuned_qwen3_8b.py
 !scripts/find_successful_case.py
+!scripts/evaluate_binary_rome_presence.py
 
 analysis_out/
 new_graphs/

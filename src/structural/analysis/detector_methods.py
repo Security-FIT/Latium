@@ -253,6 +253,109 @@ def analyze_gram_localization(context: AnalysisContext) -> dict[str, Any]:
     return run_case_analysis(context, "gram-localization", analyze)
 
 
+def _experiment_names(context: AnalysisContext) -> tuple[str, ...]:
+    raw = _required(context.config, "experiments")
+    if isinstance(raw, str) or not isinstance(raw, (list, tuple)):
+        raise TypeError("experiments must be a list of identifiers")
+    names = tuple(str(value) for value in raw)
+    if not names:
+        raise ValueError("experiments must not be empty")
+    return names
+
+
+def _add_experiment_summary(result: dict[str, Any], experiments: tuple[str, ...]) -> dict[str, Any]:
+    summaries: dict[str, Any] = {}
+    for identifier in experiments:
+        complete = 0
+        unavailable = 0
+        positives = 0
+        for case in result.get("cases", []):
+            payload = case.get("data", {}).get("experiments", {}).get(identifier)
+            if isinstance(payload, dict):
+                complete += 1
+                positives += int(payload.get("is_rome_like") is True)
+            else:
+                unavailable += 1
+        summaries[identifier] = {
+            "cases_complete": complete,
+            "cases_unavailable": unavailable,
+            "positive_decisions": positives,
+        }
+    result["summary"]["experiments"] = summaries
+    return result
+
+
+def analyze_rome_profile_experiments(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.rome_layer_localizer import evaluate_profile_experiments
+
+    experiments = _experiment_names(context)
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        return {
+            "method": "rome-profile-experiments",
+            "experiments": evaluate_profile_experiments(
+                data.get("profiles", {}),
+                experiments=experiments,
+                eligible_only=data.get("eligible_layers"),
+            ),
+        }
+
+    return _add_experiment_summary(run_case_analysis(context, "gram-localization", analyze), experiments)
+
+
+def analyze_rome_matrix_experiments(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.rome_layer_localizer import evaluate_matrix_experiments
+
+    experiments = _experiment_names(context)
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        return {
+            "method": "rome-matrix-experiments",
+            "experiments": evaluate_matrix_experiments(data, experiments=experiments),
+        }
+
+    return _add_experiment_summary(run_case_analysis(context, "gram-experiments-v1", analyze), experiments)
+
+
+def analyze_rome_control_experiment(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.rome_layer_localizer import control_profile_mdl
+
+    experiments = _experiment_names(context)
+    unsupported = [name for name in experiments if name != "control-affine-mdl-v1"]
+    if unsupported:
+        raise ValueError(f"Unknown ROME control experiments: {', '.join(unsupported)}")
+    execution = execution_cases(context)
+    cases: list[dict[str, Any]] = []
+    for case_id, execution_case in execution.items():
+        required, reason = required_capture_cases(
+            context,
+            execution_case,
+            case_id,
+            ("gram-experiments-v1", "gram-control-v1"),
+        )
+        if required is None:
+            cases.append({"case_id": case_id, "status": "unavailable", "data": {}, "error": reason})
+            continue
+        try:
+            target_profiles = required["gram-experiments-v1"].get("data", {}).get("profiles", {})
+            control_profiles = required["gram-control-v1"].get("data", {}).get("profiles", {})
+            target = {
+                str(layer): float(profile["original_score"])
+                for layer, profile in target_profiles.items()
+                if "original_score" in profile
+            }
+            control = {
+                str(layer): float(profile["diagonal_relative"])
+                for layer, profile in control_profiles.items()
+                if "diagonal_relative" in profile
+            }
+            payload = {"control-affine-mdl-v1": control_profile_mdl(target, control)}
+            cases.append(result_case(case_id, {"method": "rome-control-experiment", "experiments": payload}, None))
+        except (ValueError, KeyError, TypeError) as exc:
+            cases.append({"case_id": case_id, "status": "unavailable", "data": {}, "error": str(exc)})
+    return _add_experiment_summary({"cases": cases, "summary": summary(cases)}, experiments)
+
+
 def analyze_bottom_rank(context: AnalysisContext) -> dict[str, Any]:
     trim_first = int(_required(context.config, "trim_first"))
     trim_last = int(_required(context.config, "trim_last"))

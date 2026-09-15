@@ -248,6 +248,26 @@ def test_plan_adds_selected_analysis_capture_and_feature_requirements() -> None:
     }
 
 
+def test_plan_reuses_registered_captures_for_rome_experiments() -> None:
+    matrix = build_plan_summary(
+        StructuralBenchmarkConfig(
+            models=('gpt2-large',),
+            analysis_preset='rome-matrix-experiments',
+        ),
+        run_id='rome-matrix',
+    )
+    control = build_plan_summary(
+        StructuralBenchmarkConfig(
+            models=('gpt2-large',),
+            analysis_preset='rome-control-experiment',
+        ),
+        run_id='rome-control',
+    )
+
+    assert matrix['resolved_captures'] == ['gram-experiments-v1']
+    assert control['resolved_captures'] == ['gram-experiments-v1', 'gram-control-v1']
+
+
 def test_default_plan_is_driven_by_analysis_requirements() -> None:
     config = StructuralBenchmarkConfig(models=('qwen3-8b',))
 

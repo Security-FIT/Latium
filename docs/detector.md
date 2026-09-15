@@ -48,6 +48,9 @@ plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-
 | `edit-presence` | `matrix-features` with its six required columns |
 | `bottom-rank-svd` | `bottom-rank-tokens` |
 | `gram-localization` | `gram-localization` (single checkpoint) |
+| `rome-profile-experiments` | `gram-localization` |
+| `rome-matrix-experiments` | `gram-experiments-v1` |
+| `rome-control-experiment` | `gram-experiments-v1`, `gram-control-v1` |
 
 Artifact studies (`ipr`, `symmetry`, `interlayer`, `attention`, and `matrix-anomaly`)
 use the same contract and are stored under `analysis/artifact-study/`.
@@ -120,6 +123,70 @@ metadata.
 The checked-in replay fixture represents 13 model families and records 196
 exact localizations among 240 successful edits (81.67%). It is development
 evidence, not an independent scientific test set.
+
+## Opt-in ROME experiments
+
+The false-positive experiments reuse the structural capture and analysis
+workflow. They do not change `gram-localization` or the default detector preset.
+The scalar experiments need no recapture:
+
+```bash
+python -m src command=structural/analyze \
+  structural.analyze.run_root=analysis_out/<run-id> \
+  structural.analysis.preset=rome-profile-experiments
+```
+
+The matrix experiments share one versioned projection capture. The default
+`neighbors` group records the unchanged score, separate-neighbor agreement,
+the refined-basis control, bounded contrast, support, residual magnitude, and
+numerical diagnostics:
+
+```bash
+python -m src command=structural/run \
+  structural.run.models='[gpt2-large]' \
+  structural.analysis.preset=rome-matrix-experiments \
+  structural.run.run_id=rome-neighbor-experiments
+```
+
+Enable wider measurements explicitly. Selecting the corresponding matrix
+experiment in `analysis.methods` also adds its required group automatically:
+
+```bash
+python -m src command=structural/run \
+  structural.run.models='[gpt2-large]' \
+  structural.analysis.preset=rome-matrix-experiments \
+  structural.capture.rome_experiments.groups='[neighbors,quadratic,footprint]' \
+  structural.analysis.methods.rome-matrix-experiments.experiments='[baseline-affine-mdl-v1,quadratic-neighbor-affine-mdl-v1,signed-footprint-mdl-v1]' \
+  structural.run.run_id=rome-full-experiments
+```
+
+`footprint` performs full symmetric eigendecompositions and is intentionally
+opt-in. Use a new run ID when capture groups change. Capture configuration is
+hashed, and analysis configurations are stored under their existing config-hash
+paths.
+
+The internal-control experiment fixes the control family to attention output
+projections (`o_proj`). Unsupported architectures return unavailable cases:
+
+```bash
+python -m src command=structural/run \
+  structural.run.models='[gpt2-large]' \
+  structural.analysis.preset=rome-control-experiment \
+  structural.run.run_id=rome-control-experiment
+```
+
+Generate a model-free comparison report from any manifest-backed run:
+
+```bash
+PYTHONPATH=. python scripts/evaluate_binary_rome_presence.py \
+  analysis_out/<run-id> --output-dir analysis_out/<run-id>/rome-report
+```
+
+The report treats completed ROME cases as positives and the baseline capture as
+the clean control. It reports unavailable cases instead of counting them as
+clean. These are exposed development comparisons; the formulas do not supply a
+calibrated deployment threshold or prove which editing procedure produced a
+checkpoint.
 
 ## End-to-end order
 

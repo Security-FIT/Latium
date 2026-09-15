@@ -16,9 +16,12 @@ import pytest
 from src.results import (
     ArtifactWriter,
     RunArtifactReader,
+    RunLayout,
     build_artifact,
     config_hash,
 )
+from src.structural.capture.artifacts import write_capture
+from src.structural.config import ModelRunPlan
 
 
 def _payload(
@@ -55,6 +58,34 @@ def _ref(record: dict) -> dict[str, str]:
         "artifact_id": str(record["artifact_id"]),
         "content_hash": str(record["content_hash"]),
     }
+
+
+def test_experimental_capture_settings_require_a_new_run_id(tmp_path: Path) -> None:
+    writer = ArtifactWriter(tmp_path, run_id="run")
+    execution = writer.write(tmp_path / "execution.json", _payload("execution", kind="execution"))
+    plan = ModelRunPlan("model", "run", "plan", 1, 0, 0)
+    common = {
+        "writer": writer,
+        "layout": RunLayout(tmp_path),
+        "run_id": "run",
+        "model": "model",
+        "plan": plan,
+        "edit_method": None,
+        "capture_name": "gram-experiments-v1",
+        "cases": [{"case_id": "baseline", "status": "complete", "data": {}}],
+        "inputs": [_ref(execution)],
+        "force": False,
+    }
+    write_capture(
+        **common,
+        capture_config={"capture": "gram-experiments-v1", "options": {"groups": ["neighbors"]}},
+    )
+
+    with pytest.raises(ValueError, match="use a new run ID"):
+        write_capture(
+            **common,
+            capture_config={"capture": "gram-experiments-v1", "options": {"groups": ["quadratic"]}},
+        )
 
 
 def test_replacing_input_invalidates_all_descendants_and_render_outputs(tmp_path: Path) -> None:

@@ -10,9 +10,12 @@ Model-resident edit execution and primitive capture orchestration.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import subprocess
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 import torch
@@ -35,6 +38,48 @@ from src.structural.execution.weight_extraction import extract_attention_weights
 from src.structural.execution.weights import build_cfg, get_fc_template, load_model_config
 from src.runtime import set_global_seed
 from src.worker_progress import effective_progress_interval, write_worker_progress
+
+
+def _source_revision() -> dict[str, Any]:
+    """Record enough source identity to distinguish experimental runs."""
+    root = Path(__file__).resolve().parents[3]
+    try:
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        diff = subprocess.run(
+            ["git", "diff", "--", "src", "scripts", "tests"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        ).stdout
+        tracked_files = (
+            root / "src/structural/detectors/rome_layer_localizer.py",
+            root / "src/structural/capture/producers.py",
+            root / "src/structural/analysis/detector_methods.py",
+            root / "scripts/evaluate_binary_rome_presence.py",
+        )
+        source_digest = hashlib.sha256()
+        for path in tracked_files:
+            source_digest.update(str(path.relative_to(root)).encode())
+            source_digest.update(path.read_bytes())
+        return {
+            "git_revision": revision,
+            "tracked_source_dirty": bool(diff),
+            "tracked_source_diff_sha256": hashlib.sha256(diff).hexdigest(),
+            "rome_experiment_source_sha256": source_digest.hexdigest(),
+        }
+    except (OSError, subprocess.SubprocessError):
+        return {
+            "git_revision": None,
+            "tracked_source_dirty": None,
+            "tracked_source_diff_sha256": None,
+            "rome_experiment_source_sha256": None,
+        }
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -218,6 +263,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
             "edit_methods": list(config.edit_methods),
             "capture_profile": config.capture_profile,
             "capture_producers": list(capture_names),
+            "source": _source_revision(),
         },
     )
     plans = build_model_run_plans(config, run_id=run_id)

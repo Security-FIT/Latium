@@ -68,6 +68,20 @@ CAPTURES = NamedRegistry(
             weight_families=("proj",),
         ),
         CaptureSpec(
+            "gram-experiments-v1",
+            "Opt-in ROME score and signed-neighborhood research measurements.",
+            "src.structural.capture.producers:capture_gram_experiments",
+            requires_baseline=False,
+            weight_families=("proj",),
+        ),
+        CaptureSpec(
+            "gram-control-v1",
+            "Attention-output control profile for ROME research.",
+            "src.structural.capture.producers:capture_gram_control",
+            requires_baseline=False,
+            weight_families=("attention",),
+        ),
+        CaptureSpec(
             "bottom-rank-tokens",
             "Per-layer tail-response token sweeps for bottom-rank analysis.",
             "src.structural.capture.producers:capture_bottom_rank_tokens",
@@ -85,6 +99,7 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "matrix": ("matrix-features",),
     "paper": ("spectral", "matrix-features"),
     "gram-localization": ("gram-localization",),
+    "gram-experiments-v1": ("gram-experiments-v1",),
     "full": CAPTURES.identifiers(),
 }
 

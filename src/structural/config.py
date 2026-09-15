@@ -118,6 +118,7 @@ _DEFAULTS: dict[str, Any] = {
     "bottom_rank_sweep_ranks": (4, 8, 16, 32),
     "bottom_rank_top_svd_rank": 64,
     "bottom_rank_boundary": 2,
+    "rome_experiment_groups": ("neighbors",),
     "analysis_variants": (),
     "analysis_method_configs": {},
     "analysis_preset": "paper",
@@ -143,6 +144,7 @@ _STR_TUPLE_FIELDS = {
     "enable_captures",
     "disable_captures",
     "matrix_features",
+    "rome_experiment_groups",
     "enable_analyses",
     "disable_analyses",
     "enable_renderers",
@@ -332,6 +334,10 @@ def _validate_values(values: Mapping[str, Any]) -> None:
         raise ValueError("bottom_rank_sweep_ranks must contain positive integers")
     if any("," in model or ";" in model for model in values["models"]):
         raise ValueError("models must be a native list, not a comma/semicolon string")
+    allowed_groups = {"neighbors", "quadratic", "footprint"}
+    unknown_groups = sorted(set(values["rome_experiment_groups"]) - allowed_groups)
+    if unknown_groups:
+        raise ValueError(f"Unknown ROME experiment groups: {', '.join(unknown_groups)}")
 
 
 __all__ = [

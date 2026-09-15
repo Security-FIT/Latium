@@ -14,9 +14,10 @@ import pytest
 
 from src.results import ArtifactWriter, RunArtifactReader, RunLayout, build_artifact, config_hash
 from src.results.ids import capture_id, execution_id
-from src.structural.analysis.detector_methods import analyze_ccs_composite
+from src.structural.analysis.detector_methods import analyze_ccs_composite, analyze_rome_matrix_experiments
 from src.structural.analysis.registry import AnalysisSpec
 from src.structural.analysis.runtime import AnalysisContext, AnalysisExecutionError, run_analyses
+from src.structural.detectors.rome_layer_localizer import capture_experiment_weights
 
 
 def _write_artifact(
@@ -53,6 +54,47 @@ def _write_artifact(
     if metadata is not None:
         payload["record_metadata"] = metadata
     writer.write(path, payload, force=force)
+
+
+def test_rome_matrix_analysis_replays_multiple_variants_from_one_capture(tmp_path: Path) -> None:
+    import torch
+
+    weights = {layer: torch.eye(6) for layer in range(9)}
+    weights[4] = torch.diag(torch.tensor([4.0, 1.0, 1.0, 1.0, 1.0, 1.0]))
+    capture = capture_experiment_weights(weights, groups=("neighbors",), trim_fraction=0.0)
+    context = AnalysisContext(
+        run_root=tmp_path,
+        model="gpt2-large",
+        plan_id="cases0-0_r01",
+        edit_method="rome",
+        target_layer=4,
+        execution={"cases": [{"case_id": "case", "status": "complete"}]},
+        captures={
+            "gram-experiments-v1": [
+                {"case_id": "case", "status": "complete", "data": capture}
+            ]
+        },
+        config={
+            "experiments": [
+                "baseline-affine-mdl-v1",
+                "agreement-affine-mdl-v1",
+                "bounded-affine-mdl-v1",
+            ]
+        },
+    )
+
+    result = analyze_rome_matrix_experiments(context)
+
+    assert result["summary"]["cases_complete"] == 1
+    assert set(result["cases"][0]["data"]["experiments"]) == {
+        "baseline-affine-mdl-v1",
+        "agreement-affine-mdl-v1",
+        "bounded-affine-mdl-v1",
+    }
+    assert all(
+        summary["cases_complete"] == 1
+        for summary in result["summary"]["experiments"].values()
+    )
 
 
 def test_analysis_variants_create_distinct_artifacts_without_new_capture_plans(

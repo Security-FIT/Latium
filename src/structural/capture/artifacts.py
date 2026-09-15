@@ -21,6 +21,7 @@ from src.structural.capture.producers import CaptureContext
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.detectors.rome_layer_localizer import (
     DEFAULT_TRIM_FRACTION,
+    EXPERIMENT_CAPTURE_VERSION,
     PROFILE_FIELDS,
 )
 
@@ -31,6 +32,13 @@ def capture_options(
     matrix_features: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     variants = config.effective_analysis_variants
+    rome_groups = list(config.rome_experiment_groups)
+    matrix_config = config.analysis_method_configs.get("rome-matrix-experiments", {})
+    matrix_experiments = matrix_config.get("experiments", ())
+    if "quadratic-neighbor-affine-mdl-v1" in matrix_experiments and "quadratic" not in rome_groups:
+        rome_groups.append("quadratic")
+    if "signed-footprint-mdl-v1" in matrix_experiments and "footprint" not in rome_groups:
+        rome_groups.append("footprint")
     return {
         "spectral_top_k": max(int(variant.spectral_top_k) for variant in variants),
         "spectral_neighbor_layers": max(int(variant.spectral_neighbor_layers) for variant in variants),
@@ -40,6 +48,7 @@ def capture_options(
         "bottom_rank_sweep_ranks": tuple(config.bottom_rank_sweep_ranks),
         "bottom_rank_top_svd_rank": int(config.bottom_rank_top_svd_rank),
         "bottom_rank_boundary": int(config.bottom_rank_boundary),
+        "rome_experiment_groups": tuple(rome_groups),
     }
 
 
@@ -97,6 +106,19 @@ def capture_config(
         }
     elif capture_name == "gram-localization":
         relevant_options = {
+            "profile_fields": list(PROFILE_FIELDS),
+            "trim_fraction": DEFAULT_TRIM_FRACTION,
+        }
+    elif capture_name == "gram-experiments-v1":
+        relevant_options = {
+            "capture_version": EXPERIMENT_CAPTURE_VERSION,
+            "groups": list(options.get("rome_experiment_groups", ("neighbors",))),
+            "trim_fraction": DEFAULT_TRIM_FRACTION,
+        }
+    elif capture_name == "gram-control-v1":
+        relevant_options = {
+            "capture_version": "gram-control-v1",
+            "family": "o_proj",
             "profile_fields": list(PROFILE_FIELDS),
             "trim_fraction": DEFAULT_TRIM_FRACTION,
         }
@@ -214,6 +236,18 @@ def write_capture(
     force: bool,
 ) -> dict[str, Any]:
     artifact_id = capture_id(model, plan.plan_id, capture_name, edit_method)
+    resolved_config_hash = config_hash(capture_config)
+    if capture_name in {"gram-experiments-v1", "gram-control-v1"}:
+        writer.current(
+            artifact_id,
+            expected_config_hash=resolved_config_hash,
+            inputs=inputs,
+        )
+        existing = writer.manifest.get("artifacts", {}).get(artifact_id)
+        if isinstance(existing, dict) and existing.get("config_hash") != resolved_config_hash:
+            raise ValueError(
+                f"Experimental capture {capture_name} already exists with different settings; use a new run ID"
+            )
     complete = sum(case.get("status") == "complete" for case in cases)
     unavailable = sum(case.get("status") == "unavailable" for case in cases)
     errors = sum(case.get("status") == "error" for case in cases)
@@ -233,7 +267,7 @@ def write_capture(
         edit_method=edit_method,
         status=status,
         config=capture_config,
-        config_hash=config_hash(capture_config),
+        config_hash=resolved_config_hash,
         inputs=inputs,
         created_at=datetime.now().isoformat(),
         cases=cases,

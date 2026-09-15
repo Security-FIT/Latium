@@ -39,6 +39,13 @@ def test_null_sweep_uses_configured_base_not_global_default():
     assert result["analysis_variants"][0].spectral_top_k == 7
 
 
+def test_rome_experiment_groups_are_explicit_and_validated():
+    config = StructuralBenchmarkConfig(rome_experiment_groups=("neighbors", "quadratic"))
+    assert config.rome_experiment_groups == ("neighbors", "quadratic")
+    with pytest.raises(ValueError, match="Unknown ROME experiment groups"):
+        StructuralBenchmarkConfig(rome_experiment_groups=("unknown",))
+
+
 def test_localizer_requires_untrimmed_layer_metadata():
     profiles = {str(layer): {"diagonal_relative": float(layer)} for layer in range(1, 5)}
     with pytest.raises(ValueError, match="full capture layer list"):

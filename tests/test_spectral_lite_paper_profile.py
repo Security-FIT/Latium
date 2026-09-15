@@ -77,7 +77,8 @@ def test_spectral_detector_sv_only_payload_excludes_pairwise_raw_tensors() -> No
     assert "sv_z_scores" in result
     assert "sv_ratio_scores" in result
     assert "pcs_next_jump_scores" in result
-    assert "pcs_cross_curvature_scores" in result
+    assert "pcs_cross_shift_scores" in result
+    assert "pcs_cross_curvature_scores" not in result
 
     assert set(raw.keys()) == {
         "all_layers",

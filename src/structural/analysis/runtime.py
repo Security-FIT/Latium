@@ -29,7 +29,7 @@ class AnalysisContext:
     run_root: Path
     model: str
     plan_id: str
-    edit_method: str
+    edit_method: str | None
     target_layer: Optional[int]
     execution: dict[str, Any]
     captures: dict[str, list[dict[str, Any]]]
@@ -38,6 +38,10 @@ class AnalysisContext:
 
 class AnalysisUnavailableError(RuntimeError):
     """Raised when saved captures cannot satisfy an analysis configuration."""
+
+
+class AnalysisExecutionError(RuntimeError):
+    """Raised after analysis failures have been persisted as artifacts."""
 
 
 STRUCTURAL_DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "structural" / "default.yaml"
@@ -227,6 +231,7 @@ def run_analyses(
     method_configs: Optional[Mapping[str, Mapping[str, Any]]] = None,
     config_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,
     force: bool = False,
+    continue_on_error: bool = False,
 ) -> dict[str, Any]:
     root = Path(run_root)
     reader = RunArtifactReader(root)
@@ -240,12 +245,12 @@ def run_analyses(
     overrides = dict(config_overrides or {})
     written: list[str] = []
     skipped: list[str] = []
+    failures: list[str] = []
 
     executions = list(reader.records(kind="execution"))
     for execution_record in executions:
         edit_method = execution_record.get("edit_method")
-        if not edit_method:
-            continue
+        method_name = None if edit_method is None else str(edit_method)
         model = str(execution_record["model"])
         plan_id = str(execution_record["plan_id"])
         execution_artifact_id = str(execution_record["artifact_id"])
@@ -275,7 +280,7 @@ def run_analyses(
                 artifact_id = analysis_id(
                     model,
                     plan_id,
-                    str(edit_method),
+                    method_name,
                     spec.category,
                     identifier,
                     digest,
@@ -287,10 +292,19 @@ def run_analyses(
                 if supported:
                     for capture_name in spec.required_captures:
                         capture_spec = CAPTURES.get(capture_name)
-                        baseline_id = (
-                            capture_id(model, plan_id, capture_name, None) if capture_spec.requires_baseline else None
-                        )
-                        method_id = capture_id(model, plan_id, capture_name, str(edit_method))
+                        if method_name is None:
+                            if not capture_spec.captures_baseline:
+                                missing.append(capture_name)
+                                continue
+                            baseline_id = None
+                            method_id = capture_id(model, plan_id, capture_name, None)
+                        else:
+                            baseline_id = (
+                                capture_id(model, plan_id, capture_name, None)
+                                if capture_spec.requires_baseline
+                                else None
+                            )
+                            method_id = capture_id(model, plan_id, capture_name, method_name)
                         try:
                             method_ref = reader.ref(method_id)
                             baseline_ref = reader.ref(baseline_id) if baseline_id else None
@@ -334,8 +348,12 @@ def run_analyses(
                         run_root=root,
                         model=model,
                         plan_id=plan_id,
-                        edit_method=str(edit_method),
-                        target_layer=int(target_layer) if target_layer is not None else None,
+                        edit_method=method_name,
+                        target_layer=(
+                            int(target_layer)
+                            if method_name is not None and target_layer is not None
+                            else None
+                        ),
                         execution=execution,
                         captures=capture_payloads,
                         config=analysis_config,
@@ -366,7 +384,7 @@ def run_analyses(
                     run_id=str(reader.manifest["run_id"]),
                     model=model,
                     plan_id=plan_id,
-                    edit_method=str(edit_method),
+                    edit_method=method_name,
                     status=status,
                     config=analysis_config,
                     config_hash=digest,
@@ -379,16 +397,22 @@ def run_analyses(
                 path = layout.analysis_path(
                     model,
                     plan_id,
-                    str(edit_method),
+                    method_name,
                     spec.category,
                     identifier,
                     digest,
                 )
                 writer.write(path, payload, force=force)
                 written.append(artifact_id)
+                if status == "error":
+                    failures.append(f"{artifact_id}: {error or 'analysis failed'}")
+
+    if failures and not continue_on_error:
+        raise AnalysisExecutionError("analysis failures: " + "; ".join(failures))
 
     return {
         "run_id": reader.manifest["run_id"],
         "written": written,
         "skipped": skipped,
+        "errors": failures,
     }

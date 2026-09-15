@@ -1,0 +1,1833 @@
+{
+  "aggregate": {
+    "equal_model_macro_exact": 0.8271030139451191,
+    "exact": 196,
+    "per_model": {
+      "deepseek-7b-base": {
+        "exact": 20,
+        "successful": 20,
+        "within_one": 20
+      },
+      "deepseek-r1-llama3-8b": {
+        "exact": 20,
+        "successful": 20,
+        "within_one": 20
+      },
+      "falcon-7b": {
+        "exact": 3,
+        "successful": 19,
+        "within_one": 3
+      },
+      "gemma-4-12b": {
+        "exact": 7,
+        "successful": 7,
+        "within_one": 7
+      },
+      "gpt-j-6b": {
+        "exact": 19,
+        "successful": 19,
+        "within_one": 19
+      },
+      "gpt2-xl": {
+        "exact": 17,
+        "successful": 18,
+        "within_one": 17
+      },
+      "granite-4.1-8b": {
+        "exact": 20,
+        "successful": 20,
+        "within_one": 20
+      },
+      "granite4-micro": {
+        "exact": 17,
+        "successful": 17,
+        "within_one": 17
+      },
+      "llama2-7b": {
+        "exact": 18,
+        "successful": 20,
+        "within_one": 20
+      },
+      "ministral-3-8b": {
+        "exact": 19,
+        "successful": 20,
+        "within_one": 19
+      },
+      "mistral-7b-v0.1": {
+        "exact": 19,
+        "successful": 20,
+        "within_one": 19
+      },
+      "mistral-7b-v0.3": {
+        "exact": 17,
+        "successful": 20,
+        "within_one": 20
+      },
+      "olmo-3-1025-7b": {
+        "exact": 0,
+        "successful": 20,
+        "within_one": 0
+      }
+    },
+    "requested_cases": 260,
+    "successful_edits": 240,
+    "within_one": 201
+  },
+  "canonical_samples_sha256": "fa39299bd4bfd163d597cc8e30c80ce383b644781d0a0a793b5cd18d7f0dd898",
+  "evidence_class": "exposed-development",
+  "sample_policy": "lowest successful case id per model; profiles reduced to eligible diagonal_relative scores",
+  "samples": [
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 5,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "model": "deepseek-7b-base",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 3.0365660190582275
+        },
+        "11": {
+          "diagonal_relative": 1.8211886882781982
+        },
+        "12": {
+          "diagonal_relative": 3.2892301082611084
+        },
+        "13": {
+          "diagonal_relative": 3.0462148189544678
+        },
+        "14": {
+          "diagonal_relative": 2.917574644088745
+        },
+        "15": {
+          "diagonal_relative": 2.9153881072998047
+        },
+        "16": {
+          "diagonal_relative": 3.170968770980835
+        },
+        "17": {
+          "diagonal_relative": 3.001413583755493
+        },
+        "18": {
+          "diagonal_relative": 2.9658994674682617
+        },
+        "19": {
+          "diagonal_relative": 1.7089775800704956
+        },
+        "20": {
+          "diagonal_relative": 2.178811550140381
+        },
+        "21": {
+          "diagonal_relative": 2.017457962036133
+        },
+        "22": {
+          "diagonal_relative": 1.1599407196044922
+        },
+        "23": {
+          "diagonal_relative": 1.9063036441802979
+        },
+        "24": {
+          "diagonal_relative": 1.5799673795700073
+        },
+        "25": {
+          "diagonal_relative": 1.9617220163345337
+        },
+        "26": {
+          "diagonal_relative": 1.969085454940796
+        },
+        "3": {
+          "diagonal_relative": 2.161607027053833
+        },
+        "4": {
+          "diagonal_relative": 2.895925998687744
+        },
+        "5": {
+          "diagonal_relative": 321.3449401855469
+        },
+        "6": {
+          "diagonal_relative": 1.2255388498306274
+        },
+        "7": {
+          "diagonal_relative": 2.1028099060058594
+        },
+        "8": {
+          "diagonal_relative": 4.517063617706299
+        },
+        "9": {
+          "diagonal_relative": 2.429508924484253
+        }
+      },
+      "target_layer": 5,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 5,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ],
+      "model": "deepseek-r1-llama3-8b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 2.1389107704162598
+        },
+        "11": {
+          "diagonal_relative": 3.2645671367645264
+        },
+        "12": {
+          "diagonal_relative": 1.248373031616211
+        },
+        "13": {
+          "diagonal_relative": 2.2155380249023438
+        },
+        "14": {
+          "diagonal_relative": 4.00056266784668
+        },
+        "15": {
+          "diagonal_relative": 1.8063931465148926
+        },
+        "16": {
+          "diagonal_relative": 3.4633212089538574
+        },
+        "17": {
+          "diagonal_relative": 3.2679672241210938
+        },
+        "18": {
+          "diagonal_relative": 2.6714515686035156
+        },
+        "19": {
+          "diagonal_relative": 2.3585586547851562
+        },
+        "20": {
+          "diagonal_relative": 2.618152618408203
+        },
+        "21": {
+          "diagonal_relative": 2.134211301803589
+        },
+        "22": {
+          "diagonal_relative": 0.9902549982070923
+        },
+        "23": {
+          "diagonal_relative": 1.2064765691757202
+        },
+        "24": {
+          "diagonal_relative": 1.2454636096954346
+        },
+        "25": {
+          "diagonal_relative": 1.769242525100708
+        },
+        "26": {
+          "diagonal_relative": 1.3424322605133057
+        },
+        "27": {
+          "diagonal_relative": 1.6762416362762451
+        },
+        "28": {
+          "diagonal_relative": 2.5667099952697754
+        },
+        "3": {
+          "diagonal_relative": 3.8152270317077637
+        },
+        "4": {
+          "diagonal_relative": 3.1854844093322754
+        },
+        "5": {
+          "diagonal_relative": 16.31678581237793
+        },
+        "6": {
+          "diagonal_relative": 1.0905402898788452
+        },
+        "7": {
+          "diagonal_relative": 2.1354475021362305
+        },
+        "8": {
+          "diagonal_relative": 1.5344258546829224
+        },
+        "9": {
+          "diagonal_relative": 1.6698189973831177
+        }
+      },
+      "target_layer": 5,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 13,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ],
+      "model": "falcon-7b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 3.378542184829712
+        },
+        "11": {
+          "diagonal_relative": 3.9029181003570557
+        },
+        "12": {
+          "diagonal_relative": 2.7555532455444336
+        },
+        "13": {
+          "diagonal_relative": 5.286998748779297
+        },
+        "14": {
+          "diagonal_relative": 3.078251600265503
+        },
+        "15": {
+          "diagonal_relative": 3.194840908050537
+        },
+        "16": {
+          "diagonal_relative": 2.7071619033813477
+        },
+        "17": {
+          "diagonal_relative": 3.5370874404907227
+        },
+        "18": {
+          "diagonal_relative": 4.2114996910095215
+        },
+        "19": {
+          "diagonal_relative": 3.1074042320251465
+        },
+        "20": {
+          "diagonal_relative": 3.3596746921539307
+        },
+        "21": {
+          "diagonal_relative": 2.1572656631469727
+        },
+        "22": {
+          "diagonal_relative": 2.842668056488037
+        },
+        "23": {
+          "diagonal_relative": 1.659427285194397
+        },
+        "24": {
+          "diagonal_relative": 2.641026735305786
+        },
+        "25": {
+          "diagonal_relative": 1.1735326051712036
+        },
+        "26": {
+          "diagonal_relative": 5.1068925857543945
+        },
+        "27": {
+          "diagonal_relative": 1.5132960081100464
+        },
+        "28": {
+          "diagonal_relative": 3.241694688796997
+        },
+        "3": {
+          "diagonal_relative": 2.4531116485595703
+        },
+        "4": {
+          "diagonal_relative": 3.3479115962982178
+        },
+        "5": {
+          "diagonal_relative": 2.4290566444396973
+        },
+        "6": {
+          "diagonal_relative": 3.6624345779418945
+        },
+        "7": {
+          "diagonal_relative": 4.648372173309326
+        },
+        "8": {
+          "diagonal_relative": 3.751258373260498
+        },
+        "9": {
+          "diagonal_relative": 4.703266143798828
+        }
+      },
+      "target_layer": 5,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 11,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47
+      ],
+      "model": "gemma-4-12b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 1.5184248685836792
+        },
+        "11": {
+          "diagonal_relative": 632.8302001953125
+        },
+        "12": {
+          "diagonal_relative": 1.4066988229751587
+        },
+        "13": {
+          "diagonal_relative": 24.520729064941406
+        },
+        "14": {
+          "diagonal_relative": 9.987358093261719
+        },
+        "15": {
+          "diagonal_relative": 14.981534004211426
+        },
+        "16": {
+          "diagonal_relative": 35.6020622253418
+        },
+        "17": {
+          "diagonal_relative": 63.58631134033203
+        },
+        "18": {
+          "diagonal_relative": 15.682796478271484
+        },
+        "19": {
+          "diagonal_relative": 11.78325366973877
+        },
+        "20": {
+          "diagonal_relative": 10.57430648803711
+        },
+        "21": {
+          "diagonal_relative": 17.098548889160156
+        },
+        "22": {
+          "diagonal_relative": 13.224908828735352
+        },
+        "23": {
+          "diagonal_relative": 18.799129486083984
+        },
+        "24": {
+          "diagonal_relative": 13.771296501159668
+        },
+        "25": {
+          "diagonal_relative": 11.724427223205566
+        },
+        "26": {
+          "diagonal_relative": 12.220735549926758
+        },
+        "27": {
+          "diagonal_relative": 13.047832489013672
+        },
+        "28": {
+          "diagonal_relative": 13.297698974609375
+        },
+        "29": {
+          "diagonal_relative": 18.16054344177246
+        },
+        "30": {
+          "diagonal_relative": 19.605703353881836
+        },
+        "31": {
+          "diagonal_relative": 29.452516555786133
+        },
+        "32": {
+          "diagonal_relative": 7.534621238708496
+        },
+        "33": {
+          "diagonal_relative": 6.304717063903809
+        },
+        "34": {
+          "diagonal_relative": 9.477791786193848
+        },
+        "35": {
+          "diagonal_relative": 15.08881664276123
+        },
+        "36": {
+          "diagonal_relative": 21.397626876831055
+        },
+        "37": {
+          "diagonal_relative": 16.50394058227539
+        },
+        "38": {
+          "diagonal_relative": 31.897663116455078
+        },
+        "39": {
+          "diagonal_relative": 17.983325958251953
+        },
+        "4": {
+          "diagonal_relative": 17.606870651245117
+        },
+        "40": {
+          "diagonal_relative": 5.405885219573975
+        },
+        "41": {
+          "diagonal_relative": 11.855195999145508
+        },
+        "42": {
+          "diagonal_relative": 16.366504669189453
+        },
+        "43": {
+          "diagonal_relative": 13.690385818481445
+        },
+        "5": {
+          "diagonal_relative": 38.404136657714844
+        },
+        "6": {
+          "diagonal_relative": 12.080316543579102
+        },
+        "7": {
+          "diagonal_relative": 21.929384231567383
+        },
+        "8": {
+          "diagonal_relative": 33.949527740478516
+        },
+        "9": {
+          "diagonal_relative": 1.3498085737228394
+        }
+      },
+      "target_layer": 11,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 5,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "model": "gpt-j-6b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 2.289355754852295
+        },
+        "11": {
+          "diagonal_relative": 0.8583406805992126
+        },
+        "12": {
+          "diagonal_relative": 2.447049617767334
+        },
+        "13": {
+          "diagonal_relative": 1.600483775138855
+        },
+        "14": {
+          "diagonal_relative": 1.7289960384368896
+        },
+        "15": {
+          "diagonal_relative": 0.9496247172355652
+        },
+        "16": {
+          "diagonal_relative": 1.573335886001587
+        },
+        "17": {
+          "diagonal_relative": 1.288203477859497
+        },
+        "18": {
+          "diagonal_relative": 1.3699795007705688
+        },
+        "19": {
+          "diagonal_relative": 1.3500884771347046
+        },
+        "2": {
+          "diagonal_relative": 3.555757761001587
+        },
+        "20": {
+          "diagonal_relative": 0.8306100964546204
+        },
+        "21": {
+          "diagonal_relative": 3.0944645404815674
+        },
+        "22": {
+          "diagonal_relative": 0.6585363149642944
+        },
+        "23": {
+          "diagonal_relative": 0.7573701739311218
+        },
+        "24": {
+          "diagonal_relative": 0.8406339883804321
+        },
+        "25": {
+          "diagonal_relative": 0.48401618003845215
+        },
+        "3": {
+          "diagonal_relative": 2.1270270347595215
+        },
+        "4": {
+          "diagonal_relative": 1.830410122871399
+        },
+        "5": {
+          "diagonal_relative": 11.14606761932373
+        },
+        "6": {
+          "diagonal_relative": 1.0925018787384033
+        },
+        "7": {
+          "diagonal_relative": 3.7347538471221924
+        },
+        "8": {
+          "diagonal_relative": 2.0063047409057617
+        },
+        "9": {
+          "diagonal_relative": 2.7215914726257324
+        }
+      },
+      "target_layer": 5,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 16,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47
+      ],
+      "model": "gpt2-xl",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 0.7398406863212585
+        },
+        "11": {
+          "diagonal_relative": 0.4614436626434326
+        },
+        "12": {
+          "diagonal_relative": 0.8604227304458618
+        },
+        "13": {
+          "diagonal_relative": 0.7871400117874146
+        },
+        "14": {
+          "diagonal_relative": 0.9993343949317932
+        },
+        "15": {
+          "diagonal_relative": 0.8752639293670654
+        },
+        "16": {
+          "diagonal_relative": 3.660072088241577
+        },
+        "17": {
+          "diagonal_relative": 1.066672682762146
+        },
+        "18": {
+          "diagonal_relative": 1.5634920597076416
+        },
+        "19": {
+          "diagonal_relative": 0.8854365944862366
+        },
+        "20": {
+          "diagonal_relative": 1.201035499572754
+        },
+        "21": {
+          "diagonal_relative": 1.077509880065918
+        },
+        "22": {
+          "diagonal_relative": 1.1013927459716797
+        },
+        "23": {
+          "diagonal_relative": 0.6229057312011719
+        },
+        "24": {
+          "diagonal_relative": 1.081751823425293
+        },
+        "25": {
+          "diagonal_relative": 1.1446812152862549
+        },
+        "26": {
+          "diagonal_relative": 1.183806300163269
+        },
+        "27": {
+          "diagonal_relative": 1.060474157333374
+        },
+        "28": {
+          "diagonal_relative": 1.3418163061141968
+        },
+        "29": {
+          "diagonal_relative": 0.9514971971511841
+        },
+        "30": {
+          "diagonal_relative": 0.9868180751800537
+        },
+        "31": {
+          "diagonal_relative": 1.024827480316162
+        },
+        "32": {
+          "diagonal_relative": 1.035596251487732
+        },
+        "33": {
+          "diagonal_relative": 1.1289089918136597
+        },
+        "34": {
+          "diagonal_relative": 1.1172679662704468
+        },
+        "35": {
+          "diagonal_relative": 1.3191993236541748
+        },
+        "36": {
+          "diagonal_relative": 1.063301682472229
+        },
+        "37": {
+          "diagonal_relative": 1.5888562202453613
+        },
+        "38": {
+          "diagonal_relative": 1.3534371852874756
+        },
+        "39": {
+          "diagonal_relative": 1.1216031312942505
+        },
+        "4": {
+          "diagonal_relative": 0.6515737771987915
+        },
+        "40": {
+          "diagonal_relative": 1.4554774761199951
+        },
+        "41": {
+          "diagonal_relative": 1.1381579637527466
+        },
+        "42": {
+          "diagonal_relative": 3.228750705718994
+        },
+        "43": {
+          "diagonal_relative": 1.4766939878463745
+        },
+        "5": {
+          "diagonal_relative": 0.6127459406852722
+        },
+        "6": {
+          "diagonal_relative": 0.6511347889900208
+        },
+        "7": {
+          "diagonal_relative": 0.45290711522102356
+        },
+        "8": {
+          "diagonal_relative": 0.5164699554443359
+        },
+        "9": {
+          "diagonal_relative": 0.5716047286987305
+        }
+      },
+      "target_layer": 16,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 16,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39
+      ],
+      "model": "granite-4.1-8b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 4.058101177215576
+        },
+        "11": {
+          "diagonal_relative": 4.2794294357299805
+        },
+        "12": {
+          "diagonal_relative": 3.7129600048065186
+        },
+        "13": {
+          "diagonal_relative": 2.8867597579956055
+        },
+        "14": {
+          "diagonal_relative": 3.4608635902404785
+        },
+        "15": {
+          "diagonal_relative": 3.2459614276885986
+        },
+        "16": {
+          "diagonal_relative": 1244.7786865234375
+        },
+        "17": {
+          "diagonal_relative": 2.212547779083252
+        },
+        "18": {
+          "diagonal_relative": 2.242985248565674
+        },
+        "19": {
+          "diagonal_relative": 1.5059128999710083
+        },
+        "20": {
+          "diagonal_relative": 4.961899757385254
+        },
+        "21": {
+          "diagonal_relative": 1.5254290103912354
+        },
+        "22": {
+          "diagonal_relative": 1.677225112915039
+        },
+        "23": {
+          "diagonal_relative": 1.2481313943862915
+        },
+        "24": {
+          "diagonal_relative": 1.792048692703247
+        },
+        "25": {
+          "diagonal_relative": 2.4015326499938965
+        },
+        "26": {
+          "diagonal_relative": 2.266397476196289
+        },
+        "27": {
+          "diagonal_relative": 1.8651292324066162
+        },
+        "28": {
+          "diagonal_relative": 1.7265291213989258
+        },
+        "29": {
+          "diagonal_relative": 1.8591499328613281
+        },
+        "30": {
+          "diagonal_relative": 1.8566920757293701
+        },
+        "31": {
+          "diagonal_relative": 2.7157881259918213
+        },
+        "32": {
+          "diagonal_relative": 1.4122834205627441
+        },
+        "33": {
+          "diagonal_relative": 2.077167272567749
+        },
+        "34": {
+          "diagonal_relative": 2.9298338890075684
+        },
+        "35": {
+          "diagonal_relative": 2.5933847427368164
+        },
+        "4": {
+          "diagonal_relative": 3.010432004928589
+        },
+        "5": {
+          "diagonal_relative": 3.5563628673553467
+        },
+        "6": {
+          "diagonal_relative": 3.318737030029297
+        },
+        "7": {
+          "diagonal_relative": 4.401006698608398
+        },
+        "8": {
+          "diagonal_relative": 3.841839551925659
+        },
+        "9": {
+          "diagonal_relative": 1.6537330150604248
+        }
+      },
+      "target_layer": 16,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 10,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39
+      ],
+      "model": "granite4-micro",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 468.48394775390625
+        },
+        "11": {
+          "diagonal_relative": 2.9047210216522217
+        },
+        "12": {
+          "diagonal_relative": 2.3842594623565674
+        },
+        "13": {
+          "diagonal_relative": 1.9491084814071655
+        },
+        "14": {
+          "diagonal_relative": 2.1748554706573486
+        },
+        "15": {
+          "diagonal_relative": 1.9933416843414307
+        },
+        "16": {
+          "diagonal_relative": 1.8987807035446167
+        },
+        "17": {
+          "diagonal_relative": 1.393262267112732
+        },
+        "18": {
+          "diagonal_relative": 1.2245659828186035
+        },
+        "19": {
+          "diagonal_relative": 1.8529984951019287
+        },
+        "20": {
+          "diagonal_relative": 1.268473505973816
+        },
+        "21": {
+          "diagonal_relative": 3.225429058074951
+        },
+        "22": {
+          "diagonal_relative": 0.9308911561965942
+        },
+        "23": {
+          "diagonal_relative": 1.0013859272003174
+        },
+        "24": {
+          "diagonal_relative": 1.5312467813491821
+        },
+        "25": {
+          "diagonal_relative": 1.6296241283416748
+        },
+        "26": {
+          "diagonal_relative": 1.899184226989746
+        },
+        "27": {
+          "diagonal_relative": 1.7506064176559448
+        },
+        "28": {
+          "diagonal_relative": 1.6229389905929565
+        },
+        "29": {
+          "diagonal_relative": 1.8498276472091675
+        },
+        "30": {
+          "diagonal_relative": 2.318037509918213
+        },
+        "31": {
+          "diagonal_relative": 1.99569833278656
+        },
+        "32": {
+          "diagonal_relative": 2.9822192192077637
+        },
+        "33": {
+          "diagonal_relative": 2.9017770290374756
+        },
+        "34": {
+          "diagonal_relative": 2.8498282432556152
+        },
+        "35": {
+          "diagonal_relative": 1.2997363805770874
+        },
+        "4": {
+          "diagonal_relative": 1.771286129951477
+        },
+        "5": {
+          "diagonal_relative": 2.0167317390441895
+        },
+        "6": {
+          "diagonal_relative": 5.246500015258789
+        },
+        "7": {
+          "diagonal_relative": 4.794892311096191
+        },
+        "8": {
+          "diagonal_relative": 2.7183334827423096
+        },
+        "9": {
+          "diagonal_relative": 2.9428560733795166
+        }
+      },
+      "target_layer": 10,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 5,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ],
+      "model": "llama2-7b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 2.267667293548584
+        },
+        "11": {
+          "diagonal_relative": 1.9670833349227905
+        },
+        "12": {
+          "diagonal_relative": 3.336265802383423
+        },
+        "13": {
+          "diagonal_relative": 2.6616785526275635
+        },
+        "14": {
+          "diagonal_relative": 3.363715887069702
+        },
+        "15": {
+          "diagonal_relative": 3.710385799407959
+        },
+        "16": {
+          "diagonal_relative": 3.4599297046661377
+        },
+        "17": {
+          "diagonal_relative": 3.4447336196899414
+        },
+        "18": {
+          "diagonal_relative": 1.9362472295761108
+        },
+        "19": {
+          "diagonal_relative": 2.637866973876953
+        },
+        "20": {
+          "diagonal_relative": 1.8936741352081299
+        },
+        "21": {
+          "diagonal_relative": 1.5519590377807617
+        },
+        "22": {
+          "diagonal_relative": 1.5548332929611206
+        },
+        "23": {
+          "diagonal_relative": 2.2369418144226074
+        },
+        "24": {
+          "diagonal_relative": 1.005279302597046
+        },
+        "25": {
+          "diagonal_relative": 1.7927274703979492
+        },
+        "26": {
+          "diagonal_relative": 1.2741249799728394
+        },
+        "27": {
+          "diagonal_relative": 1.8164035081863403
+        },
+        "28": {
+          "diagonal_relative": 1.7610400915145874
+        },
+        "3": {
+          "diagonal_relative": 3.6841635704040527
+        },
+        "4": {
+          "diagonal_relative": 3.7746176719665527
+        },
+        "5": {
+          "diagonal_relative": 20.785490036010742
+        },
+        "6": {
+          "diagonal_relative": 3.420734405517578
+        },
+        "7": {
+          "diagonal_relative": 2.182281970977783
+        },
+        "8": {
+          "diagonal_relative": 3.668436050415039
+        },
+        "9": {
+          "diagonal_relative": 2.6451830863952637
+        }
+      },
+      "target_layer": 5,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 5,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33
+      ],
+      "model": "ministral-3-8b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 4.495850086212158
+        },
+        "11": {
+          "diagonal_relative": 2.655369758605957
+        },
+        "12": {
+          "diagonal_relative": 3.3288111686706543
+        },
+        "13": {
+          "diagonal_relative": 3.8029425144195557
+        },
+        "14": {
+          "diagonal_relative": 3.6086623668670654
+        },
+        "15": {
+          "diagonal_relative": 3.715095043182373
+        },
+        "16": {
+          "diagonal_relative": 2.7980921268463135
+        },
+        "17": {
+          "diagonal_relative": 2.2126777172088623
+        },
+        "18": {
+          "diagonal_relative": 3.531510829925537
+        },
+        "19": {
+          "diagonal_relative": 1.8484987020492554
+        },
+        "20": {
+          "diagonal_relative": 3.5267364978790283
+        },
+        "21": {
+          "diagonal_relative": 3.2343549728393555
+        },
+        "22": {
+          "diagonal_relative": 2.5961339473724365
+        },
+        "23": {
+          "diagonal_relative": 3.458310842514038
+        },
+        "24": {
+          "diagonal_relative": 2.7625582218170166
+        },
+        "25": {
+          "diagonal_relative": 3.3327112197875977
+        },
+        "26": {
+          "diagonal_relative": 1.8395991325378418
+        },
+        "27": {
+          "diagonal_relative": 5.356546878814697
+        },
+        "28": {
+          "diagonal_relative": 1.9137859344482422
+        },
+        "29": {
+          "diagonal_relative": 2.64040470123291
+        },
+        "3": {
+          "diagonal_relative": 4.880178451538086
+        },
+        "30": {
+          "diagonal_relative": 2.4498815536499023
+        },
+        "4": {
+          "diagonal_relative": 3.450108051300049
+        },
+        "5": {
+          "diagonal_relative": 11.205228805541992
+        },
+        "6": {
+          "diagonal_relative": 5.809387683868408
+        },
+        "7": {
+          "diagonal_relative": 5.858154296875
+        },
+        "8": {
+          "diagonal_relative": 3.906477451324463
+        },
+        "9": {
+          "diagonal_relative": 4.533973217010498
+        }
+      },
+      "target_layer": 5,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 5,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ],
+      "model": "mistral-7b-v0.1",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 4.350086212158203
+        },
+        "11": {
+          "diagonal_relative": 3.8467748165130615
+        },
+        "12": {
+          "diagonal_relative": 3.565051794052124
+        },
+        "13": {
+          "diagonal_relative": 4.359799861907959
+        },
+        "14": {
+          "diagonal_relative": 2.6289451122283936
+        },
+        "15": {
+          "diagonal_relative": 2.6074726581573486
+        },
+        "16": {
+          "diagonal_relative": 3.3432540893554688
+        },
+        "17": {
+          "diagonal_relative": 4.424545764923096
+        },
+        "18": {
+          "diagonal_relative": 4.213170528411865
+        },
+        "19": {
+          "diagonal_relative": 4.0839152336120605
+        },
+        "20": {
+          "diagonal_relative": 3.506643056869507
+        },
+        "21": {
+          "diagonal_relative": 2.4919838905334473
+        },
+        "22": {
+          "diagonal_relative": 1.6167869567871094
+        },
+        "23": {
+          "diagonal_relative": 2.2767457962036133
+        },
+        "24": {
+          "diagonal_relative": 1.6986522674560547
+        },
+        "25": {
+          "diagonal_relative": 2.3265345096588135
+        },
+        "26": {
+          "diagonal_relative": 1.5825525522232056
+        },
+        "27": {
+          "diagonal_relative": 2.011376142501831
+        },
+        "28": {
+          "diagonal_relative": 2.364457368850708
+        },
+        "3": {
+          "diagonal_relative": 4.061057090759277
+        },
+        "4": {
+          "diagonal_relative": 1.9583399295806885
+        },
+        "5": {
+          "diagonal_relative": 10.700773239135742
+        },
+        "6": {
+          "diagonal_relative": 3.3735806941986084
+        },
+        "7": {
+          "diagonal_relative": 6.831467628479004
+        },
+        "8": {
+          "diagonal_relative": 2.7996604442596436
+        },
+        "9": {
+          "diagonal_relative": 3.6095476150512695
+        }
+      },
+      "target_layer": 5,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 6,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ],
+      "model": "mistral-7b-v0.3",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 4.415515899658203
+        },
+        "11": {
+          "diagonal_relative": 3.9083456993103027
+        },
+        "12": {
+          "diagonal_relative": 3.55554461479187
+        },
+        "13": {
+          "diagonal_relative": 4.404055118560791
+        },
+        "14": {
+          "diagonal_relative": 2.66464900970459
+        },
+        "15": {
+          "diagonal_relative": 2.593963146209717
+        },
+        "16": {
+          "diagonal_relative": 3.352900743484497
+        },
+        "17": {
+          "diagonal_relative": 4.397696495056152
+        },
+        "18": {
+          "diagonal_relative": 4.205375671386719
+        },
+        "19": {
+          "diagonal_relative": 4.112834453582764
+        },
+        "20": {
+          "diagonal_relative": 3.513850212097168
+        },
+        "21": {
+          "diagonal_relative": 2.518272638320923
+        },
+        "22": {
+          "diagonal_relative": 1.6328734159469604
+        },
+        "23": {
+          "diagonal_relative": 2.2765135765075684
+        },
+        "24": {
+          "diagonal_relative": 1.6951555013656616
+        },
+        "25": {
+          "diagonal_relative": 2.330780506134033
+        },
+        "26": {
+          "diagonal_relative": 1.5927098989486694
+        },
+        "27": {
+          "diagonal_relative": 2.0042099952697754
+        },
+        "28": {
+          "diagonal_relative": 2.267866373062134
+        },
+        "3": {
+          "diagonal_relative": 3.9877982139587402
+        },
+        "4": {
+          "diagonal_relative": 4.382351398468018
+        },
+        "5": {
+          "diagonal_relative": 3.7434070110321045
+        },
+        "6": {
+          "diagonal_relative": 11.288694381713867
+        },
+        "7": {
+          "diagonal_relative": 4.919933795928955
+        },
+        "8": {
+          "diagonal_relative": 2.706470012664795
+        },
+        "9": {
+          "diagonal_relative": 3.3552839756011963
+        }
+      },
+      "target_layer": 6,
+      "trim_fraction": 0.1
+    },
+    {
+      "case_id": "0",
+      "edit_success": true,
+      "expected_selected_layer": 4,
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ],
+      "model": "olmo-3-1025-7b",
+      "profiles": {
+        "10": {
+          "diagonal_relative": 27.035701751708984
+        },
+        "11": {
+          "diagonal_relative": 22.358591079711914
+        },
+        "12": {
+          "diagonal_relative": 25.493207931518555
+        },
+        "13": {
+          "diagonal_relative": 20.450359344482422
+        },
+        "14": {
+          "diagonal_relative": 20.147869110107422
+        },
+        "15": {
+          "diagonal_relative": 17.66908073425293
+        },
+        "16": {
+          "diagonal_relative": 25.129180908203125
+        },
+        "17": {
+          "diagonal_relative": 22.00240707397461
+        },
+        "18": {
+          "diagonal_relative": 18.32753562927246
+        },
+        "19": {
+          "diagonal_relative": 15.345443725585938
+        },
+        "20": {
+          "diagonal_relative": 17.650583267211914
+        },
+        "21": {
+          "diagonal_relative": 6.227118968963623
+        },
+        "22": {
+          "diagonal_relative": 5.656737804412842
+        },
+        "23": {
+          "diagonal_relative": 13.560295104980469
+        },
+        "24": {
+          "diagonal_relative": 11.804586410522461
+        },
+        "25": {
+          "diagonal_relative": 11.634228706359863
+        },
+        "26": {
+          "diagonal_relative": 1.8751044273376465
+        },
+        "27": {
+          "diagonal_relative": 1.3227970600128174
+        },
+        "28": {
+          "diagonal_relative": 5.240492820739746
+        },
+        "3": {
+          "diagonal_relative": 41.533260345458984
+        },
+        "4": {
+          "diagonal_relative": 83.98738861083984
+        },
+        "5": {
+          "diagonal_relative": 55.69329833984375
+        },
+        "6": {
+          "diagonal_relative": 37.15212631225586
+        },
+        "7": {
+          "diagonal_relative": 39.90487289428711
+        },
+        "8": {
+          "diagonal_relative": 29.490781784057617
+        },
+        "9": {
+          "diagonal_relative": 28.558639526367188
+        }
+      },
+      "target_layer": 6,
+      "trim_fraction": 0.1
+    }
+  ],
+  "scientific_baseline": false,
+  "source": {
+    "archive_git_path": "analysis_out/rome-simple-gram-evidence-20260728.tar.gz",
+    "archive_sha256": "21571e709cb27b630dc2d75563cca1de17c13b3101ec9d7ea3d6980f555ce961",
+    "evaluation_content_sha256": "f8565f0e8eb259f830cf7fb7895ef081503dc3c74514947c5f65b327cd8f2b6e",
+    "evaluation_member": "rome-simple-gram-n20-v1/evaluation-all13-clean-only.json",
+    "evaluation_sha256": "f119e82ccba128be21970cf4f730243adc5ddcc9078362a2abd2d5f6f4aefe88"
+  }
+}

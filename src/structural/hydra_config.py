@@ -17,12 +17,14 @@ from omegaconf import DictConfig
 
 from src.common.config import (
     dict_section as _dict_section,
+    is_sequence as _is_sequence,
     mapping_section as _section,
     optional_str as _optional_str,
     plain as _plain,
+    strict_bool,
     string_list as _string_list,
 )
-from src.structural.config import StructuralBenchmarkConfig
+from src.structural.config import StructuralBenchmarkConfig, strict_int
 from src.structural.planning import (
     analysis_variant_settings,
     normalize_models_arg,
@@ -34,9 +36,7 @@ Spec = tuple[str, str, Any, Converter]
 
 
 def _to_bool(value: Any) -> bool:
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
+    return strict_bool(value, name="structural boolean")
 
 
 def _to_path(value: Any) -> Path:
@@ -44,15 +44,30 @@ def _to_path(value: Any) -> Path:
 
 
 def _to_str_tuple(value: Any) -> tuple[str, ...]:
-    return tuple(_string_list(value))
+    raw = _plain(value)
+    if raw is None:
+        return ()
+    if not _is_sequence(raw):
+        raise TypeError("structural list values must use native YAML lists")
+    output: list[str] = []
+    for item in raw:
+        normalized = str(item).strip() if item is not None else ""
+        if "," in normalized or ";" in normalized:
+            raise ValueError("structural list values must not contain comma/semicolon pseudo-lists")
+        if normalized and normalized not in output:
+            output.append(normalized)
+    return tuple(output)
 
 
 def _to_models(value: Any) -> tuple[str, ...]:
-    return tuple(normalize_models_arg(_string_list(value)))
+    return tuple(normalize_models_arg(_to_str_tuple(value)))
 
 
 def _int_at_least(minimum: int) -> Converter:
-    return lambda value: max(minimum, int(value))
+    def convert(value: Any) -> int:
+        return strict_int(_plain(value), name="structural integer value", minimum=minimum)
+
+    return convert
 
 
 SPECS: Mapping[str, Spec] = {
@@ -70,16 +85,18 @@ SPECS: Mapping[str, Spec] = {
     "worker_id": ("run", "worker_id", None, _optional_str),
     "fail_on_missing_second_moment": ("run", "fail_on_missing_second_moment", False, _to_bool),
     "force": ("run", "force", False, _to_bool),
-    "capture_profile": ("capture", "profile", "spectral", str),
+    "capture_profile": ("capture", "profile", "none", str),
     "enable_captures": ("capture", "enable", (), _to_str_tuple),
     "disable_captures": ("capture", "disable", (), _to_str_tuple),
     "analysis_preset": ("analysis", "preset", "paper", str),
     "enable_analyses": ("analysis", "enable", (), _to_str_tuple),
     "disable_analyses": ("analysis", "disable", (), _to_str_tuple),
+    "analysis_continue_on_error": ("analysis", "continue_on_error", False, _to_bool),
     "render_graphs": ("render", "enabled", False, _to_bool),
     "renderer_preset": ("render", "renderer_preset", "none", str),
     "enable_renderers": ("render", "enable", (), _to_str_tuple),
     "disable_renderers": ("render", "disable", (), _to_str_tuple),
+    "render_continue_on_error": ("render", "continue_on_error", False, _to_bool),
 }
 
 
@@ -100,11 +117,8 @@ def _bottom_rank_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
                 min_value=1,
             )
         ),
-        "bottom_rank_top_svd_rank": max(
-            1,
-            int(bottom_rank.get("top_svd_rank", 64)),
-        ),
-        "bottom_rank_boundary": max(0, int(bottom_rank.get("boundary", 2))),
+        "bottom_rank_top_svd_rank": _int_at_least(1)(bottom_rank.get("top_svd_rank", 64)),
+        "bottom_rank_boundary": _int_at_least(0)(bottom_rank.get("boundary", 2)),
     }
 
 
@@ -113,14 +127,14 @@ def _matrix_feature_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "matrix_feature_set": str(matrix_features.get("feature_set", "paper")),
         "matrix_features": tuple(_string_list(matrix_features.get("features"))),
-        "matrix_svd_top_k": max(1, int(matrix_features.get("svd_top_k", 50))),
+        "matrix_svd_top_k": _int_at_least(1)(matrix_features.get("svd_top_k", 50)),
     }
 
 
 def _runtime_settings(cfg: DictConfig) -> dict[str, Any]:
     runtime = cfg.runtime
     return {
-        "seed": int(cfg.seed),
+        "seed": strict_int(cfg.seed, name="seed"),
         "hf_token": _optional_str(runtime.hf_token),
         "prefix_log_all": _to_bool(runtime.prefix_log_all),
         "second_moment_allow_autocompute": _to_bool(runtime.second_moment_allow_autocompute),

@@ -168,7 +168,7 @@ def _write_baseline_capture(
     )
 
 
-def test_missing_method_capture_preserves_complete_execution(
+def test_missing_method_capture_replaces_execution_with_matching_rerun(
     tmp_path: Path,
 ) -> None:
     method = _CountingMethod()
@@ -221,9 +221,45 @@ def test_missing_method_capture_preserves_complete_execution(
     capture_ref = reader.ref(capture_artifact_id)
     capture_record = reader.manifest["artifacts"][capture_artifact_id]
 
-    assert execution_ref["content_hash"] == first_execution_hash
+    assert execution_ref["content_hash"] != first_execution_hash
     assert capture_record["inputs"][0] == execution_ref
     assert capture_ref["content_hash"]
+    assert reader.load(capture_artifact_id)["cases"][0]["data"]["captured"] == 2
+
+
+def test_each_rome_case_is_captured_and_restored_before_the_next(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.structural.execution import edit_execution as module
+
+    method = _CountingMethod()
+    restored: list[int] = []
+    monkeypatch.setattr(module, "restore", lambda _handler, _outcome: restored.append(method.count))
+
+    result = run_edit_method(
+        writer=ArtifactWriter(tmp_path, run_id="run"),
+        layout=RunLayout(tmp_path),
+        config=StructuralBenchmarkConfig(models=("gpt2-large",)),
+        plan=_plan(),
+        model="gpt2-large",
+        handler=_Handler(),
+        test_cases=[{"case_id": str(index)} for index in range(3)],
+        edit_method_name="rome",
+        capture_names=(),
+        options={},
+        baseline_records={},
+        baseline_proj={0: torch.eye(2)},
+        baseline_fc=None,
+        baseline_attention={},
+        proj_template="layer.{}",
+        fc_template=None,
+        method_loader=lambda _: method,
+    )
+
+    assert result["cases"] == 3
+    assert method.count == 3
+    assert restored == [1, 2, 3]
 
 
 @pytest.mark.parametrize(

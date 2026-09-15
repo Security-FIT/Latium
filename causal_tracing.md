@@ -126,4 +126,4 @@ For llama2-7b, ROME uses the validated fixed context-template pool. It runs afte
 - src/config/pipeline/causal_rome.yaml: job defaults.
 - jobs/causal_rome_pipeline.py: trace, covariance, and ROME orchestration.
 - notebooks/causal_tracing.ipynb: production runner and artifact plots.
-- notebooks/causal_tracing_legacy.ipynb: unchanged origin/causal-trace analysis notebook.
+- notebooks/causal_tracing_reference.ipynb: unchanged origin/causal-trace analysis notebook.

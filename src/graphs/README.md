@@ -18,7 +18,7 @@ Built-in renderers:
 - `rome-success`: execution success-rate CSV/JSON/PNG.
 - `detector-window`: exact and +/-1 layer detector accuracy.
 - `detector-signals`: per-case layer signal profile plots.
-- `structural-artifact-grid`: legacy-compatible 5x4 matrix artifact grid from
+- `structural-artifact-grid`: fixed 5x4 matrix artifact grid from
   current `matrix-features` artifacts.
 
 ## Add A Renderer
@@ -48,6 +48,6 @@ python -m src graphs run analysis_out/run-id \
 
 The structural artifact-grid transforms use shared `src.common.arrays`
 functions, not graph-local math. `local_zscore(..., axis=1, fill_value=nan,
-absolute=true)` preserves the legacy grid's layer-wise absolute local-z behavior;
+absolute=true)` preserves the established grid's layer-wise absolute local-z behavior;
 `curvature(..., axis=1, pad_value=nan)` preserves NaN boundaries in aggregate
 plots.

@@ -38,6 +38,10 @@ graphs.renderers.structural-artifact-grid.formats='[png,pdf,json]'
 Use `structural.capture.profile=spectral` for spectral-only primitives,
 `structural.capture.profile=matrix` for matrix-features only, and
 `structural.capture.profile=paper` for the paper graph/analysis path.
+For an end-to-end `structural run`, selecting an analysis preset automatically
+adds its required captures and matrix columns, so a detector does not require a
+matching capture-profile override. Every analysis ID, including
+`ccs-composite`, `blind`, and `rank1-blind`, is a single-method preset.
 
 ## Adding Config
 

@@ -28,3 +28,4 @@ renderers:
       - pdf
       - json
 force: false
+continue_on_error: false

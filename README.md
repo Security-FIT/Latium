@@ -106,6 +106,39 @@ selected graph from being run without the matrix columns it needs.
 Hydra overrides are the supported option style. Argparse flags such as
 `--models` are no longer supported by the main CLI.
 
+## W&B Monitoring
+
+W&B tracking is optional and disabled by default. It is installed through
+`requirements.txt`; authenticate the machine once before an online run:
+
+```bash
+wandb login
+```
+
+Enable tracking on a structural run with Hydra overrides:
+
+```bash
+python3 -m src structural run \
+  'structural.run.models=[gpt2-large]' \
+  structural.tracking.provider=wandb \
+  structural.tracking.project=latium \
+  structural.tracking.entity=YOUR_ENTITY \
+  structural.tracking.run_name=gpt2-large-check
+```
+
+Use `structural.tracking.mode=offline` on a worker without network access and
+run `wandb sync wandb/offline-run-*` later. The main fields to watch are:
+
+- `monitor/status`, `monitor/heartbeat`, and `monitor/seconds_since_activity`
+  for liveness and possible stalls.
+- `progress/edit`, `progress/edit_total`, and `context/case_id` for the current
+  edit.
+- `context/analysis` and `analysis/status` for detectors and localizers.
+- `rome/*` for optimization loss, KL divergence, weight decay, and update norms.
+
+See [`docs/wandb-monitoring.md`](docs/wandb-monitoring.md) for all settings and
+a suggested W&B workspace layout.
+
 ## Main Workflows
 
 | Workflow | Command / entrypoint |
@@ -242,6 +275,7 @@ Prefix-variability configs for Qwen3-8B are available under
 ## Documentation
 
 - `docs/project.md`: project structure and extension points.
+- `docs/wandb-monitoring.md`: W&B setup, recorded fields, and dashboard layout.
 - `src/README.md`: source tree and command wiring.
 - `src/config/README.md`: config groups and override rules.
 - `src/editing/README.md`: edit method contract.

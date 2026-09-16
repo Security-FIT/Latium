@@ -214,6 +214,43 @@ batches. Unsupported output coordinates are unavailable cases.
 Changing capture settings requires a new run ID. The new capture artifacts
 include tensor provenance, runtime, and working-storage measurements.
 
+### Relative profile figures
+
+Run the eight relative methods together and render their per-layer figures:
+
+```bash
+python -m src command=structural/run \
+  structural.run.models='[gpt2-large]' \
+  structural.analysis.preset=rome-relative \
+  structural.render.enabled=true \
+  structural.render.renderer_preset=rome-relative-paper \
+  structural.run.run_id=rome-relative-paper
+```
+
+To render an existing manifest-backed run without repeating captures or
+analyses:
+
+```bash
+python -m src graphs run analysis_out/<run-id> \
+  graphs.renderer_preset=rome-relative-paper
+```
+
+Outputs are under `graphs/rome-relative-profile-grid/`. Each available method
+gets a PNG, PDF, and JSON file with raw and `log1p` score views. The edited
+mean, standard deviation, minimum and maximum are shown with the matching
+unedited mean, target layer, baseline candidate, B0 selected fits, and candidate
+counts. Directional and global overview PNGs group related methods. The JSON
+retains per-case profiles, counts, verdicts, gains, selected fits, source artifact
+IDs, and unavailable reasons. `relative_profile_index.json` lists generated and
+unavailable methods. Missing layer values stay missing in the aggregates.
+
+By default, `case_pages: errors` writes diagnostic PDFs for unavailable,
+undetected, or mislocalized edits and baseline false positives. Set
+`graphs.renderers.rome-relative-profile-grid.case_pages=all` for every case or
+`none` to skip diagnostic pages. `case_traces=auto` shows individual edited
+profiles when there are at most 20 cases; `true` or `false` overrides it.
+`formats` accepts any nonempty subset of `[png,pdf,json]`.
+
 Generate a model-free comparison report from any manifest-backed run:
 
 ```bash

@@ -20,6 +20,9 @@ Built-in renderers:
 - `detector-signals`: per-case layer signal profile plots.
 - `structural-artifact-grid`: fixed 5x4 matrix artifact grid from
   current `matrix-features` artifacts.
+- `rome-relative-profile-grid`: eight per-layer relative ROME methods with
+  edited spread, a matched unedited baseline, selected B0 fits, overview
+  figures, case diagnostics, and machine-readable JSON.
 
 ## Add A Renderer
 
@@ -51,3 +54,13 @@ functions, not graph-local math. `local_zscore(..., axis=1, fill_value=nan,
 absolute=true)` preserves the established grid's layer-wise absolute local-z behavior;
 `curvature(..., axis=1, pad_value=nan)` preserves NaN boundaries in aggregate
 plots.
+
+Use `graphs.renderer_preset=rome-relative-paper` to render saved relative
+analyses. The end-to-end structural preset is
+`structural.analysis.preset=rome-relative` together with
+`structural.render.renderer_preset=rome-relative-paper` and
+`structural.render.enabled=true`. Configure `case_pages` (`errors`, `all`, or
+`none`), `case_traces` (`auto`, `true`, or `false`), and `formats` under
+`graphs.renderers.rome-relative-profile-grid`. Matching requires the same
+model, plan, analysis producer, and config hash; absent baselines are annotated
+and ambiguous matches are rejected.

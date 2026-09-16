@@ -290,6 +290,10 @@ ANALYSES = _validated_registry(
 ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
     "paper": ("ccs-composite", "gpt-norm-cv", "spectral"),
+    "rome-relative": (
+        "rome-profile-experiments", "rome-directional-experiments",
+        "rome-cross-layer-experiments", "rome-token-alignment-experiments",
+    ),
     **{identifier: (identifier,) for identifier in ANALYSES.identifiers()},
     "full": ANALYSES.identifiers(),
 }

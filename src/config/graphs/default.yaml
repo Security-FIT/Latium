@@ -27,5 +27,12 @@ renderers:
       - png
       - pdf
       - json
+  rome-relative-profile-grid:
+    formats:
+      - png
+      - pdf
+      - json
+    case_pages: errors
+    case_traces: auto
 force: false
 continue_on_error: false

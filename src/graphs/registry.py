@@ -78,6 +78,21 @@ RENDERERS = NamedRegistry(
             required_matrix_features=PAPER_FEATURES,
             option_keys=("features", "transforms", "formats"),
         ),
+        RendererSpec(
+            "rome-relative-profile-grid",
+            "Per-layer relative ROME profiles, B0 fits, baseline, and case diagnostics.",
+            "src.graphs.structural.relative_profiles:render_rome_relative_profile_grid",
+            requires_execution=True,
+            optional_captures=(
+                "gram-localization", "gram-directional-error-v1",
+                "gram-cross-layer-v1", "token-subspace-alignment-v1",
+            ),
+            optional_analyses=(
+                "rome-profile-experiments", "rome-directional-experiments",
+                "rome-cross-layer-experiments", "rome-token-alignment-experiments",
+            ),
+            option_keys=("formats", "case_pages", "case_traces"),
+        ),
     ]
 )
 
@@ -86,6 +101,7 @@ RENDERER_PRESETS: dict[str, tuple[str, ...]] = {
     "paper": ("paper", "detector", "rome-success", "detector-window"),
     "structural-paper": ("structural-artifact-grid",),
     "structural-full": ("structural-artifact-grid",),
+    "rome-relative-paper": ("rome-relative-profile-grid",),
     "full": RENDERERS.identifiers(),
 }
 

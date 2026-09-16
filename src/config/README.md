@@ -43,6 +43,12 @@ adds its required captures and matrix columns, so a detector does not require a
 matching capture-profile override. Every analysis ID, including
 `ccs-composite`, `blind`, and `rank1-blind`, is a single-method preset.
 
+Relative ROME binary experiments are opt-in single-method presets:
+`rome-profile-experiments`, `rome-directional-experiments`,
+`rome-cross-layer-experiments`, and `rome-token-alignment-experiments`.
+The last three request their versioned expensive capture automatically. Their
+decision rule has no configurable cutoff or calibration option.
+
 ## Adding Config
 
 - Add a YAML file in the relevant group.

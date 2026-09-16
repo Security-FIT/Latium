@@ -50,6 +50,9 @@ plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-
 | `gram-localization` | `gram-localization` (single checkpoint) |
 | `rome-profile-experiments` | `gram-localization` |
 | `rome-matrix-experiments` | `gram-experiments-v1` |
+| `rome-directional-experiments` | `gram-directional-error-v1` |
+| `rome-cross-layer-experiments` | `gram-cross-layer-v1` |
+| `rome-token-alignment-experiments` | `token-subspace-alignment-v1` |
 | `rome-control-experiment` | `gram-experiments-v1`, `gram-control-v1` |
 
 Artifact studies (`ipr`, `symmetry`, `interlayer`, `attention`, and `matrix-anomaly`)
@@ -128,6 +131,12 @@ evidence, not an independent scientific test set.
 
 The false-positive experiments reuse the structural capture and analysis
 workflow. They do not change `gram-localization` or the default detector preset.
+Every `*-relative-b0-v1` experiment applies the same checkpoint-level model
+comparison. Affine, quadratic, and affine-plus-step backgrounds compete with a
+jointly fitted nonnegative one-layer excursion. The verdict is yes only when
+the anomaly cost is strictly lower after family, split, coefficient, and
+location-search penalties. There is no threshold search or calibration step.
+Unavailable fits retain a null verdict and numerical diagnostics.
 The scalar experiments need no recapture:
 
 ```bash
@@ -174,6 +183,36 @@ python -m src command=structural/run \
   structural.analysis.preset=rome-control-experiment \
   structural.run.run_id=rome-control-experiment
 ```
+
+The richer relative experiments use separate opt-in captures:
+
+```bash
+python -m src command=structural/run \
+  structural.run.models='[gpt2-large]' \
+  structural.analysis.preset=rome-directional-experiments \
+  structural.run.run_id=rome-directional-relative
+
+python -m src command=structural/run \
+  structural.run.models='[gpt2-large]' \
+  structural.analysis.preset=rome-cross-layer-experiments \
+  structural.run.run_id=rome-cross-layer-relative
+
+python -m src command=structural/run \
+  structural.run.models='[gpt2-large]' \
+  structural.analysis.preset=rome-token-alignment-experiments \
+  structural.run.run_id=rome-token-relative
+```
+
+`gram-directional-error-v1` saves V0, signed-refined V0R, centered V1,
+and MAD-standardized V2 together. An unresolved V2 leaves valid V0 results
+intact. `gram-cross-layer-v1` saves the exact cross-layer Gram kernel and
+metadata; LOF (`k=5`) and deterministic float64 row-sparse decomposition replay
+from that kernel. Token alignment verifies Linear or transformers Conv1D
+storage orientation and processes output-head rows in bounded vocabulary
+batches. Unsupported output coordinates are unavailable cases.
+
+Changing capture settings requires a new run ID. The new capture artifacts
+include tensor provenance, runtime, and working-storage measurements.
 
 Generate a model-free comparison report from any manifest-backed run:
 

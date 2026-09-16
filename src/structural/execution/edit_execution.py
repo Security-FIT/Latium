@@ -111,6 +111,9 @@ def run_edit_method(
     method_loader: Optional[Callable[[str], Any]] = None,
     capture_case_fn: Optional[Callable[..., dict[str, Any]]] = None,
     traceback_formatter: Optional[Callable[[], str]] = None,
+    output_head_weight: Optional[torch.Tensor] = None,
+    projection_layout: Optional[str] = None,
+    output_head_layout: Optional[str] = None,
 ) -> dict[str, Any]:
     if method_loader is None:
         from src.editing.registry import get_edit_method as method_loader
@@ -205,6 +208,9 @@ def run_edit_method(
                 token_predictor=token_predictor_from_handler(handler) if needs_token_predictor else None,
                 changed_weights=dict(outcome.modified_weights),
                 options=options,
+                output_head_weight=output_head_weight,
+                projection_layout=projection_layout,
+                output_head_layout=output_head_layout,
             )
             case_captures = {
                 name: capture_one(name, capture_context, case_id=case_id)

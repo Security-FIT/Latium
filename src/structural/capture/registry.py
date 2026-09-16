@@ -89,6 +89,13 @@ CAPTURES = NamedRegistry(
             weight_families=("proj",),
         ),
         CaptureSpec(
+            "token-subspace-alignment-v1",
+            "Opt-in output-token alignment profiles for projection layers.",
+            "src.structural.capture.producers:capture_token_subspace_alignment",
+            requires_baseline=False,
+            weight_families=("proj",),
+        ),
+        CaptureSpec(
             "gram-control-v1",
             "Attention-output control profile for ROME research.",
             "src.structural.capture.producers:capture_gram_control",
@@ -116,7 +123,11 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "gram-experiments-v1": ("gram-experiments-v1",),
     "full": tuple(
         name for name in CAPTURES.identifiers()
-        if name not in {"gram-directional-error-v1", "gram-cross-layer-v1"}
+        if name not in {
+            "gram-directional-error-v1",
+            "gram-cross-layer-v1",
+            "token-subspace-alignment-v1",
+        }
     ),
 }
 

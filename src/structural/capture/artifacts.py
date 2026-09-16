@@ -23,6 +23,7 @@ from src.structural.detectors.rome_layer_localizer import (
     DEFAULT_TRIM_FRACTION,
     DIRECTIONAL_CAPTURE_VERSION,
     CROSS_LAYER_CAPTURE_VERSION,
+    TOKEN_ALIGNMENT_CAPTURE_VERSION,
     EXPERIMENT_CAPTURE_VERSION,
     PROFILE_FIELDS,
 )
@@ -128,6 +129,13 @@ def capture_config(
             "capture_version": CROSS_LAYER_CAPTURE_VERSION,
             "block_size": int(options.get("gram_cross_layer_block_size", 4)),
             "gram_dtype": "float64",
+        }
+    elif capture_name == "token-subspace-alignment-v1":
+        relevant_options = {
+            "capture_version": TOKEN_ALIGNMENT_CAPTURE_VERSION,
+            "vocabulary_batch_size": int(options.get("token_alignment_batch_size", 2048)),
+            "subspace_rank": 2,
+            "diagnostic_singular_values": 3,
         }
     elif capture_name == "gram-control-v1":
         relevant_options = {
@@ -256,6 +264,7 @@ def write_capture(
         "gram-control-v1",
         "gram-directional-error-v1",
         "gram-cross-layer-v1",
+        "token-subspace-alignment-v1",
     }:
         writer.current(
             artifact_id,
@@ -329,6 +338,13 @@ def capture_case(
         }
     try:
         data = spec.load()(context)
+        if isinstance(data, Mapping) and data.get("capture_status") == "unavailable":
+            return {
+                "case_id": case_id,
+                "status": "unavailable",
+                "data": to_serializable(data),
+                "error": str(data.get("reason", "capture unavailable")),
+            }
         return {
             "case_id": case_id,
             "status": "complete",

@@ -12,7 +12,9 @@ from src.structural.detectors.rome_layer_localizer import (
     neighbor_experiment_measurements,
     relative_profile_decision,
     robust_decomposition_scores,
+    token_subspace_alignment_profiles,
 )
+from src.structural.capture.artifacts import capture_case
 from src.structural.capture.producers import CaptureContext, capture_gram_cross_layer
 
 
@@ -184,3 +186,81 @@ def test_decomposition_reports_convergence_and_trivial_failures() -> None:
         robust_decomposition_scores(data, max_iterations=1, tolerance=1e-15)
     with pytest.raises(ValueError, match="trivial"):
         robust_decomposition_scores(torch.zeros((7, 3), dtype=torch.float64))
+
+
+def _alignment_fixture() -> tuple[dict[int, torch.Tensor], torch.Tensor]:
+    generator = torch.Generator().manual_seed(17)
+    base = torch.randn((4, 6), generator=generator, dtype=torch.float64)
+    weights = {layer: base + 0.01 * layer for layer in range(6)}
+    head = torch.randn((11, 4), generator=generator, dtype=torch.float64)
+    return weights, head
+
+
+def test_token_alignment_bounds_orientation_and_batch_agreement() -> None:
+    weights, head = _alignment_fixture()
+    linear = token_subspace_alignment_profiles(
+        weights,
+        head,
+        projection_layout="linear-output-input",
+        output_head_layout="linear-output-input",
+        vocabulary_batch_size=3,
+    )
+    conv = token_subspace_alignment_profiles(
+        {layer: weight.T for layer, weight in weights.items()},
+        head.T,
+        projection_layout="conv1d-input-output",
+        output_head_layout="conv1d-input-output",
+        vocabulary_batch_size=100,
+    )
+
+    for layer in weights:
+        left = linear["profiles"][str(layer)]
+        right = conv["profiles"][str(layer)]
+        assert 0.0 <= left["alignment_score"] <= 1.0
+        assert left["alignment_score"] == pytest.approx(right["alignment_score"])
+        assert left["maximizing_token_id"] == right["maximizing_token_id"]
+
+
+def test_token_alignment_is_invariant_to_input_rotation() -> None:
+    weights, head = _alignment_fixture()
+    rotation, _ = torch.linalg.qr(torch.randn((6, 6), generator=torch.Generator().manual_seed(9), dtype=torch.float64))
+    rotated = {layer: weight @ rotation for layer, weight in weights.items()}
+    first = token_subspace_alignment_profiles(
+        weights,
+        head,
+        projection_layout="linear-output-input",
+        output_head_layout="linear-output-input",
+    )
+    second = token_subspace_alignment_profiles(
+        rotated,
+        head,
+        projection_layout="linear-output-input",
+        output_head_layout="linear-output-input",
+    )
+
+    assert [first["profiles"][str(layer)]["alignment_score"] for layer in weights] == pytest.approx(
+        [second["profiles"][str(layer)]["alignment_score"] for layer in weights]
+    )
+
+
+def test_token_alignment_rejects_incompatible_heads_and_capture_marks_missing_access_unavailable() -> None:
+    weights, _head = _alignment_fixture()
+    with pytest.raises(ValueError, match="does not match head"):
+        token_subspace_alignment_profiles(
+            weights,
+            torch.randn((10, 5), dtype=torch.float64),
+            projection_layout="linear-output-input",
+            output_head_layout="linear-output-input",
+        )
+    context = CaptureContext(
+        proj_weights=weights,
+        fc_weights=None,
+        attention_weights={},
+        probe_vector=None,
+        token_predictor=None,
+        changed_weights={},
+        options={},
+    )
+    result = capture_case("token-subspace-alignment-v1", context, case_id="clean")
+    assert result["status"] == "unavailable"
+    assert "output-head" in result["error"]

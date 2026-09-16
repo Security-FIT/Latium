@@ -218,6 +218,14 @@ ANALYSES = _validated_registry(
             ("experiments",),
         ),
         AnalysisSpec(
+            "rome-token-alignment-experiments",
+            "Relative decisions from output-token alignment profiles.",
+            "artifact-study",
+            "src.structural.analysis.detector_methods:analyze_rome_token_alignment_experiments",
+            ("token-subspace-alignment-v1",),
+            ("experiments",),
+        ),
+        AnalysisSpec(
             "rome-control-experiment",
             "Compare the ROME target profile with an attention-output control.",
             "artifact-study",

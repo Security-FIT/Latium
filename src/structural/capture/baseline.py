@@ -43,6 +43,9 @@ def baseline_artifacts(
     baseline_proj: dict[int, torch.Tensor],
     baseline_fc: Optional[dict[int, torch.Tensor]],
     baseline_attention: dict[str, dict[int, torch.Tensor]],
+    output_head_weight: Optional[torch.Tensor] = None,
+    projection_layout: Optional[str] = None,
+    output_head_layout: Optional[str] = None,
 ) -> dict[str, dict[str, Any]]:
     resolved_execution_config = execution_config(
         config,
@@ -116,6 +119,9 @@ def baseline_artifacts(
                 token_predictor=None,
                 changed_weights={},
                 options=options,
+                output_head_weight=output_head_weight,
+                projection_layout=projection_layout,
+                output_head_layout=output_head_layout,
             )
             cases = [capture_case(capture_name, context, case_id="baseline")]
         records[capture_name] = write_capture(

@@ -34,6 +34,7 @@ from src.structural.detectors.rome_layer_localizer import (
     hidden_gram,
     profile_weights,
     numerical_tolerance,
+    token_subspace_alignment_profiles,
 )
 from src.structural.detectors.spectral_primitives import (
     canonical_orient,
@@ -51,6 +52,9 @@ class CaptureContext:
     token_predictor: Optional[Callable[[torch.Tensor], tuple[int, str]]]
     changed_weights: dict[str, tuple[int, ...] | None]
     options: dict[str, Any]
+    output_head_weight: Optional[torch.Tensor] = None
+    projection_layout: Optional[str] = None
+    output_head_layout: Optional[str] = None
 
     @property
     def is_baseline(self) -> bool:
@@ -425,6 +429,24 @@ def capture_gram_cross_layer(context: CaptureContext) -> dict[str, Any]:
             "maximum_block_bytes": int(2 * block_size * dimension * dimension * 8),
         },
     })
+
+
+def capture_token_subspace_alignment(context: CaptureContext) -> dict[str, Any]:
+    """Capture per-layer output-token alignment without requiring an edit probe."""
+    if context.output_head_weight is None:
+        return {"capture_status": "unavailable", "reason": "output-head access is unavailable"}
+    if context.projection_layout is None or context.output_head_layout is None:
+        return {"capture_status": "unavailable", "reason": "verified layout metadata is unavailable"}
+    try:
+        return to_serializable(token_subspace_alignment_profiles(
+            context.proj_weights,
+            context.output_head_weight,
+            projection_layout=context.projection_layout,
+            output_head_layout=context.output_head_layout,
+            vocabulary_batch_size=int(context.options.get("token_alignment_batch_size", 2048)),
+        ))
+    except ValueError as exc:
+        return {"capture_status": "unavailable", "reason": str(exc)}
 
 
 def capture_gram_control(context: CaptureContext) -> dict[str, Any]:

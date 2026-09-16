@@ -16,6 +16,7 @@ PROFILE_FIELDS = (SCORE_FIELD,)
 EXPERIMENT_CAPTURE_VERSION = "gram-experiments-v1"
 DIRECTIONAL_CAPTURE_VERSION = "gram-directional-error-v1"
 CROSS_LAYER_CAPTURE_VERSION = "gram-cross-layer-v1"
+TOKEN_ALIGNMENT_CAPTURE_VERSION = "token-subspace-alignment-v1"
 EXPERIMENT_GROUPS = ("neighbors", "quadratic", "footprint")
 DEFAULT_EXPERIMENT_GROUPS = ("neighbors",)
 DEFAULT_TRIM_FRACTION = 0.10
@@ -550,6 +551,127 @@ def evaluate_cross_layer_experiments(
             decision["diagnostics"]["reason"] = str(exc)
             output[identifier] = decision
     return output
+
+
+def _oriented_output_projection(weight: torch.Tensor, layout: str) -> torch.Tensor:
+    if weight.ndim != 2:
+        raise ValueError("Projection weight must be a matrix")
+    if layout == "linear-output-input":
+        return weight
+    if layout == "conv1d-input-output":
+        return weight.T
+    raise ValueError(f"Unsupported projection layout: {layout or 'unknown'}")
+
+
+def _oriented_output_head(weight: torch.Tensor, layout: str) -> torch.Tensor:
+    if weight.ndim != 2:
+        raise ValueError("Output-head weight must be a matrix")
+    if layout == "linear-output-input":
+        return weight
+    if layout == "conv1d-input-output":
+        return weight.T
+    raise ValueError(f"Unsupported output-head layout: {layout or 'unknown'}")
+
+
+def _top_output_subspace(matrix: torch.Tensor, *, layer: int) -> tuple[torch.Tensor, torch.Tensor]:
+    rank = min(3, min(matrix.shape))
+    if rank < 3:
+        raise ValueError("Projection needs at least three singular directions")
+    if max(matrix.shape) <= 64:
+        left, singular_values, _right = torch.linalg.svd(matrix, full_matrices=False)
+        return left[:, :3], singular_values[:3]
+    cuda_devices = [matrix.device.index or 0] if matrix.is_cuda else []
+    with torch.random.fork_rng(devices=cuda_devices):
+        torch.random.default_generator.manual_seed(_SVD_SEED + 104729 + int(layer))
+        left, singular_values, _right = gpu_svd_topk(
+            matrix,
+            k=3,
+            niter=4,
+            device=str(matrix.device),
+        )
+    return left.to(matrix), singular_values.to(matrix)
+
+
+def token_subspace_alignment_profiles(
+    weights: Mapping[int, torch.Tensor],
+    output_head_weight: torch.Tensor,
+    *,
+    projection_layout: str,
+    output_head_layout: str,
+    vocabulary_batch_size: int = 2048,
+) -> dict[str, Any]:
+    """Score how strongly token rows align with each layer's top output plane."""
+    layers = sorted(int(layer) for layer in weights)
+    if len(layers) < 6:
+        raise ValueError("Token alignment requires at least six layers")
+    batch_size = max(1, int(vocabulary_batch_size))
+    head = _oriented_output_head(output_head_weight.detach(), output_head_layout)
+    compute_dtype = torch.float64 if head.dtype == torch.float64 else torch.float32
+    head = head.to(dtype=compute_dtype)
+    residual_dimension = head.shape[1]
+    profiles: dict[str, dict[str, Any]] = {}
+    excluded_union: set[int] = set()
+    for layer in layers:
+        projection = _oriented_output_projection(weights[layer].detach(), projection_layout)
+        if projection.shape[0] != residual_dimension:
+            raise ValueError(
+                f"Layer {layer} output coordinate {projection.shape[0]} does not match head coordinate {residual_dimension}"
+            )
+        projection = projection.to(dtype=compute_dtype)
+        if not bool(torch.isfinite(projection).all()):
+            raise ValueError(f"Layer {layer} projection contains non-finite values")
+        basis, singular_values = _top_output_subspace(projection, layer=layer)
+        basis = basis[:, :2]
+        maximum = -1.0
+        maximizing_token: int | None = None
+        excluded: list[int] = []
+        head_scale = max(1.0, float(torch.linalg.vector_norm(head).item()))
+        row_tolerance = numerical_tolerance(head.dtype, residual_dimension, head_scale)
+        for start in range(0, head.shape[0], batch_size):
+            stop = min(head.shape[0], start + batch_size)
+            rows = head[start:stop]
+            centered = rows - rows.mean(dim=1, keepdim=True)
+            norms = torch.linalg.vector_norm(centered, dim=1)
+            valid = torch.isfinite(centered).all(dim=1) & torch.isfinite(norms) & (norms > row_tolerance)
+            excluded.extend(start + int(index) for index in torch.where(~valid)[0].tolist())
+            if not bool(valid.any()):
+                continue
+            normalized = centered[valid] / norms[valid, None]
+            alignment = torch.linalg.vector_norm(normalized @ basis, dim=1).clamp(0.0, 1.0)
+            valid_ids = torch.arange(start, stop, dtype=torch.int64)[valid.cpu()]
+            batch_max = float(alignment.max().item())
+            batch_token = int(valid_ids[torch.where(alignment.cpu() == batch_max)[0][0]].item())
+            if batch_max > maximum or (batch_max == maximum and (maximizing_token is None or batch_token < maximizing_token)):
+                maximum = batch_max
+                maximizing_token = batch_token
+        if maximizing_token is None:
+            raise ValueError("Output head has no finite nonconstant token rows")
+        excluded_union.update(excluded)
+        profiles[str(layer)] = {
+            "alignment_score": maximum,
+            "maximizing_token_id": maximizing_token,
+            "singular_values_top3": singular_values.tolist(),
+            "spectral_gap_top2_to_third": (
+                float(singular_values[1].item() / singular_values[2].item())
+                if float(singular_values[2].item()) > row_tolerance
+                else None
+            ),
+            "excluded_rows": excluded,
+            "numerical_status": "ok",
+        }
+    return {
+        "mode": "single_checkpoint",
+        "capture_version": TOKEN_ALIGNMENT_CAPTURE_VERSION,
+        "layers": layers,
+        "eligible_layers": layers,
+        "projection_layout": projection_layout,
+        "output_head_layout": output_head_layout,
+        "vocabulary_size": int(head.shape[0]),
+        "residual_dimension": int(residual_dimension),
+        "vocabulary_batch_size": batch_size,
+        "excluded_rows": sorted(excluded_union),
+        "profiles": profiles,
+    }
 
 
 def quadratic_experiment_measurements(
@@ -1414,6 +1536,7 @@ __all__ = [
     "DEFAULT_TRIM_FRACTION",
     "DIRECTIONAL_CAPTURE_VERSION",
     "CROSS_LAYER_CAPTURE_VERSION",
+    "TOKEN_ALIGNMENT_CAPTURE_VERSION",
     "EXPERIMENT_CAPTURE_VERSION",
     "EXPERIMENT_GROUPS",
     "MATRIX_SCORE_FIELDS",
@@ -1444,4 +1567,5 @@ __all__ = [
     "profile_weights",
     "quadratic_experiment_measurements",
     "score_layer",
+    "token_subspace_alignment_profiles",
 ]

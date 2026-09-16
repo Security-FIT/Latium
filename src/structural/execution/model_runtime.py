@@ -34,7 +34,11 @@ from src.structural.execution.covariance import find_second_moment_files
 from src.structural.capture.artifacts import capture_options
 from src.structural.execution.edit_execution import run_edit_method
 from src.structural.planning import build_model_run_plans, normalize_models_arg
-from src.structural.execution.weight_extraction import extract_attention_weights, extract_weights
+from src.structural.execution.weight_extraction import (
+    extract_attention_weights,
+    extract_token_alignment_access,
+    extract_weights,
+)
 from src.structural.execution.weights import build_cfg, get_fc_template, load_model_config
 from src.runtime import set_global_seed
 from src.worker_progress import effective_progress_interval, write_worker_progress
@@ -188,6 +192,9 @@ def _run_methods_for_plan(
     baseline_attention: dict[str, dict[int, torch.Tensor]],
     proj_template: str,
     fc_template: Optional[str],
+    output_head_weight: Optional[torch.Tensor] = None,
+    projection_layout: Optional[str] = None,
+    output_head_layout: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for edit_method in config.edit_methods:
@@ -211,6 +218,9 @@ def _run_methods_for_plan(
                 fc_template=fc_template,
                 case_selection=case_selection,
                 model_context=model_context,
+                output_head_weight=output_head_weight,
+                projection_layout=projection_layout,
+                output_head_layout=output_head_layout,
                 progress_callback=lambda model, completed, total: _update_progress(
                     config,
                     model=model,
@@ -317,6 +327,16 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
         baseline_attention = (
             extract_attention_weights(handler, proj_template) if "attention" in weight_families else {}
         )
+        output_head_weight: Optional[torch.Tensor] = None
+        projection_layout: Optional[str] = None
+        output_head_layout: Optional[str] = None
+        if "token-subspace-alignment-v1" in capture_names:
+            try:
+                output_head_weight, projection_layout, output_head_layout = extract_token_alignment_access(
+                    handler, proj_template
+                )
+            except ValueError as exc:
+                LOGGER.warning("Token alignment access unavailable for %s: %s", model_key, exc)
         model_context = _model_context(
             cfg,
             model_key=model_key,
@@ -355,6 +375,9 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                     baseline_proj=baseline_proj,
                     baseline_fc=baseline_fc,
                     baseline_attention=baseline_attention,
+                    output_head_weight=output_head_weight,
+                    projection_layout=projection_layout,
+                    output_head_layout=output_head_layout,
                 )
                 methods = _run_methods_for_plan(
                     writer=writer,
@@ -374,6 +397,9 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                     baseline_attention=baseline_attention,
                     proj_template=proj_template,
                     fc_template=fc_template,
+                    output_head_weight=output_head_weight,
+                    projection_layout=projection_layout,
+                    output_head_layout=output_head_layout,
                 )
                 model_results.append(
                     {

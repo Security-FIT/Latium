@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Dict
 
 import torch
 
@@ -20,6 +20,35 @@ def extract_weights(handler: ModelHandler, template: str) -> Dict[int, torch.Ten
         idx: handler._get_module(template.format(idx)).weight.detach().clone().cpu()
         for idx in range(handler.num_of_layers)
     }
+
+
+def _verified_weight_layout(module: torch.nn.Module) -> str:
+    if isinstance(module, torch.nn.Linear):
+        return "linear-output-input"
+    if module.__class__.__name__ == "Conv1D" and module.__class__.__module__.startswith("transformers"):
+        return "conv1d-input-output"
+    raise ValueError(f"Unsupported weight storage module: {module.__class__.__module__}.{module.__class__.__name__}")
+
+
+def extract_token_alignment_access(
+    handler: ModelHandler,
+    projection_template: str,
+) -> tuple[torch.Tensor, str, str]:
+    """Extract the immutable output head and verified projection storage layout."""
+    getter = getattr(handler.model, "get_output_embeddings", None)
+    head = getter() if callable(getter) else None
+    if head is None:
+        head = getattr(handler.model, "lm_head", None)
+    if head is None or not hasattr(head, "weight"):
+        raise ValueError("No output embedding head is available")
+    head_layout = _verified_weight_layout(head)
+    layouts = {
+        _verified_weight_layout(handler._get_module(projection_template.format(layer)))
+        for layer in range(handler.num_of_layers)
+    }
+    if len(layouts) != 1:
+        raise ValueError("Projection modules use inconsistent storage layouts")
+    return head.weight.detach().clone().cpu(), layouts.pop(), head_layout
 
 
 def extract_attention_weights(handler: ModelHandler, proj_template: str) -> Dict[str, Dict[int, torch.Tensor]]:

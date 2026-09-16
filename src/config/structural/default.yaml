@@ -132,6 +132,9 @@ analysis:
       experiments:
         - lof-relative-b0-v1
         - decomposition-relative-b0-v1
+    rome-token-alignment-experiments:
+      experiments:
+        - token-alignment-relative-b0-v1
     rome-control-experiment:
       experiments:
         - control-affine-mdl-v1

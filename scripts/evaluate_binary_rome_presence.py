@@ -535,10 +535,50 @@ def historical_local_prominence(input_root: Path) -> dict[str, Any]:
     """Keep the published hard-negative baseline in a separate named cohort."""
     expected = {"tp": 43, "fn": 51, "fp": 50, "tn": 155, "positive_cases": 94, "negative_cases": 205}
     candidates = list(input_root.rglob("evaluation-with-hard-negatives.json")) if input_root.is_dir() else []
+    reproduced: dict[str, int] | None = None
+    if candidates:
+        payload = load_json(candidates[0])
+
+        def locate(value: Any) -> dict[str, Any] | None:
+            if isinstance(value, dict):
+                for key, nested in value.items():
+                    if str(key).lower().replace("_", "-") == "local-prominence" and isinstance(nested, dict):
+                        return nested
+                for nested in value.values():
+                    found = locate(nested)
+                    if found is not None:
+                        return found
+            elif isinstance(value, list):
+                for nested in value:
+                    found = locate(nested)
+                    if found is not None:
+                        return found
+            return None
+
+        found = locate(payload)
+        if found is not None:
+            aliases = {
+                "tp": ("tp", "true_positives"),
+                "fn": ("fn", "false_negatives"),
+                "fp": ("fp", "false_positives"),
+                "tn": ("tn", "true_negatives"),
+            }
+            parsed: dict[str, int] = {}
+            for output_key, input_keys in aliases.items():
+                for input_key in input_keys:
+                    if input_key in found:
+                        parsed[output_key] = int(found[input_key])
+                        break
+            if len(parsed) == 4:
+                parsed["positive_cases"] = parsed["tp"] + parsed["fn"]
+                parsed["negative_cases"] = parsed["fp"] + parsed["tn"]
+                reproduced = parsed
     return {
         "cohort": "historical-v3-hard-negatives",
         "detector": "local-prominence",
-        "counts": expected,
+        "published_counts": expected,
+        "reproduced_counts": reproduced,
+        "matches_published_counts": reproduced == expected if reproduced is not None else None,
         "source_artifact_found": bool(candidates),
         "source_artifact": str(candidates[0]) if candidates else None,
         "pooled_with_relative_experiments": False,

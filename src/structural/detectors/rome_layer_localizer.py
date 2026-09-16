@@ -286,12 +286,17 @@ def _directional_error_measurement(
         normalized_errors.append(torch.diagonal(projected) / support)
 
     reference_errors = torch.stack(normalized_errors)
-    center = torch.median(reference_errors, dim=0).values
+    ordered_errors = torch.sort(reference_errors, dim=0).values
+    midpoint = ordered_errors.shape[0] // 2
+    center = 0.5 * (ordered_errors[midpoint - 1] + ordered_errors[midpoint])
     candidate_error = signed_values / candidate_support
     centered = candidate_error - center
     centered_score = float(torch.linalg.vector_norm(centered).item())
     absolute_deviations = torch.abs(reference_errors - center)
-    mad = 1.482602218505602 * torch.median(absolute_deviations, dim=0).values
+    ordered_deviations = torch.sort(absolute_deviations, dim=0).values
+    mad = 1.482602218505602 * 0.5 * (
+        ordered_deviations[midpoint - 1] + ordered_deviations[midpoint]
+    )
     scale_tolerance = numerical_tolerance(
         reference_errors.dtype,
         len(reference_layers),

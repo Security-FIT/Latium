@@ -119,6 +119,13 @@ def test_directional_capture_excludes_candidate_neighbors_and_preserves_v0() -> 
     assert 9 not in profile["reference_layers"]
     assert profile["original_score"] == pytest.approx(direct["original_score"], rel=1e-5)
     assert len(profile["reference_projections"]) == 6
+    reference_errors = torch.tensor(profile["reference_directional_errors"])
+    ordered = torch.sort(reference_errors, dim=0).values
+    expected_median = 0.5 * (ordered[2] + ordered[3])
+    deviations = torch.sort(torch.abs(reference_errors - expected_median), dim=0).values
+    expected_mad = 1.482602218505602 * 0.5 * (deviations[2] + deviations[3])
+    assert profile["reference_median"] == pytest.approx(expected_median)
+    assert profile["reference_mad"] == pytest.approx(expected_mad)
 
 
 def test_unresolved_directional_standardization_does_not_discard_v0() -> None:

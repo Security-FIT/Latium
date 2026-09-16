@@ -14,6 +14,7 @@ from src.common.linalg import gpu_svd_topk
 SCORE_FIELD = "diagonal_relative"
 PROFILE_FIELDS = (SCORE_FIELD,)
 EXPERIMENT_CAPTURE_VERSION = "gram-experiments-v1"
+DIRECTIONAL_CAPTURE_VERSION = "gram-directional-error-v1"
 EXPERIMENT_GROUPS = ("neighbors", "quadratic", "footprint")
 DEFAULT_EXPERIMENT_GROUPS = ("neighbors",)
 DEFAULT_TRIM_FRACTION = 0.10
@@ -226,6 +227,153 @@ def neighbor_experiment_measurements(
         "refined_ratio_score": float(refined_ratio.item()),
         "bounded_contrast_score": float(torch.linalg.vector_norm(contrasts).item()),
         "numerical_status": "ok",
+    }
+
+
+def _directional_error_measurement(
+    grams: Mapping[int, torch.Tensor],
+    window: list[int],
+    *,
+    candidate_index: int,
+) -> dict[str, Any]:
+    """Measure V0/V0R/V1/V2 together in one candidate's signed directions."""
+    layer = window[candidate_index]
+    current = grams[layer]
+    neighbor_support = (grams[window[candidate_index - 1]] + grams[window[candidate_index + 1]]) * 0.5
+    measured = _residual_measurements(current, neighbor_support, neighbor_support, layer=layer)
+    basis = measured["basis"]
+    residual = measured["residual"]
+    small = basis.T @ residual @ basis
+    small = (small + small.T) * 0.5
+    signed_values, rotation = torch.linalg.eigh(small)
+    order = torch.argsort(torch.abs(signed_values), descending=True)
+    signed_values = signed_values[order]
+    refined_basis = basis @ rotation[:, order]
+    candidate_support = torch.diagonal(refined_basis.T @ neighbor_support @ refined_basis)
+    tolerance = float(measured["tolerance"])
+    if bool((candidate_support < -tolerance).any()):
+        raise ValueError(f"Layer {layer} has materially negative directional support")
+    candidate_support = candidate_support.clamp_min(tolerance)
+    refined_score = float(torch.linalg.vector_norm(torch.abs(signed_values) / candidate_support).item())
+
+    reference_positions = sorted(
+        (
+            position for position in range(1, len(window) - 1)
+            if abs(position - candidate_index) > 1
+        ),
+        key=lambda position: (abs(position - candidate_index), window[position]),
+    )[:6]
+    if len(reference_positions) != 6:
+        raise ValueError("Directional error capture requires six reference residual centers")
+    reference_layers = [window[position] for position in reference_positions]
+    projected_residuals: list[torch.Tensor] = []
+    projected_supports: list[torch.Tensor] = []
+    normalized_errors: list[torch.Tensor] = []
+    for position in reference_positions:
+        reference_layer = window[position]
+        reference_center = (grams[window[position - 1]] + grams[window[position + 1]]) * 0.5
+        reference_residual = grams[reference_layer] - reference_center
+        projected = refined_basis.T @ reference_residual @ refined_basis
+        projected = (projected + projected.T) * 0.5
+        support = torch.diagonal(refined_basis.T @ reference_center @ refined_basis)
+        if bool((support < -tolerance).any()):
+            raise ValueError(f"Reference layer {reference_layer} has materially negative directional support")
+        support = support.clamp_min(tolerance)
+        projected_residuals.append(projected)
+        projected_supports.append(support)
+        normalized_errors.append(torch.diagonal(projected) / support)
+
+    reference_errors = torch.stack(normalized_errors)
+    center = torch.median(reference_errors, dim=0).values
+    candidate_error = signed_values / candidate_support
+    centered = candidate_error - center
+    centered_score = float(torch.linalg.vector_norm(centered).item())
+    absolute_deviations = torch.abs(reference_errors - center)
+    mad = 1.482602218505602 * torch.median(absolute_deviations, dim=0).values
+    scale_tolerance = numerical_tolerance(
+        reference_errors.dtype,
+        len(reference_layers),
+        max(1.0, float(torch.linalg.vector_norm(reference_errors).item())),
+    )
+    resolved = mad > scale_tolerance
+    standardized_score: float | None = None
+    v2_status = "unavailable"
+    if bool(resolved.all()):
+        standardized_score = float(torch.linalg.vector_norm(centered / mad).item())
+        v2_status = "ok"
+
+    return {
+        "original_score": float(measured["original_score"]),
+        "refined_ratio_score": refined_score,
+        "centered_directional_score": centered_score,
+        "standardized_directional_score": standardized_score,
+        "candidate_projection": (refined_basis.T @ residual @ refined_basis).tolist(),
+        "candidate_directional_error": candidate_error.tolist(),
+        "candidate_support": candidate_support.tolist(),
+        "reference_layers": reference_layers,
+        "reference_projections": [projection.tolist() for projection in projected_residuals],
+        "reference_supports": [support.tolist() for support in projected_supports],
+        "reference_directional_errors": reference_errors.tolist(),
+        "reference_median": center.tolist(),
+        "reference_mad": mad.tolist(),
+        "refined_signed_eigenvalues": signed_values.tolist(),
+        "precision": str(current.dtype),
+        "tolerance": tolerance,
+        "mad_tolerance": scale_tolerance,
+        "v0_status": "ok",
+        "v0r_status": "ok",
+        "v1_status": "ok",
+        "v2_status": v2_status,
+        "numerical_status": "ok" if v2_status == "ok" else "partial",
+    }
+
+
+def capture_directional_error_weights(weights: Mapping[int, torch.Tensor]) -> dict[str, Any]:
+    """Capture directional-error profiles from contiguous eleven-layer windows."""
+    layers = sorted(int(layer) for layer in weights)
+    positions = {layer: index for index, layer in enumerate(layers)}
+    candidates = [
+        layers[index]
+        for index in range(5, len(layers) - 5)
+        if all(layers[offset + 1] == layers[offset] + 1 for offset in range(index - 5, index + 5))
+    ]
+    grams: dict[int, torch.Tensor] = {}
+    profiles: dict[str, dict[str, Any]] = {}
+    for layer in candidates:
+        index = positions[layer]
+        window = layers[index - 5 : index + 6]
+        try:
+            for other in window:
+                if other not in grams:
+                    grams[other] = hidden_gram(weights[other])
+            shapes = {tuple(grams[other].shape) for other in window}
+            if len(shapes) != 1:
+                raise ValueError("eleven-layer Gram window has incompatible shapes")
+            profiles[str(layer)] = _directional_error_measurement(grams, window, candidate_index=5)
+        except (RuntimeError, ValueError) as exc:
+            profiles[str(layer)] = {
+                "original_score": None,
+                "refined_ratio_score": None,
+                "centered_directional_score": None,
+                "standardized_directional_score": None,
+                "numerical_status": "unavailable",
+                "reason": str(exc),
+            }
+        minimum_position = index - 4
+        grams = {
+            cached_layer: gram
+            for cached_layer, gram in grams.items()
+            if positions[cached_layer] >= minimum_position
+        }
+    return {
+        "mode": "single_checkpoint",
+        "capture_version": DIRECTIONAL_CAPTURE_VERSION,
+        "layers": layers,
+        "eligible_layers": candidates,
+        "excluded_layers": [layer for layer in layers if layer not in set(candidates)],
+        "reference_count": 6,
+        "required_contiguous_layers": 11,
+        "profiles": profiles,
     }
 
 
@@ -1089,6 +1237,7 @@ class RomeLayerLocalizer:
 __all__ = [
     "DEFAULT_EXPERIMENT_GROUPS",
     "DEFAULT_TRIM_FRACTION",
+    "DIRECTIONAL_CAPTURE_VERSION",
     "EXPERIMENT_CAPTURE_VERSION",
     "EXPERIMENT_GROUPS",
     "MATRIX_SCORE_FIELDS",
@@ -1099,6 +1248,7 @@ __all__ = [
     "RomeLayerLocalizer",
     "SCORE_FIELD",
     "capture_experiment_weights",
+    "capture_directional_error_weights",
     "control_profile_mdl",
     "detect_from_profiles",
     "eligible_layers",

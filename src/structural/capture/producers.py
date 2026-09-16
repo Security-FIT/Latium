@@ -25,7 +25,11 @@ from src.structural.detectors.matrix_anomaly import (
     stable_effective_ratio,
 )
 from src.structural.detectors.profiles import matrix_profile
-from src.structural.detectors.rome_layer_localizer import capture_experiment_weights, profile_weights
+from src.structural.detectors.rome_layer_localizer import (
+    capture_directional_error_weights,
+    capture_experiment_weights,
+    profile_weights,
+)
 from src.structural.detectors.spectral_primitives import (
     canonical_orient,
     pcs_pairwise_rank_cumsums,
@@ -329,6 +333,11 @@ def capture_gram_experiments(context: CaptureContext) -> dict[str, Any]:
     """Capture opt-in projection measurements for the ROME experiments."""
     groups = tuple(str(value) for value in context.options.get("rome_experiment_groups", ("neighbors",)))
     return to_serializable(capture_experiment_weights(context.proj_weights, groups=groups))
+
+
+def capture_gram_directional_error(context: CaptureContext) -> dict[str, Any]:
+    """Capture V0/V0R/V1/V2 profiles using one shared directional pass."""
+    return to_serializable(capture_directional_error_weights(context.proj_weights))
 
 
 def capture_gram_control(context: CaptureContext) -> dict[str, Any]:

@@ -122,6 +122,12 @@ analysis:
         - agreement-affine-mdl-v1
         - refined-ratio-affine-mdl-v1
         - bounded-affine-mdl-v1
+    rome-directional-experiments:
+      experiments:
+        - v0-relative-b0-v1
+        - v0r-relative-b0-v1
+        - v1-relative-b0-v1
+        - v2-relative-b0-v1
     rome-control-experiment:
       experiments:
         - control-affine-mdl-v1

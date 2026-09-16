@@ -75,6 +75,13 @@ CAPTURES = NamedRegistry(
             weight_families=("proj",),
         ),
         CaptureSpec(
+            "gram-directional-error-v1",
+            "Opt-in paired V0/V0R/V1/V2 directional-error profiles.",
+            "src.structural.capture.producers:capture_gram_directional_error",
+            requires_baseline=False,
+            weight_families=("proj",),
+        ),
+        CaptureSpec(
             "gram-control-v1",
             "Attention-output control profile for ROME research.",
             "src.structural.capture.producers:capture_gram_control",
@@ -100,7 +107,7 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "paper": ("spectral", "matrix-features"),
     "gram-localization": ("gram-localization",),
     "gram-experiments-v1": ("gram-experiments-v1",),
-    "full": CAPTURES.identifiers(),
+    "full": tuple(name for name in CAPTURES.identifiers() if name != "gram-directional-error-v1"),
 }
 
 

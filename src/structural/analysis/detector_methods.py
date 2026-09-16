@@ -317,6 +317,21 @@ def analyze_rome_matrix_experiments(context: AnalysisContext) -> dict[str, Any]:
     return _add_experiment_summary(run_case_analysis(context, "gram-experiments-v1", analyze), experiments)
 
 
+def analyze_rome_directional_experiments(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.rome_layer_localizer import evaluate_matrix_experiments
+
+    experiments = _experiment_names(context)
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        return {
+            "method": "rome-directional-experiments",
+            "experiments": evaluate_matrix_experiments(data, experiments=experiments),
+        }
+
+    result = run_case_analysis(context, "gram-directional-error-v1", analyze)
+    return _add_experiment_summary(result, experiments)
+
+
 def analyze_rome_control_experiment(context: AnalysisContext) -> dict[str, Any]:
     from src.structural.detectors.rome_layer_localizer import control_profile_mdl
 

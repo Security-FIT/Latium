@@ -2,7 +2,14 @@ import math
 
 import pytest
 
-from src.structural.detectors.rome_layer_localizer import relative_profile_decision
+import torch
+
+from src.structural.detectors.rome_layer_localizer import (
+    capture_directional_error_weights,
+    hidden_gram,
+    neighbor_experiment_measurements,
+    relative_profile_decision,
+)
 
 
 pytestmark = pytest.mark.unit
@@ -74,3 +81,34 @@ def test_b0_verdict_is_independent_of_original_localizer_metadata() -> None:
     assert first["candidate_layer"] == second["candidate_layer"]
     assert first["background_cost"] == pytest.approx(second["background_cost"])
     assert first["anomaly_cost"] == pytest.approx(second["anomaly_cost"])
+
+
+def test_directional_capture_excludes_candidate_neighbors_and_preserves_v0() -> None:
+    weights = {layer: torch.eye(8) * (1.0 + 0.01 * layer) for layer in range(16)}
+    weights[8] = weights[8].clone()
+    weights[8][0, 0] += 1.0
+
+    capture = capture_directional_error_weights(weights)
+    profile = capture["profiles"]["8"]
+    grams = {layer: hidden_gram(weight) for layer, weight in weights.items()}
+    direct = neighbor_experiment_measurements(grams[7], grams[8], grams[9], layer=8)
+
+    assert capture["capture_version"] == "gram-directional-error-v1"
+    assert len(profile["reference_layers"]) == 6
+    assert 8 not in profile["reference_layers"]
+    assert 7 not in profile["reference_layers"]
+    assert 9 not in profile["reference_layers"]
+    assert profile["original_score"] == pytest.approx(direct["original_score"], rel=1e-5)
+    assert len(profile["reference_projections"]) == 6
+
+
+def test_unresolved_directional_standardization_does_not_discard_v0() -> None:
+    weights = {layer: torch.eye(6) for layer in range(16)}
+    weights[8] = torch.diag(torch.tensor([2.0, 1.0, 1.0, 1.0, 1.0, 1.0]))
+
+    profile = capture_directional_error_weights(weights)["profiles"]["8"]
+
+    assert profile["v0_status"] == "ok"
+    assert profile["original_score"] is not None
+    assert profile["v2_status"] == "unavailable"
+    assert profile["standardized_directional_score"] is None

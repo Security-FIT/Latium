@@ -202,6 +202,14 @@ ANALYSES = _validated_registry(
             ("experiments",),
         ),
         AnalysisSpec(
+            "rome-directional-experiments",
+            "Relative decisions for paired V0/V0R/V1/V2 profiles.",
+            "artifact-study",
+            "src.structural.analysis.detector_methods:analyze_rome_directional_experiments",
+            ("gram-directional-error-v1",),
+            ("experiments",),
+        ),
+        AnalysisSpec(
             "rome-control-experiment",
             "Compare the ROME target profile with an attention-output control.",
             "artifact-study",

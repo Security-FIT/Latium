@@ -21,6 +21,7 @@ from src.structural.capture.producers import CaptureContext
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.detectors.rome_layer_localizer import (
     DEFAULT_TRIM_FRACTION,
+    DIRECTIONAL_CAPTURE_VERSION,
     EXPERIMENT_CAPTURE_VERSION,
     PROFILE_FIELDS,
 )
@@ -114,6 +115,12 @@ def capture_config(
             "capture_version": EXPERIMENT_CAPTURE_VERSION,
             "groups": list(options.get("rome_experiment_groups", ("neighbors",))),
             "trim_fraction": DEFAULT_TRIM_FRACTION,
+        }
+    elif capture_name == "gram-directional-error-v1":
+        relevant_options = {
+            "capture_version": DIRECTIONAL_CAPTURE_VERSION,
+            "reference_count": 6,
+            "required_contiguous_layers": 11,
         }
     elif capture_name == "gram-control-v1":
         relevant_options = {
@@ -237,7 +244,7 @@ def write_capture(
 ) -> dict[str, Any]:
     artifact_id = capture_id(model, plan.plan_id, capture_name, edit_method)
     resolved_config_hash = config_hash(capture_config)
-    if capture_name in {"gram-experiments-v1", "gram-control-v1"}:
+    if capture_name in {"gram-experiments-v1", "gram-control-v1", "gram-directional-error-v1"}:
         writer.current(
             artifact_id,
             expected_config_hash=resolved_config_hash,

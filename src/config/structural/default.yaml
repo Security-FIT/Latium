@@ -21,6 +21,16 @@ run:
   fail_on_missing_second_moment: false
   force: false
 
+tracking:
+  provider: none
+  project: latium
+  entity: null
+  mode: online
+  run_name: null
+  group: null
+  tags: []
+  heartbeat_seconds: 60
+
 capture:
   profile: none
   enable: []

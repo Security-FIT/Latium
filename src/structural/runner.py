@@ -17,6 +17,7 @@ from src.structural.analysis.registry import resolve_analyses
 from src.structural.analysis.runtime import run_analyses
 from src.structural.capture.registry import resolve_capture_plan
 from src.structural.config import StructuralBenchmarkConfig
+from src.tracking import tracking_session
 
 
 def _coerce_structural_config(
@@ -68,7 +69,9 @@ def run_structural_capture(
         resolved = resolved.with_run_id(datetime.now().strftime("%Y%m%d_%H%M%S"))
     from src.structural.execution.model_runtime import run_capture
 
-    return run_capture(resolved)
+    with tracking_session(resolved, job_type="structural-capture") as tracker:
+        tracker.set_state(**{"monitor/stage": "capture", "run_id": resolved.run_id})
+        return run_capture(resolved)
 
 
 def run_structural_analysis(
@@ -80,51 +83,58 @@ def run_structural_analysis(
     method_configs: Mapping[str, Mapping[str, Any]] | None = None,
     force: bool = False,
     continue_on_error: bool = False,
+    tracking_config: StructuralBenchmarkConfig | Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return run_analyses(
-        run_root,
-        preset=preset,
-        selected=enabled,
-        disabled=disabled,
-        method_configs=method_configs,
-        force=force,
-        continue_on_error=continue_on_error,
-    )
+    with tracking_session(tracking_config or {}, job_type="structural-analysis") as tracker:
+        tracker.set_state(**{"monitor/stage": "analysis", "run_root": run_root})
+        return run_analyses(
+            run_root,
+            preset=preset,
+            selected=enabled,
+            disabled=disabled,
+            method_configs=method_configs,
+            force=force,
+            continue_on_error=continue_on_error,
+        )
 
 
 def run_structural_benchmark(
     config: StructuralBenchmarkConfig | Mapping[str, Any],
 ) -> dict[str, Any]:
     resolved = _coerce_structural_config(config)
-    capture_result = run_structural_capture(resolved)
-    if not resolved.run_analysis:
-        return {"capture": capture_result, "analysis": None}
-    analysis_result = run_structural_analysis(
-        str(capture_result["run_root"]),
-        preset=resolved.analysis_preset,
-        enabled=resolved.enable_analyses,
-        disabled=resolved.disable_analyses,
-        method_configs=resolved.analysis_method_configs,
-        force=resolved.force,
-        continue_on_error=resolved.analysis_continue_on_error,
-    )
-    render_result = None
-    if resolved.render_graphs:
-        from src.graphs.runtime import render_run
-
-        render_result = render_run(
+    if not resolved.run_id:
+        resolved = resolved.with_run_id(datetime.now().strftime("%Y%m%d_%H%M%S"))
+    with tracking_session(resolved, job_type="structural-benchmark") as tracker:
+        capture_result = run_structural_capture(resolved)
+        if not resolved.run_analysis:
+            return {"capture": capture_result, "analysis": None}
+        analysis_result = run_structural_analysis(
             str(capture_result["run_root"]),
-            preset=resolved.renderer_preset,
-            enabled=resolved.enable_renderers,
-            disabled=resolved.disable_renderers,
+            preset=resolved.analysis_preset,
+            enabled=resolved.enable_analyses,
+            disabled=resolved.disable_analyses,
+            method_configs=resolved.analysis_method_configs,
             force=resolved.force,
-            continue_on_error=resolved.render_continue_on_error,
+            continue_on_error=resolved.analysis_continue_on_error,
         )
-    return {
-        "capture": capture_result,
-        "analysis": analysis_result,
-        "render": render_result,
-    }
+        render_result = None
+        if resolved.render_graphs:
+            from src.graphs.runtime import render_run
+
+            tracker.set_state(**{"monitor/stage": "render", "monitor/substage": "rendering"})
+            render_result = render_run(
+                str(capture_result["run_root"]),
+                preset=resolved.renderer_preset,
+                enabled=resolved.enable_renderers,
+                disabled=resolved.disable_renderers,
+                force=resolved.force,
+                continue_on_error=resolved.render_continue_on_error,
+            )
+        return {
+            "capture": capture_result,
+            "analysis": analysis_result,
+            "render": render_result,
+        }
 
 
 __all__ = [

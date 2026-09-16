@@ -128,6 +128,10 @@ analysis:
         - v0r-relative-b0-v1
         - v1-relative-b0-v1
         - v2-relative-b0-v1
+    rome-cross-layer-experiments:
+      experiments:
+        - lof-relative-b0-v1
+        - decomposition-relative-b0-v1
     rome-control-experiment:
       experiments:
         - control-affine-mdl-v1

@@ -22,6 +22,7 @@ from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.detectors.rome_layer_localizer import (
     DEFAULT_TRIM_FRACTION,
     DIRECTIONAL_CAPTURE_VERSION,
+    CROSS_LAYER_CAPTURE_VERSION,
     EXPERIMENT_CAPTURE_VERSION,
     PROFILE_FIELDS,
 )
@@ -121,6 +122,12 @@ def capture_config(
             "capture_version": DIRECTIONAL_CAPTURE_VERSION,
             "reference_count": 6,
             "required_contiguous_layers": 11,
+        }
+    elif capture_name == "gram-cross-layer-v1":
+        relevant_options = {
+            "capture_version": CROSS_LAYER_CAPTURE_VERSION,
+            "block_size": int(options.get("gram_cross_layer_block_size", 4)),
+            "gram_dtype": "float64",
         }
     elif capture_name == "gram-control-v1":
         relevant_options = {
@@ -244,7 +251,12 @@ def write_capture(
 ) -> dict[str, Any]:
     artifact_id = capture_id(model, plan.plan_id, capture_name, edit_method)
     resolved_config_hash = config_hash(capture_config)
-    if capture_name in {"gram-experiments-v1", "gram-control-v1", "gram-directional-error-v1"}:
+    if capture_name in {
+        "gram-experiments-v1",
+        "gram-control-v1",
+        "gram-directional-error-v1",
+        "gram-cross-layer-v1",
+    }:
         writer.current(
             artifact_id,
             expected_config_hash=resolved_config_hash,

@@ -332,6 +332,21 @@ def analyze_rome_directional_experiments(context: AnalysisContext) -> dict[str, 
     return _add_experiment_summary(result, experiments)
 
 
+def analyze_rome_cross_layer_experiments(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.rome_layer_localizer import evaluate_cross_layer_experiments
+
+    experiments = _experiment_names(context)
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        return {
+            "method": "rome-cross-layer-experiments",
+            "experiments": evaluate_cross_layer_experiments(data, experiments=experiments),
+        }
+
+    result = run_case_analysis(context, "gram-cross-layer-v1", analyze)
+    return _add_experiment_summary(result, experiments)
+
+
 def analyze_rome_control_experiment(context: AnalysisContext) -> dict[str, Any]:
     from src.structural.detectors.rome_layer_localizer import control_profile_mdl
 

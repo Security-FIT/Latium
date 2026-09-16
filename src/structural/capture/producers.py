@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import tempfile
+import time
 from typing import Any, Callable, Optional
 
 import numpy as np
@@ -26,9 +28,12 @@ from src.structural.detectors.matrix_anomaly import (
 )
 from src.structural.detectors.profiles import matrix_profile
 from src.structural.detectors.rome_layer_localizer import (
+    CROSS_LAYER_CAPTURE_VERSION,
     capture_directional_error_weights,
     capture_experiment_weights,
+    hidden_gram,
     profile_weights,
+    numerical_tolerance,
 )
 from src.structural.detectors.spectral_primitives import (
     canonical_orient,
@@ -338,6 +343,88 @@ def capture_gram_experiments(context: CaptureContext) -> dict[str, Any]:
 def capture_gram_directional_error(context: CaptureContext) -> dict[str, Any]:
     """Capture V0/V0R/V1/V2 profiles using one shared directional pass."""
     return to_serializable(capture_directional_error_weights(context.proj_weights))
+
+
+def capture_gram_cross_layer(context: CaptureContext) -> dict[str, Any]:
+    """Persist exact normalized-Gram inner products without retaining dense Grams."""
+    started = time.perf_counter()
+    layers = sorted(context.proj_weights)
+    if len(layers) < 6:
+        raise ValueError("Cross-layer capture requires at least six layers")
+    first = hidden_gram(context.proj_weights[layers[0]].detach().to(torch.float64)).cpu()
+    dimension = first.shape[0]
+    if first.shape != (dimension, dimension):
+        raise ValueError("Normalized Gram must be square")
+    block_size = max(1, min(int(context.options.get("gram_cross_layer_block_size", 4)), len(layers)))
+    with tempfile.TemporaryDirectory(prefix="latium-gram-k-") as directory:
+        path = f"{directory}/normalized-grams.dat"
+        storage = np.memmap(path, mode="w+", dtype=np.float64, shape=(len(layers), dimension, dimension))
+        storage[0] = first.numpy()
+        source_dtypes = {str(layers[0]): str(context.proj_weights[layers[0]].dtype)}
+        source_shapes = {str(layers[0]): list(context.proj_weights[layers[0]].shape)}
+        for index, layer in enumerate(layers[1:], start=1):
+            gram = hidden_gram(context.proj_weights[layer].detach().to(torch.float64)).cpu()
+            if gram.shape != first.shape:
+                raise ValueError(f"Layer {layer} has an incompatible normalized Gram shape")
+            storage[index] = gram.numpy()
+            source_dtypes[str(layer)] = str(context.proj_weights[layer].dtype)
+            source_shapes[str(layer)] = list(context.proj_weights[layer].shape)
+        storage.flush()
+        kernel = np.empty((len(layers), len(layers)), dtype=np.float64)
+        for row_start in range(0, len(layers), block_size):
+            row_stop = min(len(layers), row_start + block_size)
+            rows = np.asarray(storage[row_start:row_stop])
+            for column_start in range(0, len(layers), block_size):
+                column_stop = min(len(layers), column_start + block_size)
+                columns = np.asarray(storage[column_start:column_stop])
+                kernel[row_start:row_stop, column_start:column_stop] = np.einsum(
+                    "aij,bij->ab", rows, columns, optimize=True
+                )
+        temporary_bytes = int(storage.nbytes)
+        del storage
+
+    kernel_tensor = torch.from_numpy(kernel)
+    symmetry_error = float(torch.max(torch.abs(kernel_tensor - kernel_tensor.T)).item())
+    symmetric = (kernel_tensor + kernel_tensor.T) * 0.5
+    eigenvalues = torch.linalg.eigvalsh(symmetric)
+    validation_tolerance = numerical_tolerance(
+        torch.float64,
+        len(layers),
+        max(1.0, float(symmetric.abs().max().item())),
+    )
+    if symmetry_error > validation_tolerance:
+        raise ValueError("Cross-layer kernel is not symmetric within numerical precision")
+    if float(eigenvalues.min().item()) < -validation_tolerance:
+        raise ValueError("Cross-layer kernel is not positive semidefinite within numerical precision")
+    diagonal = torch.diagonal(symmetric)
+    squared_distances = diagonal[:, None] + diagonal[None, :] - 2.0 * symmetric
+    if float(squared_distances.min().item()) < -validation_tolerance:
+        raise ValueError("Cross-layer kernel produces invalid derived distances")
+    return to_serializable({
+        "mode": "single_checkpoint",
+        "capture_version": CROSS_LAYER_CAPTURE_VERSION,
+        "layers": layers,
+        "kernel": symmetric.tolist(),
+        "provenance": {
+            "tensor_family": "proj",
+            "source_dtypes": source_dtypes,
+            "source_shapes": source_shapes,
+            "gram_dtype": "torch.float64",
+            "gram_shape": [dimension, dimension],
+        },
+        "validation": {
+            "symmetry_max_error": symmetry_error,
+            "minimum_eigenvalue": float(eigenvalues.min().item()),
+            "minimum_squared_distance": float(squared_distances.min().item()),
+            "tolerance": validation_tolerance,
+        },
+        "runtime": {
+            "seconds": time.perf_counter() - started,
+            "temporary_storage_bytes": temporary_bytes,
+            "block_size": block_size,
+            "maximum_block_bytes": int(2 * block_size * dimension * dimension * 8),
+        },
+    })
 
 
 def capture_gram_control(context: CaptureContext) -> dict[str, Any]:

@@ -210,6 +210,14 @@ ANALYSES = _validated_registry(
             ("experiments",),
         ),
         AnalysisSpec(
+            "rome-cross-layer-experiments",
+            "Relative LOF and low-rank decomposition decisions from one kernel.",
+            "artifact-study",
+            "src.structural.analysis.detector_methods:analyze_rome_cross_layer_experiments",
+            ("gram-cross-layer-v1",),
+            ("experiments",),
+        ),
+        AnalysisSpec(
             "rome-control-experiment",
             "Compare the ROME target profile with an attention-output control.",
             "artifact-study",

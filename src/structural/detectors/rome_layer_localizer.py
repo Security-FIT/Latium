@@ -15,6 +15,7 @@ SCORE_FIELD = "diagonal_relative"
 PROFILE_FIELDS = (SCORE_FIELD,)
 EXPERIMENT_CAPTURE_VERSION = "gram-experiments-v1"
 DIRECTIONAL_CAPTURE_VERSION = "gram-directional-error-v1"
+CROSS_LAYER_CAPTURE_VERSION = "gram-cross-layer-v1"
 EXPERIMENT_GROUPS = ("neighbors", "quadratic", "footprint")
 DEFAULT_EXPERIMENT_GROUPS = ("neighbors",)
 DEFAULT_TRIM_FRACTION = 0.10
@@ -375,6 +376,180 @@ def capture_directional_error_weights(weights: Mapping[int, torch.Tensor]) -> di
         "required_contiguous_layers": 11,
         "profiles": profiles,
     }
+
+
+def lof_scores_from_kernel(
+    kernel: torch.Tensor,
+    *,
+    neighbors: int = 5,
+) -> tuple[torch.Tensor, dict[str, Any]]:
+    """Compute deterministic LOF scores with explicit distance ties."""
+    matrix = torch.as_tensor(kernel, dtype=torch.float64, device="cpu")
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("Cross-layer kernel must be square")
+    count = matrix.shape[0]
+    if count <= neighbors:
+        raise ValueError(f"LOF requires more than {neighbors} layers")
+    if not bool(torch.isfinite(matrix).all()):
+        raise ValueError("Cross-layer kernel contains non-finite values")
+    diagonal = torch.diagonal(matrix)
+    squared = diagonal[:, None] + diagonal[None, :] - 2.0 * matrix
+    tolerance = numerical_tolerance(matrix.dtype, count, max(1.0, float(matrix.abs().max().item())))
+    if float(squared.min().item()) < -tolerance:
+        raise ValueError("Cross-layer kernel produces materially negative squared distances")
+    distances = torch.sqrt(squared.clamp_min(0.0))
+    off_diagonal = distances[~torch.eye(count, dtype=torch.bool)]
+    if bool((off_diagonal <= tolerance).all()):
+        return torch.ones(count, dtype=torch.float64), {
+            "neighbors": neighbors,
+            "tie_expanded_neighbor_counts": [count - 1] * count,
+            "identical_graph": True,
+            "distance_tolerance": tolerance,
+        }
+
+    neighborhoods: list[torch.Tensor] = []
+    k_distances = torch.empty(count, dtype=torch.float64)
+    indices = torch.arange(count)
+    for row in range(count):
+        mask = indices != row
+        available = distances[row, mask]
+        kth = torch.sort(available).values[neighbors - 1]
+        k_distances[row] = kth
+        neighborhoods.append(indices[mask & (distances[row] <= kth + tolerance)])
+    local_reachability = torch.empty(count, dtype=torch.float64)
+    for row, neighborhood in enumerate(neighborhoods):
+        reachability = torch.maximum(k_distances[neighborhood], distances[row, neighborhood])
+        mean_reachability = float(reachability.mean().item())
+        if mean_reachability <= tolerance:
+            raise ValueError("LOF is unresolved for a duplicate subcluster")
+        local_reachability[row] = 1.0 / mean_reachability
+    scores = torch.stack([
+        torch.mean(local_reachability[neighborhood] / local_reachability[row])
+        for row, neighborhood in enumerate(neighborhoods)
+    ])
+    return scores, {
+        "neighbors": neighbors,
+        "tie_expanded_neighbor_counts": [int(neighborhood.numel()) for neighborhood in neighborhoods],
+        "identical_graph": False,
+        "distance_tolerance": tolerance,
+    }
+
+
+def robust_decomposition_scores(
+    observations: torch.Tensor,
+    *,
+    max_iterations: int = 1000,
+    tolerance: float = 1e-7,
+) -> tuple[torch.Tensor, dict[str, Any]]:
+    """Decompose layer rows into low-rank structure and row-sparse anomalies."""
+    data = torch.as_tensor(observations, dtype=torch.float64, device="cpu")
+    if data.ndim != 2 or min(data.shape) < 2 or not bool(torch.isfinite(data).all()):
+        raise ValueError("Decomposition requires a finite layer-by-feature matrix")
+    layer_count = data.shape[0]
+    regularization = 2.0 / math.sqrt(layer_count)
+    norm = float(torch.linalg.matrix_norm(data, ord="fro").item())
+    if norm == 0.0:
+        raise ValueError("Decomposition input is trivial")
+    spectral = float(torch.linalg.matrix_norm(data, ord=2).item())
+    dual_norm = max(spectral, float(torch.linalg.vector_norm(data, dim=1).max().item()) / regularization)
+    dual = data / max(dual_norm, torch.finfo(torch.float64).tiny)
+    low_rank = torch.zeros_like(data)
+    sparse = torch.zeros_like(data)
+    mu = 1.25 / max(spectral, torch.finfo(torch.float64).tiny)
+    mu_max = mu * 1e7
+    converged = False
+    residual_ratio = math.inf
+    rank = 0
+    for iteration in range(1, max_iterations + 1):
+        candidate = data - sparse + dual / mu
+        left, singular_values, right = torch.linalg.svd(candidate, full_matrices=False)
+        shrunk = torch.clamp(singular_values - 1.0 / mu, min=0.0)
+        rank = int((shrunk > 0.0).sum().item())
+        low_rank = (left[:, :rank] * shrunk[:rank]) @ right[:rank] if rank else torch.zeros_like(data)
+
+        candidate_sparse = data - low_rank + dual / mu
+        row_norms = torch.linalg.vector_norm(candidate_sparse, dim=1)
+        shrink = torch.clamp(1.0 - (regularization / mu) / row_norms.clamp_min(torch.finfo(torch.float64).tiny), min=0.0)
+        sparse = candidate_sparse * shrink[:, None]
+        residual = data - low_rank - sparse
+        residual_ratio = float(torch.linalg.matrix_norm(residual, ord="fro").item()) / norm
+        dual = dual + mu * residual
+        if residual_ratio <= tolerance:
+            converged = True
+            break
+        mu = min(mu * 1.5, mu_max)
+    if not converged:
+        raise ValueError(f"Decomposition did not converge in {max_iterations} iterations")
+    sparse_norm = float(torch.linalg.matrix_norm(sparse, ord="fro").item())
+    low_rank_norm = float(torch.linalg.matrix_norm(low_rank, ord="fro").item())
+    numerical = numerical_tolerance(data.dtype, max(data.shape), norm)
+    if sparse_norm <= numerical or low_rank_norm <= numerical:
+        raise ValueError("Decomposition is trivial")
+    scores = torch.linalg.vector_norm(sparse, dim=1)
+    return scores, {
+        "solver": "deterministic-float64-row-sparse-admm-v1",
+        "lambda": regularization,
+        "iterations": iteration,
+        "converged": converged,
+        "residual_ratio": residual_ratio,
+        "rank": rank,
+        "low_rank_frobenius": low_rank_norm,
+        "sparse_frobenius": sparse_norm,
+    }
+
+
+def factor_cross_layer_kernel(kernel: torch.Tensor) -> tuple[torch.Tensor, dict[str, Any]]:
+    """Return a deterministic row embedding whose Gram matrix is ``kernel``."""
+    matrix = torch.as_tensor(kernel, dtype=torch.float64, device="cpu")
+    matrix = (matrix + matrix.T) * 0.5
+    eigenvalues, eigenvectors = torch.linalg.eigh(matrix)
+    tolerance = numerical_tolerance(matrix.dtype, matrix.shape[0], max(1.0, float(matrix.abs().max().item())))
+    if float(eigenvalues.min().item()) < -tolerance:
+        raise ValueError("Cross-layer kernel is not positive semidefinite")
+    positive = eigenvalues > tolerance
+    if int(positive.sum().item()) < 2:
+        raise ValueError("Cross-layer kernel has insufficient nontrivial rank")
+    factor = eigenvectors[:, positive] * torch.sqrt(eigenvalues[positive])
+    return factor, {
+        "kernel_rank": int(positive.sum().item()),
+        "minimum_eigenvalue": float(eigenvalues.min().item()),
+        "psd_tolerance": tolerance,
+    }
+
+
+def evaluate_cross_layer_experiments(
+    capture: Mapping[str, Any],
+    *,
+    experiments: list[str] | tuple[str, ...],
+) -> dict[str, Any]:
+    """Derive LOF/decomposition profiles from a shared cross-layer kernel."""
+    layers = [int(layer) for layer in capture.get("layers", [])]
+    kernel = torch.tensor(capture.get("kernel", []), dtype=torch.float64)
+    if kernel.shape != (len(layers), len(layers)):
+        raise ValueError("Cross-layer capture kernel does not match its layer metadata")
+    output: dict[str, Any] = {}
+    for identifier in experiments:
+        try:
+            if identifier == "lof-relative-b0-v1":
+                scores, method_diagnostics = lof_scores_from_kernel(kernel, neighbors=5)
+            elif identifier == "decomposition-relative-b0-v1":
+                factor, factor_diagnostics = factor_cross_layer_kernel(kernel)
+                scores, method_diagnostics = robust_decomposition_scores(factor)
+                method_diagnostics = {**factor_diagnostics, **method_diagnostics}
+            else:
+                raise ValueError(f"Unknown cross-layer experiment: {identifier}")
+            decision = relative_profile_decision(
+                {str(layer): float(scores[index].item()) for index, layer in enumerate(layers)},
+                eligible_layers=layers,
+                experiment_id=identifier,
+            )
+            decision["diagnostics"]["evidence_method"] = method_diagnostics
+            output[identifier] = decision
+        except (RuntimeError, ValueError) as exc:
+            decision = relative_profile_decision({}, eligible_layers=layers, experiment_id=identifier)
+            decision["diagnostics"]["reason"] = str(exc)
+            output[identifier] = decision
+    return output
 
 
 def quadratic_experiment_measurements(
@@ -1238,6 +1413,7 @@ __all__ = [
     "DEFAULT_EXPERIMENT_GROUPS",
     "DEFAULT_TRIM_FRACTION",
     "DIRECTIONAL_CAPTURE_VERSION",
+    "CROSS_LAYER_CAPTURE_VERSION",
     "EXPERIMENT_CAPTURE_VERSION",
     "EXPERIMENT_GROUPS",
     "MATRIX_SCORE_FIELDS",
@@ -1253,14 +1429,18 @@ __all__ = [
     "detect_from_profiles",
     "eligible_layers",
     "evaluate_matrix_experiments",
+    "evaluate_cross_layer_experiments",
+    "factor_cross_layer_kernel",
     "evaluate_profile_experiments",
     "hidden_gram",
     "local_profile_diagnostics",
     "localize_scores",
+    "lof_scores_from_kernel",
     "neighbor_experiment_measurements",
     "numerical_tolerance",
     "profile_mdl",
     "relative_profile_decision",
+    "robust_decomposition_scores",
     "profile_weights",
     "quadratic_experiment_measurements",
     "score_layer",

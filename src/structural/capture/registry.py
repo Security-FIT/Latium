@@ -82,6 +82,13 @@ CAPTURES = NamedRegistry(
             weight_families=("proj",),
         ),
         CaptureSpec(
+            "gram-cross-layer-v1",
+            "Opt-in exact cross-layer normalized-Gram kernel.",
+            "src.structural.capture.producers:capture_gram_cross_layer",
+            requires_baseline=False,
+            weight_families=("proj",),
+        ),
+        CaptureSpec(
             "gram-control-v1",
             "Attention-output control profile for ROME research.",
             "src.structural.capture.producers:capture_gram_control",
@@ -107,7 +114,10 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "paper": ("spectral", "matrix-features"),
     "gram-localization": ("gram-localization",),
     "gram-experiments-v1": ("gram-experiments-v1",),
-    "full": tuple(name for name in CAPTURES.identifiers() if name != "gram-directional-error-v1"),
+    "full": tuple(
+        name for name in CAPTURES.identifiers()
+        if name not in {"gram-directional-error-v1", "gram-cross-layer-v1"}
+    ),
 }
 
 

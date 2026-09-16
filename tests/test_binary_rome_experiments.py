@@ -6,10 +6,14 @@ import torch
 
 from src.structural.detectors.rome_layer_localizer import (
     capture_directional_error_weights,
+    factor_cross_layer_kernel,
     hidden_gram,
+    lof_scores_from_kernel,
     neighbor_experiment_measurements,
     relative_profile_decision,
+    robust_decomposition_scores,
 )
+from src.structural.capture.producers import CaptureContext, capture_gram_cross_layer
 
 
 pytestmark = pytest.mark.unit
@@ -112,3 +116,71 @@ def test_unresolved_directional_standardization_does_not_discard_v0() -> None:
     assert profile["original_score"] is not None
     assert profile["v2_status"] == "unavailable"
     assert profile["standardized_directional_score"] is None
+
+
+def test_cross_layer_capture_matches_explicit_gram_inner_products() -> None:
+    weights = {
+        layer: torch.arange(1, 13, dtype=torch.float64).reshape(3, 4) + layer
+        for layer in range(7)
+    }
+    context = CaptureContext(
+        proj_weights=weights,
+        fc_weights=None,
+        attention_weights={},
+        probe_vector=None,
+        token_predictor=None,
+        changed_weights={},
+        options={"gram_cross_layer_block_size": 2},
+    )
+
+    capture = capture_gram_cross_layer(context)
+    grams = torch.stack([hidden_gram(weights[layer]) for layer in sorted(weights)])
+    expected = torch.einsum("aij,bij->ab", grams, grams)
+
+    assert capture["capture_version"] == "gram-cross-layer-v1"
+    assert torch.tensor(capture["kernel"], dtype=torch.float64) == pytest.approx(expected)
+    assert capture["runtime"]["block_size"] == 2
+    assert capture["runtime"]["temporary_storage_bytes"] == grams.numel() * 8
+
+
+def test_lof_handles_ties_identical_graphs_and_isolated_points() -> None:
+    identical = torch.ones((7, 7), dtype=torch.float64)
+    scores, diagnostics = lof_scores_from_kernel(identical)
+    assert scores.tolist() == pytest.approx([1.0] * 7)
+    assert diagnostics["identical_graph"] is True
+
+    points = torch.tensor([[0.0], [0.0], [0.1], [0.2], [0.3], [0.4], [4.0]], dtype=torch.float64)
+    kernel = points @ points.T
+    scores, diagnostics = lof_scores_from_kernel(kernel)
+    assert int(torch.argmax(scores).item()) == 6
+    assert diagnostics["tie_expanded_neighbor_counts"][0] >= 5
+
+
+def test_lof_rejects_unresolved_duplicate_subclusters() -> None:
+    points = torch.tensor([[0.0]] * 6 + [[1.0], [2.0]], dtype=torch.float64)
+    with pytest.raises(ValueError, match="duplicate subcluster"):
+        lof_scores_from_kernel(points @ points.T)
+
+
+def test_compressed_decomposition_matches_explicit_observations() -> None:
+    base = torch.tensor([[1.0, 0.2, -0.1], [0.5, 0.1, -0.05]], dtype=torch.float64)
+    coefficients = torch.linspace(0.5, 2.0, 10, dtype=torch.float64)[:, None]
+    observations = coefficients @ base[:1]
+    observations[6] += torch.tensor([4.0, -3.0, 2.0], dtype=torch.float64)
+
+    explicit, explicit_diagnostics = robust_decomposition_scores(observations)
+    factor, _ = factor_cross_layer_kernel(observations @ observations.T)
+    compressed, compressed_diagnostics = robust_decomposition_scores(factor)
+
+    assert explicit == pytest.approx(compressed, rel=1e-5, abs=1e-6)
+    assert explicit_diagnostics["converged"] is True
+    assert compressed_diagnostics["converged"] is True
+    assert int(torch.argmax(compressed).item()) == 6
+
+
+def test_decomposition_reports_convergence_and_trivial_failures() -> None:
+    data = torch.arange(35, dtype=torch.float64).reshape(7, 5)
+    with pytest.raises(ValueError, match="did not converge"):
+        robust_decomposition_scores(data, max_iterations=1, tolerance=1e-15)
+    with pytest.raises(ValueError, match="trivial"):
+        robust_decomposition_scores(torch.zeros((7, 3), dtype=torch.float64))

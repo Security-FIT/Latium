@@ -729,6 +729,7 @@ def relative_profile_decision(
 ) -> dict[str, Any]:
     """Compare ordinary profiles with a jointly fitted positive excursion."""
     diagnostics: dict[str, Any] = {"transform": "log1p"}
+    visible_scores: dict[str, float] = {}
 
     def unavailable(reason: str) -> dict[str, Any]:
         return {
@@ -740,7 +741,7 @@ def relative_profile_decision(
             "candidate_layer": None,
             "original_localizer_layer": original_localizer_layer,
             "eligible_layers": [] if eligible_layers is None else [int(value) for value in eligible_layers],
-            "layer_scores": {},
+            "layer_scores": visible_scores,
             "background_cost": None,
             "anomaly_cost": None,
             "gain": None,
@@ -751,6 +752,10 @@ def relative_profile_decision(
         score_by_layer = {int(layer): float(score) for layer, score in layer_scores.items()}
     except (TypeError, ValueError) as exc:
         return unavailable(f"invalid profile: {exc}")
+    visible_scores = {
+        str(layer): score for layer, score in score_by_layer.items()
+        if math.isfinite(score) and score >= 0.0
+    }
     declared = sorted(score_by_layer) if eligible_layers is None else [int(layer) for layer in eligible_layers]
     if len(set(declared)) != len(declared):
         return unavailable("eligible layers must be unique")
@@ -1068,7 +1073,7 @@ def evaluate_profile_experiments(
     scores = {
         str(int(layer)): float(profile[SCORE_FIELD])
         for layer, profile in profiles.items()
-        if allowed is None or int(layer) in allowed
+        if (allowed is None or int(layer) in allowed) and SCORE_FIELD in profile
     }
     output: dict[str, Any] = {}
     for identifier in experiments:
@@ -1077,7 +1082,7 @@ def evaluate_profile_experiments(
             if settings.get("relative"):
                 output[identifier] = relative_profile_decision(
                     scores,
-                    eligible_layers=sorted(int(layer) for layer in scores),
+                    eligible_layers=(sorted(allowed) if allowed is not None else sorted(int(layer) for layer in scores)),
                     experiment_id=identifier,
                 )
             else:

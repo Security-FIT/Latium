@@ -271,7 +271,7 @@ def _add_experiment_summary(result: dict[str, Any], experiments: tuple[str, ...]
         positives = 0
         for case in result.get("cases", []):
             payload = case.get("data", {}).get("experiments", {}).get(identifier)
-            if isinstance(payload, dict):
+            if isinstance(payload, dict) and payload.get("status") != "unavailable":
                 complete += 1
                 positives += int(payload.get("is_rome_like") is True)
             else:

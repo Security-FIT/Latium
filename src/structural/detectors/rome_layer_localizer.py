@@ -310,9 +310,13 @@ def _directional_error_measurement(
         "centered_directional_score": centered_score,
         "standardized_directional_score": standardized_score,
         "candidate_projection": (refined_basis.T @ residual @ refined_basis).tolist(),
+        "original_basis": basis.tolist(),
+        "original_singular_values": measured["singular_values"].tolist(),
+        "original_neighbor_support": measured["raw_support"].tolist(),
         "candidate_directional_error": candidate_error.tolist(),
         "candidate_support": candidate_support.tolist(),
         "reference_layers": reference_layers,
+        "reference_indices": reference_positions,
         "reference_projections": [projection.tolist() for projection in projected_residuals],
         "reference_supports": [support.tolist() for support in projected_supports],
         "reference_directional_errors": reference_errors.tolist(),
@@ -543,6 +547,7 @@ def evaluate_cross_layer_experiments(
                 {str(layer): float(scores[index].item()) for index, layer in enumerate(layers)},
                 eligible_layers=layers,
                 experiment_id=identifier,
+                original_localizer_layer=capture.get("original_localizer_layer"),
             )
             decision["diagnostics"]["evidence_method"] = method_diagnostics
             output[identifier] = decision

@@ -32,8 +32,10 @@ from src.structural.detectors.rome_layer_localizer import (
     capture_directional_error_weights,
     capture_experiment_weights,
     hidden_gram,
+    eligible_layers,
     profile_weights,
     numerical_tolerance,
+    score_layer,
     token_subspace_alignment_profiles,
 )
 from src.structural.detectors.spectral_primitives import (
@@ -346,7 +348,18 @@ def capture_gram_experiments(context: CaptureContext) -> dict[str, Any]:
 
 def capture_gram_directional_error(context: CaptureContext) -> dict[str, Any]:
     """Capture V0/V0R/V1/V2 profiles using one shared directional pass."""
-    return to_serializable(capture_directional_error_weights(context.proj_weights))
+    started = time.perf_counter()
+    output = capture_directional_error_weights(context.proj_weights)
+    output["provenance"] = {
+        "tensor_family": "proj",
+        "source_dtypes": {str(layer): str(weight.dtype) for layer, weight in context.proj_weights.items()},
+        "source_shapes": {str(layer): list(weight.shape) for layer, weight in context.proj_weights.items()},
+    }
+    output["runtime"] = {
+        "seconds": time.perf_counter() - started,
+        "source_tensor_bytes": sum(weight.numel() * weight.element_size() for weight in context.proj_weights.values()),
+    }
+    return to_serializable(output)
 
 
 def capture_gram_cross_layer(context: CaptureContext) -> dict[str, Any]:
@@ -374,6 +387,14 @@ def capture_gram_cross_layer(context: CaptureContext) -> dict[str, Any]:
             source_dtypes[str(layer)] = str(context.proj_weights[layer].dtype)
             source_shapes[str(layer)] = list(context.proj_weights[layer].shape)
         storage.flush()
+        localizer_scores: dict[int, float] = {}
+        for layer in eligible_layers(layers):
+            index = layers.index(layer)
+            current = torch.from_numpy(np.asarray(storage[index]).copy())
+            reference = 0.5 * torch.from_numpy(
+                (np.asarray(storage[index - 1]) + np.asarray(storage[index + 1])).copy()
+            )
+            localizer_scores[layer] = score_layer(current, reference, layer=layer)
         kernel = np.empty((len(layers), len(layers)), dtype=np.float64)
         for row_start in range(0, len(layers), block_size):
             row_stop = min(len(layers), row_start + block_size)
@@ -409,6 +430,10 @@ def capture_gram_cross_layer(context: CaptureContext) -> dict[str, Any]:
         "capture_version": CROSS_LAYER_CAPTURE_VERSION,
         "layers": layers,
         "kernel": symmetric.tolist(),
+        "original_localizer_layer": (
+            min(localizer_scores, key=lambda layer: (-localizer_scores[layer], layer))
+            if localizer_scores else None
+        ),
         "provenance": {
             "tensor_family": "proj",
             "source_dtypes": source_dtypes,
@@ -438,13 +463,40 @@ def capture_token_subspace_alignment(context: CaptureContext) -> dict[str, Any]:
     if context.projection_layout is None or context.output_head_layout is None:
         return {"capture_status": "unavailable", "reason": "verified layout metadata is unavailable"}
     try:
-        return to_serializable(token_subspace_alignment_profiles(
+        started = time.perf_counter()
+        output = token_subspace_alignment_profiles(
             context.proj_weights,
             context.output_head_weight,
             projection_layout=context.projection_layout,
             output_head_layout=context.output_head_layout,
             vocabulary_batch_size=int(context.options.get("token_alignment_batch_size", 2048)),
-        ))
+        )
+        localizer = profile_weights(context.proj_weights)
+        localizer_scores = {
+            int(layer): float(profile["diagonal_relative"])
+            for layer, profile in localizer["profiles"].items()
+        }
+        output["original_localizer_layer"] = (
+            min(localizer_scores, key=lambda layer: (-localizer_scores[layer], layer))
+            if localizer_scores else None
+        )
+        for raw_layer, profile in output["profiles"].items():
+            profile["original_score"] = localizer_scores.get(int(raw_layer))
+        output["provenance"] = {
+            "tensor_family": "proj",
+            "source_dtypes": {str(layer): str(weight.dtype) for layer, weight in context.proj_weights.items()},
+            "source_shapes": {str(layer): list(weight.shape) for layer, weight in context.proj_weights.items()},
+            "output_head_dtype": str(context.output_head_weight.dtype),
+            "output_head_shape": list(context.output_head_weight.shape),
+        }
+        output["runtime"] = {
+            "seconds": time.perf_counter() - started,
+            "source_tensor_bytes": (
+                context.output_head_weight.numel() * context.output_head_weight.element_size()
+                + sum(weight.numel() * weight.element_size() for weight in context.proj_weights.values())
+            ),
+        }
+        return to_serializable(output)
     except ValueError as exc:
         return {"capture_status": "unavailable", "reason": str(exc)}
 

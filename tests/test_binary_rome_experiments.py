@@ -16,6 +16,7 @@ from src.structural.detectors.rome_layer_localizer import (
 )
 from src.structural.capture.artifacts import capture_case
 from src.structural.capture.producers import CaptureContext, capture_gram_cross_layer
+from scripts.evaluate_binary_rome_presence import summarize_specimens
 
 
 pytestmark = pytest.mark.unit
@@ -61,6 +62,18 @@ def test_b0_background_can_explain_a_stage_transition() -> None:
     assert result["rome_compatible_detected"] is False
     assert result["diagnostics"]["selected_background"]["family"] == "affine-plus-step"
     assert result["diagnostics"]["step_split_count"] == 9
+
+
+def test_b0_background_explains_quadratic_shape_and_rejects_negative_excursion() -> None:
+    quadratic = [0.2 + 0.3 * (layer / 10.0) + 0.9 * (layer / 10.0) ** 2 for layer in range(11)]
+    smooth = relative_profile_decision(_scores(quadratic))
+    quadratic[5] -= 0.45
+    negative = relative_profile_decision(_scores(quadratic))
+
+    assert smooth["rome_compatible_detected"] is False
+    assert smooth["diagnostics"]["selected_background"]["family"] == "quadratic"
+    assert negative["rome_compatible_detected"] is False
+    assert negative["diagnostics"]["selected_anomaly"]["amplitude"] >= 0.0
 
 
 def test_b0_preserves_unavailable_diagnostics_for_incomplete_or_constant_profiles() -> None:
@@ -264,3 +277,46 @@ def test_token_alignment_rejects_incompatible_heads_and_capture_marks_missing_ac
     result = capture_case("token-subspace-alignment-v1", context, case_id="clean")
     assert result["status"] == "unavailable"
     assert "output-head" in result["error"]
+
+
+def test_evaluator_keeps_binary_and_localization_results_separate() -> None:
+    specimens = [
+        {
+            "specimen_id": "lineage:case",
+            "experiment_id": "method",
+            "status": "complete",
+            "ground_truth_positive": True,
+            "rome_compatible_detected": True,
+            "candidate_layer": 8,
+            "ground_truth_layer": 3,
+            "localization_exact": False,
+            "localization_within_one": False,
+            "edit_applied": True,
+            "behavioral_success": False,
+            "negative_category": None,
+        },
+        {
+            "specimen_id": "lineage:clean",
+            "experiment_id": "method",
+            "status": "unavailable",
+            "ground_truth_positive": False,
+            "rome_compatible_detected": None,
+            "candidate_layer": None,
+            "ground_truth_layer": None,
+            "localization_exact": None,
+            "localization_within_one": None,
+            "edit_applied": False,
+            "behavioral_success": None,
+            "negative_category": "clean",
+        },
+    ]
+
+    summary = summarize_specimens(specimens)["per_experiment"]["method"]
+
+    assert summary["tp"] == 1
+    assert summary["fn"] == 0
+    assert summary["localization_exact"] == 0
+    assert summary["localization_cases"] == 1
+    assert summary["tn"] == 0
+    assert summary["unavailable"] == 1
+    assert summary["behavioral_successes"] == 0

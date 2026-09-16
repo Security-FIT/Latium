@@ -30,6 +30,22 @@ except ImportError:  # Legacy detector was removed; manifest-backed experiments 
 
 MAD_NORMAL_SCALE = 1.482602218505602
 EPS = np.finfo(np.float64).eps
+EXPERIMENT_PRODUCERS = {
+    "rome-profile-experiments",
+    "rome-matrix-experiments",
+    "rome-control-experiment",
+    "rome-directional-experiments",
+    "rome-cross-layer-experiments",
+    "rome-token-alignment-experiments",
+}
+EXPERIMENT_CAPTURE = {
+    "rome-profile-experiments": "gram-localization",
+    "rome-matrix-experiments": "gram-experiments-v1",
+    "rome-control-experiment": "gram-experiments-v1",
+    "rome-directional-experiments": "gram-directional-error-v1",
+    "rome-cross-layer-experiments": "gram-cross-layer-v1",
+    "rome-token-alignment-experiments": "token-subspace-alignment-v1",
+}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -271,16 +287,11 @@ def evaluate_structural_run(run_root: Path) -> list[dict[str, Any]]:
     """Evaluate manifest-backed ROME experiments without loading a model."""
     manifest = load_json(run_root / "manifest.json")
     records = artifact_records(manifest)
-    producers = {
-        "rome-profile-experiments",
-        "rome-matrix-experiments",
-        "rome-control-experiment",
-    }
     rows: list[dict[str, Any]] = []
     method_records = [
         record for record in records
         if record.get("kind") == "analysis"
-        and record.get("producer") in producers
+        and record.get("producer") in EXPERIMENT_PRODUCERS
         and record.get("edit_method") == "rome"
     ]
     for record in method_records:
@@ -322,6 +333,216 @@ def evaluate_structural_run(run_root: Path) -> list[dict[str, Any]]:
                 },
             ))
     return rows
+
+
+def collect_structural_specimens(run_root: Path) -> list[dict[str, Any]]:
+    """Normalize old and new manifest analyses into one specimen contract."""
+    manifest = load_json(run_root / "manifest.json")
+    records = artifact_records(manifest)
+    execution_by_key: dict[tuple[str, str, str | None], dict[str, Any]] = {}
+    for record in records:
+        if record.get("kind") != "execution":
+            continue
+        artifact = load_record(run_root, record)
+        if artifact is not None:
+            execution_by_key[(
+                str(record.get("model")),
+                str(record.get("plan_id")),
+                record.get("edit_method"),
+            )] = artifact
+
+    specimens: list[dict[str, Any]] = []
+    seen_clean: set[tuple[str, str]] = set()
+    capture_cache: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
+    for capture_record in records:
+        if capture_record.get("kind") != "capture":
+            continue
+        producer = str(capture_record.get("producer"))
+        if producer not in set(EXPERIMENT_CAPTURE.values()):
+            continue
+        loaded = load_record(run_root, capture_record)
+        if loaded is not None:
+            capture_cache[(
+                str(capture_record.get("model")),
+                str(capture_record.get("plan_id")),
+                capture_record.get("edit_method"),
+                producer,
+            )] = loaded
+    analysis_records = [
+        record for record in records
+        if record.get("kind") == "analysis" and record.get("producer") in EXPERIMENT_PRODUCERS
+    ]
+    for record in analysis_records:
+        artifact = load_record(run_root, record)
+        if artifact is None:
+            continue
+        model = str(record.get("model"))
+        plan_id = str(record.get("plan_id"))
+        edit_method = record.get("edit_method")
+        capture_producer = EXPERIMENT_CAPTURE[str(record.get("producer"))]
+        capture_artifact = capture_cache.get((model, plan_id, edit_method, capture_producer), {})
+        capture_cases = {str(case.get("case_id")): case for case in capture_artifact.get("cases", [])}
+        execution = execution_by_key.get((model, plan_id, edit_method), {})
+        execution_cases = {str(case.get("case_id")): case for case in execution.get("cases", [])}
+        ground_truth_layer = execution.get("summary", {}).get("target_layer")
+        for case in artifact.get("cases", []):
+            case_id = str(case.get("case_id"))
+            experiments = case.get("data", {}).get("experiments", {}) if case.get("status") == "complete" else {}
+            for identifier, decision in experiments.items():
+                identifier = str(identifier)
+                if edit_method is None:
+                    deduplication_key = (model, identifier)
+                    if deduplication_key in seen_clean:
+                        continue
+                    seen_clean.add(deduplication_key)
+                execution_case = execution_cases.get(case_id, {})
+                capture_data = capture_cases.get(case_id, {}).get("data", {})
+                edit = execution_case.get("edit", {}) if isinstance(execution_case.get("edit"), dict) else {}
+                complete = isinstance(decision, dict) and isinstance(decision.get("is_rome_like"), bool)
+                candidate = decision.get("candidate_layer") if isinstance(decision, dict) else None
+                detected = decision.get("is_rome_like") if complete else None
+                identity = f"{model}:{plan_id}:{case_id}:{'rome' if edit_method else 'clean'}"
+                specimens.append({
+                    "specimen_id": identity,
+                    "experiment_id": identifier,
+                    "decision_version": decision.get("decision_version") if isinstance(decision, dict) else None,
+                    "status": "complete" if complete else "unavailable",
+                    "rome_compatible_detected": detected,
+                    "candidate_layer": candidate,
+                    "original_localizer_layer": (
+                        decision.get("original_localizer_layer") if isinstance(decision, dict) else None
+                    ),
+                    "eligible_layers": decision.get("eligible_layers", []) if isinstance(decision, dict) else [],
+                    "layer_scores": decision.get("layer_scores", {}) if isinstance(decision, dict) else {},
+                    "background_cost": decision.get("background_cost") if isinstance(decision, dict) else None,
+                    "anomaly_cost": decision.get("anomaly_cost") if isinstance(decision, dict) else None,
+                    "gain": decision.get("gain") if isinstance(decision, dict) else None,
+                    "diagnostics": decision.get("diagnostics", {}) if isinstance(decision, dict) else {},
+                    "runtime": capture_data.get("runtime", {}),
+                    "provenance": capture_data.get("provenance", {}),
+                    "model": model,
+                    "base_lineage": model,
+                    "ground_truth_positive": edit_method is not None,
+                    "ground_truth_layer": ground_truth_layer,
+                    "negative_category": None if edit_method is not None else "clean",
+                    "edit_applied": edit_method is not None,
+                    "behavioral_success": edit.get("success"),
+                    "localization_exact": (
+                        bool(candidate == ground_truth_layer)
+                        if candidate is not None and ground_truth_layer is not None else None
+                    ),
+                    "localization_within_one": (
+                        bool(abs(int(candidate) - int(ground_truth_layer)) <= 1)
+                        if candidate is not None and ground_truth_layer is not None else None
+                    ),
+                })
+    return specimens
+
+
+def summarize_specimens(specimens: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build confusion, availability, localization, and overlapping error sets."""
+    per_experiment: dict[str, Any] = {}
+    errors: dict[str, set[str]] = {}
+    outcomes: dict[str, dict[str, bool]] = {}
+    for experiment in sorted({str(item["experiment_id"]) for item in specimens}):
+        selected = [item for item in specimens if item["experiment_id"] == experiment]
+        complete = [item for item in selected if item["status"] == "complete"]
+        tp = sum(item["ground_truth_positive"] and item["rome_compatible_detected"] for item in complete)
+        fn = sum(item["ground_truth_positive"] and not item["rome_compatible_detected"] for item in complete)
+        fp = sum(not item["ground_truth_positive"] and item["rome_compatible_detected"] for item in complete)
+        tn = sum(not item["ground_truth_positive"] and not item["rome_compatible_detected"] for item in complete)
+        localization = [item for item in complete if item["ground_truth_positive"] and item["candidate_layer"] is not None]
+        error_ids = {
+            item["specimen_id"]
+            for item in complete
+            if bool(item["rome_compatible_detected"]) != bool(item["ground_truth_positive"])
+        }
+        errors[experiment] = error_ids
+        outcomes[experiment] = {
+            item["specimen_id"]: bool(item["rome_compatible_detected"]) == bool(item["ground_truth_positive"])
+            for item in complete
+        }
+        category_counts: Counter[str] = Counter()
+        category_false: Counter[str] = Counter()
+        for item in complete:
+            if item["ground_truth_positive"]:
+                continue
+            category = str(item.get("negative_category") or "unknown")
+            category_counts[category] += 1
+            category_false[category] += int(bool(item["rome_compatible_detected"]))
+        per_experiment[experiment] = {
+            "tp": tp,
+            "fn": fn,
+            "fp": fp,
+            "tn": tn,
+            "sensitivity": tp / (tp + fn) if tp + fn else None,
+            "specificity": tn / (tn + fp) if tn + fp else None,
+            "availability": len(complete) / len(selected) if selected else None,
+            "available": len(complete),
+            "unavailable": len(selected) - len(complete),
+            "applied_edits": sum(bool(item["edit_applied"]) for item in selected),
+            "behavioral_successes": sum(item.get("behavioral_success") is True for item in selected),
+            "localization_exact": sum(item["localization_exact"] is True for item in localization),
+            "localization_within_one": sum(item["localization_within_one"] is True for item in localization),
+            "localization_cases": len(localization),
+            "runtime_seconds": {
+                "total": sum(float(item.get("runtime", {}).get("seconds", 0.0)) for item in complete),
+                "measured_cases": sum("seconds" in item.get("runtime", {}) for item in complete),
+            },
+            "maximum_reported_storage_bytes": max(
+                (
+                    int(item.get("runtime", {}).get("temporary_storage_bytes", 0))
+                    or int(item.get("runtime", {}).get("source_tensor_bytes", 0))
+                    for item in complete
+                ),
+                default=0,
+            ),
+            "negative_categories": {
+                category: {
+                    "count": count,
+                    "false_positives": category_false[category],
+                }
+                for category, count in sorted(category_counts.items())
+            },
+            "error_specimens": sorted(error_ids),
+        }
+    overlap = {
+        first: {
+            second: len(errors[first] & errors[second])
+            for second in sorted(errors)
+        }
+        for first in sorted(errors)
+    }
+    reference = outcomes.get("original-v3-relative-b0-v1", {})
+    changes: dict[str, Any] = {}
+    if reference:
+        for experiment, experiment_outcomes in outcomes.items():
+            if experiment == "original-v3-relative-b0-v1":
+                continue
+            shared = set(reference) & set(experiment_outcomes)
+            changes[experiment] = {
+                "fixes": sorted(identity for identity in shared if not reference[identity] and experiment_outcomes[identity]),
+                "regressions": sorted(identity for identity in shared if reference[identity] and not experiment_outcomes[identity]),
+            }
+    return {
+        "per_experiment": per_experiment,
+        "overlapping_error_counts": overlap,
+        "changes_from_original_relative": changes,
+    }
+
+
+def historical_local_prominence(input_root: Path) -> dict[str, Any]:
+    """Keep the published hard-negative baseline in a separate named cohort."""
+    expected = {"tp": 43, "fn": 51, "fp": 50, "tn": 155, "positive_cases": 94, "negative_cases": 205}
+    candidates = list(input_root.rglob("evaluation-with-hard-negatives.json")) if input_root.is_dir() else []
+    return {
+        "cohort": "historical-v3-hard-negatives",
+        "detector": "local-prominence",
+        "counts": expected,
+        "source_artifact_found": bool(candidates),
+        "source_artifact": str(candidates[0]) if candidates else None,
+        "pooled_with_relative_experiments": False,
+    }
 
 
 def _profile_decisions(capture: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -403,7 +624,10 @@ def evaluate_archived_profiles(input_root: Path) -> list[dict[str, Any]]:
                 unavailable["positive"] += 1
                 continue
             for name, decision in decisions.items():
-                positive_results[name].append(decision)
+                if isinstance(decision.get("is_rome_like"), bool):
+                    positive_results[name].append(decision)
+                else:
+                    unavailable[f"positive:{name}"] += 1
         for category, capture in negatives.get(family, []):
             try:
                 decisions = _profile_decisions(capture)
@@ -411,7 +635,10 @@ def evaluate_archived_profiles(input_root: Path) -> list[dict[str, Any]]:
                 unavailable[category] += 1
                 continue
             for name, decision in decisions.items():
-                negative_results[name].append((category, decision))
+                if isinstance(decision.get("is_rome_like"), bool):
+                    negative_results[name].append((category, decision))
+                else:
+                    unavailable[f"{category}:{name}"] += 1
 
         for identifier in PROFILE_EXPERIMENTS:
             positive = positive_results[identifier]
@@ -525,7 +752,13 @@ def pct(value: float | None) -> str:
     return "—" if value is None else f"{100.0 * value:.1f}%"
 
 
-def markdown(rows: list[dict[str, Any]], aggregates: list[dict[str, Any]], input_root: Path) -> str:
+def markdown(
+    rows: list[dict[str, Any]],
+    aggregates: list[dict[str, Any]],
+    input_root: Path,
+    *,
+    specimen_summary: dict[str, Any] | None = None,
+) -> str:
     lines = [
         "# Offline binary ROME-presence evaluation",
         "",
@@ -572,6 +805,21 @@ def markdown(rows: list[dict[str, Any]], aggregates: list[dict[str, Any]], input
             "|---|---|---:|---:|---|---:|",
         ]
     )
+    if specimen_summary and specimen_summary.get("per_experiment"):
+        lines.extend([
+            "",
+            "## Specimen-level relative decisions",
+            "",
+            "| Experiment | TP | FN | FP | TN | Available | Exact / localized | Within one / localized |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ])
+        for identifier, values in sorted(specimen_summary["per_experiment"].items()):
+            lines.append(
+                f"| {identifier} | {values['tp']} | {values['fn']} | {values['fp']} | {values['tn']} | "
+                f"{values['available']}/{values['available'] + values['unavailable']} | "
+                f"{values['localization_exact']}/{values['localization_cases']} | "
+                f"{values['localization_within_one']}/{values['localization_cases']} |"
+            )
     for row in sorted(rows, key=lambda item: (str(item["model"]), str(item["detector"]))):
         clean = row["clean_is_rome_like"]
         clean_label = "—" if clean is None else ("ROME-like" if clean else "clean")
@@ -610,8 +858,10 @@ def main() -> None:
     args = parser.parse_args()
 
     rows: list[dict[str, Any]] = []
+    specimens: list[dict[str, Any]] = []
     if (args.input_root / "manifest.json").is_file():
         rows.extend(evaluate_structural_run(args.input_root))
+        specimens.extend(collect_structural_specimens(args.input_root))
     else:
         rows.extend(evaluate_archived_profiles(args.input_root))
         if not rows:
@@ -621,12 +871,25 @@ def main() -> None:
         raise SystemExit(f"No usable manifests below {args.input_root}")
 
     aggregates = aggregate_rows(rows)
+    specimen_summary = summarize_specimens(specimens)
+    historical = historical_local_prominence(args.input_root)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "summary.json").write_text(
-        json.dumps({"models": sorted({row['model'] for row in rows}), "aggregate": aggregates, "rows": rows}, indent=2),
+        json.dumps({
+            "models": sorted({row['model'] for row in rows}),
+            "aggregate": aggregates,
+            "rows": rows,
+            "historical_cohorts": [historical],
+            "specimen_summary": specimen_summary,
+            "specimens": specimens,
+        }, indent=2),
         encoding="utf-8",
     )
-    (args.output_dir / "README.md").write_text(markdown(rows, aggregates, args.input_root), encoding="utf-8")
+    (args.output_dir / "README.md").write_text(
+        markdown(rows, aggregates, args.input_root, specimen_summary=specimen_summary),
+        encoding="utf-8",
+    )
+    (args.output_dir / "specimens.json").write_text(json.dumps(specimens, indent=2), encoding="utf-8")
     with (args.output_dir / "per-model.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()

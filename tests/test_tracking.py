@@ -4,6 +4,8 @@ import sys
 from types import SimpleNamespace
 
 from src.tracking import current_tracker, tracking_session
+from src.structural.analysis.runtime import _analysis_tracking_metrics
+from src.structural.execution.edit_execution import _counterfact_tracking_state
 
 
 class _FakeRun:
@@ -57,3 +59,56 @@ def test_wandb_session_records_state_metrics_and_completion(monkeypatch) -> None
     assert any(log.get("rome/loss") == 1.25 for log in fake_run.logs)
     assert fake_run.summary["monitor/status"] == "complete"
     assert fake_run.exit_code == 0
+
+
+def test_analysis_tracking_uses_localization_accuracy() -> None:
+    metrics = _analysis_tracking_metrics(
+        {"accuracy": 0.75, "correct": 3, "cases_evaluated": 4},
+        [],
+        expected_edited=True,
+    )
+
+    assert metrics["analysis/success_rate"] == 0.75
+    assert metrics["analysis/successes"] == 3
+    assert metrics["analysis/evaluated"] == 4
+
+
+def test_analysis_tracking_scores_binary_and_experiment_detectors() -> None:
+    metrics = _analysis_tracking_metrics(
+        {
+            "experiments": {
+                "relative-method": {
+                    "cases_complete": 4,
+                    "positive_decisions": 3,
+                }
+            }
+        },
+        [
+            {"status": "complete", "data": {"model_detected": True}},
+            {"status": "complete", "data": {"model_detected": False}},
+        ],
+        expected_edited=True,
+    )
+
+    assert metrics["analysis/success_rate"] == 0.5
+    assert metrics["analysis/experiments/relative-method/success_rate"] == 0.75
+
+
+def test_counterfact_tracking_includes_dataset_row_and_rewrite() -> None:
+    state = _counterfact_tracking_state(
+        {
+            "dataset_index": 42,
+            "case_id": 9001,
+            "fact_tuple": ("The {} is", "Eiffel Tower", " in Rome", " in Paris"),
+        },
+        position=3,
+        total=10,
+    )
+
+    assert state["counterfact/index"] == 42
+    assert state["counterfact/case_id"] == "9001"
+    assert state["counterfact/subject"] == "Eiffel Tower"
+    assert state["counterfact/target_true"] == " in Paris"
+    assert state["counterfact/target_new"] == " in Rome"
+    assert state["counterfact/original_text"] == "The Eiffel Tower is in Paris"
+    assert state["counterfact/edited_text"] == "The Eiffel Tower is in Rome"

@@ -131,13 +131,16 @@ run `wandb sync wandb/offline-run-*` later. The main fields to watch are:
 
 - `monitor/status`, `monitor/heartbeat`, and `monitor/seconds_since_activity`
   for liveness and possible stalls.
-- `progress/edit`, `progress/edit_total`, and `context/case_id` for the current
-  edit.
-- `context/analysis` and `analysis/status` for detectors and localizers.
-- `rome/*` for optimization loss, KL divergence, weight decay, and update norms.
+- `progress/edit` and `progress/edit_total` for the current edit. The
+  `counterfact/*` fields include the dataset index, case ID, subject, prompt,
+  old target, new target, and rendered original/edited facts.
+- `context/analysis`, `analysis/status`, and `analysis/success_rate` for
+  detectors and localizers. Per-method summary fields remain available under
+  `analysis/methods/<method>/success_rate`; paper experiment methods use
+  `analysis/experiments/<method>/success_rate`.
 
-See [`docs/wandb-monitoring.md`](docs/wandb-monitoring.md) for all settings and
-a suggested W&B workspace layout.
+See [`docs/wandb-monitoring.md`](docs/wandb-monitoring.md) for the settings and
+field definitions.
 
 ## Main Workflows
 

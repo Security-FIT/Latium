@@ -1047,20 +1047,6 @@ def optimize_v(
         if verbose:
             LOGGER.info(f"Epoch {i} log_probs {pred_loss} dkl {dkl} wd {weight_decay}")
 
-        from src.tracking import current_tracker
-
-        current_tracker().log(
-            {
-                "rome/epoch": i + 1,
-                "rome/epochs_total": N_optim_steps,
-                "rome/prediction_loss": pred_loss.detach().item(),
-                "rome/kl_divergence": dkl.detach().item(),
-                "rome/weight_decay": weight_decay.detach().item(),
-                "rome/loss": loss.detach().item(),
-                "rome/delta_norm": delta.detach().norm().item(),
-            }
-        )
-
         if i == N_optim_steps - 1:
             break
 
@@ -1117,17 +1103,6 @@ def insert_kv(
     LOGGER.info(f"Delta scale: {_delta_scale}")
     LOGGER.info(f"Division Factor: {torch.dot(k, left).item()}")
     LOGGER.info(f"Right vector norm: {right.norm()}")
-
-    from src.tracking import current_tracker
-
-    current_tracker().log(
-        {
-            "rome/final_delta_norm": delta.detach().norm().item(),
-            "rome/delta_scale": _delta_scale,
-            "rome/division_factor": torch.dot(k, left).detach().item(),
-            "rome/right_vector_norm": right.detach().norm().item(),
-        }
-    )
 
     update_matrix = left.unsqueeze(1) @ right.unsqueeze(0)
     try:

@@ -9,6 +9,7 @@ Per-case edit execution, restoration, and edited-state capture.
 
 from __future__ import annotations
 
+import json
 import logging
 import traceback
 from collections import defaultdict
@@ -37,6 +38,40 @@ from src.tracking import current_tracker
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _counterfact_tracking_state(
+    case: Mapping[str, Any],
+    *,
+    position: int,
+    total: int,
+) -> dict[str, Any]:
+    fact = tuple(case.get("fact_tuple", ()))
+    prompt_template, subject, target_new, target_true = (*fact, None, None, None, None)[:4]
+    rendered_prompt = None
+    if prompt_template is not None and subject is not None:
+        try:
+            rendered_prompt = str(prompt_template).format(subject)
+        except (IndexError, KeyError, ValueError):
+            rendered_prompt = str(prompt_template)
+    return {
+        "progress/edit": position,
+        "progress/edit_total": total,
+        "progress/edit_fraction": position / max(1, total),
+        "counterfact/index": case.get("dataset_index"),
+        "counterfact/case_id": str(case["case_id"]),
+        "counterfact/fact_tuple": json.dumps(list(fact), ensure_ascii=False),
+        "counterfact/prompt_template": prompt_template,
+        "counterfact/subject": subject,
+        "counterfact/target_new": target_new,
+        "counterfact/target_true": target_true,
+        "counterfact/original_text": (
+            f"{rendered_prompt}{target_true}" if rendered_prompt is not None and target_true is not None else None
+        ),
+        "counterfact/edited_text": (
+            f"{rendered_prompt}{target_new}" if rendered_prompt is not None and target_new is not None else None
+        ),
+    }
 
 
 def modified_weights(
@@ -191,10 +226,7 @@ def run_edit_method(
             **{
                 "monitor/stage": "edit",
                 "monitor/substage": "apply",
-                "case_id": case_id,
-                "progress/edit": index,
-                "progress/edit_total": len(test_cases),
-                "progress/edit_fraction": index / max(1, len(test_cases)),
+                **_counterfact_tracking_state(case, position=index, total=len(test_cases)),
             }
         )
         try:
@@ -248,16 +280,7 @@ def run_edit_method(
             )
             for capture_name, captured in case_captures.items():
                 captured_cases[capture_name].append(captured)
-            tracker.log(
-                {
-                    "edit/success": int(bool(outcome.success)),
-                    **{
-                        f"edit/{key}": value
-                        for key, value in outcome.metrics.items()
-                        if isinstance(value, (int, float, bool))
-                    },
-                }
-            )
+            tracker.log({"counterfact/status": "complete"})
         except Exception as exc:
             LOGGER.warning(
                 "Case failed: model=%s method=%s case=%s error=%s",
@@ -286,7 +309,7 @@ def run_edit_method(
                         "error": "edit execution failed",
                     }
                 )
-            tracker.log({"edit/success": 0, "edit/error": str(exc)})
+            tracker.log({"counterfact/status": "error", "counterfact/error": str(exc)})
         finally:
             restore(handler, outcome)
             if torch.cuda.is_available():

@@ -223,6 +223,69 @@ def _status_summary(
     return "unavailable", resolved_summary, "no analysis cases were available"
 
 
+def _analysis_tracking_metrics(
+    summary: Mapping[str, Any],
+    cases: Sequence[Mapping[str, Any]],
+    *,
+    expected_edited: bool,
+) -> dict[str, Any]:
+    """Return comparable success rates for localization and binary detectors."""
+    metrics: dict[str, Any] = {}
+    evaluated = int(summary.get("cases_evaluated", 0) or 0)
+    accuracy = summary.get("accuracy")
+    if evaluated > 0 and isinstance(accuracy, (int, float)):
+        metrics.update(
+            {
+                "analysis/success_rate": float(accuracy),
+                "analysis/successes": int(summary.get("correct", 0) or 0),
+                "analysis/evaluated": evaluated,
+            }
+        )
+    else:
+        decisions: list[bool] = []
+        for case in cases:
+            if case.get("status") != "complete":
+                continue
+            case_accuracy = case.get("accuracy", {})
+            correct = case_accuracy.get("correct") if isinstance(case_accuracy, Mapping) else None
+            if isinstance(correct, bool):
+                decisions.append(correct)
+                continue
+            data = case.get("data", {})
+            if not isinstance(data, Mapping):
+                continue
+            detected = data.get("model_detected")
+            if not isinstance(detected, bool):
+                detected = data.get("is_rome_like")
+            if isinstance(detected, bool):
+                decisions.append(detected is expected_edited)
+        if decisions:
+            successes = sum(decisions)
+            metrics.update(
+                {
+                    "analysis/success_rate": successes / len(decisions),
+                    "analysis/successes": successes,
+                    "analysis/evaluated": len(decisions),
+                }
+            )
+
+    experiments = summary.get("experiments", {})
+    if isinstance(experiments, Mapping):
+        for identifier, experiment in experiments.items():
+            if not isinstance(experiment, Mapping):
+                continue
+            complete = int(experiment.get("cases_complete", 0) or 0)
+            if complete <= 0:
+                continue
+            positives = int(experiment.get("positive_decisions", 0) or 0)
+            successes = positives if expected_edited else complete - positives
+            prefix = f"analysis/experiments/{identifier}"
+            metrics[f"{prefix}/success_rate"] = successes / complete
+            metrics[f"{prefix}/successes"] = successes
+            metrics[f"{prefix}/evaluated"] = complete
+    return metrics
+
+
 def run_analyses(
     run_root: str | Path,
     *,
@@ -427,6 +490,16 @@ def run_analyses(
                 )
                 writer.write(path, payload, force=force)
                 written.append(artifact_id)
+                success_metrics = _analysis_tracking_metrics(
+                    summary,
+                    cases,
+                    expected_edited=method_name is not None,
+                )
+                method_metrics = {
+                    f"analysis/methods/{identifier}/{key.removeprefix('analysis/')}": value
+                    for key, value in success_metrics.items()
+                    if key in {"analysis/success_rate", "analysis/successes", "analysis/evaluated"}
+                }
                 tracker.log(
                     {
                         "analysis/status": status,
@@ -434,6 +507,8 @@ def run_analyses(
                         "analysis/cases_complete": summary.get("cases_complete", 0),
                         "analysis/cases_unavailable": summary.get("cases_unavailable", 0),
                         "analysis/cases_error": summary.get("cases_error", 0),
+                        **success_metrics,
+                        **method_metrics,
                     }
                 )
                 if status == "error":

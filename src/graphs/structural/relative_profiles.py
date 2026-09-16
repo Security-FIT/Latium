@@ -315,7 +315,7 @@ def render_rome_relative_profile_grid(context: RenderContext) -> list[str]:
                 baseline = None
             stem = "relative_" + "_".join(safe_slug(str(value)) for value in (
                 table.model, table.plan_id, table.edit_method, producer, experiment_id,
-                table.config_hash or "nohash", table.artifact_id or "noartifact",
+                (table.config_hash or "nohash")[:12],
             ))
             entry: dict[str, Any] = {
                 "model": table.model, "plan_id": table.plan_id, "edit_method": table.edit_method,

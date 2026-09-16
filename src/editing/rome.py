@@ -13,6 +13,7 @@ import torch
 
 from src.editing.base import EditOutcome
 from src.evaluation.rome import compute_rome_metrics
+from src.tracking import current_tracker
 
 
 class RomeEditMethod:
@@ -28,14 +29,17 @@ class RomeEditMethod:
         )
 
         fact = case["fact_tuple"]
+        tracker = current_tracker()
         layer_name = handler._layer_name_template.format(handler._layer)
         old_weight = handler._get_module(layer_name).weight.detach().clone()
         try:
+            tracker.set_state(**{"monitor/substage": "rome_key"})
             probe_vector = gather_k(
                 handler,
                 fact_tuple=fact,
                 N=resolve_rome_sample_count(handler, "k_N"),
             )
+            tracker.set_state(**{"monitor/substage": "rome_optimize_value"})
             delta = optimize_v(
                 handler,
                 fact_tuple=fact,
@@ -44,6 +48,7 @@ class RomeEditMethod:
             )
             if delta is None:
                 raise RuntimeError("optimize_v returned None")
+            tracker.set_state(**{"monitor/substage": "rome_insert"})
             insert_kv(handler, probe_vector, delta)
             return EditOutcome(
                 success=True,

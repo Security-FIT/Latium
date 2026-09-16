@@ -33,6 +33,7 @@ from src.structural.capture.producers import CaptureContext, token_predictor_fro
 from src.structural.capture.registry import captures_require_probe, required_weight_families
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.worker_progress import effective_progress_interval
+from src.tracking import current_tracker
 
 
 LOGGER = logging.getLogger(__name__)
@@ -180,12 +181,25 @@ def run_edit_method(
     interval = effective_progress_interval(len(test_cases), config.progress_interval)
     weight_families = required_weight_families(capture_names)
     needs_token_predictor = captures_require_probe(capture_names)
+    tracker = current_tracker()
+    tracker.set_state(model=model, plan=plan.plan_id, edit_method=edit_method_name)
 
     for index, case in enumerate(test_cases, start=1):
         case_id = str(case["case_id"])
         outcome: Optional[EditOutcome] = None
+        tracker.set_state(
+            **{
+                "monitor/stage": "edit",
+                "monitor/substage": "apply",
+                "case_id": case_id,
+                "progress/edit": index,
+                "progress/edit_total": len(test_cases),
+                "progress/edit_fraction": index / max(1, len(test_cases)),
+            }
+        )
         try:
             outcome = method.apply(handler, case)
+            tracker.set_state(**{"monitor/substage": "evaluate"})
             metrics = method.evaluate(handler, case, outcome)
             outcome.metrics.update(metrics)
             if "efficacy_score" in metrics:
@@ -200,6 +214,7 @@ def run_edit_method(
                 outcome,
                 weight_families,
             )
+            tracker.set_state(**{"monitor/substage": "capture_artifacts"})
             capture_context = CaptureContext(
                 proj_weights=modified_proj,
                 fc_weights=modified_fc,
@@ -233,6 +248,16 @@ def run_edit_method(
             )
             for capture_name, captured in case_captures.items():
                 captured_cases[capture_name].append(captured)
+            tracker.log(
+                {
+                    "edit/success": int(bool(outcome.success)),
+                    **{
+                        f"edit/{key}": value
+                        for key, value in outcome.metrics.items()
+                        if isinstance(value, (int, float, bool))
+                    },
+                }
+            )
         except Exception as exc:
             LOGGER.warning(
                 "Case failed: model=%s method=%s case=%s error=%s",
@@ -261,6 +286,7 @@ def run_edit_method(
                         "error": "edit execution failed",
                     }
                 )
+            tracker.log({"edit/success": 0, "edit/error": str(exc)})
         finally:
             restore(handler, outcome)
             if torch.cuda.is_available():

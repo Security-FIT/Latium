@@ -99,6 +99,14 @@ _DEFAULTS: dict[str, Any] = {
     "progress_file": None,
     "progress_interval": 10,
     "worker_id": None,
+    "tracking_provider": "none",
+    "tracking_project": "latium",
+    "tracking_entity": None,
+    "tracking_mode": "online",
+    "tracking_run_name": None,
+    "tracking_group": None,
+    "tracking_tags": (),
+    "tracking_heartbeat_seconds": 60,
     "fail_on_missing_second_moment": False,
     "force": False,
     "case_dataset_name": "",
@@ -141,6 +149,7 @@ _DEFAULTS: dict[str, Any] = {
 _STR_TUPLE_FIELDS = {
     "models",
     "edit_methods",
+    "tracking_tags",
     "enable_captures",
     "disable_captures",
     "matrix_features",
@@ -157,6 +166,7 @@ _INT_FIELDS = {
     "run_start_idx_step",
     "runs_per_model",
     "progress_interval",
+    "tracking_heartbeat_seconds",
     "matrix_svd_top_k",
     "spectral_top_k",
     "spectral_neighbor_layers",
@@ -166,7 +176,16 @@ _INT_FIELDS = {
     "seed",
 }
 _OPTIONAL_INT_FIELDS = {"trim_first", "trim_last"}
-_OPTIONAL_STR_FIELDS = {"case_index_file", "run_id", "progress_file", "worker_id", "hf_token"}
+_OPTIONAL_STR_FIELDS = {
+    "case_index_file",
+    "run_id",
+    "progress_file",
+    "worker_id",
+    "tracking_entity",
+    "tracking_run_name",
+    "tracking_group",
+    "hf_token",
+}
 _BOOL_FIELDS = {
     "fail_on_missing_second_moment",
     "force",
@@ -322,6 +341,7 @@ def _validate_values(values: Mapping[str, Any]) -> None:
         "run_start_idx_step": 0,
         "runs_per_model": 1,
         "progress_interval": 1,
+        "tracking_heartbeat_seconds": 1,
         "matrix_svd_top_k": 1,
         "bottom_rank_top_svd_rank": 1,
         "bottom_rank_boundary": 0,
@@ -330,6 +350,10 @@ def _validate_values(values: Mapping[str, Any]) -> None:
         if int(values[field]) < minimum:
             raise ValueError(f"{field} must be at least {minimum}")
     _validate_analysis_values(values)
+    if values["tracking_provider"] not in {"none", "wandb"}:
+        raise ValueError("tracking_provider must be 'none' or 'wandb'")
+    if values["tracking_mode"] not in {"online", "offline", "disabled"}:
+        raise ValueError("tracking_mode must be 'online', 'offline', or 'disabled'")
     if not values["bottom_rank_sweep_ranks"] or any(rank < 1 for rank in values["bottom_rank_sweep_ranks"]):
         raise ValueError("bottom_rank_sweep_ranks must contain positive integers")
     if any("," in model or ";" in model for model in values["models"]):

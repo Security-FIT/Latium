@@ -49,6 +49,7 @@ def run_structural_command(cfg: DictConfig, name: str) -> int:
         run_root = path_or_none(analyze.get("run_root"))
         if run_root is None:
             raise ValueError("structural.analyze.run_root is required for command=structural/analyze")
+        tracking_config = structural_config_from_hydra(cfg, run_analysis=True)
         payload = run_structural_analysis(
             str(run_root),
             preset=str(analysis.get("preset", "paper")),
@@ -60,6 +61,7 @@ def run_structural_command(cfg: DictConfig, name: str) -> int:
                 analysis.get("continue_on_error", False),
                 name="structural.analysis.continue_on_error",
             ),
+            tracking_config=tracking_config,
         )
         write_or_print(payload, json_out)
         return 0

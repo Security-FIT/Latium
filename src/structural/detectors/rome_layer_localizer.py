@@ -17,6 +17,7 @@ EXPERIMENT_CAPTURE_VERSION = "gram-experiments-v1"
 EXPERIMENT_GROUPS = ("neighbors", "quadratic", "footprint")
 DEFAULT_EXPERIMENT_GROUPS = ("neighbors",)
 DEFAULT_TRIM_FRACTION = 0.10
+RELATIVE_DECISION_VERSION = "relative-profile-b0-v1"
 _SVD_SEED = 433494437
 
 
@@ -264,6 +265,188 @@ def _least_squares_rss(values: torch.Tensor, design: torch.Tensor) -> tuple[floa
     return float(torch.dot(residual, residual).item()), coefficients
 
 
+def relative_profile_decision(
+    layer_scores: Mapping[str, float],
+    *,
+    eligible_layers: list[int] | tuple[int, ...] | None = None,
+    experiment_id: str = "original-v3-relative-b0-v1",
+    original_localizer_layer: int | None = None,
+) -> dict[str, Any]:
+    """Compare ordinary profiles with a jointly fitted positive excursion."""
+    diagnostics: dict[str, Any] = {"transform": "log1p"}
+
+    def unavailable(reason: str) -> dict[str, Any]:
+        return {
+            "experiment_id": experiment_id,
+            "decision_version": RELATIVE_DECISION_VERSION,
+            "status": "unavailable",
+            "rome_compatible_detected": None,
+            "is_rome_like": None,
+            "candidate_layer": None,
+            "original_localizer_layer": original_localizer_layer,
+            "eligible_layers": [] if eligible_layers is None else [int(value) for value in eligible_layers],
+            "layer_scores": {},
+            "background_cost": None,
+            "anomaly_cost": None,
+            "gain": None,
+            "diagnostics": {**diagnostics, "reason": reason},
+        }
+
+    try:
+        score_by_layer = {int(layer): float(score) for layer, score in layer_scores.items()}
+    except (TypeError, ValueError) as exc:
+        return unavailable(f"invalid profile: {exc}")
+    declared = sorted(score_by_layer) if eligible_layers is None else [int(layer) for layer in eligible_layers]
+    if len(set(declared)) != len(declared):
+        return unavailable("eligible layers must be unique")
+    declared = sorted(declared)
+    declared_set = set(declared)
+    missing = [layer for layer in declared if layer not in score_by_layer]
+    diagnostics["extra_profile_layers"] = [layer for layer in score_by_layer if layer not in declared_set]
+    if missing:
+        return unavailable(f"incomplete eligible profile; missing layers {missing[:8]}")
+    if len(declared) < 6:
+        return unavailable("relative profile comparison requires at least six eligible observations")
+    scores = [score_by_layer[layer] for layer in declared]
+    if any(not math.isfinite(score) or score < 0.0 for score in scores):
+        return unavailable("profile scores must be finite and non-negative")
+
+    values = torch.log1p(torch.tensor(scores, dtype=torch.float64))
+    if bool(torch.all(values == values[0])):
+        return unavailable("profile is numerically constant")
+    coordinates = torch.tensor(declared, dtype=torch.float64)
+    coordinate_range = float((coordinates[-1] - coordinates[0]).item())
+    if coordinate_range <= 0.0:
+        return unavailable("layer coordinates have no range")
+    depth = (coordinates - coordinates[0]) / coordinate_range
+    n = len(declared)
+    family_penalty = 2.0 * math.log(3.0)
+    resolution = numerical_tolerance(
+        values.dtype,
+        n,
+        max(1.0, float(torch.linalg.vector_norm(values).item())),
+    ) ** 2
+    diagnostics.update({
+        "actual_layer_coordinates": declared,
+        "scaled_layer_coordinates": depth.tolist(),
+        "rss_resolution": resolution,
+        "family_search_penalty": family_penalty,
+    })
+
+    affine = torch.stack((torch.ones_like(depth), depth), dim=1)
+    background_designs: list[dict[str, Any]] = [
+        {"family": "affine", "design": affine, "split": None, "search_cost": family_penalty},
+        {
+            "family": "quadratic",
+            "design": torch.column_stack((affine, depth.square())),
+            "split": None,
+            "search_cost": family_penalty,
+        },
+    ]
+    permitted_splits = list(range(2, n - 1))
+    split_penalty = 2.0 * math.log(len(permitted_splits))
+    for split in permitted_splits:
+        step = (torch.arange(n, dtype=torch.int64) >= split).to(torch.float64)
+        background_designs.append({
+            "family": "affine-plus-step",
+            "design": torch.column_stack((affine, step)),
+            "split": split,
+            "search_cost": family_penalty + split_penalty,
+        })
+    diagnostics["step_split_count"] = len(permitted_splits)
+    diagnostics["split_search_penalty"] = split_penalty
+
+    background_fits: list[dict[str, Any]] = []
+    anomaly_fits: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    for spec in background_designs:
+        design = spec["design"]
+        try:
+            rss, coefficients = _least_squares_rss(values, design)
+        except ValueError as exc:
+            rejected.append({"family": spec["family"], "split": spec["split"], "reason": str(exc)})
+            continue
+        if n - design.shape[1] <= 0:
+            continue
+        rss = max(rss, resolution)
+        background_fits.append({
+            **spec,
+            "rss": rss,
+            "coefficients": coefficients.tolist(),
+            "cost": n * math.log(rss / n) + design.shape[1] * math.log(n) + spec["search_cost"],
+        })
+        candidates: list[dict[str, Any]] = []
+        for index, layer in enumerate(declared):
+            excursion = torch.zeros(n, dtype=torch.float64)
+            excursion[index] = 1.0
+            try:
+                anomaly_rss, anomaly_coefficients = _constrained_profile_fit(values, design, [excursion])
+            except ValueError:
+                continue
+            if n - (design.shape[1] + 1) <= 0:
+                continue
+            candidates.append({
+                "candidate_layer": layer,
+                "rss": max(anomaly_rss, resolution),
+                "coefficients": anomaly_coefficients.tolist(),
+                "amplitude": float(anomaly_coefficients[-1].item()),
+            })
+        location_count = len(candidates)
+        if not location_count:
+            continue
+        location_penalty = 2.0 * math.log(location_count)
+        for candidate in candidates:
+            candidate.update({
+                "family": spec["family"],
+                "split": spec["split"],
+                "location_count": location_count,
+                "location_search_penalty": location_penalty,
+                "cost": (
+                    n * math.log(candidate["rss"] / n)
+                    + (design.shape[1] + 1) * math.log(n)
+                    + spec["search_cost"]
+                    + location_penalty
+                ),
+            })
+            anomaly_fits.append(candidate)
+
+    diagnostics["rejected_fits"] = rejected
+    if not background_fits or not anomaly_fits:
+        return unavailable("no identifiable background/anomaly comparison")
+    best_background = min(
+        background_fits,
+        key=lambda fit: (fit["cost"], fit["family"], -1 if fit["split"] is None else fit["split"]),
+    )
+    best_anomaly = min(
+        anomaly_fits,
+        key=lambda fit: (fit["cost"], fit["candidate_layer"], fit["family"]),
+    )
+    gain = float(best_background["cost"] - best_anomaly["cost"])
+    raw_maximum = min(declared, key=lambda layer: (-score_by_layer[layer], layer))
+    original = raw_maximum if original_localizer_layer is None else int(original_localizer_layer)
+    diagnostics.update({
+        "raw_profile_maximum": raw_maximum,
+        "selected_background": {key: value for key, value in best_background.items() if key != "design"},
+        "selected_anomaly": best_anomaly,
+    })
+    detected = bool(best_anomaly["cost"] < best_background["cost"])
+    return {
+        "experiment_id": experiment_id,
+        "decision_version": RELATIVE_DECISION_VERSION,
+        "status": "complete",
+        "rome_compatible_detected": detected,
+        "is_rome_like": detected,
+        "candidate_layer": int(best_anomaly["candidate_layer"]),
+        "original_localizer_layer": original,
+        "eligible_layers": declared,
+        "layer_scores": {str(layer): score_by_layer[layer] for layer in declared},
+        "background_cost": float(best_background["cost"]),
+        "anomaly_cost": float(best_anomaly["cost"]),
+        "gain": gain,
+        "diagnostics": diagnostics,
+    }
+
+
 def profile_mdl(
     layer_scores: Mapping[str, float],
     *,
@@ -336,6 +519,7 @@ def profile_mdl(
 
 
 PROFILE_EXPERIMENTS: dict[str, dict[str, Any]] = {
+    "original-v3-relative-b0-v1": {"relative": True},
     "affine-mdl-v1": {"degree": 1, "log_transform": True, "include_step_competitor": False},
     "affine-raw-mdl-v1": {"degree": 1, "log_transform": False, "include_step_competitor": False},
     "quadratic-mdl-v1": {"degree": 2, "log_transform": True, "include_step_competitor": False},
@@ -357,6 +541,16 @@ MATRIX_SCORE_FIELDS: dict[str, str] = {
     "refined-ratio-affine-mdl-v1": "refined_ratio_score",
     "bounded-affine-mdl-v1": "bounded_contrast_score",
     "quadratic-neighbor-affine-mdl-v1": "quadratic_score",
+}
+
+RELATIVE_MATRIX_SCORE_FIELDS: dict[str, str] = {
+    "v0-relative-b0-v1": "original_score",
+    "v0r-relative-b0-v1": "refined_ratio_score",
+    "v1-relative-b0-v1": "centered_directional_score",
+    "v2-relative-b0-v1": "standardized_directional_score",
+    "lof-relative-b0-v1": "lof_score",
+    "decomposition-relative-b0-v1": "decomposition_score",
+    "token-alignment-relative-b0-v1": "alignment_score",
 }
 
 
@@ -424,7 +618,15 @@ def evaluate_profile_experiments(
     output: dict[str, Any] = {}
     for identifier in experiments:
         if identifier in PROFILE_EXPERIMENTS:
-            output[identifier] = profile_mdl(scores, **PROFILE_EXPERIMENTS[identifier])
+            settings = PROFILE_EXPERIMENTS[identifier]
+            if settings.get("relative"):
+                output[identifier] = relative_profile_decision(
+                    scores,
+                    eligible_layers=sorted(int(layer) for layer in scores),
+                    experiment_id=identifier,
+                )
+            else:
+                output[identifier] = profile_mdl(scores, **settings)
         elif identifier in LOCAL_PROFILE_EXPERIMENTS:
             output[identifier] = local_profile_diagnostics(scores, **LOCAL_PROFILE_EXPERIMENTS[identifier])
         else:
@@ -440,6 +642,27 @@ def evaluate_matrix_experiments(
     profiles = capture.get("profiles", {})
     output: dict[str, Any] = {}
     for identifier in experiments:
+        if identifier in RELATIVE_MATRIX_SCORE_FIELDS:
+            field = RELATIVE_MATRIX_SCORE_FIELDS[identifier]
+            scores = {
+                str(int(layer)): float(profile[field])
+                for layer, profile in profiles.items()
+                if field in profile and profile[field] is not None and math.isfinite(float(profile[field]))
+            }
+            declared = [int(layer) for layer in capture.get("eligible_layers", sorted(int(value) for value in profiles))]
+            raw_scores = {
+                int(layer): float(profile.get("original_score", profile.get(field, 0.0)))
+                for layer, profile in profiles.items()
+                if profile.get("original_score", profile.get(field)) is not None
+            }
+            original = min(raw_scores, key=lambda layer: (-raw_scores[layer], layer)) if raw_scores else None
+            output[identifier] = relative_profile_decision(
+                scores,
+                eligible_layers=declared,
+                experiment_id=identifier,
+                original_localizer_layer=original,
+            )
+            continue
         if identifier == "signed-footprint-mdl-v1":
             gains = {
                 str(int(layer)): float(profile["footprint_gain"])
@@ -871,6 +1094,8 @@ __all__ = [
     "MATRIX_SCORE_FIELDS",
     "PROFILE_FIELDS",
     "PROFILE_EXPERIMENTS",
+    "RELATIVE_DECISION_VERSION",
+    "RELATIVE_MATRIX_SCORE_FIELDS",
     "RomeLayerLocalizer",
     "SCORE_FIELD",
     "capture_experiment_weights",
@@ -885,6 +1110,7 @@ __all__ = [
     "neighbor_experiment_measurements",
     "numerical_tolerance",
     "profile_mdl",
+    "relative_profile_decision",
     "profile_weights",
     "quadratic_experiment_measurements",
     "score_layer",

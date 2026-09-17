@@ -18,6 +18,14 @@ if [[ -f "$ROOT/jobs/local.env" ]]; then
   source "$ROOT/jobs/local.env"
 fi
 
+# Variables sourced from local.env are shell-local unless explicitly exported.
+# Export only the credential/tracking variables consumed by child processes.
+for name in HF_TOKEN HUGGINGFACE_HUB_TOKEN WANDB_API_KEY WANDB_ENTITY WANDB_PROJECT; do
+  if [[ -n "${!name:-}" ]]; then
+    export "$name"
+  fi
+done
+
 if [[ -n "${LATIUM_ENV:-}" ]]; then
   [[ -x "$LATIUM_ENV/bin/python" ]] || die "LATIUM_ENV has no Python: $LATIUM_ENV"
   export PATH="$LATIUM_ENV/bin:$PATH"
@@ -46,6 +54,8 @@ export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
 export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+export WANDB_DIR="${WANDB_DIR:-$SCRATCHDIR/wandb}"
+mkdir -p "$WANDB_DIR"
 
 LATIUM_ARG_COUNT="${LATIUM_ARG_COUNT:-1}"
 [[ "$LATIUM_ARG_COUNT" =~ ^[0-9]+$ ]] || die "LATIUM_ARG_COUNT is invalid: $LATIUM_ARG_COUNT"
@@ -84,6 +94,9 @@ case "${LATIUM_RUNNER:-latium}" in
     ;;
   causal-rome)
     RUN_COMMAND=(python "$ROOT/jobs/causal_rome_pipeline.py" "${LATIUM_ARGS[@]}")
+    ;;
+  paper-fleet)
+    RUN_COMMAND=(python "$ROOT/jobs/paper_fleet.py" "${LATIUM_ARGS[@]}")
     ;;
   *)
     die "Unknown LATIUM_RUNNER: ${LATIUM_RUNNER}"

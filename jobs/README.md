@@ -57,6 +57,38 @@ Arguments after `--` are passed exactly. Preset defaults come first, so
 user-supplied command overrides win. Merged PBS stdout/stderr is written below
 `jobs/logs/`.
 
+## Parallel paper fleet
+
+The paper fleet is submitted as one independent PBS worker per model. Every
+worker runs the confirmed causal trace first, checks that the selected trace
+module is compatible with the model's ROME projection template, reuses or
+computes the selected-layer second moment in `data/second_moment_stats/`, and
+then runs the baseline plus ROME-edited structural analyses. CCS-paper,
+paper-improvements localization, relative ROME analyses, and both graph
+presets are retained. Graph images are PNG-only and their machine-readable
+JSON sidecars/indexes are retained; PDF case pages are disabled.
+
+Start with the smallest model as a smoke test:
+
+```bash
+bash jobs/submit_paper_fleet.sh --smoke
+```
+
+After the smoke worker completes successfully, submit all requested models in
+parallel:
+
+```bash
+bash jobs/submit_paper_fleet.sh
+```
+
+The default is ROME/structural `n=50`, 100,000 second-moment samples, 40 GB
+GPU memory, and 96 GB host memory. `gemma-4-12b` is automatically requested
+with 64 GB GPU memory, 128 GB host memory, and a 96-hour walltime. Override
+these values with launcher options or `LATIUM_*` environment variables. Use
+`qstat -u olexamatej` to monitor workers; each model writes `state.json`,
+`model.log`, causal-trace outputs, structural artifacts, graphs, and a worker
+summary below the shared run root.
+
 Useful submission options:
 
 ```text

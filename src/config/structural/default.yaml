@@ -132,9 +132,16 @@ analysis:
 render:
   enabled: false
   continue_on_error: false
-  renderer_preset: none
+  renderer_preset: ccs-report
+  style_preset: default
   enable: []
   disable: []
+  renderers:
+    structural-ccs-lines:
+      formats:
+        - png
+        - pdf
+        - json
 
 output:
   json_out: null

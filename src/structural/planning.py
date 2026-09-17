@@ -310,6 +310,8 @@ def build_plan_summary(
         'resolved_analyses': list(analysis_names),
         'run_analysis': config.run_analysis,
         'renderer_preset': config.renderer_preset,
+        'renderer_style_preset': config.renderer_style_preset,
+        'renderer_options': config.renderer_options,
         'enable_renderers': list(config.enable_renderers),
         'disable_renderers': list(config.disable_renderers),
         'resolved_renderers': list(renderer_names),

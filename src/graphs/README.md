@@ -20,6 +20,19 @@ Built-in renderers:
 - `detector-signals`: per-case layer signal profile plots.
 - `structural-artifact-grid`: fixed 5x4 matrix artifact grid from
   current `matrix-features` artifacts.
+- `structural-ccs-lines`: six panels of spectral gap and top-1 energy at raw,
+  window-5, and window-7 scale. Each panel shows individual edited cases,
+  their mean and spread, and the matched unedited mean.
+
+`ccs-report` selects `paper`, `detector`, `rome-success`, `detector-window`,
+and `structural-ccs-lines` together. It requires all report figures and their
+inputs to be present; missing output makes the command fail. The old
+aggregate-only renderer preset `paper` is retired. The `paper` renderer itself
+still writes the report's machine-readable summary.
+
+For a new CCS run, use `python -m src structural run structural=ccs-report`
+with the desired model and case overrides. For saved artifacts, use
+`python -m src graphs run <run-root>`; this also defaults to `ccs-report`.
 
 ## Add A Renderer
 
@@ -37,7 +50,8 @@ Older generic renderers may still call `context.as_mapping()` internally as a
 compatibility bridge, but new graph makers should use `RenderContext` directly.
 
 Renderer options are configured through Hydra under
-`graphs.renderers.<renderer-id>`. For example:
+`graphs.renderers.<renderer-id>` for re-rendering and
+`structural.render.renderers.<renderer-id>` for end-to-end runs. For example:
 
 ```bash
 python -m src graphs run analysis_out/run-id \

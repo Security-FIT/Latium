@@ -13,7 +13,7 @@ from typing import Any
 
 from src.editing.registry import EDIT_METHODS
 from src.graphs.registry import resolve_renderers
-from src.structural.analysis.registry import resolve_analyses
+from src.structural.analysis.registry import ANALYSES, resolve_analyses, supports_model
 from src.structural.analysis.runtime import run_analyses
 from src.structural.capture.registry import resolve_capture_plan
 from src.structural.config import StructuralBenchmarkConfig
@@ -44,6 +44,12 @@ def validate_structural_config(config: StructuralBenchmarkConfig) -> None:
         enabled=config.enable_renderers,
         disabled=config.disable_renderers,
     )
+    if config.render_graphs and config.renderer_preset == "ccs-report":
+        if not config.run_analysis or "ccs-composite" not in analysis_names:
+            raise ValueError("ccs-report requires the ccs-composite analysis")
+        unsupported = [model for model in config.models if not supports_model(ANALYSES.get("ccs-composite"), model)]
+        if unsupported:
+            raise ValueError(f"ccs-report requires CCS-supported models: {', '.join(unsupported)}")
     capture_plan = resolve_capture_plan(
         config.capture_profile,
         enabled=config.enable_captures,
@@ -117,6 +123,8 @@ def run_structural_benchmark(
             preset=resolved.renderer_preset,
             enabled=resolved.enable_renderers,
             disabled=resolved.disable_renderers,
+            style_preset=resolved.renderer_style_preset,
+            renderer_options=resolved.renderer_options,
             force=resolved.force,
             continue_on_error=resolved.render_continue_on_error,
         )

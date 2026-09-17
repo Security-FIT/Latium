@@ -78,12 +78,22 @@ RENDERERS = NamedRegistry(
             required_matrix_features=PAPER_FEATURES,
             option_keys=("features", "transforms", "formats"),
         ),
+        RendererSpec(
+            "structural-ccs-lines",
+            "Six-panel CCS matrix-feature curves for edited cases and baseline.",
+            "src.graphs.structural.ccs_lines:render_structural_ccs_lines",
+            requires_execution=True,
+            required_captures=("matrix-features",),
+            required_matrix_features=("spectral_gap", "top1_energy"),
+            required_analyses=("ccs-composite",),
+            option_keys=("formats",),
+        ),
     ]
 )
 
 RENDERER_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
-    "paper": ("paper", "detector", "rome-success", "detector-window"),
+    "ccs-report": ("paper", "detector", "rome-success", "detector-window", "structural-ccs-lines"),
     "structural-paper": ("structural-artifact-grid",),
     "structural-full": ("structural-artifact-grid",),
     "full": RENDERERS.identifiers(),
@@ -96,6 +106,12 @@ def resolve_renderers(
     enabled: Sequence[str] = (),
     disabled: Sequence[str] = (),
 ) -> tuple[str, ...]:
+    if preset == "paper":
+        raise ValueError("Aggregate-only renderer preset 'paper' was retired; use 'ccs-report'")
+    if preset == "ccs-report":
+        omitted = set(disabled) & set(RENDERER_PRESETS["ccs-report"])
+        if omitted:
+            raise ValueError(f"ccs-report cannot disable required renderers: {', '.join(sorted(omitted))}")
     return resolve_preset_selection(
         RENDERER_PRESETS,
         RENDERERS,

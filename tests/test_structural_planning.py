@@ -305,6 +305,7 @@ def test_end_to_end_pipeline_analyzes_before_rendering(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
+    render_kwargs: dict[str, object] = {}
 
     def capture(_config):
         events.append("capture")
@@ -314,8 +315,9 @@ def test_end_to_end_pipeline_analyzes_before_rendering(
         events.append("analyze")
         return {"written": []}
 
-    def render(*_args, **_kwargs):
+    def render(*_args, **kwargs):
         events.append("render")
+        render_kwargs.update(kwargs)
         return {"written": []}
 
     monkeypatch.setattr("src.structural.runner.run_structural_capture", capture)
@@ -324,14 +326,27 @@ def test_end_to_end_pipeline_analyzes_before_rendering(
 
     result = run_structural_benchmark(
         StructuralBenchmarkConfig(
-            models=("gpt2-large",),
+            models=("qwen3-4b",),
             render_graphs=True,
-            renderer_preset="paper",
+            renderer_preset="ccs-report",
+            renderer_style_preset="default",
+            renderer_options={"structural-ccs-lines": {"formats": ["png", "pdf", "json"]}},
         )
     )
 
     assert events == ["capture", "analyze", "render"]
     assert result["render"] == {"written": []}
+    assert render_kwargs["preset"] == "ccs-report"
+    assert render_kwargs["renderer_options"] == {
+        "structural-ccs-lines": {"formats": ["png", "pdf", "json"]}
+    }
+
+
+def test_ccs_report_rejects_unsupported_models_before_capture() -> None:
+    with pytest.raises(ValueError, match="CCS-supported models"):
+        validate_structural_config(
+            StructuralBenchmarkConfig(models=("gpt2-large",), render_graphs=True, renderer_preset="ccs-report")
+        )
 
 
 def test_importing_planning_module_does_not_import_torch() -> None:

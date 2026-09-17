@@ -28,16 +28,18 @@ python3 -m src structural plan \
 Common structural overrides:
 
 ```bash
-structural.capture.profile=paper
-structural.capture.matrix_features.feature_set=paper
-structural.render.renderer_preset=structural-paper
-graphs.renderer_preset=structural-paper
-graphs.renderers.structural-artifact-grid.formats='[png,pdf,json]'
+python3 -m src structural plan structural=ccs-report 'structural.run.models=[qwen3-4b]'
+python3 -m src structural run structural=ccs-report 'structural.run.models=[qwen3-4b]'
+python3 -m src graphs run analysis_out/run-id
 ```
 
 Use `structural.capture.profile=spectral` for spectral-only primitives,
 `structural.capture.profile=matrix` for matrix-features only, and
-`structural.capture.profile=paper` for the paper graph/analysis path.
+`structural.capture.profile=paper` to explicitly request both paper captures.
+The `ccs-report` workflow enables the paper analysis and all five report
+renderers, and capture planning adds their required inputs. The graph command
+defaults to the same bundle; `graphs.renderer_preset=paper` is retired so it
+cannot produce only aggregate summaries by mistake.
 For an end-to-end `structural run`, selecting an analysis preset automatically
 adds its required captures and matrix columns, so a detector does not require a
 matching capture-profile override. Every analysis ID, including

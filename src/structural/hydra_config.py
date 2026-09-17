@@ -101,7 +101,8 @@ SPECS: Mapping[str, Spec] = {
     "disable_analyses": ("analysis", "disable", (), _to_str_tuple),
     "analysis_continue_on_error": ("analysis", "continue_on_error", False, _to_bool),
     "render_graphs": ("render", "enabled", False, _to_bool),
-    "renderer_preset": ("render", "renderer_preset", "none", str),
+    "renderer_preset": ("render", "renderer_preset", "ccs-report", str),
+    "renderer_style_preset": ("render", "style_preset", "default", str),
     "enable_renderers": ("render", "enable", (), _to_str_tuple),
     "disable_renderers": ("render", "disable", (), _to_str_tuple),
     "render_continue_on_error": ("render", "continue_on_error", False, _to_bool),
@@ -146,6 +147,10 @@ def _rome_experiment_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _renderer_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
+    return {"renderer_options": _dict_section(_section(structural, "render"), "renderers")}
+
+
 def _runtime_settings(cfg: DictConfig) -> dict[str, Any]:
     runtime = cfg.runtime
     return {
@@ -175,6 +180,7 @@ def structural_config_from_hydra(
         **analysis_variant_settings(structural),
         **_matrix_feature_settings(structural),
         **_rome_experiment_settings(structural),
+        **_renderer_settings(structural),
         **_bottom_rank_settings(structural),
         analysis_method_configs=_dict_section(analysis, "methods"),
         run_analysis=run_analysis,

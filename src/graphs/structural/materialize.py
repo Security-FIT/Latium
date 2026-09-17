@@ -25,6 +25,7 @@ class MatrixFeatureTable:
     layers: np.ndarray
     values: dict[str, np.ndarray]
     case_count: int
+    case_ids: tuple[str, ...]
 
 
 def run_key(payload: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
@@ -56,6 +57,7 @@ def matrix_feature_table(
 ) -> MatrixFeatureTable:
     run = payload.get("run", {})
     case_profiles: list[dict[int, dict[str, Any]]] = []
+    case_ids: list[str] = []
     for case in payload.get("cases", []):
         if not isinstance(case, dict) or case.get("status") != "complete":
             continue
@@ -76,6 +78,7 @@ def matrix_feature_table(
             normalized[layer] = profile
         if normalized:
             case_profiles.append(normalized)
+            case_ids.append(str(case.get("case_id", len(case_profiles) - 1)))
 
     layers = sorted({layer for profiles in case_profiles for layer in profiles})
     if not layers:
@@ -96,6 +99,7 @@ def matrix_feature_table(
         layers=np.asarray(layers, dtype=int),
         values=arrays,
         case_count=len(case_profiles),
+        case_ids=tuple(case_ids),
     )
 
 

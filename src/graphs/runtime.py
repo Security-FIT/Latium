@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -17,10 +18,19 @@ from src.results import ArtifactWriter, RunArtifactReader, build_artifact, confi
 from src.results.ids import render_id
 
 
+REPORT_OUTPUT_SUFFIXES: dict[str, tuple[str, ...]] = {
+    "paper": (".json",),
+    "detector": (".png",),
+    "rome-success": (".png",),
+    "detector-window": (".png",),
+    "structural-ccs-lines": (".png", ".pdf", ".json"),
+}
+
+
 def render_run(
     run_root: str | Path,
     *,
-    preset: str = "paper",
+    preset: str = "ccs-report",
     enabled: Sequence[str] = (),
     disabled: Sequence[str] = (),
     style_preset: str = "default",
@@ -42,7 +52,9 @@ def render_run(
     written: list[str] = []
     skipped: list[str] = []
     failures: list[str] = []
+    report_failures: list[str] = []
     configured_options = dict(renderer_options or {})
+    complete_report = preset == "ccs-report"
 
     for renderer_id in renderer_ids:
         spec = RENDERERS.get(renderer_id)
@@ -67,7 +79,13 @@ def render_run(
             expected_config_hash=digest,
             inputs=inputs,
         )
-        if not force and current is not None:
+        current_complete = (
+            complete_report
+            and current is not None
+            and current.get("status") == "complete"
+            and _render_outputs_exist(root, current)
+        )
+        if not force and current is not None and (not complete_report or current_complete):
             skipped.append(artifact_id)
             continue
         output_dir = root / "graphs" / renderer_id
@@ -89,6 +107,9 @@ def render_run(
                 outputs = spec.load()(context)
                 status = "complete" if outputs else "unavailable"
                 error = None if outputs else "renderer produced no outputs"
+                if complete_report and outputs and not _report_outputs_valid(renderer_id, outputs):
+                    status = "error"
+                    error = "required report files were not produced"
             except RendererUnavailableError as exc:
                 outputs = []
                 status = "unavailable"
@@ -98,6 +119,8 @@ def render_run(
                 status = "error"
                 error = str(exc)
                 failures.append(f"{renderer_id}: {exc}")
+        if complete_report and status != "complete":
+            report_failures.append(f"{renderer_id}: {error}")
         payload = build_artifact(
             artifact_id=artifact_id,
             kind="render",
@@ -117,9 +140,11 @@ def render_run(
             },
             error=error,
         )
-        writer.write(output_dir / "artifact.json", payload, force=force)
+        writer.write(output_dir / "artifact.json", payload, force=force or (complete_report and current is not None))
         written.append(artifact_id)
 
+    if report_failures:
+        raise RenderExecutionError("ccs-report incomplete: " + "; ".join(report_failures))
     if failures and not continue_on_error:
         raise RenderExecutionError("renderer failures: " + "; ".join(failures))
 
@@ -209,3 +234,30 @@ def _relative_output_path(root: Path, output: str) -> str:
         return str(path.relative_to(root))
     except ValueError:
         return str(path)
+
+
+def _render_outputs_exist(root: Path, record: Mapping[str, Any]) -> bool:
+    try:
+        artifact_path = (root / str(record["path"])).resolve()
+        if not artifact_path.is_relative_to(root.resolve()):
+            return False
+        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        outputs = artifact["summary"]["outputs"]
+        if not outputs:
+            return False
+        for output in outputs:
+            path = (root / str(output)).resolve()
+            if not path.is_relative_to(root.resolve()) or not path.is_file():
+                return False
+        return _report_outputs_valid(str(record["producer"]), [(root / str(output)) for output in outputs])
+    except (KeyError, OSError, TypeError, ValueError):
+        return False
+
+
+def _report_outputs_valid(renderer_id: str, outputs: Sequence[str | Path]) -> bool:
+    paths = [Path(output) for output in outputs]
+    return (
+        bool(paths)
+        and all(path.is_file() for path in paths)
+        and all(any(path.suffix == suffix for path in paths) for suffix in REPORT_OUTPUT_SUFFIXES.get(renderer_id, ()))
+    )

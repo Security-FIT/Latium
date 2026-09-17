@@ -136,7 +136,9 @@ _DEFAULTS: dict[str, Any] = {
     "analysis_continue_on_error": False,
     "render_graphs": False,
     "render_continue_on_error": False,
-    "renderer_preset": "none",
+    "renderer_preset": "ccs-report",
+    "renderer_style_preset": "default",
+    "renderer_options": {},
     "enable_renderers": (),
     "disable_renderers": (),
     "seed": 0,
@@ -279,6 +281,10 @@ def _normalize_field(field: str, value: Any) -> Any:
     if field == "analysis_method_configs":
         if not isinstance(value, Mapping) or any(not isinstance(item, Mapping) for item in value.values()):
             raise TypeError("analysis_method_configs must map method names to mappings")
+        return {str(key): dict(item) for key, item in value.items()}
+    if field == "renderer_options":
+        if not isinstance(value, Mapping) or any(not isinstance(item, Mapping) for item in value.values()):
+            raise TypeError("renderer_options must map renderer names to mappings")
         return {str(key): dict(item) for key, item in value.items()}
     return value
 

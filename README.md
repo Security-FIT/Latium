@@ -65,32 +65,29 @@ python3 -m src structural plan \
   structural.capture.profile=paper
 ```
 
-Capture edits, run model-free analyses, and render graph artifacts:
+Run the complete CCS report, including accuracy, ROME success, layer-window
+accuracy, paper JSON, and the six-panel per-layer signal figure:
 
 ```bash
 python3 -m src structural run \
-  'structural.run.models=[gpt2-large]' \
+  structural=ccs-report \
+  'structural.run.models=[qwen3-4b]' \
   structural.run.n_tests=30 \
-  structural.analysis.preset=paper \
-  structural.render.enabled=true \
-  structural.render.renderer_preset=structural-paper \
-  structural.run.run_id=gpt2-large-paper
+  structural.run.run_id=qwen3-4b-ccs-report
 ```
 
-Analyze or render an existing run root:
+Plan that workflow or re-render a saved run with the same complete report:
 
 ```bash
-python3 -m src structural analyze \
-  structural.analyze.run_root=analysis_out/gpt2-large-paper \
-  structural.analysis.preset=paper
+python3 -m src structural plan structural=ccs-report 'structural.run.models=[qwen3-4b]'
 
-python3 -m src graphs run analysis_out/gpt2-large-paper graphs.renderer_preset=structural-paper
+python3 -m src graphs run analysis_out/qwen3-4b-ccs-report
 ```
 
-The graph renderer registry includes paper summaries, detector accuracy,
-ROME-success metrics, layer-window accuracy, detector signal-profile plots, and
-the structural artifact grid. Use `graphs.renderer_preset=full` or enable
-individual renderers such as `graphs.enable_renderers=[detector-signals]`.
+`graphs run` defaults to `ccs-report`; the former aggregate-only renderer preset
+`paper` now raises an error. `structural.analysis.preset=paper` still names the
+analysis selection and is set by the workflow. The 5x4 structural artifact
+grid remains available separately as `structural-paper`.
 
 Structural runs derive capture requirements from the selected analyses. For
 example, `structural.analysis.preset=ccs-composite` automatically captures its

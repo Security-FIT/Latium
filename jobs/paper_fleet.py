@@ -559,7 +559,10 @@ class FleetRunner:
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-root", default=str(ROOT / "analysis_out" / "paper-fleet" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")))
-    parser.add_argument("--python", default=str(ROOT / ".venv" / "bin" / "python"))
+    # run.pbs selects the configured MetaCentrum environment on PATH. Reuse
+    # the interpreter that launched this driver so child stages do not fall
+    # back to a repository-local .venv that may not exist.
+    parser.add_argument("--python", default=os.environ.get("LATIUM_PYTHON", sys.executable))
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_MODELS))
     parser.add_argument("--n-tests", type=int, default=50)
     parser.add_argument("--trace-facts", type=int, default=50)

@@ -357,42 +357,58 @@ class FleetRunner:
             from src.common.model_config import load_model_config
 
             model_config = load_model_config(model)
-            trace_root = model_dir / "causal-trace"
-            trace_stage = state["stages"].get("causal_trace", {})
-            trace_summary_exists = any(trace_root.glob("*/summary.json"))
-            trace_resume_valid = bool(
-                trace_stage.get("complete")
-                and trace_stage.get("trace_module")
-                and trace_summary_exists
-            )
-            if not trace_resume_valid:
-                trace_command = [
-                    self.python,
-                    "-m",
-                    "src",
-                    "causal-trace",
-                    f"model={model}",
-                    f"command.causal_trace.output_dir={trace_root}",
-                    f"command.causal_trace.num_valid_facts={self.args.trace_facts}",
-                    f"command.causal_trace.minimum_confirmation_facts={self.args.minimum_confirmation_facts}",
-                    f"command.causal_trace.bootstrap_samples={self.args.trace_bootstrap_samples}",
-                    "command.causal_trace.overwrite_model_config_layer=false",
-                ]
-                run_logged(trace_command, stage="causal-trace", model=model)
-            trace_check = verify_causal_trace(
-                trace_root,
-                model=model,
-                model_config=model_config,
-            )
-            selected_layer = int(trace_check["selected_layer"])
+            if self.args.skip_causal_trace:
+                selected_layer = int(getattr(model_config, "layer"))
+                trace_check = {
+                    "complete": True,
+                    "skipped": True,
+                    "selection_method": "configured_model_layer",
+                    "selected_layer": selected_layer,
+                    "configured_layer": selected_layer,
+                }
+                LOGGER.info(
+                    "[%s] causal trace skipped; using configured layer=%d",
+                    model,
+                    selected_layer,
+                )
+            else:
+                trace_root = model_dir / "causal-trace"
+                trace_stage = state["stages"].get("causal_trace", {})
+                trace_summary_exists = any(trace_root.glob("*/summary.json"))
+                trace_resume_valid = bool(
+                    trace_stage.get("complete")
+                    and trace_stage.get("trace_module")
+                    and trace_summary_exists
+                )
+                if not trace_resume_valid:
+                    trace_command = [
+                        self.python,
+                        "-m",
+                        "src",
+                        "causal-trace",
+                        f"model={model}",
+                        f"command.causal_trace.output_dir={trace_root}",
+                        f"command.causal_trace.num_valid_facts={self.args.trace_facts}",
+                        f"command.causal_trace.minimum_confirmation_facts={self.args.minimum_confirmation_facts}",
+                        f"command.causal_trace.bootstrap_samples={self.args.trace_bootstrap_samples}",
+                        "command.causal_trace.overwrite_model_config_layer=false",
+                    ]
+                    run_logged(trace_command, stage="causal-trace", model=model)
+                trace_check = verify_causal_trace(
+                    trace_root,
+                    model=model,
+                    model_config=model_config,
+                )
+                selected_layer = int(trace_check["selected_layer"])
             state["stages"]["causal_trace"] = trace_check
             write_json(state_path, state)
-            LOGGER.info(
-                "[%s] causal trace selected layer=%d (configured layer=%d)",
-                model,
-                selected_layer,
-                int(trace_check["configured_layer"]),
-            )
+            if not self.args.skip_causal_trace:
+                LOGGER.info(
+                    "[%s] causal trace selected layer=%d (configured layer=%d)",
+                    model,
+                    selected_layer,
+                    int(trace_check["configured_layer"]),
+                )
 
             covariance_files = model_second_moment_files(model, selected_layer)
             covariance_command = [
@@ -571,6 +587,14 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--covariance-samples", type=int, default=100000)
     parser.add_argument("--wandb-project", default="latium")
     parser.add_argument("--wandb-group")
+    parser.add_argument(
+        "--skip-causal-trace",
+        "--no-causal-trace",
+        "--use-configured-layers",
+        dest="skip_causal_trace",
+        action="store_true",
+        help="Skip causal tracing and use each model config's layer",
+    )
     parser.add_argument("--worker", action="store_true", help="Do not write a shared fleet.json (for parallel PBS workers)")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args(argv)

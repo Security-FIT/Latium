@@ -81,6 +81,15 @@ parallel:
 bash jobs/submit_paper_fleet.sh
 ```
 
+To use the existing model YAML layers without running causal tracing, add
+`--skip-causal-trace` (or `--no-causal-trace`). The worker then reuses or
+computes the 100,000-sample covariance at each configured layer before running
+the same ROME and detector bundle:
+
+```bash
+bash jobs/submit_paper_fleet.sh --skip-causal-trace
+```
+
 The default is ROME/structural `n=50`, 100,000 second-moment samples, 40 GB
 GPU memory, and 96 GB host memory. `gemma-4-12b` is automatically requested
 with 64 GB GPU memory, 128 GB host memory, and a 96-hour walltime. Override

@@ -21,6 +21,7 @@ WANDB_PROJECT="${WANDB_PROJECT:-latium}"
 WANDB_GROUP="${WANDB_GROUP:-paper-fleet-$(basename "$RUN_ROOT")}"
 DRY_RUN=0
 SMOKE=0
+SKIP_CAUSAL_TRACE=0
 
 MODELS=(
   granite4-micro
@@ -55,6 +56,8 @@ Options:
   --gpu-mem SIZE                minimum VRAM (default 40gb; Gemma uses 64gb)
   --scratch SIZE                local scratch (default 100gb)
   --walltime HH:MM:SS           PBS walltime (default 72:00:00)
+  --skip-causal-trace           use configured model layers; do not run causal tracing
+  --no-causal-trace             alias for --skip-causal-trace
   --queue QUEUE                 optional PBS queue
   --dry-run                     print qsub commands without submitting
 EOF
@@ -93,6 +96,10 @@ while [[ $# -gt 0 ]]; do
     --gpu-mem) GPU_MEM="${2:?missing value for --gpu-mem}"; shift 2 ;;
     --scratch) SCRATCH="${2:?missing value for --scratch}"; shift 2 ;;
     --walltime) WALLTIME="${2:?missing value for --walltime}"; shift 2 ;;
+    --skip-causal-trace|--no-causal-trace|--use-configured-layers)
+      SKIP_CAUSAL_TRACE=1
+      shift
+      ;;
     --queue) QUEUE="${2:?missing value for --queue}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -128,6 +135,9 @@ for model in "${MODELS[@]}"; do
     --wandb-group "$WANDB_GROUP"
     --worker
   )
+  if (( SKIP_CAUSAL_TRACE )); then
+    args+=(--skip-causal-trace)
+  fi
   args_b64="$(printf '%s\0' "${args[@]}" | base64 | tr -d '\n')"
   select="select=1:ncpus=$NCPUS:mem=$model_mem:scratch_local=$SCRATCH:ngpus=1:gpu_mem=$model_gpu_mem"
   qsub_cmd=(qsub -N "latium-pf-$model_slug" -j oe -o "$model_log" -l "$select" -l "walltime=$model_walltime")

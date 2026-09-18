@@ -14,7 +14,7 @@ COVARIANCE_SAMPLES="${LATIUM_COVARIANCE_SAMPLES:-100000}"
 MEM="${LATIUM_PAPER_MEM:-96gb}"
 GPU_MEM="${LATIUM_PAPER_GPU_MEM:-40gb}"
 SCRATCH="${LATIUM_PAPER_SCRATCH:-100gb}"
-WALLTIME="${LATIUM_PAPER_WALLTIME:-72:00:00}"
+WALLTIME="${LATIUM_PAPER_WALLTIME:-10:00:00}"
 NCPUS="${LATIUM_PAPER_NCPUS:-8}"
 QUEUE="${LATIUM_PAPER_QUEUE:-}"
 WANDB_PROJECT="${WANDB_PROJECT:-latium}"
@@ -56,7 +56,7 @@ Options:
   --mem SIZE                    host memory (default 96gb)
   --gpu-mem SIZE                minimum VRAM (default 40gb; Gemma uses 64gb)
   --scratch SIZE                local scratch (default 100gb)
-  --walltime HH:MM:SS           PBS walltime (default 72:00:00)
+  --walltime HH:MM:SS           PBS walltime (default 10:00:00)
   --skip-causal-trace           use configured model layers; do not run causal tracing
   --no-causal-trace             alias for --skip-causal-trace
   --skip-second-moment          require existing covariance; never recompute it
@@ -114,6 +114,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$QUEUE" == gpu_long || "$QUEUE" == gpu_long@* ]]; then
+  die "gpu_long is disabled for the paper fleet; omit --queue to use normal routing"
+fi
+
 [[ "$TRACE_FACTS" =~ ^[0-9]+$ && "$MIN_CONFIRMATION" =~ ^[0-9]+$ ]] || die "trace counts must be integers"
 (( MIN_CONFIRMATION < TRACE_FACTS )) || die "--min-confirmation must be smaller than --trace-facts"
 mkdir -p "$RUN_ROOT" "$ROOT/jobs/logs/paper-fleet"
@@ -126,7 +130,7 @@ for model in "${MODELS[@]}"; do
   if [[ "$model" == gemma-4-12b ]]; then
     model_gpu_mem="${LATIUM_GEMMA_GPU_MEM:-64gb}"
     model_mem="${LATIUM_GEMMA_MEM:-128gb}"
-    model_walltime="${LATIUM_GEMMA_WALLTIME:-96:00:00}"
+    model_walltime="${LATIUM_GEMMA_WALLTIME:-10:00:00}"
   fi
 
   model_log="$ROOT/jobs/logs/paper-fleet/${model_slug}.$(date +%Y%m%d-%H%M%S).log"

@@ -102,8 +102,10 @@ bash jobs/submit_paper_fleet.sh \
 ```
 
 The default is ROME/structural `n=50`, 100,000 second-moment samples, 40 GB
-GPU memory, and 96 GB host memory. `gemma-4-12b` is automatically requested
-with 64 GB GPU memory, 128 GB host memory, and a 96-hour walltime. Override
+GPU memory, 96 GB host memory, and 10-hour walltime. `gemma-4-12b` is
+automatically requested with 64 GB GPU memory and 128 GB host memory, also for
+10 hours. The launcher omits `-q`, so MetaCentrum uses its normal/default
+routing. Override
 these values with launcher options or `LATIUM_*` environment variables. Use
 `qstat -u olexamatej` to monitor workers; each model writes `state.json`,
 `model.log`, causal-trace outputs, structural artifacts, graphs, and a worker

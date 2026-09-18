@@ -422,6 +422,11 @@ class FleetRunner:
                 f"model.second_moment_target_samples={self.args.covariance_samples}",
             ]
             if not covariance_files:
+                if self.args.skip_second_moment:
+                    raise FileNotFoundError(
+                        f"No covariance file for {model} layer {selected_layer}; "
+                        "--skip-second-moment forbids recomputation"
+                    )
                 run_logged(covariance_command, stage="covariance", model=model)
                 covariance_files = model_second_moment_files(model, selected_layer)
             if not covariance_files:
@@ -457,10 +462,10 @@ class FleetRunner:
                 "structural.run.fail_on_missing_second_moment=true",
                 "structural.render.enabled=true",
                 "structural.render.renderer_preset=full",
-                "structural.render.renderers.structural-artifact-grid.formats=[png,json]",
-                "structural.render.renderers.rome-relative-profile-grid.formats=[png,json]",
-                "structural.render.renderers.rome-relative-profile-grid.case_pages=none",
-                "structural.render.renderers.structural-ccs-lines.formats=[png,json]",
+                "++structural.render.renderers.structural-artifact-grid.formats=[png,json]",
+                "++structural.render.renderers.rome-relative-profile-grid.formats=[png,json]",
+                "++structural.render.renderers.rome-relative-profile-grid.case_pages=none",
+                "++structural.render.renderers.structural-ccs-lines.formats=[png,json]",
                 "structural.render.continue_on_error=false",
                 "structural.tracking.provider=wandb",
                 f"structural.tracking.project={self.args.wandb_project}",
@@ -483,7 +488,7 @@ class FleetRunner:
                 "run",
                 str(structural_root),
                 "graphs.renderer_preset=ccs-report",
-                "graphs.renderers.structural-ccs-lines.formats=[png,json]",
+                "++graphs.renderers.structural-ccs-lines.formats=[png,json]",
             ]
             if not state["stages"].get("graphs", {}).get("complete"):
                 run_logged(graph_command, stage="graphs-ccs-report", model=model)
@@ -496,10 +501,10 @@ class FleetRunner:
                         "run",
                         str(structural_root),
                         "graphs.renderer_preset=full",
-                        "graphs.renderers.structural-artifact-grid.formats=[png,json]",
-                        "graphs.renderers.rome-relative-profile-grid.formats=[png,json]",
-                        "graphs.renderers.rome-relative-profile-grid.case_pages=none",
-                        "graphs.renderers.structural-ccs-lines.formats=[png,json]",
+                        "++graphs.renderers.structural-artifact-grid.formats=[png,json]",
+                        "++graphs.renderers.rome-relative-profile-grid.formats=[png,json]",
+                        "++graphs.renderers.rome-relative-profile-grid.case_pages=none",
+                        "++graphs.renderers.structural-ccs-lines.formats=[png,json]",
                     ],
                     stage="graphs-full",
                     model=model,
@@ -594,6 +599,13 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         dest="skip_causal_trace",
         action="store_true",
         help="Skip causal tracing and use each model config's layer",
+    )
+    parser.add_argument(
+        "--skip-second-moment",
+        "--reuse-covariance",
+        dest="skip_second_moment",
+        action="store_true",
+        help="Require an existing covariance file instead of computing one",
     )
     parser.add_argument("--worker", action="store_true", help="Do not write a shared fleet.json (for parallel PBS workers)")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)

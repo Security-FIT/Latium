@@ -22,6 +22,7 @@ WANDB_GROUP="${WANDB_GROUP:-paper-fleet-$(basename "$RUN_ROOT")}"
 DRY_RUN=0
 SMOKE=0
 SKIP_CAUSAL_TRACE=0
+SKIP_SECOND_MOMENT=0
 
 MODELS=(
   granite4-micro
@@ -58,6 +59,8 @@ Options:
   --walltime HH:MM:SS           PBS walltime (default 72:00:00)
   --skip-causal-trace           use configured model layers; do not run causal tracing
   --no-causal-trace             alias for --skip-causal-trace
+  --skip-second-moment          require existing covariance; never recompute it
+  --reuse-covariance             alias for --skip-second-moment
   --queue QUEUE                 optional PBS queue
   --dry-run                     print qsub commands without submitting
 EOF
@@ -100,6 +103,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_CAUSAL_TRACE=1
       shift
       ;;
+    --skip-second-moment|--reuse-covariance)
+      SKIP_SECOND_MOMENT=1
+      shift
+      ;;
     --queue) QUEUE="${2:?missing value for --queue}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -137,6 +144,9 @@ for model in "${MODELS[@]}"; do
   )
   if (( SKIP_CAUSAL_TRACE )); then
     args+=(--skip-causal-trace)
+  fi
+  if (( SKIP_SECOND_MOMENT )); then
+    args+=(--skip-second-moment)
   fi
   args_b64="$(printf '%s\0' "${args[@]}" | base64 | tr -d '\n')"
   select="select=1:ncpus=$NCPUS:mem=$model_mem:scratch_local=$SCRATCH:ngpus=1:gpu_mem=$model_gpu_mem"

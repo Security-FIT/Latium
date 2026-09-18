@@ -90,6 +90,17 @@ the same ROME and detector bundle:
 bash jobs/submit_paper_fleet.sh --skip-causal-trace
 ```
 
+When rerunning after a downstream failure, reuse the same run root and add
+`--skip-second-moment` to require existing covariance files and prevent any
+recomputation:
+
+```bash
+bash jobs/submit_paper_fleet.sh \
+  --no-causal-trace \
+  --skip-second-moment \
+  --run-root analysis_out/paper-fleet/<existing-run>
+```
+
 The default is ROME/structural `n=50`, 100,000 second-moment samples, 40 GB
 GPU memory, and 96 GB host memory. `gemma-4-12b` is automatically requested
 with 64 GB GPU memory, 128 GB host memory, and a 96-hour walltime. Override

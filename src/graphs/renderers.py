@@ -13,6 +13,7 @@ from numbers import Real
 from typing import Any, Iterable
 
 from src.common.io import write_json
+from src.evaluation.rome import summarize_rome_scores
 from src.results import config_hash
 from src.results.naming import safe_slug
 
@@ -95,6 +96,16 @@ def _execution_rows(context: Any) -> list[dict[str, Any]]:
         complete = [case for case in cases if case.get("status") == "complete"]
         success = [case for case in complete if bool(case.get("edit", {}).get("success"))]
         summary = payload.get("summary", {})
+        score_summary = summarize_rome_scores(
+            [
+                {
+                    "efficacy_score": _case_metric(case, "efficacy_score", "efficacy"),
+                    "paraphrase_score": _case_metric(case, "paraphrase_score", "paraphrase"),
+                    "neighborhood_score": _case_metric(case, "neighborhood_score", "neighborhood"),
+                }
+                for case in complete
+            ]
+        )
         rows.append(
             {
                 "model": run.get("model"),
@@ -108,12 +119,10 @@ def _execution_rows(context: Any) -> list[dict[str, Any]]:
                     summary.get("edit_success_rate"),
                     len(success) / len(complete) if complete else 0.0,
                 ),
-                "overall_score": _mean(_case_metric(case, "overall_score", "overall") for case in complete),
-                "efficacy_score": _mean(_case_metric(case, "efficacy_score", "efficacy") for case in complete),
-                "paraphrase_score": _mean(_case_metric(case, "paraphrase_score", "paraphrase") for case in complete),
-                "neighborhood_score": _mean(
-                    _case_metric(case, "neighborhood_score", "neighborhood") for case in complete
-                ),
+                "overall_score": score_summary["mean_overall_score"],
+                "efficacy_score": score_summary["mean_efficacy_score"],
+                "paraphrase_score": score_summary["mean_paraphrase_score"],
+                "neighborhood_score": score_summary["mean_neighborhood_score"],
             }
         )
     return rows

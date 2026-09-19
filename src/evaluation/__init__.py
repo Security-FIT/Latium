@@ -5,6 +5,6 @@
 :author: Jakub Res <iresj@fit.vut.cz>
 """
 
-from .rome import compute_rome_metrics
+from .rome import compute_rome_metrics, compute_rome_score, summarize_rome_scores
 
-__all__ = ["compute_rome_metrics"]
+__all__ = ["compute_rome_metrics", "compute_rome_score", "summarize_rome_scores"]

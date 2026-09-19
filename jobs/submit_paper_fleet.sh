@@ -8,7 +8,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_ROOT="${LATIUM_PAPER_FLEET_ROOT:-$ROOT/analysis_out/paper-fleet/$(date -u +%Y%m%dT%H%M%SZ)}"
 N_TESTS="${LATIUM_N_TESTS:-50}"
 TRACE_FACTS="${LATIUM_TRACE_FACTS:-50}"
-MIN_CONFIRMATION="${LATIUM_TRACE_MIN_CONFIRMATION:-25}"
 TRACE_BOOTSTRAP="${LATIUM_TRACE_BOOTSTRAP_SAMPLES:-1000}"
 COVARIANCE_SAMPLES="${LATIUM_COVARIANCE_SAMPLES:-100000}"
 MEM="${LATIUM_PAPER_MEM:-96gb}"
@@ -51,7 +50,6 @@ Options:
   --models MODEL [MODEL ...]    replace the default model list
   --n-tests N                   ROME/structural cases (default 50)
   --trace-facts N               causal-trace valid facts (default 50)
-  --min-confirmation N          held-out confirmation facts (default 25)
   --covariance-samples N        second-moment samples (default 100000)
   --mem SIZE                    host memory (default 96gb)
   --gpu-mem SIZE                minimum VRAM (default 40gb; Gemma uses 64gb)
@@ -75,7 +73,6 @@ while [[ $# -gt 0 ]]; do
       MODELS=(granite4-micro)
       N_TESTS=1
       TRACE_FACTS=10
-      MIN_CONFIRMATION=5
       TRACE_BOOTSTRAP=100
       COVARIANCE_SAMPLES=100000
       MEM=64gb
@@ -93,7 +90,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --n-tests) N_TESTS="${2:?missing value for --n-tests}"; shift 2 ;;
     --trace-facts) TRACE_FACTS="${2:?missing value for --trace-facts}"; shift 2 ;;
-    --min-confirmation) MIN_CONFIRMATION="${2:?missing value for --min-confirmation}"; shift 2 ;;
     --covariance-samples) COVARIANCE_SAMPLES="${2:?missing value for --covariance-samples}"; shift 2 ;;
     --mem) MEM="${2:?missing value for --mem}"; shift 2 ;;
     --gpu-mem) GPU_MEM="${2:?missing value for --gpu-mem}"; shift 2 ;;
@@ -118,8 +114,7 @@ if [[ "$QUEUE" == gpu_long || "$QUEUE" == gpu_long@* ]]; then
   die "gpu_long is disabled for the paper fleet; omit --queue to use normal routing"
 fi
 
-[[ "$TRACE_FACTS" =~ ^[0-9]+$ && "$MIN_CONFIRMATION" =~ ^[0-9]+$ ]] || die "trace counts must be integers"
-(( MIN_CONFIRMATION < TRACE_FACTS )) || die "--min-confirmation must be smaller than --trace-facts"
+[[ "$TRACE_FACTS" =~ ^[0-9]+$ ]] || die "trace facts must be an integer"
 mkdir -p "$RUN_ROOT" "$ROOT/jobs/logs/paper-fleet"
 
 for model in "${MODELS[@]}"; do
@@ -139,7 +134,6 @@ for model in "${MODELS[@]}"; do
     --models "$model"
     --n-tests "$N_TESTS"
     --trace-facts "$TRACE_FACTS"
-    --minimum-confirmation-facts "$MIN_CONFIRMATION"
     --trace-bootstrap-samples "$TRACE_BOOTSTRAP"
     --covariance-samples "$COVARIANCE_SAMPLES"
     --wandb-project "$WANDB_PROJECT"

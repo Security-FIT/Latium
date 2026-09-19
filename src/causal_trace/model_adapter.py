@@ -208,17 +208,17 @@ def restore_hook(position: int, clean_state: torch.Tensor, sequence_length: int)
 
 
 def probability(outputs: Any, target_token_id: int) -> float:
-    probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
+    probs = torch.softmax(outputs.logits[:, -1, :].float(), dim=-1)
     return float(probs[0, int(target_token_id)].detach().float().cpu().item())
 
 
 def probabilities(outputs: Any, target_token_id: int) -> np.ndarray:
-    probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
+    probs = torch.softmax(outputs.logits[:, -1, :].float(), dim=-1)
     return probs[:, int(target_token_id)].detach().float().cpu().numpy()
 
 
 def top_token(outputs: Any) -> tuple[int, float]:
-    probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
+    probs = torch.softmax(outputs.logits[:, -1, :].float(), dim=-1)
     top = int(torch.argmax(probs[0]).detach().cpu().item())
     return top, float(probs[0, top].detach().float().cpu().item())
 

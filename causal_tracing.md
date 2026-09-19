@@ -1,129 +1,94 @@
 # Causal tracing
 
-Latium uses causal tracing to choose a layer for a later ROME run. Production code lives in src/causal_trace/. The notebook calls that code and plots saved artifacts.
+Latium measures whether restoring one clean MLP output can recover the first
+true-target token after subject embeddings are corrupted. A positive result is
+evidence for a causal effect of that intervention. It does not establish where
+a fact is stored or which layer is best for ROME editing.
 
-## Measurement
+## Fixed experiment
 
-For each accepted CounterFact example, Latium measures the probability of the first true-target token in three conditions:
+For every accepted CounterFact row, the clean model's most likely next token
+must be the first true-target token. Independent Gaussian noise is added to
+every subject-token embedding. The standard deviation is three times the
+embedding-table standard deviation, computed once per run. A row is accepted
+only if corruption lowers the mean probability of the target token. The noise
+multiplier may be overridden, but it is fixed for every row in a run.
 
-1. Clean: no intervention.
-2. Corrupt: add Gaussian noise to every subject-token embedding.
-3. Restore: repeat the same corruption and restore clean MLP outputs at the last subject token for one overlapping layer window.
-
-For fact f, noise draw k, and window w:
+The same noise draws are used in the corrupt baseline and each restoration:
 
     IE(f, k, w) = P(target | corrupt(f, k) + restore(f, w))
                   - P(target | corrupt(f, k))
 
-The two terms use the same noise draw. Draws are averaged within each fact. Confidence intervals resample facts, not individual draws.
+The clean outputs of the enclosing MLP are restored at the last subject token.
+For example, the Llama trace hooks `model.layers.N.mlp`, while ROME edits
+`model.layers.N.mlp.down_proj`. Ten noise draws are averaged within a fact;
+confidence intervals resample facts.
 
-By default, the corruption scale is calibrated separately for each fact before
-any layer restoration is evaluated. The calibrator finds the weakest
-embedding-standard-deviation multiplier that satisfies the configured effect and
-stability guards. Its search range and precision come from the embedding dtype.
-Calibration uses deterministic noise draws that are independent
-of the draws used for the reported corrupt baseline and restoration sweep.
-A positive numeric noise_multiplier remains available for fixed-scale reproduction.
+The default window width is **one layer**, so a selected center is a directly
+tested MLP layer. `command.causal_trace.window_size` may be increased to study
+intervals, but a window center must not be interpreted as an individually
+localized layer. Multi-layer windows cannot overwrite a model YAML layer and
+cannot feed the automatic ROME pipeline.
 
-The hook restores the whole MLP output. On Llama-style models, tracing hooks model.layers.N.mlp; ROME still edits model.layers.N.mlp.down_proj. A forward pass validates all MLP hooks before the dataset scan.
+## Discovery and confirmation
 
-## Default experiment
+The run requests 100 accepted facts and scans at most 10,000 rows. Accepted
+facts are shuffled with seed 42, then split equally into discovery and
+confirmation sets. If fewer than the requested number are accepted, no layer
+is selected.
 
-| Quantity | Default |
-|---|---:|
-| Accepted facts requested | 100 |
-| Maximum rows scanned | 10,000 |
-| Noise draws per fact | 10 |
-| Noise batch size | 10 |
-| Noise standard deviation | Per-fact automatic minimum passing the effect guard |
-| Restored window width | 10 layers |
-| Discovery / confirmation split | 50 / 50 |
-| Minimum confirmation facts | 50 |
-| Minimum clean-to-corrupt probability drop | 0.03 |
-| Maximum corrupt relative standard deviation | 1.0 |
-| Bootstrap resamples | 1,000 |
-| Confidence level | 95% |
-| Trimmed-mean fraction | 10% per tail |
-| Neighbor and adjacent-peak radius | 2 centers |
-| Required local support | 90% |
-| Noninferiority margin | 10% of discovery peak |
-| Minimum supported region | 3 centers |
-| Seed | 42 |
+Only discovery facts are swept across all layers. The layer with the largest
+mean paired effect is frozen, with the lower layer breaking ties. Confirmation
+facts are evaluated **only at this frozen layer**. Selection succeeds when
+its 95% fact-bootstrap confidence interval has a positive lower bound. The
+default interval uses 1,000 bootstrap resamples.
 
-The clean top prediction must equal the first true-target token. Corruption must reduce its probability by at least 0.03, and:
+The configured model layer is a plot reference only. It does not enter
+selection. Model YAML changes only with
+`command.causal_trace.overwrite_model_config_layer=true` after confirmation.
 
-    std(P_corrupt) / abs(P_clean - mean(P_corrupt)) <= 1.0
+## Run and outputs
 
-These checks happen before restoration windows are evaluated.
+    python3 -m src causal-trace model=gpt2-xl
 
-## Selection
+Each successful run writes `resolved_config.yaml`, `mlp_module_map.json`,
+`fact_results.jsonl`, `rejections.csv`, `split_assignments.csv`,
+`discovery_windows.csv`, `confirmation_windows.csv`, `selection.json`,
+`summary.json`, and `early_site_trace.png`.
 
-The accepted facts are shuffled once with seed 42. With 100 facts, discovery and confirmation each receive 50 facts.
+Each fact row records the fixed noise standard deviation and seed, its split,
+and exactly the window centers evaluated for that split. The summary includes
+model and tokenizer revisions when available, the Git commit, model dtype,
+the complete hook map, and the selected interval. Only the first target token
+is measured.
 
-1. Evaluate one centered window at every model layer. Boundary windows shorter than 10 layers are saved and plotted but cannot be selected.
-2. On discovery facts, calculate the mean, median, 10% trimmed mean, normalized recovery, and a 95% fact-bootstrap interval.
-3. Require a positive lower confidence bound, median, and trimmed mean.
-4. Form contiguous regions using radius-2 neighborhoods, 90% local support, the radius-2 peak rule, and a 10% noninferiority margin.
-5. Test only those regions on confirmation facts. A region passes when its held-out 95% lower confidence bound is above zero.
-6. Choose one consistency-ranked center inside the winning confirmed region.
-
-The configured model layer is only a plot marker. It does not affect selection. Model YAML stays unchanged unless command.causal_trace.overwrite_model_config_layer=true is explicitly set. Confirmation failure never changes it.
-
-## Run the trace
-
-    python3 -m src causal-trace model=gpt2-xl command.causal_trace.num_valid_facts=100
-
-Each run writes:
-
-    mlp_module_map.json
-    fact_results.jsonl
-    rejections.csv
-    split_assignments.csv
-    discovery_windows.csv
-    confirmation_windows.csv
-    aggregate_windows.csv
-    selection.json
-    summary.json
-    early_site_trace.png
-
-fact_results.jsonl records the resolved multiplier, independent seeds, and calibration search trail for every accepted fact. summary.json records resolved multiplier statistics, split counts, the discovery center, confirmed region, selected center, hook semantics, and confirmation result.
+The notebook `notebooks/causal_tracing.ipynb` invokes this command and reads
+its output. `notebooks/causal_tracing_reference.ipynb` is historical reference
+material.
 
 ## Causal trace to ROME
 
-The detector-free job runs:
-
-    causal trace -> confirmed layer -> matching second moment -> ROME benchmark
-
-The default job uses 100 trace facts and 30 ROME cases:
-
     jobs/submit.sh causal-rome -- pipeline.model=gpt2-xl
 
-Useful overrides include pipeline.causal_trace.num_valid_facts, pipeline.covariance.target_samples, and pipeline.rome.n_tests.
+The job requires a directly tested, confirmed single layer. It computes or
+finds matching second moments and runs the ROME benchmark at that layer. ROME
+case enumeration starts after all CounterFact rows scanned by the trace, so
+trace construction and edit evaluation use disjoint facts. The job does not
+modify model YAML.
 
-When pipeline.covariance.target_samples is null, the job reads second_moment_target_samples from the selected pipeline model. If that model has no value, it uses the second-moment command fallback of 100,000 samples. An explicit pipeline override wins.
+To determine whether the traced layer is the best editing layer, compare it
+against neighboring and configured layers on an independent ROME validation
+set. Evaluate the chosen editing layer once more on a separate test set. This
+editing comparison is a separate experiment from causal tracing:
 
-pipeline.rome.n_tests remains 30 because it is this job's evaluation size. The structural.run.n_tests reference in new-detection-clean belongs to a structural detector run. This job does not compose or run that pipeline, so linking to the setting would add an unrelated dependency and would not be model-adaptive.
+    python3 jobs/validate_rome_layers.py \
+      --model gpt2-xl \
+      --trace-summary analysis_out/causal_trace/<run>/summary.json \
+      --output-root analysis_out/rome-layer-validation
 
-The selected layer is passed to covariance and ROME as a runtime override. The job requires a passing trace, a non-empty plot, covariance for the selected layer, and at least one evaluated ROME case before writing pipeline-summary.json.
-
-For llama2-7b, ROME uses the validated fixed context-template pool. It runs after causal selection and cannot affect the selected layer.
-
-## Limits
-
-- Only the first target token is scored.
-- Overlapping windows are correlated.
-- Results depend on the corruption eligibility rule, window width, fact filtering, restored component, subject position, and model adapter.
-- Positive held-out recovery does not prove that a fact is stored in one layer.
-- The representative center is an operational ROME layer; the later ROME benchmark tests whether it is useful.
-
-## Files
-
-- src/causal_trace/causal_trace.py: execution and artifacts.
-- src/causal_trace/model_adapter.py: whole-MLP hooks.
-- src/causal_trace/tokenization.py: subject and target token mapping.
-- src/causal_trace/selection.py: aggregation, intervals, and selection.
-- src/config/command/causal_trace.yaml: method defaults.
-- src/config/pipeline/causal_rome.yaml: job defaults.
-- jobs/causal_rome_pipeline.py: trace, covariance, and ROME orchestration.
-- notebooks/causal_tracing.ipynb: production runner and artifact plots.
-- notebooks/causal_tracing_reference.ipynb: unchanged origin/causal-trace analysis notebook.
+The validator compares the traced layer, adjacent layers, and the configured
+layer on identical CounterFact validation rows. It ranks by the ROME overall
+score, reports efficacy, paraphrase and neighborhood metrics, and evaluates
+the chosen layer on new test rows. Both sets start after the rows scanned by
+causal tracing. Every candidate must evaluate the same requested number of
+cases; otherwise the comparison stops.

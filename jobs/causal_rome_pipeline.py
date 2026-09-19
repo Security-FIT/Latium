@@ -199,6 +199,11 @@ def _trace_state(trace_root: Path) -> tuple[Path, dict[str, Any], int]:
         raise RuntimeError(f"Causal tracing did not confirm a layer: {reason or summary_path}")
     if int(summary.get("num_valid_facts", 0)) <= 0:
         raise RuntimeError(f"Causal tracing produced no valid facts: {summary_path}")
+    if int(summary.get("window_size", 0)) != 1 or not summary.get("selected_layer_directly_tested"):
+        raise RuntimeError("ROME requires a confirmed single-layer trace, not a window center")
+    lower_bound = summary.get("confirmation_ci_lower")
+    if lower_bound is None or float(lower_bound) <= 0:
+        raise RuntimeError("The selected layer has no positive held-out interval")
     plot = Path(str(summary.get("plot", "")))
     if not plot.is_absolute():
         plot = ROOT / plot
@@ -228,9 +233,7 @@ def _rome_state(rome_dir: Path, *, model: str, selected_layer: int) -> tuple[Pat
         raise RuntimeError(f"ROME report has no result for {model}: {report_path}")
     summary = result["summary"]
     if int(summary.get("layer", -1)) != int(selected_layer):
-        raise RuntimeError(
-            f"ROME ran layer {summary.get('layer')} instead of causal layer {selected_layer}"
-        )
+        raise RuntimeError(f"ROME ran layer {summary.get('layer')} instead of causal layer {selected_layer}")
     if int(summary.get("n_evaluated", 0)) <= 0:
         raise RuntimeError(f"ROME completed no evaluable cases: {report_path}")
     return report_path, summary
@@ -239,10 +242,7 @@ def _rome_state(rome_dir: Path, *, model: str, selected_layer: int) -> tuple[Pat
 def _output_root(configured: Any) -> Path:
     raw = str(configured or "").strip()
     if not raw:
-        job = "".join(
-            char if char.isalnum() or char in "._-" else "_"
-            for char in os.environ.get("PBS_JOBID", "local")
-        )
+        job = "".join(char if char.isalnum() or char in "._-" else "_" for char in os.environ.get("PBS_JOBID", "local"))
         raw = f"analysis_out/jobs/{job}-causal-rome"
     path = Path(raw)
     return path if path.is_absolute() else (ROOT / path).resolve()
@@ -294,12 +294,15 @@ def run_pipeline(
     if not covariance_files:
         raise FileNotFoundError(f"No saved covariance matches model={model} layer={selected_layer}")
 
+    # Both commands enumerate the same CounterFact rows. Skip every row inspected
+    # while constructing the trace so edit evaluation cannot reuse trace facts.
+    evaluation_start = max(int(payload["rome"]["start_idx"]), int(trace["num_dataset_examples_scanned"]))
     _run_command(
         build_rome_command(
             model=model,
             layer=selected_layer,
             n_tests=int(payload["rome"]["n_tests"]),
-            start_idx=int(payload["rome"]["start_idx"]),
+            start_idx=evaluation_start,
             output_dir=rome_dir,
             extra_overrides=[*payload["rome"].get("overrides", []), *rome_overrides],
         )
@@ -314,6 +317,7 @@ def run_pipeline(
         "schema": "latium.causal_rome_job.v1",
         "model": model,
         "selected_layer": selected_layer,
+        "rome_evaluation_start_idx": evaluation_start,
         "causal_trace_summary": str(summary_path),
         "causal_trace_plot": str(trace["plot"]),
         "causal_trace_confirmation_passed": True,

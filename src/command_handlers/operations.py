@@ -45,13 +45,6 @@ def run_causal_trace(cfg: DictConfig) -> int:
     return 0
 
 
-def run_alt_trace(cfg: DictConfig) -> int:
-    from src.causal_trace.alt_trace import run_alt_trace as run
-
-    run(cfg)
-    return 0
-
-
 def run_compute_multiplier(cfg: DictConfig) -> int:
     from src.causal_trace.causal_trace import compute_multiplier
 
@@ -115,7 +108,6 @@ OPERATIONS: dict[str, Callable[[DictConfig], int]] = {
     "manual-rome": run_manual_rome,
     "print-arch": run_print_arch,
     "causal-trace": run_causal_trace,
-    "alt-trace": run_alt_trace,
     "compute-multiplier": run_compute_multiplier,
     "second-moment": run_second_moment,
     "batch-rome": run_batch_rome,

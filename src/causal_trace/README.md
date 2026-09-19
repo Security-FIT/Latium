@@ -33,3 +33,7 @@ It does not modify model YAML files or run structural detectors:
 ```bash
 jobs/submit.sh causal-rome -- pipeline.model=gpt2-xl
 ```
+
+Use `jobs/validate_rome_layers.py` to compare the traced layer with adjacent
+and configured layers on separate ROME validation and test facts. See the
+top-level method document for the command and interpretation.

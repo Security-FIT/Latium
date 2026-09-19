@@ -150,7 +150,6 @@ field definitions.
 | Analysis-only replay | `python3 -m src structural analyze ...` |
 | Graph rendering | `python3 -m src graphs run <run-root>` |
 | Audited early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
-| Alternative trace | `python3 -m src alt-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
 | MetaCentrum causal trace -> ROME | `jobs/submit.sh causal-rome -- pipeline.model=gpt2-large` |
 
@@ -160,15 +159,14 @@ field definitions.
 python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100
 ```
 
-The active workflow corrupts the full subject-token embedding span, restores
-whole-MLP outputs at the last subject token over overlapping windows, and
-aggregates paired indirect effects across facts. Discovery predeclares robust
-contiguous regions; a held-out split must confirm a region before one
-representative center is reported.
+The active workflow corrupts the full subject-token embedding span at a fixed
+scale, restores one whole-MLP output at the last subject token, and aggregates
+paired indirect effects across facts. Discovery chooses one layer, which is
+then evaluated on held-out facts. Wider windows remain available for exploring
+layer intervals; the ROME pipeline requires a directly tested single layer.
 
 See `causal_tracing.md` for method, configuration, outputs, and limitations.
-The older `alt-trace` command and notebooks remain available for historical
-comparison, but they are not part of the current selection policy.
+The original tracing notebook remains available for historical comparison.
 
 ## Structural Artifacts
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import hydra
+import pytest
 
 from jobs import causal_rome_pipeline as pipeline
 
@@ -37,9 +38,7 @@ def test_pipeline_uses_selected_model_covariance_target(monkeypatch) -> None:
     monkeypatch.setattr(
         pipeline,
         "_model_config",
-        lambda model: SimpleNamespace(
-            second_moment_target_samples=12_345 if model == "qwen3-4b" else None
-        ),
+        lambda model: SimpleNamespace(second_moment_target_samples=12_345 if model == "qwen3-4b" else None),
     )
 
     payload = pipeline.resolve_pipeline_config(["pipeline.model=qwen3-4b"])
@@ -54,9 +53,7 @@ def test_pipeline_covariance_override_wins(monkeypatch) -> None:
         lambda _model: SimpleNamespace(second_moment_target_samples=12_345),
     )
 
-    payload = pipeline.resolve_pipeline_config(
-        ["pipeline.model=qwen3-4b", "pipeline.covariance.target_samples=77"]
-    )
+    payload = pipeline.resolve_pipeline_config(["pipeline.model=qwen3-4b", "pipeline.covariance.target_samples=77"])
 
     assert payload["covariance"]["target_samples"] == 77
 
@@ -189,6 +186,10 @@ def test_pipeline_validates_trace_covariance_and_rome_without_detector(
                 json.dumps(
                     {
                         "num_valid_facts": 2,
+                        "num_dataset_examples_scanned": 12,
+                        "window_size": 1,
+                        "selected_layer_directly_tested": True,
+                        "confirmation_ci_lower": 0.01,
                         "selected_trace_center": 4,
                         "confirmation_passed": True,
                         "plot": str(plot),
@@ -246,5 +247,25 @@ def test_pipeline_validates_trace_covariance_and_rome_without_detector(
     ]
     assert summary["schema"] == "latium.causal_rome_job.v1"
     assert summary["selected_layer"] == 4
+    assert summary["rome_evaluation_start_idx"] == 12
     assert summary["rome_summary"]["n_evaluated"] == 1
     assert not any("detector" in value for command in commands for value in command)
+
+
+def test_pipeline_rejects_confirmed_multi_layer_window(tmp_path: Path) -> None:
+    trace_dir = tmp_path / "trace" / "run"
+    trace_dir.mkdir(parents=True)
+    (trace_dir / "summary.json").write_text(
+        json.dumps(
+            {
+                "num_valid_facts": 100,
+                "selected_trace_center": 13,
+                "confirmation_passed": True,
+                "confirmation_ci_lower": 0.05,
+                "window_size": 10,
+                "selected_layer_directly_tested": False,
+            }
+        )
+    )
+    with pytest.raises(RuntimeError, match="single-layer"):
+        pipeline._trace_state(tmp_path / "trace")

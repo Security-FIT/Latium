@@ -22,10 +22,9 @@ def test_trace_settings_match_hydra_defaults() -> None:
 
     assert settings.num_valid_facts == 100
     assert settings.num_noise_samples == 10
-    assert settings.window_size == 10
-    assert settings.minimum_confirmation_facts == 50
+    assert settings.window_size == 1
     assert settings.overwrite_model_config_layer is False
-    assert settings.noise_multiplier is None
+    assert settings.noise_multiplier == 3.0
 
 
 def test_trace_settings_preserve_explicit_noise_override() -> None:
@@ -34,11 +33,24 @@ def test_trace_settings_preserve_explicit_noise_override() -> None:
     assert settings.noise_multiplier == pytest.approx(2.5)
 
 
-def test_trace_settings_require_effect_guard_in_automatic_mode() -> None:
-    with pytest.raises(ValueError, match="automatic noise calibration requires"):
-        TraceSettings.from_config(_trace_config("command.causal_trace.min_total_effect=0"), num_layers=48)
+def test_trace_settings_reject_automatic_and_nonfinite_noise() -> None:
+    with pytest.raises(ValueError, match="positive finite"):
+        TraceSettings.from_config(_trace_config("command.causal_trace.noise_multiplier=auto"), num_layers=48)
+    with pytest.raises(ValueError, match="positive finite"):
+        TraceSettings.from_config(_trace_config("command.causal_trace.noise_multiplier=inf"), num_layers=48)
 
 
 def test_trace_settings_reject_window_larger_than_model() -> None:
     with pytest.raises(ValueError, match="window_size must be between 1 and the model's 4 layers"):
-        TraceSettings.from_config(_trace_config(), num_layers=4)
+        TraceSettings.from_config(_trace_config("command.causal_trace.window_size=5"), num_layers=4)
+
+
+def test_window_center_cannot_overwrite_rome_layer() -> None:
+    with pytest.raises(ValueError, match="multi-layer window center"):
+        TraceSettings.from_config(
+            _trace_config(
+                "command.causal_trace.window_size=10",
+                "command.causal_trace.overwrite_model_config_layer=true",
+            ),
+            num_layers=48,
+        )

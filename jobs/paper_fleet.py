@@ -130,10 +130,7 @@ def verify_causal_trace(
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     summary_model = str(summary.get("model", ""))
     if summary_model not in {str(model), str(model_config.name)}:
-        raise RuntimeError(
-            f"Causal-trace summary is for {summary_model!r}, expected {model!r} "
-            f"({model_config.name!r})"
-        )
+        raise RuntimeError(f"Causal-trace summary is for {summary_model!r}, expected {model!r} ({model_config.name!r})")
     if not bool(summary.get("confirmation_passed")):
         reason = summary.get("selection_failure_reason") or summary.get("failure_reason")
         raise RuntimeError(f"Causal tracing did not confirm a layer: {reason or summary_path}")
@@ -141,11 +138,14 @@ def verify_causal_trace(
     if selected_layer is None:
         raise RuntimeError(f"Causal-trace summary has no selected layer: {summary_path}")
     selected_layer = int(selected_layer)
+    if int(summary.get("window_size", 0)) != 1 or not summary.get("selected_layer_directly_tested"):
+        raise RuntimeError("ROME requires a confirmed single-layer trace")
+    lower_bound = summary.get("confirmation_ci_lower")
+    if lower_bound is None or float(lower_bound) <= 0:
+        raise RuntimeError("The selected layer has no positive held-out interval")
     traced_modules = summary.get("trace_mlp_output_modules") or []
     if not traced_modules or not 0 <= selected_layer < len(traced_modules):
-        raise RuntimeError(
-            f"Causal-trace selected layer {selected_layer} is outside its module map"
-        )
+        raise RuntimeError(f"Causal-trace selected layer {selected_layer} is outside its module map")
     plot = Path(str(summary.get("plot", "")))
     if not plot.is_absolute():
         plot = ROOT / plot
@@ -163,10 +163,7 @@ def verify_causal_trace(
     restore_template = str(getattr(model_config, "restore_layer_name_template", "") or "")
     block = restore_template.format(selected_layer) if restore_template else ""
     if block:
-        accepted.update(
-            f"{block}.{suffix}"
-            for suffix in ("mlp", "shared_mlp", "feed_forward", "ffn", "fc2")
-        )
+        accepted.update(f"{block}.{suffix}" for suffix in ("mlp", "shared_mlp", "feed_forward", "ffn", "fc2"))
     traced_module = str(traced_modules[selected_layer])
     if traced_module not in accepted:
         raise RuntimeError(
@@ -186,6 +183,7 @@ def verify_causal_trace(
         "rome_projection_module": projection,
         "num_layers": len(traced_modules),
         "num_valid_facts": int(summary.get("num_valid_facts", 0)),
+        "num_dataset_examples_scanned": int(summary.get("num_dataset_examples_scanned", 0)),
         "confirmation_passed": True,
     }
 
@@ -295,7 +293,8 @@ def verify_graphs(run_root: Path) -> dict[str, Any]:
         empty = [
             str(directory.relative_to(run_root))
             for directory in directories
-            if directory.is_dir() and not any(path.is_file() and path.stat().st_size > 0 for path in directory.rglob("*"))
+            if directory.is_dir()
+            and not any(path.is_file() and path.stat().st_size > 0 for path in directory.rglob("*"))
         ]
         if missing or empty:
             raise RuntimeError(f"{group} graph validation failed; missing={missing}, empty={empty}")
@@ -376,9 +375,7 @@ class FleetRunner:
                 trace_stage = state["stages"].get("causal_trace", {})
                 trace_summary_exists = any(trace_root.glob("*/summary.json"))
                 trace_resume_valid = bool(
-                    trace_stage.get("complete")
-                    and trace_stage.get("trace_module")
-                    and trace_summary_exists
+                    trace_stage.get("complete") and trace_stage.get("trace_module") and trace_summary_exists
                 )
                 if not trace_resume_valid:
                     trace_command = [
@@ -389,7 +386,6 @@ class FleetRunner:
                         f"model={model}",
                         f"command.causal_trace.output_dir={trace_root}",
                         f"command.causal_trace.num_valid_facts={self.args.trace_facts}",
-                        f"command.causal_trace.minimum_confirmation_facts={self.args.minimum_confirmation_facts}",
                         f"command.causal_trace.bootstrap_samples={self.args.trace_bootstrap_samples}",
                         "command.causal_trace.overwrite_model_config_layer=false",
                     ]
@@ -440,7 +436,10 @@ class FleetRunner:
             write_json(state_path, state)
 
             structural_output = model_dir / "structural-output"
-            structural_run_id = f"{slug(model)}-n{self.args.n_tests}"
+            structural_start_idx = int(trace_check.get("num_dataset_examples_scanned", 0))
+            structural_run_id = (
+                f"{slug(model)}-cases{structural_start_idx}-{structural_start_idx + self.args.n_tests - 1}"
+            )
             structural_root = structural_output / structural_run_id
             layer_override = "{" + model + ":" + str(selected_layer) + "}"
             structural_command = [
@@ -452,7 +451,7 @@ class FleetRunner:
                 f"structural.run.models=[{model}]",
                 f"+structural.run.model_layer_overrides={layer_override}",
                 f"structural.run.n_tests={self.args.n_tests}",
-                "structural.run.start_idx=0",
+                f"structural.run.start_idx={structural_start_idx}",
                 f"structural.run.output_dir={structural_output}",
                 f"structural.run.run_id={structural_run_id}",
                 "structural.analysis.preset=paper",
@@ -548,7 +547,6 @@ class FleetRunner:
             "models": list(self.args.models),
             "n_tests": self.args.n_tests,
             "trace_facts": self.args.trace_facts,
-            "minimum_confirmation_facts": self.args.minimum_confirmation_facts,
             "trace_bootstrap_samples": self.args.trace_bootstrap_samples,
             "covariance_samples": self.args.covariance_samples,
             "wandb_project": self.args.wandb_project,
@@ -579,7 +577,10 @@ class FleetRunner:
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run-root", default=str(ROOT / "analysis_out" / "paper-fleet" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")))
+    parser.add_argument(
+        "--run-root",
+        default=str(ROOT / "analysis_out" / "paper-fleet" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")),
+    )
     # run.pbs selects the configured MetaCentrum environment on PATH. Reuse
     # the interpreter that launched this driver so child stages do not fall
     # back to a repository-local .venv that may not exist.
@@ -587,7 +588,6 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_MODELS))
     parser.add_argument("--n-tests", type=int, default=50)
     parser.add_argument("--trace-facts", type=int, default=50)
-    parser.add_argument("--minimum-confirmation-facts", type=int, default=25)
     parser.add_argument("--trace-bootstrap-samples", type=int, default=1000)
     parser.add_argument("--covariance-samples", type=int, default=100000)
     parser.add_argument("--wandb-project", default="latium")
@@ -607,14 +607,15 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Require an existing covariance file instead of computing one",
     )
-    parser.add_argument("--worker", action="store_true", help="Do not write a shared fleet.json (for parallel PBS workers)")
+    parser.add_argument(
+        "--worker", action="store_true", help="Do not write a shared fleet.json (for parallel PBS workers)"
+    )
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args(argv)
     if (
         args.n_tests <= 0
         or args.trace_facts <= 0
-        or args.minimum_confirmation_facts < 2
-        or args.minimum_confirmation_facts >= args.trace_facts
+        or args.trace_facts < 4
         or args.trace_bootstrap_samples <= 0
         or args.covariance_samples <= 0
     ):

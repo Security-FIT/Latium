@@ -22,7 +22,7 @@ run:
   force: false
 
 capture:
-  profile: paper
+  profile: none
   enable: []
   disable: []
   matrix_features:
@@ -32,6 +32,7 @@ capture:
 
 analysis:
   enabled: true
+  continue_on_error: false
   preset: paper
   enable: []
   disable: []
@@ -66,7 +67,7 @@ analysis:
         - 5
         - 7
       boundary: 2
-    composite:
+    ccs-composite:
       top_k: 50
       trim_first: 2
       trim_last: 2
@@ -130,9 +131,17 @@ analysis:
 
 render:
   enabled: false
-  renderer_preset: none
+  continue_on_error: false
+  renderer_preset: ccs-report
+  style_preset: default
   enable: []
   disable: []
+  renderers:
+    structural-ccs-lines:
+      formats:
+        - png
+        - pdf
+        - json
 
 output:
   json_out: null

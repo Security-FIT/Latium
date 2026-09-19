@@ -5,8 +5,8 @@ ROME (Rank-One Model Editing), with tooling for structural edit detection,
 causal tracing, artifact-backed analysis, and graph rendering.
 
 The project is developed for cybersecurity research by the Security@FIT group in
-collaboration with Red Hat Research. The `legacy` branch preserves the ACM CCS
-2026 submission snapshot. This branch was refactored because the submission-era
+collaboration with Red Hat Research. An archived branch preserves the ACM CCS
+2026 submission snapshot. The current code was refactored because the submission-era
 script and notebook layout had outgrown the project; the current runtime is
 Hydra-first and uses `python3 -m src`.
 
@@ -65,40 +65,40 @@ python3 -m src structural plan \
   structural.capture.profile=paper
 ```
 
-Capture edits, run model-free analyses, and render graph artifacts:
+Run the complete CCS report, including accuracy, ROME success, layer-window
+accuracy, paper JSON, and the six-panel per-layer signal figure:
 
 ```bash
 python3 -m src structural run \
-  'structural.run.models=[gpt2-large]' \
+  structural=ccs-report \
+  'structural.run.models=[qwen3-4b]' \
   structural.run.n_tests=30 \
-  structural.capture.profile=paper \
-  structural.capture.matrix_features.feature_set=paper \
-  structural.analysis.preset=paper \
-  structural.render.enabled=true \
-  structural.render.renderer_preset=structural-paper \
-  structural.run.run_id=gpt2-large-paper
+  structural.run.run_id=qwen3-4b-ccs-report
 ```
 
-Analyze or render an existing run root:
+Plan that workflow or re-render a saved run with the same complete report:
 
 ```bash
-python3 -m src structural analyze \
-  structural.analyze.run_root=analysis_out/gpt2-large-paper \
-  structural.analysis.preset=paper
+python3 -m src structural plan structural=ccs-report 'structural.run.models=[qwen3-4b]'
 
-python3 -m src graphs run analysis_out/gpt2-large-paper graphs.renderer_preset=structural-paper
+python3 -m src graphs run analysis_out/qwen3-4b-ccs-report
 ```
 
-The graph renderer registry includes paper summaries, detector accuracy,
-ROME-success metrics, layer-window accuracy, detector signal-profile plots, and
-the structural artifact grid. Use `graphs.renderer_preset=full` or enable
-individual renderers such as `graphs.enable_renderers=[detector-signals]`.
+`graphs run` defaults to `ccs-report`; the former aggregate-only renderer preset
+`paper` now raises an error. `structural.analysis.preset=paper` still names the
+analysis selection and is set by the workflow. The 5x4 structural artifact
+grid remains available separately as `structural-paper`.
 
-`matrix-features` is configurable. The default paper path captures only the
-scalar columns needed by paper graphs and the composite matrix branch:
-`spectral_gap`, `top1_energy`, `row_alignment`, `norm_cv`, and
-`effective_rank`. Blind/rank1/studies feature sets are opt-in through
-`structural.capture.matrix_features.feature_set`.
+Structural runs derive capture requirements from the selected analyses. For
+example, `structural.analysis.preset=ccs-composite` automatically captures its
+spectral primitives and the five matrix columns it consumes: `spectral_gap`,
+`top1_energy`, `row_alignment`, `norm_cv`, and `effective_rank`. The same rule
+applies to blind, rank-one, presence, and study analyses. Explicit capture
+profiles remain available for capture-only and graph-only workflows.
+The default capture profile is `none`, so an end-to-end run is driven by the
+analysis preset; a capture-only command must select a capture profile explicitly.
+End-to-end renderer requirements are included in the same plan, preventing a
+selected graph from being run without the matrix columns it needs.
 
 Hydra overrides are the supported option style. Argparse flags such as
 `--models` are no longer supported by the main CLI.
@@ -114,7 +114,7 @@ Hydra overrides are the supported option style. Argparse flags such as
 | Analysis-only replay | `python3 -m src structural analyze ...` |
 | Graph rendering | `python3 -m src graphs run <run-root>` |
 | Audited early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
-| Legacy alternative trace | `python3 -m src alt-trace model=gpt2-large` |
+| Alternative trace | `python3 -m src alt-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
 | MetaCentrum causal trace -> ROME | `jobs/submit.sh causal-rome -- pipeline.model=gpt2-large` |
 
@@ -148,6 +148,9 @@ analysis_out/<run-id>/
 The manifest tracks artifact IDs, paths, config hashes, content hashes, and
 input dependencies. Re-running skips current artifacts. Use
 `structural.run.force=true` or `graphs.force=true` to recompute explicitly.
+
+The opt-in ROME layer localizer and its evidence limits are documented in
+[`docs/detector.md`](docs/detector.md).
 
 The structural pipeline is split into:
 

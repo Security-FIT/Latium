@@ -50,7 +50,7 @@ def analyze_blind(context: AnalysisContext) -> dict[str, Any]:
     return run_case_analysis(context, "matrix-features", analyze)
 
 
-def analyze_composite(context: AnalysisContext) -> dict[str, Any]:
+def analyze_ccs_composite(context: AnalysisContext) -> dict[str, Any]:
     from src.structural.detectors.composite import detect_layer
 
     execution = execution_cases(context)
@@ -232,6 +232,25 @@ def analyze_edit_presence(context: AnalysisContext) -> dict[str, Any]:
         )
 
     return run_case_analysis(context, "matrix-features", analyze)
+
+
+def analyze_gram_localization(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.rome_layer_localizer import detect_from_profiles
+
+    def analyze(data: dict[str, Any], _: str) -> dict[str, Any]:
+        result = detect_from_profiles(
+            data.get("profiles", {}),
+            layers=data.get("layers"),
+            trim_fraction=float(data.get("trim_fraction", 0.10)),
+        )
+        localization = result["localization"]
+        selected = localization["selected_layer"]
+        result["anomalous_layer"] = selected
+        result["detection_score"] = float(localization["layer_scores"][str(selected)])
+        result["method"] = "diagonal-relative"
+        return result
+
+    return run_case_analysis(context, "gram-localization", analyze)
 
 
 def analyze_bottom_rank(context: AnalysisContext) -> dict[str, Any]:

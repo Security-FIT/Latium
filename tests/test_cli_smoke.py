@@ -80,12 +80,12 @@ def test_top_level_primary_shortcuts_run_through_hydra(monkeypatch) -> None:
     monkeypatch.setattr(src_main, 'run_hydra', fake_run_hydra)
 
     assert src_main.main(['methods']) == 0
-    assert src_main.main(['graphs', 'run', 'analysis_out/run', 'graphs.renderer_preset=paper']) == 0
+    assert src_main.main(['graphs', 'run', 'analysis_out/run', 'graphs.renderer_preset=ccs-report']) == 0
     assert src_main.main(['prefix-experiment', 'prefix_experiment.model=gpt2-large']) == 0
 
     assert calls == [
         ['command=methods'],
-        ['command=graphs/run', 'graphs.run_root=analysis_out/run', 'graphs.renderer_preset=paper'],
+        ['command=graphs/run', 'graphs.run_root=analysis_out/run', 'graphs.renderer_preset=ccs-report'],
         ['command=prefix_experiment', 'prefix_experiment.model=gpt2-large'],
     ]
 

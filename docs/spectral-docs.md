@@ -98,28 +98,20 @@ For empty/over-trimmed cases, it returns a safe null-style result (`anomalous_la
 
 ### PCS signals
 
-Within-projection PCS maps:
-- `pcs_neighbor_mean_scores`
-- `pcs_neighbor_shift_scores`
+The detector emits only the PCS maps consumed by hybrid scoring:
+
 - `pcs_neighbor_var_scores`
-- `pcs_neighbor_min_shift_scores`
-- `pcs_neighbor_flip_fraction_scores`
-- `pcs_next_scores`
-- `pcs_next_shift_scores`
 - `pcs_next_jump_scores`
 - `pcs_next_curvature_scores`
-
-Cross-projection PCS maps:
-- `pcs_cross_scores`
 - `pcs_cross_shift_scores`
-- `pcs_cross_curvature_scores`
 
-All of these keys are always present in `detect(...)` output; when FC information cannot be used, cross maps are all zeros.
+These keys are always present in `detect(...)` output. When FC information
+cannot be used, `pcs_cross_shift_scores` is zero.
 
 ### How PCS is calculated
 
-For each evaluated layer, take top-$K$ principal directions and singular values.  
-(I kinda vibed up these formulas for markdown but im like 98% sure they match the code)
+For each evaluated layer, take the top-$K$ principal directions and singular
+values.
 
 1. Canonicalize direction signs (to remove SVD sign ambiguity):
 $$
@@ -135,40 +127,24 @@ $$
 \widetilde w_{\ell,m,i}=\frac{\tfrac12(\sigma_{\ell,i}+\sigma_{m,i})}{\sum_j\tfrac12(\sigma_{\ell,j}+\sigma_{m,j})+\varepsilon}
 $$
 
-3. Neighbor-based PCS signals (within radius $r$ -number of layers- around each layer):
+3. Neighbor variance within radius $r$ around each layer:
 $$
 \mathcal N_r(\ell)=\{m:\,0<|m-\ell|\le r\}
-$$
-$$
-\operatorname{neighbor\_mean}_\ell=\operatorname{mean}_{m\in\mathcal N_r(\ell)}\operatorname{wPCS}(\ell,m)
-$$
-$$
-\operatorname{neighbor\_shift}_\ell=\operatorname{mean}_{m\in\mathcal N_r(\ell)}\left(1-\operatorname{wPCS}(\ell,m)\right)
 $$
 $$
 \operatorname{neighbor\_var}_\ell=\operatorname{var}_{m\in\mathcal N_r(\ell)}\operatorname{wPCS}(\ell,m)
 $$
 
-`pcs_neighbor_min_shift_scores` uses the strongest local drop:
-$$
-\operatorname{neighbor\_min\_shift}_\ell = 1 - \min_{m\in\mathcal N_r(\ell)}\operatorname{wPCS}(\ell,m)
-$$
-
-`pcs_neighbor_flip_fraction_scores` is the weighted fraction of principal components with negative pairwise dot product.
-
-4. Next-layer PCS signals:
+4. Next-layer jump and curvature:
 $$
 \operatorname{pcs\_next}_\ell=\operatorname{wPCS}(\ell,\ell+1)
-$$
-$$
-\operatorname{pcs\_next\_shift}_\ell = 1-\operatorname{pcs\_next}_\ell
 $$
 $$
 \operatorname{pcs\_next\_jump}_\ell = \left|\operatorname{pcs\_next}_\ell-\operatorname{pcs\_next}_{\ell-1}\right|
 $$
 
 Implementation edge handling:
-- for `pcs_next_scores`, the last entry copies the previous one,
+- the internal next-layer series copies its previous value at the last layer,
 - for `pcs_next_jump_scores`, the first entry copies the first finite jump,
 - if there are fewer than 2 evaluated layers, these arrays stay zero.
 
@@ -188,11 +164,10 @@ $$
 \operatorname{pcs\_cross}_\ell = \sum_{i=1}^{K}\widetilde w_{\ell,i}\,\langle \widetilde v^{(proj)}_{\ell,i},\widetilde v^{(fc)}_{\ell,i}\rangle
 $$
 
-Then:
+The emitted cross-projection term is:
 $$
 \operatorname{pcs\_cross\_shift}_\ell = 1-\operatorname{pcs\_cross}_\ell
 $$
-and `pcs_cross_curvature_scores` is its second-derivative energy over depth.
 
 ### Final scoring
 
@@ -212,7 +187,12 @@ Hybrid helper outputs:
 - `rome_hybrid_scores`
 
 `sv_z_rolling_z_scores` and `sv_ratio_rolling_z_scores` use absolute rolling z-score with centered window size 5 (forced odd).
-When `has_fc_weights=False`, `sv_ratio_rolling_z_scores` is all zeros.
+When `has_fc_weights=False`, `sv_ratio_scores`,
+`sv_ratio_rolling_z_scores`, and `sv_pcs_contradiction_scores` are all zeros.
+This is an intentional output-contract change: the FC-dependent diagnostics no
+longer report projection-only substitutes. These fields are retained for plots
+and stable result shape; the no-FC hybrid still uses the projection-only terms
+shown below.
 
 Rolling z-score used by code:
 $$
@@ -225,21 +205,19 @@ $$
 \operatorname{pcs\_rank}_\ell = \operatorname{mean}\big(\operatorname{rank01}(\operatorname{pcs\_next\_jump}_\ell),\operatorname{rank01}(\operatorname{pcs\_neighbor\_var}_\ell),\operatorname{rank01}(\operatorname{pcs\_next\_curvature}_\ell)[,\operatorname{rank01}(\operatorname{pcs\_cross\_shift}_\ell)]\big)
 $$
 
-`sv_pcs_contradiction_scores` is:
+With FC weights, `sv_pcs_contradiction_scores` is:
 $$
 \operatorname{contradiction}_\ell = \operatorname{sv\_rank}_\ell\cdot(1-\operatorname{pcs\_rank}_\ell)
 $$
 
-`sv_rank` used by code is:
+where:
 $$
 \operatorname{sv\_rank}_\ell=
-\begin{cases}
-\frac{1}{2}\left(\operatorname{rank01}(A_\ell)+\operatorname{rank01}(B_\ell)\right), & \text{with FC}\\
-\operatorname{rank01}(A_\ell), & \text{without FC}
-\end{cases}
+\frac{1}{2}\left(\operatorname{rank01}(A_\ell)+\operatorname{rank01}(B_\ell)\right)
 $$
 
 where $A_\ell$ is Signal A (`sv_z_scores`) and $B_\ell$ is Signal B (`sv_ratio_scores`).
+Without FC weights, contradiction is defined as zero.
 
 With FC weights:
 $$

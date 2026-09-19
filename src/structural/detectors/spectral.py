@@ -15,11 +15,11 @@ import numpy as np
 
 from src.structural.detectors.local_scores import local_score_bank
 from src.structural.detectors.spectral_primitives import (
-    PCS_CROSS_NAMES,
-    PCS_NAMES,
+    SCORE_PCS_CROSS_NAMES,
+    SCORE_PCS_NAMES,
     hybrid_scores,
-    pcs_cross_signals_from_rank_cumsums,
-    pcs_signals_from_pairwise_cumsums,
+    score_pcs_cross_signals_from_rank_cumsums,
+    score_pcs_signals_from_pairwise_cumsums,
     sv_ratio_energy,
     sv_z_energy,
 )
@@ -41,7 +41,6 @@ def _score_config(config: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "top_k": int(_required(config, "top_k")),
         "rolling_window": max(1, int(_required(config, "rolling_window"))),
-        "local_windows": tuple(int(value) for value in _required(config, "local_windows")),
         "boundary": max(0, int(_required(config, "boundary"))),
     }
 
@@ -95,8 +94,8 @@ def empty_spectral_result(
         "pcs_composite_rank_scores": dict(z),
         "sv_pcs_contradiction_scores": dict(z),
         "rome_hybrid_scores": dict(z),
-        **{name: dict(z) for name in PCS_NAMES},
-        **{name: dict(z) for name in PCS_CROSS_NAMES},
+        **{name: dict(z) for name in SCORE_PCS_NAMES},
+        **{name: dict(z) for name in SCORE_PCS_CROSS_NAMES},
         "local_window_scores": {},
         "has_fc_weights": False,
         "config": dict(config),
@@ -127,9 +126,7 @@ def score_spectral_inputs(
     config: Mapping[str, Any],
     result_config: Mapping[str, Any] | None = None,
     string_keys: bool = False,
-    pairwise_pcs: np.ndarray | None = None,
-    include_pairwise_pcs: bool = False,
-    emit_local_window_scores: bool = True,
+    emit_local_window_scores: bool = False,
 ) -> dict[str, Any]:
     scoring = _score_config(config)
     top_k = scoring["top_k"]
@@ -140,8 +137,8 @@ def score_spectral_inputs(
     if sv_ratio.size != sv_z.size:
         sv_ratio = np.zeros_like(sv_z)
 
-    pcs_values = _series(pcs, PCS_NAMES, len(sv_z))
-    pcs_cross_values = _series(pcs_cross, PCS_CROSS_NAMES, len(sv_z))
+    pcs_values = _series(pcs, SCORE_PCS_NAMES, len(sv_z))
+    pcs_cross_values = _series(pcs_cross, SCORE_PCS_CROSS_NAMES, len(sv_z))
     hybrid = hybrid_scores(
         sv_z,
         sv_ratio,
@@ -175,9 +172,6 @@ def score_spectral_inputs(
         "excluded_layers": list(excluded_layers),
         "config": dict(result_config if result_config is not None else config),
     }
-    if include_pairwise_pcs and pairwise_pcs is not None:
-        result["pairwise_pcs"] = pairwise_pcs.tolist()
-
     for name, values in {**pcs_values, **pcs_cross_values, **hybrid}.items():
         result[name] = layer_map(values)
 
@@ -195,7 +189,7 @@ def score_spectral_inputs(
                 score_name: layer_map(score_values)
                 for score_name, score_values in local_score_bank(
                     values,
-                    windows=scoring["local_windows"],
+                    windows=tuple(int(value) for value in _required(config, "local_windows")),
                 ).items()
             }
             for name, values in local_series.items()
@@ -225,6 +219,12 @@ def replay_spectral(
     trim_first = max(0, int(_required(config, "trim_first")))
     trim_last = max(0, int(_required(config, "trim_last")))
     neighbor_layers = max(1, int(_required(config, "neighbor_layers")))
+    stored_neighbor_layers = max(1, int(data.get("stored_neighbor_layers", len(layers) or 1)))
+    if neighbor_layers > stored_neighbor_layers:
+        raise _analysis_unavailable(
+            f"spectral neighbor_layers={neighbor_layers} exceeds captured radius="
+            f"{stored_neighbor_layers}; recapture is required"
+        )
 
     sv_proj_map = data.get("sv_proj_topk", {})
     sv_proj = np.asarray(_layer_values(sv_proj_map, layers), dtype=np.float64)
@@ -237,16 +237,15 @@ def replay_spectral(
     evaluated_layers = layers[start:end]
     excluded_layers = layers[:start] + layers[end:]
 
-    pcs, pairwise = pcs_signals_from_pairwise_cumsums(
+    pcs = score_pcs_signals_from_pairwise_cumsums(
         np.asarray(data.get("pcs_pairwise_dot_weight_cumsum", []), dtype=np.float64),
-        np.asarray(data.get("pcs_flip_pairwise_weight_cumsum", []), dtype=np.float64),
         np.asarray(data.get("pcs_pairwise_weight_cumsum", []), dtype=np.float64),
         top_k=top_k,
         start=start,
         end=end,
         neighbor_layers=neighbor_layers,
     )
-    pcs_cross = pcs_cross_signals_from_rank_cumsums(
+    pcs_cross = score_pcs_cross_signals_from_rank_cumsums(
         data.get("pcs_cross_dot_weight_cumsum", {}),
         data.get("pcs_cross_weight_cumsum", {}),
         layers,
@@ -266,8 +265,6 @@ def replay_spectral(
         has_fc=has_fc,
         config=config,
         string_keys=True,
-        pairwise_pcs=pairwise,
-        include_pairwise_pcs=True,
     )
 
 

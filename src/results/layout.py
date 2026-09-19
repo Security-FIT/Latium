@@ -79,13 +79,18 @@ class RunLayout:
         self,
         model: str,
         plan_id: str,
-        edit_method: str,
+        edit_method: str | None,
         category: str,
         analysis_id: str,
         analysis_config_hash: str,
     ) -> Path:
+        execution_root = (
+            self.baseline_root(model, plan_id)
+            if edit_method is None
+            else self.method_root(model, plan_id, edit_method)
+        )
         return (
-            self.method_root(model, plan_id, edit_method)
+            execution_root
             / "analysis"
             / _segment(category, "category")
             / _segment(analysis_id, "analysis_id")

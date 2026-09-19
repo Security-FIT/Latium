@@ -22,8 +22,8 @@ runner.py
 Captures must return JSON-serializable data. Baseline captures should store
 reusable layers. Edited captures may store patches or full profiles depending
 on downstream consumers. `matrix-features` stores all edited layers because
-composite analyses and structural graph renderers need complete post-edit layer
-profiles.
+CCS composite analyses and structural graph renderers need complete post-edit
+layer profiles.
 
 `matrix-features` is configured through Hydra:
 
@@ -39,13 +39,20 @@ Shared matrix profile math lives in `detectors/profiles.py` as
 
 1. Add the runner in `analysis/detector_methods.py` or `analysis/studies.py`.
 2. Register it in `analysis/registry.py`.
-3. Declare `required_captures`.
+3. Declare `required_captures` and any `required_matrix_features`.
 4. Add default method config under `src/config/structural/default.yaml` if
    needed.
 5. Test missing inputs and happy-path output.
 
 Use `category="detection"` for layer prediction and
 `category="artifact-study"` for exploratory saved analyses.
+
+For `structural run`, analysis requirements are closed over automatically: a
+selected method adds its captures and matrix columns even when the configured
+capture profile is `none`. A required capture cannot also be explicitly disabled.
+Enabled end-to-end renderers add their capture and matrix-column requirements to
+the same plan.
+Analysis-only replay remains model-free and therefore cannot create missing captures.
 
 ## Add Detector Math
 
@@ -56,3 +63,11 @@ Use shared helpers instead of duplicating formulas:
 
 - `src.common.arrays.local_zscore` and `curvature` for local layer transforms.
 - `detectors/profiles.py` for per-layer matrix profile fields.
+
+## ROME localizer
+
+The `gram-localization` capture/analysis pair is a projection-only,
+single-checkpoint opt-in. Capture specifications declare required weight
+families, so unrelated FC, attention, and token-head state is not prepared.
+See [`docs/detector.md`](../../docs/detector.md) for the algorithm, evidence,
+and limits.

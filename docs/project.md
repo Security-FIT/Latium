@@ -65,10 +65,10 @@ Notebooks are for visual inspection, not production runs.
 
 - `notebooks/causal_tracing.ipynb` invokes the production causal-trace command
   and visualizes its saved artifacts.
-- `notebooks/causal_tracing_legacy.ipynb` preserves the historical
+- `notebooks/causal_tracing_reference.ipynb` preserves the historical
   `origin/causal-trace:analysis.ipynb` notebook unchanged.
 - `notebooks/analysis.ipynb` is a thin wrapper around graph rendering for an
-  existing run root; it is unrelated to the legacy causal-trace notebook.
+  existing run root; it is unrelated to the causal-trace reference notebook.
 
 Production causal tracing is the CLI workflow documented in
 `causal_tracing.md`.
@@ -168,7 +168,7 @@ Rules:
 - Baseline captures should include all reusable layers.
 - Method captures may write patches or full profiles depending on downstream
   consumers. `matrix-features` writes all layers for edited cases because
-  composite and paper graphs compare the full post-edit depth profile.
+  CCS composite and paper graphs compare the full post-edit depth profile.
 - Use `context.changed_layers(family, layers)` for patch selection.
 - Declare `requires_probe=True` if the capture needs an edit probe vector.
 - Hydra-owned capture options belong under `structural.capture`. Matrix feature
@@ -185,8 +185,8 @@ the artifact is stored.
    `src/structural/analysis/studies.py`.
 2. Register it in `src/structural/analysis/registry.py`.
 3. List required capture IDs in `required_captures`.
-4. Validate required matrix feature columns with `require_matrix_features` when
-   consuming `matrix-features`.
+4. List scalar columns in `required_matrix_features` and validate them with
+   `require_matrix_features` when consuming `matrix-features`.
 5. Add default config under `structural.analysis.methods.<analysis-id>` if the
    analysis has config fields.
 6. Add tests for unavailable inputs and happy-path outputs.
@@ -210,6 +210,8 @@ Registry fields:
 - `config_fields`: accepted config keys.
 - `variant_fields`: maps `AnalysisVariantConfig` fields into method config.
 - `model_families`: optional support filter, such as `gpt` or `non-gpt`.
+- `required_matrix_features`: columns automatically added to matrix capture for
+  end-to-end structural runs.
 
 Use `AnalysisUnavailableError` when a case cannot be analyzed because the saved
 capture is insufficient and recapture is required.

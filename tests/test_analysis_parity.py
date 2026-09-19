@@ -163,7 +163,6 @@ def test_spectral_replay_matches_model_resident_detector() -> None:
         "trim_last": 1,
         "neighbor_layers": 2,
         "rolling_window": 3,
-        "local_windows": [3],
         "boundary": 2,
     }
     capture = capture_spectral(
@@ -174,7 +173,7 @@ def test_spectral_replay_matches_model_resident_detector() -> None:
             probe_vector=None,
             token_predictor=None,
             changed_weights={},
-            options={"spectral_top_k": 4},
+            options={"spectral_top_k": 4, "spectral_neighbor_layers": 2},
         )
     )
     resident = SpectralDetector(
@@ -192,15 +191,97 @@ def test_spectral_replay_matches_model_resident_detector() -> None:
     for name in (
         "sv_z_scores",
         "sv_ratio_scores",
-        "pcs_neighbor_mean_scores",
+        "pcs_neighbor_var_scores",
         "pcs_next_jump_scores",
-        "pcs_cross_scores",
-        "pcs_cross_curvature_scores",
+        "pcs_next_curvature_scores",
+        "pcs_cross_shift_scores",
         "rome_hybrid_scores",
     ):
         assert np.allclose(
             list(replayed[name].values()),
             list(resident[name].values()),
+            rtol=1e-6,
+            atol=1e-6,
+        )
+
+
+def test_spectral_patch_recomputes_only_changed_neighborhood_and_matches_full_capture() -> None:
+    proj = _weights()
+    fc = {layer: weight + 0.05 * torch.eye(weight.shape[0]) for layer, weight in proj.items()}
+    edited = dict(proj)
+    edited[4] = edited[4] + torch.ones(8, 1) @ torch.ones(1, 8)
+    options = {"spectral_top_k": 4, "spectral_neighbor_layers": 2}
+    baseline = capture_spectral(
+        CaptureContext(
+            proj_weights=proj,
+            fc_weights=fc,
+            attention_weights={},
+            probe_vector=None,
+            token_predictor=None,
+            changed_weights={},
+            options=options,
+        )
+    )
+    patch = capture_spectral(
+        CaptureContext(
+            proj_weights=edited,
+            fc_weights=fc,
+            attention_weights={},
+            probe_vector=None,
+            token_predictor=None,
+            changed_weights={"proj": (4,)},
+            options=options,
+        )
+    )
+    full = capture_spectral(
+        CaptureContext(
+            proj_weights=edited,
+            fc_weights=fc,
+            attention_weights={},
+            probe_vector=None,
+            token_predictor=None,
+            changed_weights={},
+            options=options,
+        )
+    )
+
+    assert set(patch["sv_proj_topk"]) == {"4"}
+    assert set(patch["pcs_pairwise_rows"]["dot_weight_cumsum"]) == {"4"}
+    assert set(patch["pcs_cross_dot_weight_cumsum"]) == {"4"}
+    assert "pcs_flip_pairwise_weight_cumsum" not in baseline
+
+    materialized = materialize_capture(
+        {
+            "producer": "spectral",
+            "cases": [{"case_id": "baseline", "status": "complete", "data": baseline}],
+        },
+        {
+            "producer": "spectral",
+            "cases": [{"case_id": "case", "status": "complete", "data": patch}],
+        },
+    )[0]["data"]
+    config = {
+        "top_k": 4,
+        "trim_first": 1,
+        "trim_last": 1,
+        "neighbor_layers": 2,
+        "rolling_window": 3,
+        "boundary": 1,
+    }
+    replayed_patch = replay_spectral(materialized, config)
+    replayed_full = replay_spectral(full, config)
+    for name in (
+        "sv_z_scores",
+        "sv_ratio_scores",
+        "pcs_neighbor_var_scores",
+        "pcs_next_jump_scores",
+        "pcs_next_curvature_scores",
+        "pcs_cross_shift_scores",
+        "rome_hybrid_scores",
+    ):
+        assert np.allclose(
+            list(replayed_patch[name].values()),
+            list(replayed_full[name].values()),
             rtol=1e-6,
             atol=1e-6,
         )

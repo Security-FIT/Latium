@@ -502,7 +502,7 @@ def run_experiment(
     )
     method_configs = method_configs or {}
     spectral_method = dict(method_configs.get("spectral", {}))
-    composite_method = dict(method_configs.get("composite", {}))
+    composite_method = dict(method_configs.get("ccs-composite", {}))
     attention_method = dict(method_configs.get("attention", {}))
     spectral_detector = SpectralDetector(
         top_k=spectral_top_k,

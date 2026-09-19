@@ -15,6 +15,25 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Optional
 
+from src.common.config import strict_bool
+
+
+_ANALYSIS_MINIMUMS = {
+    "spectral_top_k": 1,
+    "spectral_neighbor_layers": 1,
+    "spectral_rolling_window": 1,
+}
+_ANALYSIS_OPTIONAL_MINIMUMS = {"trim_first": 0, "trim_last": 0}
+
+
+def strict_int(value: Any, *, name: str, minimum: int | None = None) -> int:
+    """Validate an integer without silently truncating floats or accepting booleans."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return value
+
 
 @dataclass(frozen=True)
 class AnalysisVariantConfig:
@@ -25,14 +44,25 @@ class AnalysisVariantConfig:
     spectral_rolling_window: int = 5
     local_windows: tuple[int, ...] = (3, 5, 7)
 
+    def __post_init__(self) -> None:
+        for name in ("spectral_top_k", "spectral_neighbor_layers", "spectral_rolling_window"):
+            strict_int(getattr(self, name), name=name)
+        for name in ("trim_first", "trim_last"):
+            if getattr(self, name) is not None:
+                strict_int(getattr(self, name), name=name)
+        object.__setattr__(self, "local_windows", tuple(
+            strict_int(window, name="local_windows") for window in self.local_windows
+        ))
+        _validate_analysis_variant(self)
+
     def to_dict(self) -> dict[str, object]:
         return {
-            "spectral_top_k": int(self.spectral_top_k),
-            "trim_first": None if self.trim_first is None else int(self.trim_first),
-            "trim_last": None if self.trim_last is None else int(self.trim_last),
-            "spectral_neighbor_layers": int(self.spectral_neighbor_layers),
-            "spectral_rolling_window": int(self.spectral_rolling_window),
-            "local_windows": [int(window) for window in self.local_windows],
+            "spectral_top_k": self.spectral_top_k,
+            "trim_first": self.trim_first,
+            "trim_last": self.trim_last,
+            "spectral_neighbor_layers": self.spectral_neighbor_layers,
+            "spectral_rolling_window": self.spectral_rolling_window,
+            "local_windows": list(self.local_windows),
         }
 
 
@@ -73,7 +103,7 @@ _DEFAULTS: dict[str, Any] = {
     "force": False,
     "case_dataset_name": "",
     "case_dataset_split": "",
-    "capture_profile": "paper",
+    "capture_profile": "none",
     "enable_captures": (),
     "disable_captures": (),
     "matrix_feature_set": "paper",
@@ -94,8 +124,12 @@ _DEFAULTS: dict[str, Any] = {
     "enable_analyses": (),
     "disable_analyses": (),
     "run_analysis": True,
+    "analysis_continue_on_error": False,
     "render_graphs": False,
-    "renderer_preset": "none",
+    "render_continue_on_error": False,
+    "renderer_preset": "ccs-report",
+    "renderer_style_preset": "default",
+    "renderer_options": {},
     "enable_renderers": (),
     "disable_renderers": (),
     "seed": 0,
@@ -132,11 +166,14 @@ _INT_FIELDS = {
     "seed",
 }
 _OPTIONAL_INT_FIELDS = {"trim_first", "trim_last"}
+_OPTIONAL_STR_FIELDS = {"case_index_file", "run_id", "progress_file", "worker_id", "hf_token"}
 _BOOL_FIELDS = {
     "fail_on_missing_second_moment",
     "force",
     "run_analysis",
+    "analysis_continue_on_error",
     "render_graphs",
+    "render_continue_on_error",
     "prefix_log_all",
     "second_moment_allow_autocompute",
     "log_skip_traceback",
@@ -156,6 +193,7 @@ class StructuralBenchmarkConfig:
             field: _normalize_field(field, values[field] if field in values else _default_value(field))
             for field in _DEFAULTS
         }
+        _validate_values(normalized)
         object.__setattr__(self, "_values", MappingProxyType(normalized))
 
     def __getattr__(self, name: str) -> Any:
@@ -183,12 +221,12 @@ class StructuralBenchmarkConfig:
             return tuple(self.analysis_variants)
         return (
             AnalysisVariantConfig(
-                spectral_top_k=int(self.spectral_top_k),
+                spectral_top_k=self.spectral_top_k,
                 trim_first=self.trim_first,
                 trim_last=self.trim_last,
-                spectral_neighbor_layers=int(self.spectral_neighbor_layers),
-                spectral_rolling_window=int(self.spectral_rolling_window),
-                local_windows=tuple(int(window) for window in self.local_windows),
+                spectral_neighbor_layers=self.spectral_neighbor_layers,
+                spectral_rolling_window=self.spectral_rolling_window,
+                local_windows=self.local_windows,
             ),
         )
 
@@ -204,13 +242,15 @@ def _default_value(field: str) -> Any:
 
 def _normalize_field(field: str, value: Any) -> Any:
     if field in _STR_TUPLE_FIELDS:
-        return tuple(str(item) for item in _as_sequence(value) if item not in (None, ""))
+        return _string_tuple(value)
     if field in _INT_TUPLE_FIELDS:
-        return tuple(int(item) for item in _as_sequence(value))
+        return tuple(strict_int(item, name=field) for item in _as_sequence(value))
     if field in _INT_FIELDS:
-        return int(value)
+        return strict_int(value, name=field)
     if field in _OPTIONAL_INT_FIELDS:
-        return None if value is None else int(value)
+        return None if value is None else strict_int(value, name=field)
+    if field in _OPTIONAL_STR_FIELDS:
+        return None if value in (None, "") else str(value)
     if field in _BOOL_FIELDS:
         return _bool(value)
     if field == "output_dir":
@@ -218,7 +258,13 @@ def _normalize_field(field: str, value: Any) -> Any:
     if field == "analysis_variants":
         return tuple(_analysis_variant(item) for item in _as_sequence(value))
     if field == "analysis_method_configs":
-        return {str(key): dict(item) for key, item in dict(value or {}).items() if isinstance(item, Mapping)}
+        if not isinstance(value, Mapping) or any(not isinstance(item, Mapping) for item in value.values()):
+            raise TypeError("analysis_method_configs must map method names to mappings")
+        return {str(key): dict(item) for key, item in value.items()}
+    if field == "renderer_options":
+        if not isinstance(value, Mapping) or any(not isinstance(item, Mapping) for item in value.values()):
+            raise TypeError("renderer_options must map renderer names to mappings")
+        return {str(key): dict(item) for key, item in value.items()}
     return value
 
 
@@ -234,16 +280,64 @@ def _as_sequence(value: Any) -> tuple[Any, ...]:
     if value is None:
         return ()
     if isinstance(value, str):
-        return tuple(part.strip() for part in value.split(",") if part.strip())
+        return (value,)
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
         return tuple(value)
     return (value,)
 
 
+def _string_tuple(value: Any) -> tuple[str, ...]:
+    output: list[str] = []
+    seen: set[str] = set()
+    for item in _as_sequence(value):
+        normalized = str(item).strip() if item is not None else ""
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            output.append(normalized)
+    return tuple(output)
+
+
 def _bool(value: Any) -> bool:
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
+    return strict_bool(value, name="structural boolean")
+
+
+def _validate_analysis_variant(config: AnalysisVariantConfig) -> None:
+    _validate_analysis_values(config.to_dict())
+
+
+def _validate_analysis_values(values: Mapping[str, Any]) -> None:
+    for field, minimum in _ANALYSIS_MINIMUMS.items():
+        if values[field] < minimum:
+            raise ValueError(f"{field} must be at least {minimum}")
+    for field, minimum in _ANALYSIS_OPTIONAL_MINIMUMS.items():
+        value = values[field]
+        if value is not None and value < minimum:
+            raise ValueError(f"{field} must be non-negative or None")
+    if values["spectral_rolling_window"] % 2 == 0:
+        raise ValueError("spectral_rolling_window must be a positive odd integer")
+    if not values["local_windows"] or any(window < 1 or window % 2 == 0 for window in values["local_windows"]):
+        raise ValueError("local_windows must contain positive odd integers")
+
+
+def _validate_values(values: Mapping[str, Any]) -> None:
+    minimums = {
+        "n_tests": 0,
+        "start_idx": 0,
+        "run_start_idx_step": 0,
+        "runs_per_model": 1,
+        "progress_interval": 1,
+        "matrix_svd_top_k": 1,
+        "bottom_rank_top_svd_rank": 1,
+        "bottom_rank_boundary": 0,
+    }
+    for field, minimum in minimums.items():
+        if int(values[field]) < minimum:
+            raise ValueError(f"{field} must be at least {minimum}")
+    _validate_analysis_values(values)
+    if not values["bottom_rank_sweep_ranks"] or any(rank < 1 for rank in values["bottom_rank_sweep_ranks"]):
+        raise ValueError("bottom_rank_sweep_ranks must contain positive integers")
+    if any("," in model or ";" in model for model in values["models"]):
+        raise ValueError("models must be a native list, not a comma/semicolon string")
 
 
 __all__ = [

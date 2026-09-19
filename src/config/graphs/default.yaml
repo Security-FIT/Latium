@@ -6,7 +6,7 @@
 run_root: null
 artifact: null
 output_dir: null
-renderer_preset: paper
+renderer_preset: ccs-report
 style_preset: default
 enable_renderers: []
 disable_renderers: []
@@ -27,4 +27,10 @@ renderers:
       - png
       - pdf
       - json
+  structural-ccs-lines:
+    formats:
+      - png
+      - pdf
+      - json
 force: false
+continue_on_error: false

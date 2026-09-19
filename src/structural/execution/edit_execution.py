@@ -30,6 +30,7 @@ from src.structural.capture.artifacts import (
     write_execution,
 )
 from src.structural.capture.producers import CaptureContext, token_predictor_from_handler
+from src.structural.capture.registry import captures_require_probe, required_weight_families
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.worker_progress import effective_progress_interval
 
@@ -45,6 +46,7 @@ def modified_weights(
     proj_template: str,
     fc_template: Optional[str],
     outcome: EditOutcome,
+    weight_families: frozenset[str] = frozenset(("proj", "fc", "attention")),
 ) -> tuple[
     dict[int, torch.Tensor],
     Optional[dict[int, torch.Tensor]],
@@ -56,7 +58,7 @@ def modified_weights(
     modified_fc = dict(baseline_fc) if baseline_fc is not None else None
     modified_attention = {family: dict(weights) for family, weights in baseline_attention.items()}
 
-    if "proj" in outcome.modified_weights:
+    if "proj" in weight_families and "proj" in outcome.modified_weights:
         changed = outcome.modified_weights["proj"]
         layers = range(handler.num_of_layers) if changed is None else (int(layer) for layer in changed)
         for layer in layers:
@@ -64,14 +66,14 @@ def modified_weights(
                 handler._get_module(proj_template.format(int(layer))).weight.detach().clone().cpu()
             )
 
-    if "fc" in outcome.modified_weights and fc_template:
+    if "fc" in weight_families and "fc" in outcome.modified_weights and fc_template:
         changed = outcome.modified_weights["fc"]
         layers = range(handler.num_of_layers) if changed is None else (int(layer) for layer in changed)
         modified_fc = modified_fc or {}
         for layer in layers:
             modified_fc[int(layer)] = handler._get_module(fc_template.format(int(layer))).weight.detach().clone().cpu()
 
-    if "attention" in outcome.modified_weights:
+    if "attention" in weight_families and "attention" in outcome.modified_weights:
         modified_attention = extract_attention_weights(handler, proj_template)
 
     return modified_proj, modified_fc, modified_attention
@@ -173,6 +175,8 @@ def run_edit_method(
     execution_cases: list[dict[str, Any]] = []
     captured_cases: dict[str, list[dict[str, Any]]] = defaultdict(list)
     interval = effective_progress_interval(len(test_cases), config.progress_interval)
+    weight_families = required_weight_families(capture_names)
+    needs_token_predictor = captures_require_probe(capture_names)
 
     for index, case in enumerate(test_cases, start=1):
         case_id = str(case["case_id"])
@@ -183,6 +187,29 @@ def run_edit_method(
             outcome.metrics.update(metrics)
             if "efficacy_score" in metrics:
                 outcome.success = bool(float(metrics["efficacy_score"]) >= 1.0)
+            modified_proj, modified_fc, modified_attention = modified_weights(
+                handler,
+                baseline_proj,
+                baseline_fc,
+                baseline_attention,
+                proj_template,
+                fc_template,
+                outcome,
+                weight_families,
+            )
+            capture_context = CaptureContext(
+                proj_weights=modified_proj,
+                fc_weights=modified_fc,
+                attention_weights=modified_attention,
+                probe_vector=outcome.probe_vector,
+                token_predictor=token_predictor_from_handler(handler) if needs_token_predictor else None,
+                changed_weights=dict(outcome.modified_weights),
+                options=options,
+            )
+            case_captures = {
+                name: capture_one(name, capture_context, case_id=case_id)
+                for name in capture_names
+            }
             execution_cases.append(
                 {
                     "case_id": case_id,
@@ -198,27 +225,8 @@ def run_edit_method(
                     "error": None,
                 }
             )
-
-            modified_proj, modified_fc, modified_attention = modified_weights(
-                handler,
-                baseline_proj,
-                baseline_fc,
-                baseline_attention,
-                proj_template,
-                fc_template,
-                outcome,
-            )
-            capture_context = CaptureContext(
-                proj_weights=modified_proj,
-                fc_weights=modified_fc,
-                attention_weights=modified_attention,
-                probe_vector=outcome.probe_vector,
-                token_predictor=token_predictor_from_handler(handler),
-                changed_weights=dict(outcome.modified_weights),
-                options=options,
-            )
-            for capture_name in capture_names:
-                captured_cases[capture_name].append(capture_one(capture_name, capture_context, case_id=case_id))
+            for capture_name, captured in case_captures.items():
+                captured_cases[capture_name].append(captured)
         except Exception as exc:
             LOGGER.warning(
                 "Case failed: model=%s method=%s case=%s error=%s",
@@ -256,6 +264,7 @@ def run_edit_method(
             if progress_callback is not None:
                 progress_callback(model, index, len(test_cases))
 
+    replace_recomputed = bool(config.force or execution_current)
     execution_record = write_execution(
         writer,
         layout,
@@ -267,7 +276,7 @@ def run_edit_method(
         cases=execution_cases,
         target_layer=int(handler._layer),
         num_layers=int(handler.num_of_layers),
-        force=config.force,
+        force=replace_recomputed,
         metadata={"analysis_variants": analysis_variant_metadata(config)},
     )
     for capture_name in capture_names:
@@ -284,7 +293,7 @@ def run_edit_method(
             capture_config=capture_configs[capture_name],
             cases=captured_cases[capture_name],
             inputs=inputs,
-            force=config.force,
+            force=replace_recomputed,
         )
     return {
         "skipped": False,

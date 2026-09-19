@@ -19,10 +19,12 @@ import torch
 
 from src.common.config import get_config_value as _get, plain
 from src.common.linalg import clear_linalg_caches
+from src.graphs.registry import resolve_renderers
 from src.handlers.rome import ModelHandler
 from src.results import ArtifactWriter, RunLayout
+from src.structural.analysis.registry import resolve_analyses
 from src.structural.capture.baseline import baseline_artifacts
-from src.structural.capture.registry import resolve_captures
+from src.structural.capture.registry import required_weight_families, resolve_capture_plan
 from src.structural.execution.case_selection import load_test_cases
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.execution.covariance import find_second_moment_files
@@ -178,11 +180,34 @@ def _run_methods_for_plan(
 def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
     set_global_seed(config.seed)
     models = tuple(normalize_models_arg(config.models))
-    capture_names = resolve_captures(
+    analysis_names = (
+        resolve_analyses(
+            config.analysis_preset,
+            enabled=config.enable_analyses,
+            disabled=config.disable_analyses,
+        )
+        if config.run_analysis
+        else ()
+    )
+    renderer_names = (
+        resolve_renderers(
+            config.renderer_preset,
+            enabled=config.enable_renderers,
+            disabled=config.disable_renderers,
+        )
+        if config.render_graphs
+        else ()
+    )
+    capture_plan = resolve_capture_plan(
         config.capture_profile,
         enabled=config.enable_captures,
         disabled=config.disable_captures,
+        analyses=analysis_names,
+        renderers=renderer_names,
+        matrix_feature_set=config.matrix_feature_set,
+        matrix_features=config.matrix_features,
     )
+    capture_names = capture_plan.names
     run_id = config.run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
     layout = RunLayout.from_output(config.output_dir, run_id).ensure()
     writer = ArtifactWriter(
@@ -235,15 +260,16 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
         proj_template = handler._layer_name_template
         configured_fc = str(getattr(cfg.model, "fc_layer_name_template", "") or "").strip()
         fc_template = configured_fc or get_fc_template(proj_template)
-        baseline_proj = extract_weights(handler, proj_template)
+        weight_families = required_weight_families(capture_names)
+        baseline_proj = extract_weights(handler, proj_template) if "proj" in weight_families else {}
         baseline_fc: Optional[dict[int, torch.Tensor]] = None
-        if fc_template:
+        if "fc" in weight_families and fc_template:
             try:
                 baseline_fc = extract_weights(handler, fc_template)
             except (KeyError, ValueError):
                 LOGGER.warning("FC weights unavailable for %s", model_key)
         baseline_attention = (
-            extract_attention_weights(handler, proj_template) if "attention-features" in capture_names else {}
+            extract_attention_weights(handler, proj_template) if "attention" in weight_families else {}
         )
         model_context = _model_context(
             cfg,
@@ -268,7 +294,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                     )
                     test_case_cache[cache_key] = (test_cases, case_selection)
                 test_cases, case_selection = test_case_cache[cache_key]
-                options = capture_options(config)
+                options = capture_options(config, matrix_features=capture_plan.matrix_features)
                 baseline_records = baseline_artifacts(
                     writer=writer,
                     layout=layout,

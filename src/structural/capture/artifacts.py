@@ -19,16 +19,23 @@ from src.structural.capture.matrix_features import resolve_matrix_features
 from src.structural.capture.registry import CAPTURES
 from src.structural.capture.producers import CaptureContext
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
+from src.structural.detectors.rome_layer_localizer import (
+    DEFAULT_TRIM_FRACTION,
+    PROFILE_FIELDS,
+)
 
 
 def capture_options(
     config: StructuralBenchmarkConfig,
+    *,
+    matrix_features: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     variants = config.effective_analysis_variants
     return {
         "spectral_top_k": max(int(variant.spectral_top_k) for variant in variants),
+        "spectral_neighbor_layers": max(int(variant.spectral_neighbor_layers) for variant in variants),
         "matrix_feature_set": str(config.matrix_feature_set),
-        "matrix_features": tuple(config.matrix_features),
+        "matrix_features": tuple(config.matrix_features if matrix_features is None else matrix_features),
         "matrix_svd_top_k": int(config.matrix_svd_top_k),
         "bottom_rank_sweep_ranks": tuple(config.bottom_rank_sweep_ranks),
         "bottom_rank_top_svd_rank": int(config.bottom_rank_top_svd_rank),
@@ -86,6 +93,12 @@ def capture_config(
     if capture_name == "spectral":
         relevant_options = {
             "spectral_top_k": int(options["spectral_top_k"]),
+            "spectral_neighbor_layers": int(options["spectral_neighbor_layers"]),
+        }
+    elif capture_name == "gram-localization":
+        relevant_options = {
+            "profile_fields": list(PROFILE_FIELDS),
+            "trim_fraction": DEFAULT_TRIM_FRACTION,
         }
     elif capture_name == "matrix-features":
         relevant_options = {
@@ -123,7 +136,7 @@ def write_execution(
     edit_method: Optional[str],
     config: dict[str, Any],
     cases: list[dict[str, Any]],
-    target_layer: int,
+    target_layer: Optional[int],
     num_layers: int,
     force: bool,
     metadata: Optional[dict[str, Any]] = None,
@@ -148,7 +161,7 @@ def write_execution(
         created_at=datetime.now().isoformat(),
         cases=cases,
         summary={
-            "target_layer": int(target_layer),
+            "target_layer": None if target_layer is None else int(target_layer),
             "num_layers": int(num_layers),
             "cases_total": len(cases),
             "cases_complete": complete,

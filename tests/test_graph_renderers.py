@@ -231,6 +231,12 @@ def test_registered_graph_renderers_use_manifest_artifacts(tmp_path: Path) -> No
 
     assert set(result["written"]) == {"render/rome-success", "render/detector-window", "render/detector-signals"}
     assert (tmp_path / "graphs" / "rome-success" / "rome-success-rate.png").is_file()
+    rome_metrics = json.loads(
+        (tmp_path / "graphs" / "rome-success" / "rome-success-metrics.json").read_text(encoding="utf-8")
+    )
+    assert rome_metrics["executions"][0]["overall_score"] == pytest.approx(
+        3.0 / (1.0 + 1.0 / 0.7 + 1.0 / 0.6)
+    )
     assert (tmp_path / "graphs" / "detector-window" / "detector-layer-window.png").is_file()
     signal_index = json.loads(
         (tmp_path / "graphs" / "detector-signals" / "detector-signal-profiles.json").read_text(

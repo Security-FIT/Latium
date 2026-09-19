@@ -23,7 +23,7 @@ import torch
 from omegaconf import OmegaConf
 
 from src.handlers.rome import ModelHandler
-from src.evaluation.rome import compute_rome_metrics
+from src.evaluation.rome import compute_rome_metrics, summarize_rome_scores
 from src.common.loading import load_dataset
 from src.common.model_config import load_model_config
 from src.rome.common import gather_k, optimize_v, insert_kv, resolve_rome_sample_count
@@ -82,11 +82,8 @@ def run_single_model(
     skipped = 0
     results = []
     # Accumulators for aggregate ROME paper metrics
-    es_scores = []
     em_scores = []
-    ps_scores = []
-    ns_scores = []
-    s_scores = []
+    metric_records = []
 
     LOGGER.info("Model=%s layer=%s n_tests=%d", cfg.model.name, handler._layer, n_tests)
 
@@ -146,13 +143,8 @@ def run_single_model(
                 neighborhood_prompts=neighborhood_prompts or [],
             )
 
-            es_scores.append(metrics["efficacy_score"])
+            metric_records.append(metrics)
             em_scores.append(metrics["efficacy_magnitude"])
-            if metrics["paraphrase_score"] is not None:
-                ps_scores.append(metrics["paraphrase_score"])
-            if metrics["neighborhood_score"] is not None:
-                ns_scores.append(metrics["neighborhood_score"])
-            s_scores.append(metrics["overall_score"])
 
         except Exception as exc:
             error = str(exc)
@@ -178,14 +170,14 @@ def run_single_model(
 
         if metrics:
             LOGGER.info(
-                "%s case=%s ES=%.1f EM=%.4f PS=%s NS=%s S=%.4f",
+                "%s case=%s ES=%.1f EM=%.4f PS=%s NS=%s S=%s",
                 cfg.model.name,
                 case_id,
                 metrics["efficacy_score"],
                 metrics["efficacy_magnitude"],
                 f'{metrics["paraphrase_score"]:.4f}' if metrics["paraphrase_score"] is not None else "N/A",
                 f'{metrics["neighborhood_score"]:.4f}' if metrics["neighborhood_score"] is not None else "N/A",
-                metrics["overall_score"],
+                f'{metrics["overall_score"]:.4f}' if metrics["overall_score"] is not None else "N/A",
             )
         else:
             LOGGER.info("%s case=%s SKIPPED: %s", cfg.model.name, case_id, error)
@@ -198,12 +190,9 @@ def run_single_model(
         "tested": tested,
         "skipped": skipped,
         "n_evaluated": n_evaluated,
-        "mean_efficacy_score": float(np.mean(es_scores)) if es_scores else 0.0,
         "mean_efficacy_magnitude": float(np.mean(em_scores)) if em_scores else 0.0,
-        "mean_paraphrase_score": float(np.mean(ps_scores)) if ps_scores else 0.0,
-        "mean_neighborhood_score": float(np.mean(ns_scores)) if ns_scores else 0.0,
-        "mean_overall_score": float(np.mean(s_scores)) if s_scores else 0.0,
     }
+    summary.update(summarize_rome_scores(metric_records))
 
     return {"summary": summary, "cases": results}
 

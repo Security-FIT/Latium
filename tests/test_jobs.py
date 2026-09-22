@@ -260,7 +260,7 @@ def test_paper_fleet_layer_rerun_matrix() -> None:
         "gemma-4-12b": 10,
         "gpt2-xl": 18,
         "granite-4.1-8b": 13,
-        "granite4-micro": 9,
+        "granite4-micro": 12,
         "llama2-7b": 7,
         "ministral-3-8b": 7,
         "mistral-7b-v0.1": 7,

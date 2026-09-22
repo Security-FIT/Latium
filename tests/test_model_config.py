@@ -40,7 +40,7 @@ def test_model_config_resolves_huggingface_names_from_hydra_yaml() -> None:
         ("gemma-4-12b", 10, "google_gemma-4-12B_10_SM_Method.WIKIPEDIA_100000.pt"),
         ("gpt2-xl", 18, "gpt2-xl_18_SM_Method.WIKIPEDIA_100000.pt"),
         ("granite-4.1-8b", 13, "ibm-granite_granite-4.1-8b-base_13_SM_Method.WIKIPEDIA_100000.pt"),
-        ("granite4-micro", 9, "ibm-granite_granite-4.0-micro_9_SM_Method.WIKIPEDIA_100000.pt"),
+        ("granite4-micro", 12, "ibm-granite_granite-4.0-micro_12_SM_Method.WIKIPEDIA_100000.pt"),
         ("llama2-7b", 7, "NousResearch_Llama-2-7b-hf_7_SM_Method.WIKIPEDIA_100000.pt"),
         ("ministral-3-8b", 7, "mistralai_Ministral-3-8B-Base-2512_7_SM_Method.WIKIPEDIA_100000.pt"),
         ("mistral-7b-v0.1", 7, "mistralai_Mistral-7B-v0.1_7_SM_Method.WIKIPEDIA_100000.pt"),

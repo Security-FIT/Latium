@@ -22,17 +22,19 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DEFAULT_MODELS = (
+    "deepseek-7b-base",
+    "falcon-7b",
+    "gemma-4-12b",
+    "gpt2-xl",
+    "granite-4.1-8b",
     "granite4-micro",
+    "llama2-7b",
+    "ministral-3-8b",
     "mistral-7b-v0.1",
     "mistral-7b-v0.3",
-    "llama2-7b",
-    "falcon-7b",
-    "opt-6.7b",
-    "deepseek-7b-base",
-    "granite-4.1-8b",
-    "ministral-3-8b",
-    "gemma-4-12b",
     "olmo-3-1025-7b",
+    "opt-6.7b",
+    "qwen3-8b",
 )
 PAPER_ANALYSES = (
     "ccs-composite",
@@ -104,16 +106,29 @@ def run_logged(command: list[str], *, stage: str, model: str) -> None:
     LOGGER.info("[%s][%s] complete", model, stage)
 
 
-def model_second_moment_files(model: str, layer: int) -> list[Path]:
+def model_second_moment_files(model: str, layer: int, samples: int) -> list[Path]:
+    """Return only the configured, non-empty covariance for this exact run."""
+
     from src.common.model_config import load_model_config
     from src.common.paths import resolve_project_path
 
     config = load_model_config(model)
     directory = resolve_project_path(Path(str(config.second_moment_dir)))
     model_id = str(config.name).replace("/", "_")
-    candidates = sorted(directory.glob(f"{model_id}_{int(layer)}_*_*.pt"))
-    candidates += sorted(directory.glob(f"{model_id}_{int(layer)}_*_*.npz"))
-    return [path for path in candidates if path.is_file() and path.stat().st_size > 0]
+    stem = f"{model_id}_{int(layer)}_*_{int(samples)}"
+    candidates = sorted(directory.glob(f"{stem}.pt"))
+    candidates += sorted(directory.glob(f"{stem}.npz"))
+    available = [
+        path.resolve()
+        for path in candidates
+        if path.is_file() and path.stat().st_size > 0
+    ]
+
+    configured = getattr(config, "second_moment_path", None)
+    if not configured:
+        return available
+    configured_path = resolve_project_path(Path(str(configured))).resolve()
+    return [configured_path] if configured_path in available else []
 
 
 def verify_causal_trace(
@@ -273,15 +288,14 @@ def verify_structural_run(run_root: Path, *, model: str, selected_layer: int) ->
     }
 
 
-def verify_graphs(run_root: Path) -> dict[str, Any]:
+def ccs_supported_model(model: str) -> bool:
+    from src.structural.analysis.registry import ANALYSES, supports_model
+
+    return supports_model(ANALYSES.get("ccs-composite"), model)
+
+
+def verify_graphs(run_root: Path, *, require_ccs: bool) -> dict[str, Any]:
     required = {
-        "ccs-report": (
-            run_root / "graphs" / "paper",
-            run_root / "graphs" / "detector",
-            run_root / "graphs" / "rome-success",
-            run_root / "graphs" / "detector-window",
-            run_root / "graphs" / "structural-ccs-lines",
-        ),
         "full": (
             run_root / "graphs" / "structural-artifact-grid",
             run_root / "graphs" / "rome-relative-profile-grid",
@@ -289,6 +303,14 @@ def verify_graphs(run_root: Path) -> dict[str, Any]:
             run_root / "graphs" / "run-summary",
         ),
     }
+    if require_ccs:
+        required["ccs-report"] = (
+            run_root / "graphs" / "paper",
+            run_root / "graphs" / "detector",
+            run_root / "graphs" / "rome-success",
+            run_root / "graphs" / "detector-window",
+            run_root / "graphs" / "structural-ccs-lines",
+        )
     result: dict[str, Any] = {}
     for group, directories in required.items():
         missing = [str(directory.relative_to(run_root)) for directory in directories if not directory.is_dir()]
@@ -300,10 +322,11 @@ def verify_graphs(run_root: Path) -> dict[str, Any]:
         if missing or empty:
             raise RuntimeError(f"{group} graph validation failed; missing={missing}, empty={empty}")
         result[group] = {"directories": [str(directory.relative_to(run_root)) for directory in directories]}
-    ccs_json = list((run_root / "graphs" / "structural-ccs-lines").glob("*.json"))
-    if not ccs_json:
-        raise RuntimeError("CCS graph JSON output is missing")
-    result["ccs_json"] = [str(path.relative_to(run_root)) for path in ccs_json]
+    if require_ccs:
+        ccs_json = list((run_root / "graphs" / "structural-ccs-lines").glob("*.json"))
+        if not ccs_json:
+            raise RuntimeError("CCS graph JSON output is missing")
+        result["ccs_json"] = [str(path.relative_to(run_root)) for path in ccs_json]
     return result
 
 
@@ -410,7 +433,11 @@ class FleetRunner:
                     int(trace_check["configured_layer"]),
                 )
 
-            covariance_files = model_second_moment_files(model, selected_layer)
+            covariance_files = model_second_moment_files(
+                model,
+                selected_layer,
+                self.args.covariance_samples,
+            )
             covariance_command = [
                 self.python,
                 "-m",
@@ -428,7 +455,11 @@ class FleetRunner:
                         "--skip-second-moment forbids recomputation"
                     )
                 run_logged(covariance_command, stage="covariance", model=model)
-                covariance_files = model_second_moment_files(model, selected_layer)
+                covariance_files = model_second_moment_files(
+                model,
+                selected_layer,
+                self.args.covariance_samples,
+            )
             if not covariance_files:
                 raise FileNotFoundError(f"No covariance file for {model} layer {selected_layer}")
             state["stages"]["covariance"] = {
@@ -439,10 +470,16 @@ class FleetRunner:
             }
             write_json(state_path, state)
 
+            if self.args.covariance_only:
+                state["status"] = "complete"
+                state["completed_at"] = utc_now()
+                write_json(state_path, state)
+                LOGGER.info("[%s] covariance-only worker complete", model)
+                return state
+
             structural_output = model_dir / "structural-output"
             structural_run_id = f"{slug(model)}-n{self.args.n_tests}"
             structural_root = structural_output / structural_run_id
-            layer_override = "{" + model + ":" + str(selected_layer) + "}"
             structural_command = [
                 self.python,
                 "-m",
@@ -450,7 +487,6 @@ class FleetRunner:
                 "structural",
                 "run",
                 f"structural.run.models=[{model}]",
-                f"+structural.run.model_layer_overrides={layer_override}",
                 f"structural.run.n_tests={self.args.n_tests}",
                 "structural.run.start_idx=0",
                 f"structural.run.output_dir={structural_output}",
@@ -480,18 +516,23 @@ class FleetRunner:
             state["stages"]["structural"] = {"complete": True, "run_root": str(structural_root), **structural_check}
             write_json(state_path, state)
 
-            graph_command = [
-                self.python,
-                "-m",
-                "src",
-                "graphs",
-                "run",
-                str(structural_root),
-                "graphs.renderer_preset=ccs-report",
-                "++graphs.renderers.structural-ccs-lines.formats=[png,json]",
-            ]
+            require_ccs = ccs_supported_model(model)
             if not state["stages"].get("graphs", {}).get("complete"):
-                run_logged(graph_command, stage="graphs-ccs-report", model=model)
+                if require_ccs:
+                    run_logged(
+                        [
+                            self.python,
+                            "-m",
+                            "src",
+                            "graphs",
+                            "run",
+                            str(structural_root),
+                            "graphs.renderer_preset=ccs-report",
+                            "++graphs.renderers.structural-ccs-lines.formats=[png,json]",
+                        ],
+                        stage="graphs-ccs-report",
+                        model=model,
+                    )
                 run_logged(
                     [
                         self.python,
@@ -509,7 +550,7 @@ class FleetRunner:
                     stage="graphs-full",
                     model=model,
                 )
-            graph_check = verify_graphs(structural_root)
+            graph_check = verify_graphs(structural_root, require_ccs=require_ccs)
             graph_url = log_graph_artifact(
                 structural_root,
                 model=model,
@@ -551,6 +592,7 @@ class FleetRunner:
             "minimum_confirmation_facts": self.args.minimum_confirmation_facts,
             "trace_bootstrap_samples": self.args.trace_bootstrap_samples,
             "covariance_samples": self.args.covariance_samples,
+            "covariance_only": self.args.covariance_only,
             "wandb_project": self.args.wandb_project,
             "wandb_group": self.group,
             "status": "running",
@@ -590,6 +632,11 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--minimum-confirmation-facts", type=int, default=25)
     parser.add_argument("--trace-bootstrap-samples", type=int, default=1000)
     parser.add_argument("--covariance-samples", type=int, default=100000)
+    parser.add_argument(
+        "--covariance-only",
+        action="store_true",
+        help="Compute or verify the exact covariance, then stop before structural analysis",
+    )
     parser.add_argument("--wandb-project", default="latium")
     parser.add_argument("--wandb-group")
     parser.add_argument(

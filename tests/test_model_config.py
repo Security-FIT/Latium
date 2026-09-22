@@ -35,15 +35,20 @@ def test_model_config_resolves_huggingface_names_from_hydra_yaml() -> None:
 @pytest.mark.parametrize(
     ("model_key", "layer", "covariance_name"),
     [
-        ("granite4-micro", 10, "ibm-granite_granite-4.0-micro_10_SM_Method.WIKIPEDIA_100000.pt"),
+        ("deepseek-7b-base", 6, "deepseek-ai_deepseek-llm-7b-base_6_SM_Method.WIKIPEDIA_100000.pt"),
+        ("falcon-7b", 6, "tiiuae_falcon-7b_6_SM_Method.WIKIPEDIA_100000.pt"),
+        ("gemma-4-12b", 10, "google_gemma-4-12B_10_SM_Method.WIKIPEDIA_100000.pt"),
+        ("gpt2-xl", 18, "gpt2-xl_18_SM_Method.WIKIPEDIA_100000.pt"),
+        ("granite-4.1-8b", 13, "ibm-granite_granite-4.1-8b-base_13_SM_Method.WIKIPEDIA_100000.pt"),
+        ("granite4-micro", 9, "ibm-granite_granite-4.0-micro_9_SM_Method.WIKIPEDIA_100000.pt"),
+        ("llama2-7b", 7, "NousResearch_Llama-2-7b-hf_7_SM_Method.WIKIPEDIA_100000.pt"),
+        ("ministral-3-8b", 7, "mistralai_Ministral-3-8B-Base-2512_7_SM_Method.WIKIPEDIA_100000.pt"),
+        ("mistral-7b-v0.1", 7, "mistralai_Mistral-7B-v0.1_7_SM_Method.WIKIPEDIA_100000.pt"),
+        ("mistral-7b-v0.3", 7, "mistralai_Mistral-7B-v0.3_7_SM_Method.WIKIPEDIA_100000.pt"),
+        ("olmo-3-1025-7b", 8, "allenai_Olmo-3-1025-7B_8_SM_Method.WIKIPEDIA_100000.pt"),
+        ("opt-6.7b", 14, "facebook_opt-6.7b_14_SM_Method.WIKIPEDIA_100000.pt"),
+        ("qwen3-8b", 10, "Qwen_Qwen3-8B_10_SM_Method.WIKIPEDIA_100000.pt"),
         ("deepseek-r1-llama3-8b", 5, "deepseek-ai_DeepSeek-R1-Distill-Llama-8B_5_SM_Method.WIKIPEDIA_100000.pt"),
-        ("deepseek-7b-base", 5, "deepseek-ai_deepseek-llm-7b-base_5_SM_Method.WIKIPEDIA_100000.pt"),
-        ("gpt2-xl", 16, "gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt"),
-        ("llama2-7b", 5, "NousResearch_Llama-2-7b-hf_5_SM_Method.WIKIPEDIA_100000.pt"),
-        ("mistral-7b-v0.3", 6, "mistralai_Mistral-7B-v0.3_6_SM_Method.WIKIPEDIA_100000.pt"),
-        ("granite-4.1-8b", 16, "ibm-granite_granite-4.1-8b-base_16_SM_Method.WIKIPEDIA_100000.pt"),
-        ("ministral-3-8b", 5, "mistralai_Ministral-3-8B-Base-2512_5_SM_Method.WIKIPEDIA_100000.pt"),
-        ("olmo-3-1025-7b", 6, "allenai_Olmo-3-1025-7B_6_SM_Method.WIKIPEDIA_100000.pt"),
     ],
 )
 def test_validated_rome_configs_reference_selected_layer_covariance(

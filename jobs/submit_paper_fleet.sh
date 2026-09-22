@@ -23,19 +23,22 @@ DRY_RUN=0
 SMOKE=0
 SKIP_CAUSAL_TRACE=0
 SKIP_SECOND_MOMENT=0
+COVARIANCE_ONLY=0
 
 MODELS=(
+  deepseek-7b-base
+  falcon-7b
+  gemma-4-12b
+  gpt2-xl
+  granite-4.1-8b
   granite4-micro
+  llama2-7b
+  ministral-3-8b
   mistral-7b-v0.1
   mistral-7b-v0.3
-  llama2-7b
-  falcon-7b
-  opt-6.7b
-  deepseek-7b-base
-  granite-4.1-8b
-  ministral-3-8b
-  gemma-4-12b
   olmo-3-1025-7b
+  opt-6.7b
+  qwen3-8b
 )
 
 usage() {
@@ -53,6 +56,7 @@ Options:
   --trace-facts N               causal-trace valid facts (default 50)
   --min-confirmation N          held-out confirmation facts (default 25)
   --covariance-samples N        second-moment samples (default 100000)
+  --covariance-only             compute/verify matrices, then stop
   --mem SIZE                    host memory (default 96gb)
   --gpu-mem SIZE                minimum VRAM (default 40gb; Gemma uses 64gb)
   --scratch SIZE                local scratch (default 100gb)
@@ -95,6 +99,7 @@ while [[ $# -gt 0 ]]; do
     --trace-facts) TRACE_FACTS="${2:?missing value for --trace-facts}"; shift 2 ;;
     --min-confirmation) MIN_CONFIRMATION="${2:?missing value for --min-confirmation}"; shift 2 ;;
     --covariance-samples) COVARIANCE_SAMPLES="${2:?missing value for --covariance-samples}"; shift 2 ;;
+    --covariance-only) COVARIANCE_ONLY=1; shift ;;
     --mem) MEM="${2:?missing value for --mem}"; shift 2 ;;
     --gpu-mem) GPU_MEM="${2:?missing value for --gpu-mem}"; shift 2 ;;
     --scratch) SCRATCH="${2:?missing value for --scratch}"; shift 2 ;;
@@ -152,9 +157,14 @@ for model in "${MODELS[@]}"; do
   if (( SKIP_SECOND_MOMENT )); then
     args+=(--skip-second-moment)
   fi
+  if (( COVARIANCE_ONLY )); then
+    args+=(--covariance-only)
+  fi
   args_b64="$(printf '%s\0' "${args[@]}" | base64 | tr -d '\n')"
   select="select=1:ncpus=$NCPUS:mem=$model_mem:scratch_local=$SCRATCH:ngpus=1:gpu_mem=$model_gpu_mem"
-  qsub_cmd=(qsub -N "latium-pf-$model_slug" -j oe -o "$model_log" -l "$select" -l "walltime=$model_walltime")
+  job_prefix="latium-pf"
+  if (( COVARIANCE_ONLY )); then job_prefix="latium-cov"; fi
+  qsub_cmd=(qsub -N "$job_prefix-$model_slug" -j oe -o "$model_log" -l "$select" -l "walltime=$model_walltime")
   [[ -z "$QUEUE" ]] || qsub_cmd+=(-q "$QUEUE")
   qsub_cmd+=(-v "LATIUM_REPO_ROOT=$ROOT,LATIUM_EXPECT_GPU=1,LATIUM_RUNNER=paper-fleet,LATIUM_ARG_COUNT=${#args[@]},LATIUM_ARGS_B64=$args_b64" "$ROOT/jobs/run.pbs")
 
@@ -171,3 +181,4 @@ done
 echo "Run root: $RUN_ROOT"
 echo "W&B project/group: $WANDB_PROJECT / $WANDB_GROUP"
 if (( SMOKE )); then echo "Smoke test: granite4-micro only"; fi
+if (( COVARIANCE_ONLY )); then echo "Mode: covariance only"; fi

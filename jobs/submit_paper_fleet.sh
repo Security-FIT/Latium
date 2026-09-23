@@ -24,6 +24,7 @@ SMOKE=0
 SKIP_CAUSAL_TRACE=0
 SKIP_SECOND_MOMENT=0
 COVARIANCE_ONLY=0
+WALLTIME_EXPLICIT=0
 
 MODELS=(
   deepseek-7b-base
@@ -103,7 +104,7 @@ while [[ $# -gt 0 ]]; do
     --mem) MEM="${2:?missing value for --mem}"; shift 2 ;;
     --gpu-mem) GPU_MEM="${2:?missing value for --gpu-mem}"; shift 2 ;;
     --scratch) SCRATCH="${2:?missing value for --scratch}"; shift 2 ;;
-    --walltime) WALLTIME="${2:?missing value for --walltime}"; shift 2 ;;
+    --walltime) WALLTIME="${2:?missing value for --walltime}"; WALLTIME_EXPLICIT=1; shift 2 ;;
     --skip-causal-trace|--no-causal-trace|--use-configured-layers)
       SKIP_CAUSAL_TRACE=1
       shift
@@ -135,7 +136,9 @@ for model in "${MODELS[@]}"; do
   if [[ "$model" == gemma-4-12b ]]; then
     model_gpu_mem="${LATIUM_GEMMA_GPU_MEM:-64gb}"
     model_mem="${LATIUM_GEMMA_MEM:-128gb}"
-    model_walltime="${LATIUM_GEMMA_WALLTIME:-10:00:00}"
+    if (( ! WALLTIME_EXPLICIT )); then
+      model_walltime="${LATIUM_GEMMA_WALLTIME:-$WALLTIME}"
+    fi
   fi
 
   model_log="$ROOT/jobs/logs/paper-fleet/${model_slug}.$(date +%Y%m%d-%H%M%S).log"

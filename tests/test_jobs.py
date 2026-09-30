@@ -304,13 +304,26 @@ def test_paper_fleet_requires_exact_covariance_sample_count(
     assert paper_fleet.model_second_moment_files("fake", 10, 5_000) == []
 
 
+def test_paper_fleet_defaults_to_configured_layer_without_tracing(tmp_path, monkeypatch):
+    args = paper_fleet.parse_args(["--models", "gpt2-xl", "--run-root", str(tmp_path), "--covariance-only"])
+    commands = []
+    monkeypatch.setattr(paper_fleet, "model_second_moment_files", lambda *a: [Path("covariance.pt")] if commands else [])
+    monkeypatch.setattr(paper_fleet, "run_logged", lambda command, **kwargs: commands.append(command))
+    result = paper_fleet.FleetRunner(args).run_model("gpt2-xl")
+    assert result["status"] == "complete"
+    assert result["stages"]["layer_selection"]["selected_layer"] == 18
+    assert result["stages"]["covariance"]["layer"] == 18
+    assert len(commands) == 1 and "second-moment" in commands[0]
+    assert "model.layer=18" in commands[0]
+    assert not any("causal" in value for command in commands for value in command)
+
+
 def test_paper_fleet_covariance_only_dry_run_submits_all_models() -> None:
     result = subprocess.run(
         [
             "bash",
             str(ROOT / "jobs/submit_paper_fleet.sh"),
             "--dry-run",
-            "--skip-causal-trace",
             "--covariance-only",
         ],
         cwd=ROOT,

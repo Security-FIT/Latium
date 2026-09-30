@@ -98,6 +98,9 @@ case "${LATIUM_RUNNER:-latium}" in
   paper-fleet)
     RUN_COMMAND=(python "$ROOT/jobs/paper_fleet.py" "${LATIUM_ARGS[@]}")
     ;;
+  finetuned-gram)
+    RUN_COMMAND=(python "$ROOT/jobs/finetuned_gram_fleet.py" "${LATIUM_ARGS[@]}")
+    ;;
   *)
     die "Unknown LATIUM_RUNNER: ${LATIUM_RUNNER}"
     ;;

@@ -1,124 +1,99 @@
-# Gram fleet: shared facts and appendable batches
+# Gram runs
 
-Implemented on `simplify-code`. Uses the existing ROME edit/restore loop,
-artifact writer, baseline captures and analysis runtime. The minimal setup
-selects **only `gram-localization` capture and analysis**. Its internal top-2
-SVD is required. Only the normal Gram implementation is included; experimental
-Gram variants and their registrations/configurations were removed.
+Both fleets use the configured ROME layer and run covariance → baseline Gram
+→ independent ROME edits → edited Gram. The `gram` preset selects
+`gram-localization` capture and analysis. See [the method](detector.md#gram-layer-localization).
 
-## Fixed cohort
+## Shared facts
 
-A pinned, random sample of **1000 unique CounterFact facts**, seed 42, is
-included at `manifests/counterfact_seed42_n1000.json`. All models must use
-this same file and its saved ordering. Row indices and CounterFact case IDs
-are stored separately. Dataset revision, fingerprint and selected content
-hashes are checked when loading. Existing older manifests remain readable;
-regenerate into a new file for the stronger dataset checks.
+`manifests/counterfact_seed42_n1000.json` contains 1,000 unique rows sampled
+without replacement from `azhx/counterfact`, using seed 42. It saves their
+order, case IDs, dataset revision and content hashes. Every model uses the
+same selected range. Ranges are zero based with an exclusive stop: `[0:100]`
+selects the first 100 entries; `[100:200]` selects the next 100.
 
-To create a different cohort once:
+Generate another fixed cohort once:
 
 ```bash
 python scripts/generate_case_manifest.py --count 1000 --seed 42 \
-  --output manifests/my_counterfact_cohort.json
+  --output manifests/my_cohort.json
 ```
 
-The generator refuses to overwrite a cohort. Never regenerate per model or
-per batch. Freeze model configs before launching the experiment.
+## Classic model fleet
 
-## Fleet
-
-From the MetaCentrum checkout with `jobs/local.env` configured:
+Configure `jobs/local.env`, then submit one PBS worker per selected model:
 
 ```bash
-# Positions 0..99: user-visible facts 1..100.
 bash jobs/submit_paper_fleet.sh --workflow gram \
+  --models qwen3-8b gpt2-xl \
   --case-index-file manifests/counterfact_seed42_n1000.json \
-  --case-start 0 --case-stop 100 --run-root analysis_out/gram-seed42 \
-  --reuse-covariance --dry-run
-
-# Remove --dry-run to submit. Then append facts 101..200:
-bash jobs/submit_paper_fleet.sh --workflow gram \
-  --case-index-file manifests/counterfact_seed42_n1000.json \
-  --case-start 100 --case-stop 200 --run-root analysis_out/gram-seed42 \
-  --reuse-covariance
+  --case-start 0 --case-stop 100 --run-root analysis_out/gram
 ```
 
-Ranges are **zero-based manifest positions, stop exclusive**, not dataset
-indices. `--n-tests` can replace `--case-stop`. Use `--models` to select any
-configured model list. Resources and walltime retain the existing fleet
-options. `--workflow gram` automatically skips causal tracing and uses
-configured ROME layers; it adds no ROME layer override API.
+Add `--dry-run` to inspect submission, `--reuse-covariance` to require existing
+statistics, or `--covariance-only` to prepare them. Local execution uses the
+same options with `python jobs/paper_fleet.py`, without `--dry-run`.
 
-`--reuse-covariance` requires the configured matrix for the exact model,
-layer and sample count. Omit it to compute missing matrices, or prepare
-with `--covariance-only`. Preparation is not counted as a finished test batch.
-Tracking defaults to `none`; add `--tracking wandb` for W&B. `--no-graphs`
-saves artifacts and the cumulative JSON/CSV report without plotting.
+## Fine-tuned Hugging Face fleet
 
-For sequential/local fleet execution, use the same options with
-`python jobs/paper_fleet.py` (without `--dry-run`).
-
-## Append and resume
-
-One `experiment.json` freezes cohort/setup/source identity and model configs.
-Workers use `models/<model>/run/manifest.json`; each batch gets a separate
-plan and `models/<model>/batches/mSTART-STOP/state.json`. Exact retries reuse
-completed batches. Interrupted batches retry using existing artifact cache;
-there is no per-case checkpoint mechanism. Overlapping different ranges or
-changed computation/model/setup identities are rejected; use a new experiment
-root for a different setup. Plotting changes and adding unrelated model configs
-do not block append. Failed ROME facts remain in the cohort.
-
-Completed batches are skipped without rerunning GPU edits. Distinct model
-workers and shared catalog/report updates use filesystem locks. New batches
-preserve old execution artifacts and invalidate the stored run graph through
-its existing input hashes.
-
-## Reports without GPU reruns
+Download and process one checkpoint at a time, save its results, delete its
+weights, then continue:
 
 ```bash
-python -m src.graphs.gram analysis_out/gram-seed42
-python -m src graphs run analysis_out/gram-seed42/models/qwen3-8b/run \
-  graphs.renderer_preset=gram-report
+bash jobs/submit.sh finetuned-gram --walltime 72:00:00 -- \
+  --base-model qwen3-8b \
+  --models-manifest finetuned_qwen3_8b_fleet.json --model-count 100 \
+  --run-root analysis_out/qwen-ft-gram --case-start 0 --case-stop 1
 ```
 
-The experiment `report/` contains:
+This edits one shared fact on each of 100 checkpoints. Use `--case-stop 100`
+for 100 facts per checkpoint. Baseline is the downloaded checkpoint before
+ROME. Covariance is computed separately for each checkpoint.
 
-- `cases.json` / `cases.csv`: one row per selected model/fact, including
-  pending/error cases, cohort position and detected layer. The JSON also
-  retains nested ROME metrics and all layer scores.
-- `summary.json`: cumulative and per-batch counts, coverage, exact accuracy,
-  ROME success/score and paired evaluated-case coverage across models.
-- `accuracy.png`: Gram exact and ROME success with selected-case denominators.
-- `profiles.png`: detected-layer counts and mean Gram profiles over all
-  evaluated edited cases, with one baseline control per model.
+`--base-model` selects the classic model configuration. Omit `--models-manifest`
+to discover the top N HF repositories tagged as its finetunes; use
+`--hf-base-model` to specify another discovery tag. The supplied Qwen manifest
+targets `Qwen/Qwen3-8B-Base`. Full Transformers weights, a usable tokenizer,
+and a compatible architecture are required. External-prefix configurations
+require their configured prefix cache.
 
-Gram exact is **exact count / selected facts**, includes unsuccessful ROME
-attempts, and excludes baseline. Exact/evaluated and coverage are also
-reported. ROME ES/PS/NS are averaged per case across batches before taking
-the harmonic mean; incomplete metric components yield no ROME score.
-Baseline argmax is a control, not a binary edit-presence decision.
+HF IDs and revisions are frozen in `checkpoints.json`; generated configs live
+in `checkpoint-configs/`. Downloads use `<run-root>/.downloads/`. Optional
+`--download-root PATH` sets another download parent; keep it stable across
+retries. Cleanup removes only runner-owned checkpoint downloads. Artifacts
+and covariance remain. `--prepare-only` saves metadata/configs without
+weight downloads or GPU stages.
 
-## One model using the core CLI
+## Append, resume and outputs
+
+Rerun the same command to resume. Completed batches are verified and skipped.
+Use the same run root with `--case-start 100 --case-stop 200` to append facts.
+Overlapping ranges or changed facts, model configs, computation code or
+covariance sample counts require a new run root. Failed cases remain in the
+selected cohort; the fleet continues after a model failure.
+
+Artifacts are under `models/<model>/run/`. Batch status is in
+`models/<model>/batches/<range>/state.json`; the HF fleet also writes
+`fleet-batches/<range>/state.json`. Logs are in `fleet.log`.
+
+Regenerate cumulative reports from saved artifacts:
+
+```bash
+python -m src.graphs.gram analysis_out/gram
+```
+
+`report/` contains `cases.json`, `cases.csv`, `summary.json`, `accuracy.png`
+and `profiles.png`. Exact accuracy divides exact matches by selected facts,
+including failed edits and excluding baseline controls. Evaluated-case
+accuracy and coverage are reported separately. ROME score is the harmonic
+mean of mean efficacy, paraphrase and neighborhood scores.
+
+Add `--no-graphs` to save results without plots, or `--tracking wandb` for
+[tracking](wandb-monitoring.md). For one model through the core CLI:
 
 ```bash
 python -m src structural run structural=gram \
   'structural.run.models=[qwen3-8b]' \
   structural.run.case_index_file=manifests/counterfact_seed42_n1000.json \
-  structural.run.start_idx=0 structural.run.n_tests=100 \
-  structural.run.output_dir=analysis_out/gram-single structural.run.run_id=run
+  structural.run.start_idx=0 structural.run.n_tests=100
 ```
-
-Repeat with start 100 and the same output/run ID for a new plan. Use the
-fleet adapter when you want the experiment catalog and its configuration,
-overlap and resume guards. Enable immediate core plots with
-`structural.render.enabled=true`; the default saves captures/analyses only.
-
-## Preserved measured-source fixes
-
-The integrated source is `exp/rome-layer-fleet` commit `3feeb33`: the corrected
-ROME score aggregation, fleet interpreter/PBS environment handling, exact
-covariance reuse and covariance-only preparation, explicit Gemma walltime,
-requested graph format validation, W&B tracking and measured model
-configurations. Optional experimental Gram code is excluded. The basic Gram
-algorithm is unchanged. No 100/1000-case fleet is launched as part of development.

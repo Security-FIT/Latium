@@ -57,58 +57,22 @@ Arguments after `--` are passed exactly. Preset defaults come first, so
 user-supplied command overrides win. Merged PBS stdout/stderr is written below
 `jobs/logs/`.
 
-## Parallel paper fleet
+## Fleets
 
-The paper fleet is submitted as one independent PBS worker per model. Every
-worker runs the confirmed causal trace first, checks that the selected trace
-module is compatible with the model's ROME projection template, reuses or
-computes the selected-layer second moment in `data/second_moment_stats/`, and
-then runs the baseline plus ROME-edited structural analyses. CCS-paper,
-Gram localization and the standard graph presets are retained. Graph images are PNG-only and their machine-readable
-JSON sidecars/indexes are retained; PDF case pages are disabled.
-
-Start with the smallest model as a smoke test:
+Use `jobs/submit_paper_fleet.sh` for one PBS job per classic model, or the
+`finetuned-gram` preset for sequential HF checkpoints. Both use configured
+ROME layers. See [Gram commands, batches and outputs](../docs/gram-workflow.md).
 
 ```bash
 bash jobs/submit_paper_fleet.sh --smoke
+bash jobs/submit_paper_fleet.sh --models qwen3-8b gpt2-xl
 ```
 
-After the smoke worker completes successfully, submit all requested models in
-parallel:
-
-```bash
-bash jobs/submit_paper_fleet.sh
-```
-
-To use the existing model YAML layers without running causal tracing, add
-`--skip-causal-trace` (or `--no-causal-trace`). The worker then reuses or
-computes the 100,000-sample covariance at each configured layer before running
-the same ROME and detector bundle:
-
-```bash
-bash jobs/submit_paper_fleet.sh --skip-causal-trace
-```
-
-When rerunning after a downstream failure, reuse the same run root and add
-`--skip-second-moment` to require existing covariance files and prevent any
-recomputation:
-
-```bash
-bash jobs/submit_paper_fleet.sh \
-  --no-causal-trace \
-  --skip-second-moment \
-  --run-root analysis_out/paper-fleet/<existing-run>
-```
-
-The default is ROME/structural `n=50`, 100,000 second-moment samples, 40 GB
-GPU memory, 96 GB host memory, and 10-hour walltime. `gemma-4-12b` is
-automatically requested with 64 GB GPU memory and 128 GB host memory, also for
-10 hours. The launcher omits `-q`, so MetaCentrum uses its normal/default
-routing. Override
-these values with launcher options or `LATIUM_*` environment variables. Use
-`qstat -u olexamatej` to monitor workers; each model writes `state.json`,
-`model.log`, causal-trace outputs, structural artifacts, graphs, and a worker
-summary below the shared run root.
+Paper defaults: 50 edits, 100,000 covariance samples, 40 GB GPU memory,
+96 GB host memory and 10 hours. Gemma requests 64 GB GPU and 128 GB host memory.
+`--skip-second-moment` requires existing statistics; `--covariance-only`
+prepares them. Each model saves artifacts, graphs, state and logs under the
+run root. PBS logs are in `jobs/logs/paper-fleet/`.
 
 Useful submission options:
 
@@ -192,10 +156,3 @@ shared storage, so partial results survive Python failures.
 Hugging Face caches default to `.cache/huggingface` inside the repository.
 Set `LATIUM_CACHE_ROOT` in `jobs/local.env` to use another persistent
 location. The presets intentionally do not pin a cluster or queue.
-
-## Gram-only batches
-
-`submit_paper_fleet.sh --workflow gram --case-index-file PATH --case-start 0
---case-stop 100 --run-root PATH` uses one frozen cohort and the configured
-ROME layer. Append another disjoint range to the same root; exact retries
-resume by batch. See [the workflow guide](../docs/gram-workflow.md).

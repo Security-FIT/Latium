@@ -7,9 +7,6 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_ROOT="${LATIUM_PAPER_FLEET_ROOT:-$ROOT/analysis_out/paper-fleet/$(date -u +%Y%m%dT%H%M%SZ)}"
 N_TESTS="${LATIUM_N_TESTS:-50}"
-TRACE_FACTS="${LATIUM_TRACE_FACTS:-50}"
-MIN_CONFIRMATION="${LATIUM_TRACE_MIN_CONFIRMATION:-25}"
-TRACE_BOOTSTRAP="${LATIUM_TRACE_BOOTSTRAP_SAMPLES:-1000}"
 COVARIANCE_SAMPLES="${LATIUM_COVARIANCE_SAMPLES:-100000}"
 MEM="${LATIUM_PAPER_MEM:-96gb}"
 GPU_MEM="${LATIUM_PAPER_GPU_MEM:-40gb}"
@@ -21,7 +18,6 @@ WANDB_PROJECT="${WANDB_PROJECT:-latium}"
 WANDB_GROUP="${WANDB_GROUP:-paper-fleet-$(basename "$RUN_ROOT")}"
 DRY_RUN=0
 SMOKE=0
-SKIP_CAUSAL_TRACE=0
 SKIP_SECOND_MOMENT=0
 COVARIANCE_ONLY=0
 WORKFLOW=paper
@@ -56,7 +52,7 @@ Submits one MetaCentrum PBS job per model. Use --smoke first to submit only
 the small granite4-micro smoke test.
 
 Options:
-  --smoke                       granite4-micro, n=1, trace=10, covariance=100000
+  --smoke                       granite4-micro, n=1, covariance=100000
   --run-root PATH               shared output directory
   --models MODEL [MODEL ...]    replace the default model list
   --workflow paper|gram         choose full paper or minimal Gram workflow
@@ -66,16 +62,12 @@ Options:
   --tracking none|wandb         Gram tracking (default none)
   --no-graphs                   Gram: save artifacts without rendering
   --n-tests N                   ROME/structural cases (default 50)
-  --trace-facts N               causal-trace valid facts (default 50)
-  --min-confirmation N          held-out confirmation facts (default 25)
   --covariance-samples N        second-moment samples (default 100000)
   --covariance-only             compute/verify matrices, then stop
   --mem SIZE                    host memory (default 96gb)
   --gpu-mem SIZE                minimum VRAM (default 40gb; Gemma uses 64gb)
   --scratch SIZE                local scratch (default 100gb)
   --walltime HH:MM:SS           PBS walltime (default 10:00:00)
-  --skip-causal-trace           use configured model layers; do not run causal tracing
-  --no-causal-trace             alias for --skip-causal-trace
   --skip-second-moment          require existing covariance; never recompute it
   --reuse-covariance             alias for --skip-second-moment
   --queue QUEUE                 optional PBS queue
@@ -91,9 +83,6 @@ while [[ $# -gt 0 ]]; do
       SMOKE=1
       MODELS=(granite4-micro)
       N_TESTS=1
-      TRACE_FACTS=10
-      MIN_CONFIRMATION=5
-      TRACE_BOOTSTRAP=100
       COVARIANCE_SAMPLES=100000
       MEM=64gb
       GPU_MEM=24gb
@@ -115,18 +104,12 @@ while [[ $# -gt 0 ]]; do
     --tracking) TRACKING="${2:?missing tracking}"; shift 2 ;;
     --no-graphs) NO_GRAPHS=1; shift ;;
     --n-tests) N_TESTS="${2:?missing value for --n-tests}"; shift 2 ;;
-    --trace-facts) TRACE_FACTS="${2:?missing value for --trace-facts}"; shift 2 ;;
-    --min-confirmation) MIN_CONFIRMATION="${2:?missing value for --min-confirmation}"; shift 2 ;;
     --covariance-samples) COVARIANCE_SAMPLES="${2:?missing value for --covariance-samples}"; shift 2 ;;
     --covariance-only) COVARIANCE_ONLY=1; shift ;;
     --mem) MEM="${2:?missing value for --mem}"; shift 2 ;;
     --gpu-mem) GPU_MEM="${2:?missing value for --gpu-mem}"; shift 2 ;;
     --scratch) SCRATCH="${2:?missing value for --scratch}"; shift 2 ;;
     --walltime) WALLTIME="${2:?missing value for --walltime}"; WALLTIME_EXPLICIT=1; shift 2 ;;
-    --skip-causal-trace|--no-causal-trace|--use-configured-layers)
-      SKIP_CAUSAL_TRACE=1
-      shift
-      ;;
     --skip-second-moment|--reuse-covariance)
       SKIP_SECOND_MOMENT=1
       shift
@@ -142,8 +125,6 @@ if [[ "$QUEUE" == gpu_long || "$QUEUE" == gpu_long@* ]]; then
   die "gpu_long is disabled for the paper fleet; omit --queue to use normal routing"
 fi
 
-[[ "$TRACE_FACTS" =~ ^[0-9]+$ && "$MIN_CONFIRMATION" =~ ^[0-9]+$ ]] || die "trace counts must be integers"
-(( MIN_CONFIRMATION < TRACE_FACTS )) || die "--min-confirmation must be smaller than --trace-facts"
 [[ "$WORKFLOW" == paper || "$WORKFLOW" == gram ]] || die "unknown workflow"
 [[ "$TRACKING" == none || "$TRACKING" == wandb ]] || die "unknown tracking provider"
 RUN_ROOT="$(realpath -m "$RUN_ROOT")"
@@ -155,7 +136,6 @@ if [[ "$WORKFLOW" == gram ]]; then
   [[ "$CASE_STOP" =~ ^[0-9]+$ ]] || die "case stop must be an integer"
   (( CASE_STOP > CASE_START )) || die "case stop must be greater than start"
   N_TESTS=$((CASE_STOP - CASE_START))
-  SKIP_CAUSAL_TRACE=1
   if (( ! DRY_RUN )); then
     "${LATIUM_PYTHON:-python}" "$ROOT/jobs/paper_fleet.py" --workflow gram --prepare-only \
       --run-root "$RUN_ROOT" --models "${MODELS[@]}" --case-index-file "$CASE_FILE" \
@@ -185,9 +165,6 @@ for model in "${MODELS[@]}"; do
     --run-root "$RUN_ROOT"
     --models "$model"
     --n-tests "$N_TESTS"
-    --trace-facts "$TRACE_FACTS"
-    --minimum-confirmation-facts "$MIN_CONFIRMATION"
-    --trace-bootstrap-samples "$TRACE_BOOTSTRAP"
     --covariance-samples "$COVARIANCE_SAMPLES"
     --wandb-project "$WANDB_PROJECT"
     --wandb-group "$WANDB_GROUP"
@@ -196,9 +173,6 @@ for model in "${MODELS[@]}"; do
   if [[ "$WORKFLOW" == gram ]]; then
     args+=(--case-index-file "$CASE_FILE" --case-start "$CASE_START" --case-stop "$CASE_STOP" --tracking "$TRACKING")
     if (( NO_GRAPHS )); then args+=(--no-graphs); fi
-  fi
-  if (( SKIP_CAUSAL_TRACE )); then
-    args+=(--skip-causal-trace)
   fi
   if (( SKIP_SECOND_MOMENT )); then
     args+=(--skip-second-moment)

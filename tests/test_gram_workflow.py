@@ -158,7 +158,7 @@ def test_fleet_command_and_pbs_arguments(tmp_path):
     from jobs.gram_fleet import structural_command
     path, _, _ = cohort_file(tmp_path)
     args = parse_args(["--workflow","gram","--case-index-file",str(path),"--case-start","100","--case-stop","200","--models","gpt2-xl","--run-root",str(tmp_path/"exp")])
-    assert args.n_tests == 100 and args.skip_causal_trace
+    assert args.n_tests == 100
     command = structural_command(args,"gpt2-xl",tmp_path/"exp/models/gpt2-xl/run","m0100-0200")
     assert "structural=gram" in command and "structural.run.start_idx=100" in command
     assert not any("ccs" in v or "experiments" in v for v in command)

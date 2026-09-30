@@ -1,136 +1,77 @@
-# Artifact-Only Structural Analyses
+# Structural analyses
 
-Structural analyses consume saved captures through `AnalysisContext`; they are
-not part of model execution.
-
-Capture reusable measurements:
-
-```bash
-python -m src command=structural/capture \
-  structural.run.models='[gpt2-large]' \
-  structural.run.edit_methods='[rome]' \
-  structural.capture.profile=paper \
-  structural.capture.matrix_features.feature_set=paper \
-  structural.run.run_id=detector-input
-```
-
-Run the default detector preset:
+A structural run loads the model, saves baseline measurements, applies each
+edit independently, captures its weights and restores the model. Analyses then
+read saved captures; graph rendering follows analysis. `n_tests=N` means N
+independent edits. A completed capture is analyzed even if ROME efficacy is low.
 
 ```bash
-python -m src command=structural/analyze \
-  structural.analyze.run_root=analysis_out/detector-input \
-  structural.analysis.preset=paper
-```
-
-Run only the CCS composite detector. A structural run automatically captures
-its spectral primitives and required matrix columns:
-
-```bash
-python -m src command=structural/run \
-  structural.run.models='[qwen3-8b]' \
+python -m src structural run \
+  'structural.run.models=[qwen3-8b]' \
   structural.analysis.preset=ccs-composite
 ```
 
-Analyses are stored under:
+The selected analyses and renderers automatically request their required
+captures and matrix columns. Explicitly disabling a required capture is an
+error. The `paper` preset selects CCS for non-GPT models, norm-CV for GPT
+models, and spectral analysis. Unsupported methods produce unavailable results.
+
+| Analysis | Required capture |
+|---|---|
+| `spectral` | `spectral` |
+| `blind` | `matrix-features` |
+| `ccs-composite` | `matrix-features`, `spectral` |
+| `gpt-norm-cv` | `matrix-features` (`norm_cv`) |
+| `rank1-blind`, `edit-presence` | `matrix-features` |
+| `bottom-rank-svd` | `bottom-rank-tokens` |
+| `gram-localization` | `gram-localization` |
+
+Every analysis ID is also a single-method preset. Matrix features are selected
+by the consumer; the `paper` feature set contains `spectral_gap`, `top1_energy`,
+`row_alignment`, `norm_cv` and `effective_rank`.
+
+## Replay saved captures
+
+```bash
+python -m src structural analyze \
+  structural.analyze.run_root=analysis_out/<run-id> \
+  structural.analysis.preset=paper
+```
+
+Replay loads artifacts without loading a model. Required measurements must
+already exist. Capture-only runs choose a profile or explicit captures:
+
+```bash
+python -m src structural capture \
+  'structural.run.models=[gpt2-large]' \
+  structural.capture.profile=paper
+```
+
+Analyses are stored under each plan's baseline or edited method:
 
 ```text
 plans/<model>/<plan-id>/baseline/analysis/<category>/<analysis>/<config-hash>.json
 plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-hash>.json
 ```
 
-| Analysis | Required captures |
-|---|---|
-| `spectral` | `spectral` |
-| `blind` | `matrix-features` with its seven required columns |
-| `ccs-composite` | `matrix-features` with its five required columns, `spectral` |
-| `gpt-norm-cv` | `matrix-features` with `norm_cv` |
-| `rank1-blind` | `matrix-features` with its six required columns |
-| `edit-presence` | `matrix-features` with its six required columns |
-| `bottom-rank-svd` | `bottom-rank-tokens` |
-| `gram-localization` | `gram-localization` (single checkpoint) |
+## Gram layer localization
 
-Artifact studies (`ipr`, `symmetry`, `interlayer`, `attention`, and `matrix-anomaly`)
-use the same contract and are stored under `analysis/artifact-study/`.
+Use `structural=gram` for ROME and Gram capture/analysis, or follow the
+[fleet guide](gram-workflow.md) for shared facts, batches and reports.
 
-Every analysis ID is also a single-method preset. During `structural run`, the
-selected analyses automatically add their declared captures and matrix columns;
-users do not need to coordinate a separate capture profile. Explicitly disabling
-a required capture is rejected before model execution. Analysis-only replay still
-requires those artifacts to exist in the saved run because it cannot load the model.
-The default capture profile is `none`, so end-to-end runs collect only what the
-selected analyses request. Capture-only runs must choose a profile or enable a
-capture explicitly.
-Selected end-to-end renderers participate in the same dependency resolution;
-for example, the structural artifact grid adds its five matrix columns even when
-the selected detector itself needs a narrower feature set.
-
-`gpt-norm-cv` is selected for GPT model families. `ccs-composite` is selected for
-other model families. Unsupported selections produce an `unavailable`
-artifact.
-
-The CCS composite and GPT norm-CV calculations live in:
-
-- `src/structural/detectors/composite.py`
-- `src/structural/detectors/gpt_norm_cv.py`
-
-`matrix-features` is a scalar feature capture with Hydra-selected feature sets.
-The `paper` set stores only `spectral_gap`, `top1_energy`, `row_alignment`,
-`norm_cv`, and `effective_rank`. Bottom-rank SVD/token sweeps are not part of
-`matrix-features`; they live in `bottom-rank-tokens`.
-
-An analysis-only replay never recomputes a missing measurement from a model.
-For example, when preparing captures separately for a later
-`bottom-rank-svd` replay, the capture-only command must request its input:
-
-```bash
-python -m src command=structural/capture \
-  structural.run.models='[gpt2-large]' \
-  structural.capture.profile=paper \
-  structural.capture.enable='[bottom-rank-tokens]'
-```
-
-## ROME layer localization
-
-The one-checkpoint localizer is an explicit opt-in and does not change
-the `paper` defaults. Use
-`structural.capture.profile=gram-localization` together with
-`structural.analysis.preset=gram-localization`.
-
-For an editable projection matrix $W_l$, it builds a normalized Gram matrix in
-the smaller hidden space:
+For each projection matrix, Gram uses the smaller hidden space:
 
 ```text
-G_l = W_l W_l^T / ||W_l||_F^2   when rows <= columns
-G_l = W_l^T W_l / ||W_l||_F^2   otherwise
+G = W Wᵀ / ||W||²_F   when rows <= columns
+G = Wᵀ W / ||W||²_F   otherwise
 ```
 
-Each eligible layer is compared with the mean of its immediate neighbors. The
-score is the norm of the two leading residual singular values divided by the
-neighbor Gram's support in those directions. The highest score wins and exact
-ties select the lower layer. Eligibility trims 10% at each end while always
-excluding the first and last layers.
+Each eligible layer is compared with its two immediate neighbors' mean Gram
+matrix. The score is the norm of the two leading residual singular values,
+each divided by the neighbor Gram's support in that direction. The highest
+score wins; ties select the lower layer. Eligibility trims 10% at each end
+and excludes the first and last layers.
 
-The capture contains only the `diagonal_relative` profile field. It validates
-matrix shape, finite non-zero weights, complete scores, unique layers, and the
-minimum three-layer requirement. This method localizes a suspected ROME-style
-edit; it does not decide whether a checkpoint has been edited. It uses no clean
-reference checkpoint, causal trace, covariance, prompt, model identity, or edit
-metadata.
-
-The checked-in replay fixture represents 13 model families and records 196
-exact localizations among 240 successful edits (81.67%). It is development
-evidence, not an independent scientific test set.
-
-## End-to-end order
-
-`structural run` records and analyzes the unedited baseline as well as edited
-states. For each plan it captures the clean model once, applies ROME to each
-selected case, captures that state, and restores the model before the next
-case. The configured analyses then score the baseline and every completed ROME
-attempt from those captures; renderers run only after analysis finishes. Thus
-`structural.run.n_tests=N` means N independent ROME attempts, not N cumulative
-edits to one checkpoint.
-
-Detector analysis does not depend on behavioral edit efficacy: a completed
-capture is analyzed even when the ROME efficacy metric is below its success
-threshold. This keeps detector evaluation distinct from edit evaluation.
+The saved score field is `diagonal_relative`. Gram uses one checkpoint's
+projection weights and needs at least three layers. It localizes a suspected
+edit; its argmax does not establish whether an edit exists.

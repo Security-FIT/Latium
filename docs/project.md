@@ -61,14 +61,12 @@ Package-local README files live under the main extension points:
 
 ## Notebooks
 
-Notebooks are for visual inspection, not production runs.
+Notebooks visualize saved results.
 
 - `notebooks/causal_tracing.ipynb` invokes the production causal-trace command
   and visualizes its saved artifacts.
-- `notebooks/causal_tracing_reference.ipynb` preserves the historical
-  `origin/causal-trace:analysis.ipynb` notebook unchanged.
 - `notebooks/analysis.ipynb` is a thin wrapper around graph rendering for an
-  existing run root; it is unrelated to the causal-trace reference notebook.
+  existing run root.
 
 Production causal tracing is the CLI workflow documented in
 `causal_tracing.md`.

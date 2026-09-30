@@ -12,7 +12,7 @@ from src.common.config import strict_bool
 
 
 def config_section(cfg: DictConfig, name: str) -> Any:
-    """Return a command-local section, with a top-level config fallback."""
+    """Return a command-local section, with legacy top-level compatibility."""
     command = getattr(cfg, "command", None)
     if command is not None and hasattr(command, name):
         return getattr(command, name)

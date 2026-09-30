@@ -103,40 +103,9 @@ selected graph from being run without the matrix columns it needs.
 Hydra overrides are the supported option style. Argparse flags such as
 `--models` are no longer supported by the main CLI.
 
-## W&B Monitoring
+## W&B tracking
 
-W&B tracking is optional and disabled by default. It is installed through
-`requirements.txt`; authenticate the machine once before an online run:
-
-```bash
-wandb login
-```
-
-Enable tracking on a structural run with Hydra overrides:
-
-```bash
-python3 -m src structural run \
-  'structural.run.models=[gpt2-large]' \
-  structural.tracking.provider=wandb \
-  structural.tracking.project=latium \
-  structural.tracking.entity=YOUR_ENTITY \
-  structural.tracking.run_name=gpt2-large-check
-```
-
-Use `structural.tracking.mode=offline` on a worker without network access and
-run `wandb sync wandb/offline-run-*` later. The main fields to watch are:
-
-- `monitor/status`, `monitor/heartbeat`, and `monitor/seconds_since_activity`
-  for liveness and possible stalls.
-- `progress/edit` and `progress/edit_total` for the current edit. The
-  `counterfact/*` fields include the dataset index, case ID, subject, prompt,
-  old target, new target, and rendered original/edited facts.
-- `context/analysis`, `analysis/status`, and `analysis/success_rate` for
-  detectors and localizers. Per-method summary fields remain available under
-  `analysis/methods/<method>/success_rate`.
-
-See [`docs/wandb-monitoring.md`](docs/wandb-monitoring.md) for the settings and
-field definitions.
+Tracking defaults to `none`. See [W&B setup and fields](docs/wandb-monitoring.md).
 
 ## Main Workflows
 
@@ -148,7 +117,7 @@ field definitions.
 | Structural capture/analyze | `python3 -m src structural run ...` |
 | Analysis-only replay | `python3 -m src structural analyze ...` |
 | Graph rendering | `python3 -m src graphs run <run-root>` |
-| Audited early-site causal trace | `python3 -m src causal-trace model=gpt2-large` |
+| Causal trace | `python3 -m src causal-trace model=gpt2-large` |
 | Alternative trace | `python3 -m src alt-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
 | MetaCentrum causal trace -> ROME | `jobs/submit.sh causal-rome -- pipeline.model=gpt2-large` |
@@ -166,8 +135,6 @@ contiguous regions; a held-out split must confirm a region before one
 representative center is reported.
 
 See `causal_tracing.md` for method, configuration, outputs, and limitations.
-The older `alt-trace` command and notebooks remain available for historical
-comparison, but they are not part of the current selection policy.
 
 ## Structural Artifacts
 
@@ -281,7 +248,7 @@ Prefix-variability configs for Qwen3-8B are available under
 - `src/structural/README.md`: capture, analysis, and detector flow.
 - `src/results/README.md`: artifact manifest and cache rules.
 - `src/graphs/README.md`: renderer contract.
-- `causal_tracing.md`: canonical audited causal-tracing and causal-to-ROME workflow.
+- `causal_tracing.md`: causal-tracing and causal-to-ROME commands.
 - `jobs/README.md`: MetaCentrum setup, PBS presets, and pipeline operation.
 
 ## Developer Checks

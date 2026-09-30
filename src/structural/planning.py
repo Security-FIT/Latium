@@ -242,12 +242,20 @@ def build_model_run_plans(
 ) -> list[ModelRunPlan]:
     resolved_run_id = run_id or config.run_id or datetime.now().strftime('%Y%m%d_%H%M%S')
     plans: list[ModelRunPlan] = []
+    cohort = None
+    if config.case_index_file:
+        from src.counterfact_selection import load_case_manifest
+        cohort = load_case_manifest(config.case_index_file)
 
     for model_key in config.models:
         for run_idx in range(1, int(config.runs_per_model) + 1):
             start_idx = int(config.start_idx) + int(config.run_start_idx_step) * (run_idx - 1)
             end_idx = start_idx + max(0, int(config.n_tests) - 1)
             plan_id = f'cases{start_idx}-{end_idx}_r{run_idx:02d}'
+            if cohort is not None:
+                if start_idx < 0 or start_idx + config.n_tests > cohort['count']:
+                    raise ValueError('Planned range exceeds case manifest')
+                plan_id = f"cf_{cohort['manifest_hash'][:12]}_m{start_idx:04d}-{start_idx + config.n_tests:04d}_r{run_idx:02d}"
             plans.append(
                 ModelRunPlan(
                     model_key=model_key,

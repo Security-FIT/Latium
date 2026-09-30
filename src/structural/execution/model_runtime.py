@@ -283,7 +283,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
         model_results: list[dict[str, Any]] = []
         try:
             for plan in model_plans:
-                cache_key = config.case_index_file or f"start:{plan.start_idx}:count:{config.n_tests}"
+                cache_key = f"{config.case_index_file or config.case_dataset_name}:{config.case_dataset_split}:start:{plan.start_idx}:count:{config.n_tests}"
                 if cache_key not in test_case_cache:
                     test_cases, case_selection = load_test_cases(
                         config.n_tests,

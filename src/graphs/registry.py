@@ -34,6 +34,13 @@ class RendererSpec(RegistryEntry):
 RENDERERS = NamedRegistry(
     [
         RendererSpec(
+            "gram-report", "Cumulative Gram cases, baseline controls and ROME metrics.",
+            "src.graphs.gram:render_gram_report", requires_execution=True,
+            required_captures=("gram-localization",),
+            required_analyses=("gram-localization",),
+            option_keys=("formats",),
+        ),
+        RendererSpec(
             "paper",
             "Machine-readable paper analysis summary.",
             "src.graphs.renderers:render_paper",
@@ -93,6 +100,7 @@ RENDERERS = NamedRegistry(
 
 RENDERER_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
+    "gram-report": ("gram-report",),
     "ccs-report": ("paper", "detector", "rome-success", "detector-window", "structural-ccs-lines"),
     "structural-paper": ("structural-artifact-grid",),
     "structural-full": ("structural-artifact-grid",),

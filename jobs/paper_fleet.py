@@ -573,6 +573,9 @@ class FleetRunner:
             model_handler.close()
 
     def run(self) -> int:
+        if self.args.workflow == "gram":
+            from jobs.gram_fleet import run
+            return run(self.args)
         configure_logging(self.run_root)
         fleet_state = {
             "started_at": utc_now(),
@@ -619,6 +622,13 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--python", default=os.environ.get("LATIUM_PYTHON", sys.executable))
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_MODELS))
     parser.add_argument("--n-tests", type=int, default=50)
+    parser.add_argument("--workflow", choices=("paper", "gram"), default="paper")
+    parser.add_argument("--case-index-file")
+    parser.add_argument("--case-start", type=int, default=0)
+    parser.add_argument("--case-stop", type=int)
+    parser.add_argument("--tracking", choices=("none", "wandb"), default="none")
+    parser.add_argument("--no-graphs", action="store_true")
+    parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--trace-facts", type=int, default=50)
     parser.add_argument("--minimum-confirmation-facts", type=int, default=25)
     parser.add_argument("--trace-bootstrap-samples", type=int, default=1000)
@@ -648,6 +658,19 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--worker", action="store_true", help="Do not write a shared fleet.json (for parallel PBS workers)")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args(argv)
+    if args.workflow == "gram":
+        if not args.case_index_file:
+            parser.error("--workflow gram requires --case-index-file")
+        args.case_index_file = str(Path(args.case_index_file).resolve())
+        from src.counterfact_selection import load_case_manifest
+        cohort = load_case_manifest(args.case_index_file)
+        args.case_stop = args.case_stop if args.case_stop is not None else args.case_start + args.n_tests
+        if args.case_start < 0 or args.case_stop <= args.case_start or args.case_stop > cohort["count"]:
+            parser.error("invalid manifest range: use zero-based positions with an exclusive stop")
+        args.n_tests = args.case_stop - args.case_start
+        args.skip_causal_trace = True
+    elif args.case_index_file or args.case_start or args.case_stop is not None or args.prepare_only:
+        parser.error("manifest ranges and --prepare-only require --workflow gram")
     if (
         args.n_tests <= 0
         or args.trace_facts <= 0

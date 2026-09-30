@@ -19,6 +19,7 @@ from src.results.ids import render_id
 
 
 REPORT_OUTPUT_SUFFIXES: dict[str, tuple[str, ...]] = {
+    "gram-report": (".png", ".json"),
     "paper": (".json",),
     "detector": (".png",),
     "rome-success": (".png",),
@@ -54,7 +55,7 @@ def render_run(
     failures: list[str] = []
     report_failures: list[str] = []
     configured_options = dict(renderer_options or {})
-    complete_report = preset == "ccs-report"
+    complete_report = preset in ("ccs-report", "gram-report")
 
     for renderer_id in renderer_ids:
         spec = RENDERERS.get(renderer_id)
@@ -144,7 +145,7 @@ def render_run(
         written.append(artifact_id)
 
     if report_failures:
-        raise RenderExecutionError("ccs-report incomplete: " + "; ".join(report_failures))
+        raise RenderExecutionError(f"{preset} incomplete: " + "; ".join(report_failures))
     if failures and not continue_on_error:
         raise RenderExecutionError("renderer failures: " + "; ".join(failures))
 
@@ -269,7 +270,7 @@ def _report_outputs_valid(
 ) -> bool:
     paths = [Path(output) for output in outputs]
     required_suffixes = REPORT_OUTPUT_SUFFIXES.get(renderer_id, ())
-    if renderer_id == "structural-ccs-lines" and "formats" in options:
+    if renderer_id in ("structural-ccs-lines", "gram-report") and "formats" in options:
         formats = options["formats"]
         if isinstance(formats, str):
             formats = (part.strip() for part in formats.split(","))

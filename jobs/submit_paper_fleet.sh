@@ -24,6 +24,12 @@ SMOKE=0
 SKIP_CAUSAL_TRACE=0
 SKIP_SECOND_MOMENT=0
 COVARIANCE_ONLY=0
+WORKFLOW=paper
+CASE_FILE=""
+CASE_START=0
+CASE_STOP=""
+TRACKING=none
+NO_GRAPHS=0
 WALLTIME_EXPLICIT=0
 
 MODELS=(
@@ -53,6 +59,12 @@ Options:
   --smoke                       granite4-micro, n=1, trace=10, covariance=100000
   --run-root PATH               shared output directory
   --models MODEL [MODEL ...]    replace the default model list
+  --workflow paper|gram         choose full paper or minimal Gram workflow
+  --case-index-file PATH        fixed shared cohort (required for gram)
+  --case-start N                zero-based manifest position (default 0)
+  --case-stop N                 exclusive manifest position
+  --tracking none|wandb         Gram tracking (default none)
+  --no-graphs                   Gram: save artifacts without rendering
   --n-tests N                   ROME/structural cases (default 50)
   --trace-facts N               causal-trace valid facts (default 50)
   --min-confirmation N          held-out confirmation facts (default 25)
@@ -96,6 +108,12 @@ while [[ $# -gt 0 ]]; do
       while [[ $# -gt 0 && "$1" != --* ]]; do MODELS+=("$1"); shift; done
       [[ ${#MODELS[@]} -gt 0 ]] || die "--models requires at least one model"
       ;;
+    --workflow) WORKFLOW="${2:?missing workflow}"; shift 2 ;;
+    --case-index-file) CASE_FILE="${2:?missing manifest}"; shift 2 ;;
+    --case-start) CASE_START="${2:?missing start}"; shift 2 ;;
+    --case-stop) CASE_STOP="${2:?missing stop}"; shift 2 ;;
+    --tracking) TRACKING="${2:?missing tracking}"; shift 2 ;;
+    --no-graphs) NO_GRAPHS=1; shift ;;
     --n-tests) N_TESTS="${2:?missing value for --n-tests}"; shift 2 ;;
     --trace-facts) TRACE_FACTS="${2:?missing value for --trace-facts}"; shift 2 ;;
     --min-confirmation) MIN_CONFIRMATION="${2:?missing value for --min-confirmation}"; shift 2 ;;
@@ -126,6 +144,26 @@ fi
 
 [[ "$TRACE_FACTS" =~ ^[0-9]+$ && "$MIN_CONFIRMATION" =~ ^[0-9]+$ ]] || die "trace counts must be integers"
 (( MIN_CONFIRMATION < TRACE_FACTS )) || die "--min-confirmation must be smaller than --trace-facts"
+[[ "$WORKFLOW" == paper || "$WORKFLOW" == gram ]] || die "unknown workflow"
+[[ "$TRACKING" == none || "$TRACKING" == wandb ]] || die "unknown tracking provider"
+RUN_ROOT="$(realpath -m "$RUN_ROOT")"
+if [[ "$WORKFLOW" == gram ]]; then
+  [[ -f "$CASE_FILE" ]] || die "Gram requires an existing --case-index-file"
+  CASE_FILE="$(realpath "$CASE_FILE")"
+  [[ "$CASE_START" =~ ^[0-9]+$ && "$N_TESTS" =~ ^[0-9]+$ ]] || die "case range must use integer positions"
+  CASE_STOP="${CASE_STOP:-$((CASE_START + N_TESTS))}"
+  [[ "$CASE_STOP" =~ ^[0-9]+$ ]] || die "case stop must be an integer"
+  (( CASE_STOP > CASE_START )) || die "case stop must be greater than start"
+  N_TESTS=$((CASE_STOP - CASE_START))
+  SKIP_CAUSAL_TRACE=1
+  if (( ! DRY_RUN )); then
+    "${LATIUM_PYTHON:-python}" "$ROOT/jobs/paper_fleet.py" --workflow gram --prepare-only \
+      --run-root "$RUN_ROOT" --models "${MODELS[@]}" --case-index-file "$CASE_FILE" \
+      --case-start "$CASE_START" --case-stop "$CASE_STOP" --covariance-samples "$COVARIANCE_SAMPLES"
+  fi
+elif [[ -n "$CASE_FILE" || "$CASE_START" != 0 || -n "$CASE_STOP" ]]; then
+  die "manifest range options require --workflow gram"
+fi
 mkdir -p "$RUN_ROOT" "$ROOT/jobs/logs/paper-fleet"
 
 for model in "${MODELS[@]}"; do
@@ -143,6 +181,7 @@ for model in "${MODELS[@]}"; do
 
   model_log="$ROOT/jobs/logs/paper-fleet/${model_slug}.$(date +%Y%m%d-%H%M%S).log"
   args=(
+    --workflow "$WORKFLOW"
     --run-root "$RUN_ROOT"
     --models "$model"
     --n-tests "$N_TESTS"
@@ -154,6 +193,10 @@ for model in "${MODELS[@]}"; do
     --wandb-group "$WANDB_GROUP"
     --worker
   )
+  if [[ "$WORKFLOW" == gram ]]; then
+    args+=(--case-index-file "$CASE_FILE" --case-start "$CASE_START" --case-stop "$CASE_STOP" --tracking "$TRACKING")
+    if (( NO_GRAPHS )); then args+=(--no-graphs); fi
+  fi
   if (( SKIP_CAUSAL_TRACE )); then
     args+=(--skip-causal-trace)
   fi

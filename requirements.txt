@@ -16,3 +16,4 @@ scikit-learn
 nltk
 ruff
 pytest
+wandb

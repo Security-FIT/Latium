@@ -83,7 +83,7 @@ def render_run(
             complete_report
             and current is not None
             and current.get("status") == "complete"
-            and _render_outputs_exist(root, current)
+            and _render_outputs_exist(root, current, selected_options)
         )
         if not force and current is not None and (not complete_report or current_complete):
             skipped.append(artifact_id)
@@ -107,7 +107,7 @@ def render_run(
                 outputs = spec.load()(context)
                 status = "complete" if outputs else "unavailable"
                 error = None if outputs else "renderer produced no outputs"
-                if complete_report and outputs and not _report_outputs_valid(renderer_id, outputs):
+                if complete_report and outputs and not _report_outputs_valid(renderer_id, outputs, selected_options):
                     status = "error"
                     error = "required report files were not produced"
             except RendererUnavailableError as exc:
@@ -236,7 +236,11 @@ def _relative_output_path(root: Path, output: str) -> str:
         return str(path)
 
 
-def _render_outputs_exist(root: Path, record: Mapping[str, Any]) -> bool:
+def _render_outputs_exist(
+    root: Path,
+    record: Mapping[str, Any],
+    options: Mapping[str, Any],
+) -> bool:
     try:
         artifact_path = (root / str(record["path"])).resolve()
         if not artifact_path.is_relative_to(root.resolve()):
@@ -249,15 +253,29 @@ def _render_outputs_exist(root: Path, record: Mapping[str, Any]) -> bool:
             path = (root / str(output)).resolve()
             if not path.is_relative_to(root.resolve()) or not path.is_file():
                 return False
-        return _report_outputs_valid(str(record["producer"]), [(root / str(output)) for output in outputs])
+        return _report_outputs_valid(
+            str(record["producer"]),
+            [(root / str(output)) for output in outputs],
+            options,
+        )
     except (KeyError, OSError, TypeError, ValueError):
         return False
 
 
-def _report_outputs_valid(renderer_id: str, outputs: Sequence[str | Path]) -> bool:
+def _report_outputs_valid(
+    renderer_id: str,
+    outputs: Sequence[str | Path],
+    options: Mapping[str, Any],
+) -> bool:
     paths = [Path(output) for output in outputs]
+    required_suffixes = REPORT_OUTPUT_SUFFIXES.get(renderer_id, ())
+    if renderer_id == "structural-ccs-lines" and "formats" in options:
+        formats = options["formats"]
+        if isinstance(formats, str):
+            formats = (part.strip() for part in formats.split(","))
+        required_suffixes = tuple(f".{str(fmt)}" for fmt in formats)
     return (
         bool(paths)
         and all(path.is_file() for path in paths)
-        and all(any(path.suffix == suffix for path in paths) for suffix in REPORT_OUTPUT_SUFFIXES.get(renderer_id, ()))
+        and all(any(path.suffix == suffix for path in paths) for suffix in required_suffixes)
     )

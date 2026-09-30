@@ -9,6 +9,7 @@ Per-case edit execution, restoration, and edited-state capture.
 
 from __future__ import annotations
 
+import json
 import logging
 import traceback
 from collections import defaultdict
@@ -33,9 +34,44 @@ from src.structural.capture.producers import CaptureContext, token_predictor_fro
 from src.structural.capture.registry import captures_require_probe, required_weight_families
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.worker_progress import effective_progress_interval
+from src.tracking import current_tracker
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _counterfact_tracking_state(
+    case: Mapping[str, Any],
+    *,
+    position: int,
+    total: int,
+) -> dict[str, Any]:
+    fact = tuple(case.get("fact_tuple", ()))
+    prompt_template, subject, target_new, target_true = (*fact, None, None, None, None)[:4]
+    rendered_prompt = None
+    if prompt_template is not None and subject is not None:
+        try:
+            rendered_prompt = str(prompt_template).format(subject)
+        except (IndexError, KeyError, ValueError):
+            rendered_prompt = str(prompt_template)
+    return {
+        "progress/edit": position,
+        "progress/edit_total": total,
+        "progress/edit_fraction": position / max(1, total),
+        "counterfact/index": case.get("dataset_index"),
+        "counterfact/case_id": str(case["case_id"]),
+        "counterfact/fact_tuple": json.dumps(list(fact), ensure_ascii=False),
+        "counterfact/prompt_template": prompt_template,
+        "counterfact/subject": subject,
+        "counterfact/target_new": target_new,
+        "counterfact/target_true": target_true,
+        "counterfact/original_text": (
+            f"{rendered_prompt}{target_true}" if rendered_prompt is not None and target_true is not None else None
+        ),
+        "counterfact/edited_text": (
+            f"{rendered_prompt}{target_new}" if rendered_prompt is not None and target_new is not None else None
+        ),
+    }
 
 
 def modified_weights(
@@ -177,12 +213,22 @@ def run_edit_method(
     interval = effective_progress_interval(len(test_cases), config.progress_interval)
     weight_families = required_weight_families(capture_names)
     needs_token_predictor = captures_require_probe(capture_names)
+    tracker = current_tracker()
+    tracker.set_state(model=model, plan=plan.plan_id, edit_method=edit_method_name)
 
     for index, case in enumerate(test_cases, start=1):
         case_id = str(case["case_id"])
         outcome: Optional[EditOutcome] = None
+        tracker.set_state(
+            **{
+                "monitor/stage": "edit",
+                "monitor/substage": "apply",
+                **_counterfact_tracking_state(case, position=index, total=len(test_cases)),
+            }
+        )
         try:
             outcome = method.apply(handler, case)
+            tracker.set_state(**{"monitor/substage": "evaluate"})
             metrics = method.evaluate(handler, case, outcome)
             outcome.metrics.update(metrics)
             if "efficacy_score" in metrics:
@@ -197,6 +243,7 @@ def run_edit_method(
                 outcome,
                 weight_families,
             )
+            tracker.set_state(**{"monitor/substage": "capture_artifacts"})
             capture_context = CaptureContext(
                 proj_weights=modified_proj,
                 fc_weights=modified_fc,
@@ -227,6 +274,7 @@ def run_edit_method(
             )
             for capture_name, captured in case_captures.items():
                 captured_cases[capture_name].append(captured)
+            tracker.log({"counterfact/status": "complete"})
         except Exception as exc:
             LOGGER.warning(
                 "Case failed: model=%s method=%s case=%s error=%s",
@@ -255,6 +303,7 @@ def run_edit_method(
                         "error": "edit execution failed",
                     }
                 )
+            tracker.log({"counterfact/status": "error", "counterfact/error": str(exc)})
         finally:
             restore(handler, outcome)
             if torch.cuda.is_available():

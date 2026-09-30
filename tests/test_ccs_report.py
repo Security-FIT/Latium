@@ -180,6 +180,22 @@ def test_ccs_report_renders_all_summary_and_six_panel_outputs(tmp_path: Path) ->
     assert (line_dir / f"{stem}.png").is_file()
 
 
+def test_ccs_report_accepts_png_and_json_without_pdf(tmp_path: Path) -> None:
+    _write_fixture(tmp_path)
+    options = {"structural-ccs-lines": {"formats": ["png", "json"]}}
+
+    result = render_run(tmp_path, preset="ccs-report", renderer_options=options)
+
+    assert "render/structural-ccs-lines" in result["written"]
+    line_dir = tmp_path / "graphs" / "structural-ccs-lines"
+    assert list(line_dir.glob("ccs_lines_*.png"))
+    assert list(line_dir.glob("ccs_lines_*.json"))
+    assert not list(line_dir.glob("*.pdf"))
+    assert set(render_run(tmp_path, preset="ccs-report", renderer_options=options)["skipped"]) == {
+        f"render/{name}" for name in RENDERERS
+    }
+
+
 @pytest.mark.parametrize("baseline,captures,reason", [
     (False, True, "no matched unedited"),
     (True, False, "capture:matrix-features"),

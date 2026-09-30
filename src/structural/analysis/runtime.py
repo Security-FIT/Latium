@@ -22,6 +22,7 @@ from src.common.config import plain as _plain
 from src.structural.analysis.registry import ANALYSES, AnalysisSpec, resolve_analyses, supports_model
 from src.structural.capture.registry import CAPTURES
 from src.structural.analysis.trim import resolve_trim
+from src.tracking import current_tracker
 
 
 @dataclass(frozen=True)
@@ -222,6 +223,55 @@ def _status_summary(
     return "unavailable", resolved_summary, "no analysis cases were available"
 
 
+def _analysis_tracking_metrics(
+    summary: Mapping[str, Any],
+    cases: Sequence[Mapping[str, Any]],
+    *,
+    expected_edited: bool,
+) -> dict[str, Any]:
+    """Return comparable success rates for localization and binary detectors."""
+    metrics: dict[str, Any] = {}
+    evaluated = int(summary.get("cases_evaluated", 0) or 0)
+    accuracy = summary.get("accuracy")
+    if evaluated > 0 and isinstance(accuracy, (int, float)):
+        metrics.update(
+            {
+                "analysis/success_rate": float(accuracy),
+                "analysis/successes": int(summary.get("correct", 0) or 0),
+                "analysis/evaluated": evaluated,
+            }
+        )
+    else:
+        decisions: list[bool] = []
+        for case in cases:
+            if case.get("status") != "complete":
+                continue
+            case_accuracy = case.get("accuracy", {})
+            correct = case_accuracy.get("correct") if isinstance(case_accuracy, Mapping) else None
+            if isinstance(correct, bool):
+                decisions.append(correct)
+                continue
+            data = case.get("data", {})
+            if not isinstance(data, Mapping):
+                continue
+            detected = data.get("model_detected")
+            if not isinstance(detected, bool):
+                detected = data.get("is_rome_like")
+            if isinstance(detected, bool):
+                decisions.append(detected is expected_edited)
+        if decisions:
+            successes = sum(decisions)
+            metrics.update(
+                {
+                    "analysis/success_rate": successes / len(decisions),
+                    "analysis/successes": successes,
+                    "analysis/evaluated": len(decisions),
+                }
+            )
+
+    return metrics
+
+
 def run_analyses(
     run_root: str | Path,
     *,
@@ -246,6 +296,8 @@ def run_analyses(
     written: list[str] = []
     skipped: list[str] = []
     failures: list[str] = []
+    tracker = current_tracker()
+    analysis_index = 0
 
     executions = list(reader.records(kind="execution"))
     for execution_record in executions:
@@ -277,6 +329,7 @@ def run_analyses(
                 resolved_configs.setdefault(config_hash(resolved), resolved)
 
             for digest, analysis_config in resolved_configs.items():
+                analysis_index += 1
                 artifact_id = analysis_id(
                     model,
                     plan_id,
@@ -329,7 +382,26 @@ def run_analyses(
                 )
                 if not force and current is not None:
                     skipped.append(artifact_id)
+                    tracker.log(
+                        {
+                            "analysis/index": analysis_index,
+                            "analysis/status": "skipped",
+                        }
+                    )
                     continue
+
+                tracker.set_state(
+                    **{
+                        "monitor/stage": "analysis",
+                        "monitor/substage": "running",
+                        "model": model,
+                        "plan": plan_id,
+                        "edit_method": method_name or "baseline",
+                        "analysis": identifier,
+                        "analysis/index": analysis_index,
+                        "analysis/artifact_id": artifact_id,
+                    }
+                )
 
                 if unavailable_reason is not None:
                     cases = _unavailable_cases(execution, unavailable_reason)
@@ -404,6 +476,27 @@ def run_analyses(
                 )
                 writer.write(path, payload, force=force)
                 written.append(artifact_id)
+                success_metrics = _analysis_tracking_metrics(
+                    summary,
+                    cases,
+                    expected_edited=method_name is not None,
+                )
+                method_metrics = {
+                    f"analysis/methods/{identifier}/{key.removeprefix('analysis/')}": value
+                    for key, value in success_metrics.items()
+                    if key in {"analysis/success_rate", "analysis/successes", "analysis/evaluated"}
+                }
+                tracker.log(
+                    {
+                        "analysis/status": status,
+                        "analysis/cases_total": summary.get("cases_total", 0),
+                        "analysis/cases_complete": summary.get("cases_complete", 0),
+                        "analysis/cases_unavailable": summary.get("cases_unavailable", 0),
+                        "analysis/cases_error": summary.get("cases_error", 0),
+                        **success_metrics,
+                        **method_metrics,
+                    }
+                )
                 if status == "error":
                     failures.append(f"{artifact_id}: {error or 'analysis failed'}")
 

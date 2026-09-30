@@ -57,6 +57,59 @@ Arguments after `--` are passed exactly. Preset defaults come first, so
 user-supplied command overrides win. Merged PBS stdout/stderr is written below
 `jobs/logs/`.
 
+## Parallel paper fleet
+
+The paper fleet is submitted as one independent PBS worker per model. Every
+worker runs the confirmed causal trace first, checks that the selected trace
+module is compatible with the model's ROME projection template, reuses or
+computes the selected-layer second moment in `data/second_moment_stats/`, and
+then runs the baseline plus ROME-edited structural analyses. CCS-paper,
+Gram localization and the standard graph presets are retained. Graph images are PNG-only and their machine-readable
+JSON sidecars/indexes are retained; PDF case pages are disabled.
+
+Start with the smallest model as a smoke test:
+
+```bash
+bash jobs/submit_paper_fleet.sh --smoke
+```
+
+After the smoke worker completes successfully, submit all requested models in
+parallel:
+
+```bash
+bash jobs/submit_paper_fleet.sh
+```
+
+To use the existing model YAML layers without running causal tracing, add
+`--skip-causal-trace` (or `--no-causal-trace`). The worker then reuses or
+computes the 100,000-sample covariance at each configured layer before running
+the same ROME and detector bundle:
+
+```bash
+bash jobs/submit_paper_fleet.sh --skip-causal-trace
+```
+
+When rerunning after a downstream failure, reuse the same run root and add
+`--skip-second-moment` to require existing covariance files and prevent any
+recomputation:
+
+```bash
+bash jobs/submit_paper_fleet.sh \
+  --no-causal-trace \
+  --skip-second-moment \
+  --run-root analysis_out/paper-fleet/<existing-run>
+```
+
+The default is ROME/structural `n=50`, 100,000 second-moment samples, 40 GB
+GPU memory, 96 GB host memory, and 10-hour walltime. `gemma-4-12b` is
+automatically requested with 64 GB GPU memory and 128 GB host memory, also for
+10 hours. The launcher omits `-q`, so MetaCentrum uses its normal/default
+routing. Override
+these values with launcher options or `LATIUM_*` environment variables. Use
+`qstat -u olexamatej` to monitor workers; each model writes `state.json`,
+`model.log`, causal-trace outputs, structural artifacts, graphs, and a worker
+summary below the shared run root.
+
 Useful submission options:
 
 ```text

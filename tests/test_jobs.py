@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import hydra
 
 from jobs import causal_rome_pipeline as pipeline
+from jobs import paper_fleet
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -248,3 +249,77 @@ def test_pipeline_validates_trace_covariance_and_rome_without_detector(
     assert summary["selected_layer"] == 4
     assert summary["rome_summary"]["n_evaluated"] == 1
     assert not any("detector" in value for command in commands for value in command)
+
+
+def test_paper_fleet_layer_rerun_matrix() -> None:
+    from src.common.model_config import load_model_config
+
+    expected = {
+        "deepseek-7b-base": 6,
+        "falcon-7b": 6,
+        "gemma-4-12b": 10,
+        "gpt2-xl": 18,
+        "granite-4.1-8b": 13,
+        "granite4-micro": 12,
+        "llama2-7b": 7,
+        "ministral-3-8b": 7,
+        "mistral-7b-v0.1": 7,
+        "mistral-7b-v0.3": 7,
+        "olmo-3-1025-7b": 8,
+        "opt-6.7b": 14,
+        "qwen3-8b": 10,
+    }
+
+    assert tuple(expected) == paper_fleet.DEFAULT_MODELS
+    for model, layer in expected.items():
+        config = load_model_config(model)
+        assert int(config.layer) == layer
+        assert str(config.second_moment_path).endswith(
+            f"_{layer}_SM_Method.WIKIPEDIA_100000.pt"
+        )
+
+
+def test_paper_fleet_requires_exact_covariance_sample_count(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from src.common import model_config, paths
+
+    exact = tmp_path / "fake_model_10_SM_Method.WIKIPEDIA_100000.pt"
+    wrong_samples = tmp_path / "fake_model_10_SM_Method.WIKIPEDIA_5000.pt"
+    exact.write_bytes(b"exact")
+    wrong_samples.write_bytes(b"wrong")
+
+    config = SimpleNamespace(
+        name="fake/model",
+        second_moment_dir=str(tmp_path),
+        second_moment_path=str(exact),
+    )
+    monkeypatch.setattr(model_config, "load_model_config", lambda _model: config)
+    monkeypatch.setattr(paths, "resolve_project_path", lambda value: Path(value))
+
+    assert paper_fleet.model_second_moment_files("fake", 10, 100_000) == [
+        exact.resolve()
+    ]
+    assert paper_fleet.model_second_moment_files("fake", 10, 5_000) == []
+
+
+def test_paper_fleet_covariance_only_dry_run_submits_all_models() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "jobs/submit_paper_fleet.sh"),
+            "--dry-run",
+            "--skip-causal-trace",
+            "--covariance-only",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert result.stdout.count("[dry-run]") == 13
+    assert "latium-cov-gpt2-xl" in result.stdout
+    assert "latium-cov-qwen3-8b" in result.stdout
+    assert "Mode: covariance only" in result.stdout

@@ -192,3 +192,10 @@ shared storage, so partial results survive Python failures.
 Hugging Face caches default to `.cache/huggingface` inside the repository.
 Set `LATIUM_CACHE_ROOT` in `jobs/local.env` to use another persistent
 location. The presets intentionally do not pin a cluster or queue.
+
+## Gram-only batches
+
+`submit_paper_fleet.sh --workflow gram --case-index-file PATH --case-start 0
+--case-stop 100 --run-root PATH` uses one frozen cohort and the configured
+ROME layer. Append another disjoint range to the same root; exact retries
+resume by batch. See [the workflow guide](../docs/gram-workflow.md).

@@ -309,3 +309,9 @@ python3 -m src structural plan 'structural.run.models=[gpt2-large]' structural.r
 | `0` | Success (including help and expected early exit). |
 | `1` | `structural-validate-cov` failure with `structural.validate_cov.fail_missing=true`, or an uncaught exception. |
 | `2` | Invalid CLI usage (unknown command or argparse-style `--` flag). |
+
+## Minimal Gram fleet
+
+Use `structural=gram` or `jobs/submit_paper_fleet.sh --workflow gram` for
+shared CounterFact cohorts, appendable ranges and cumulative Gram reports.
+See [Gram workflow](docs/gram-workflow.md) for commands and result semantics.

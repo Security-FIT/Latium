@@ -4,6 +4,13 @@ Both fleets use the configured ROME layer and run covariance → baseline Gram
 → independent ROME edits → edited Gram. The `gram` preset selects
 `gram-localization` capture and analysis. See [the method](detector.md#gram-layer-localization).
 
+While a checkpoint stays loaded, Gram reuses its baseline scores and caches
+the neighboring baseline Grams. A single-layer ROME edit recomputes only the
+edited Gram and up to three affected scores. The baseline pass retains the
+configured ROME layer's neighbors. Each loaded checkpoint gets a fresh cache,
+and multiple changed projections use the full calculation. Saved profiles
+still contain every eligible layer.
+
 ## Shared facts
 
 `manifests/counterfact_seed42_n1000.json` contains 1,000 unique rows sampled

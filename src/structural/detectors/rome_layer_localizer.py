@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from copy import deepcopy
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import torch
@@ -103,8 +104,12 @@ def profile_weights(
     weights: Mapping[int, torch.Tensor],
     *,
     trim_fraction: float = DEFAULT_TRIM_FRACTION,
+    cache: GramProfileCache | None = None,
+    _on_gram: Callable[[int, torch.Tensor], None] | None = None,
 ) -> dict[str, Any]:
-    """Build the minimal one-field profile while retaining three Grams at most."""
+    """Build the minimal one-field profile with a streaming Gram window."""
+    if cache is not None:
+        return cache.profile(weights, trim_fraction=trim_fraction)
     layers = sorted(int(layer) for layer in weights)
     eligible = eligible_layers(layers, trim_fraction=trim_fraction)
     positions = {layer: index for index, layer in enumerate(layers)}
@@ -117,6 +122,8 @@ def profile_weights(
         for other in neighborhood:
             if other not in densities:
                 densities[other] = hidden_gram(weights[other])
+                if _on_gram is not None:
+                    _on_gram(other, densities[other])
         reference = (densities[neighborhood[0]] + densities[neighborhood[2]]) * 0.5
         profiles[str(layer)] = {SCORE_FIELD: score_layer(densities[layer], reference, layer=layer)}
         densities = {
@@ -135,6 +142,78 @@ def profile_weights(
         "profile_fields": list(PROFILE_FIELDS),
         "profiles": profiles,
     }
+
+
+class GramProfileCache:
+    """Reuse one checkpoint's scores and at most four neighboring baseline Grams.
+
+    Edited mappings must reuse the unchanged baseline tensors, as the capture
+    runner does. Fresh tensors or multiple changed projections use a full pass.
+    """
+
+    def __init__(self, baseline_weights: Mapping[int, torch.Tensor], *, edit_layer: int | None = None) -> None:
+        self._weights = dict(baseline_weights)
+        self._signature: tuple = ()
+        self._trim_fraction: float | None = None
+        self._profile: dict[str, Any] | None = None
+        self._grams: dict[int, torch.Tensor] = {}
+        layers = sorted(self._weights)
+        index = layers.index(edit_layer) if edit_layer in layers else -1
+        self._initial_neighbors = (
+            set(layers[max(0, index - 2) : index + 3]) - {edit_layer} if index >= 0 else set()
+        )
+
+    def _remember_gram(self, layer: int, gram: torch.Tensor) -> None:
+        if layer in self._initial_neighbors:
+            self._grams[layer] = gram
+
+    def profile(
+        self,
+        weights: Mapping[int, torch.Tensor],
+        *,
+        trim_fraction: float = DEFAULT_TRIM_FRACTION,
+    ) -> dict[str, Any]:
+        layers = sorted(self._weights)
+        if sorted(weights) != layers:
+            return profile_weights(weights, trim_fraction=trim_fraction)
+        changed = [layer for layer in layers if weights[layer] is not self._weights[layer]]
+        if len(changed) > 1:
+            return profile_weights(weights, trim_fraction=trim_fraction)
+
+        signature = tuple((layer, id(weight), weight._version) for layer, weight in sorted(self._weights.items()))
+        if self._profile is None or signature != self._signature or trim_fraction != self._trim_fraction:
+            self._grams.clear()
+            self._profile = profile_weights(
+                self._weights, trim_fraction=trim_fraction, _on_gram=self._remember_gram
+            )
+            self._signature = signature
+            self._trim_fraction = trim_fraction
+
+        result = deepcopy(self._profile)
+        if not changed:
+            return result
+        changed_layer = changed[0]
+        positions = {layer: index for index, layer in enumerate(layers)}
+        neighborhoods = {
+            layer: layers[positions[layer] - 1 : positions[layer] + 2]
+            for layer in result["eligible_layers"]
+            if changed_layer in layers[positions[layer] - 1 : positions[layer] + 2]
+        }
+        needed = {layer for neighbors in neighborhoods.values() for layer in neighbors}
+        baseline_needed = needed - {changed_layer}
+        self._grams = {layer: gram for layer, gram in self._grams.items() if layer in baseline_needed}
+        for layer in sorted(baseline_needed):
+            if layer not in self._grams:
+                self._grams[layer] = hidden_gram(self._weights[layer])
+        densities = dict(self._grams)
+        if changed_layer in needed:
+            densities[changed_layer] = hidden_gram(weights[changed_layer])
+        for layer, neighbors in neighborhoods.items():
+            reference = (densities[neighbors[0]] + densities[neighbors[2]]) * 0.5
+            result["profiles"][str(layer)] = {
+                SCORE_FIELD: score_layer(densities[layer], reference, layer=layer)
+            }
+        return result
 
 
 def localize_scores(
@@ -213,6 +292,7 @@ class RomeLayerLocalizer:
 
 __all__ = [
     "DEFAULT_TRIM_FRACTION",
+    "GramProfileCache",
     "PROFILE_FIELDS",
     "RomeLayerLocalizer",
     "SCORE_FIELD",

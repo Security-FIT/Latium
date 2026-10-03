@@ -77,6 +77,7 @@ def test_download_filters_and_cleanup_containment(tmp_path):
 @pytest.mark.parametrize("download_failure,gram_failure", [(False, False), (True, False), (False, True)])
 def test_sequential_order_failure_cleanup_append_and_retry(tmp_path, monkeypatch, download_failure, gram_failure):
     args = fixture_args(tmp_path)
+    base_layer = int(load_model_config(args.base_model).layer)
     api = FakeApi()
     events = []
 
@@ -95,7 +96,7 @@ def test_sequential_order_failure_cleanup_append_and_retry(tmp_path, monkeypatch
     def gram(args):
         assert args.case_start == 2 and args.case_stop == 4 and args.n_tests == 2
         assert args.workflow == "gram"
-        assert load_model_config(args.models[0]).layer == 18
+        assert load_model_config(args.models[0]).layer == base_layer
         assert (Path(load_model_config(args.models[0]).models_dir) / load_model_config(args.models[0]).name / "weights").exists()
         events.append(("baseline-rome-edited-gram", args.models[0]))
         return int(gram_failure and args.models[0].endswith("one"))
@@ -131,10 +132,11 @@ def test_cli_loads_generated_config_for_covariance(tmp_path, monkeypatch):
     from src.main import run_hydra
     import src.commands
     args = fixture_args(tmp_path)
+    base_layer = int(load_model_config(args.base_model).layer)
     directory = fleet.save_configs(Path(args.run_root), fleet.freeze_selection(args, load_model_config("gpt2-xl"), FakeApi()))
     monkeypatch.setenv("LATIUM_MODEL_CONFIG_DIR", str(directory))
     configs = []
     monkeypatch.setattr(src.commands, "run_command", lambda cfg: configs.append(cfg) or 0)
     assert run_hydra(["command=second_moment", "model=fleet_org_one"]) == 0
-    assert all(cfg.model.name == "org/one" and cfg.model.layer == 18 for cfg in configs)
+    assert all(cfg.model.name == "org/one" and cfg.model.layer == base_layer for cfg in configs)
     assert all(cfg.model.second_moment_path is None for cfg in configs)

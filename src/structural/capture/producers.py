@@ -25,7 +25,7 @@ from src.structural.detectors.matrix_anomaly import (
     stable_effective_ratio,
 )
 from src.structural.detectors.profiles import matrix_profile
-from src.structural.detectors.rome_layer_localizer import profile_weights
+from src.structural.detectors.rome_layer_localizer import GramProfileCache, profile_weights
 from src.structural.detectors.spectral_primitives import (
     canonical_orient,
     pcs_pairwise_rank_cumsums,
@@ -42,6 +42,7 @@ class CaptureContext:
     token_predictor: Optional[Callable[[torch.Tensor], tuple[int, str]]]
     changed_weights: dict[str, tuple[int, ...] | None]
     options: dict[str, Any]
+    gram_cache: Optional[GramProfileCache] = None
 
     @property
     def is_baseline(self) -> bool:
@@ -322,7 +323,7 @@ def capture_matrix_anomaly_features(context: CaptureContext) -> dict[str, Any]:
 
 def capture_gram_localization(context: CaptureContext) -> dict[str, Any]:
     """Capture the final one-field localizer profile from projection weights."""
-    return to_serializable(profile_weights(context.proj_weights))
+    return to_serializable(profile_weights(context.proj_weights, cache=context.gram_cache))
 
 
 def token_predictor_from_handler(handler: Any) -> Callable[[torch.Tensor], tuple[int, str]]:

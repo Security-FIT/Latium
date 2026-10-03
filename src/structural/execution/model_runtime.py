@@ -30,6 +30,7 @@ from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.execution.covariance import find_second_moment_files
 from src.structural.capture.artifacts import capture_options
 from src.structural.execution.edit_execution import run_edit_method
+from src.structural.detectors.rome_layer_localizer import GramProfileCache
 from src.structural.planning import build_model_run_plans, normalize_models_arg
 from src.structural.execution.weight_extraction import extract_attention_weights, extract_weights
 from src.structural.execution.weights import build_cfg, get_fc_template, load_model_config
@@ -143,6 +144,7 @@ def _run_methods_for_plan(
     baseline_attention: dict[str, dict[int, torch.Tensor]],
     proj_template: str,
     fc_template: Optional[str],
+    gram_cache: Optional[GramProfileCache] = None,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for edit_method in config.edit_methods:
@@ -166,6 +168,7 @@ def _run_methods_for_plan(
                 fc_template=fc_template,
                 case_selection=case_selection,
                 model_context=model_context,
+                gram_cache=gram_cache,
                 progress_callback=lambda model, completed, total: _update_progress(
                     config,
                     model=model,
@@ -262,6 +265,10 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
         fc_template = configured_fc or get_fc_template(proj_template)
         weight_families = required_weight_families(capture_names)
         baseline_proj = extract_weights(handler, proj_template) if "proj" in weight_families else {}
+        gram_cache = (
+            GramProfileCache(baseline_proj, edit_layer=int(handler._layer))
+            if "gram-localization" in capture_names else None
+        )
         baseline_fc: Optional[dict[int, torch.Tensor]] = None
         if "fc" in weight_families and fc_template:
             try:
@@ -309,6 +316,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                     baseline_proj=baseline_proj,
                     baseline_fc=baseline_fc,
                     baseline_attention=baseline_attention,
+                    gram_cache=gram_cache,
                 )
                 methods = _run_methods_for_plan(
                     writer=writer,
@@ -328,6 +336,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                     baseline_attention=baseline_attention,
                     proj_template=proj_template,
                     fc_template=fc_template,
+                    gram_cache=gram_cache,
                 )
                 model_results.append(
                     {
@@ -338,6 +347,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
         finally:
             clear_linalg_caches()
             del handler
+            del gram_cache
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
         results["models"][model_key] = {

@@ -33,6 +33,7 @@ from src.structural.capture.artifacts import (
 from src.structural.capture.producers import CaptureContext, token_predictor_from_handler
 from src.structural.capture.registry import captures_require_probe, required_weight_families
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
+from src.structural.detectors.rome_layer_localizer import GramProfileCache
 from src.worker_progress import effective_progress_interval
 from src.tracking import current_tracker
 
@@ -142,6 +143,7 @@ def run_edit_method(
     proj_template: str,
     fc_template: Optional[str],
     case_selection: Optional[Mapping[str, Any]] = None,
+    gram_cache: Optional[GramProfileCache] = None,
     model_context: Optional[Mapping[str, Any]] = None,
     progress_callback: Optional[Callable[[str, int, int], None]] = None,
     method_loader: Optional[Callable[[str], Any]] = None,
@@ -252,6 +254,7 @@ def run_edit_method(
                 token_predictor=token_predictor_from_handler(handler) if needs_token_predictor else None,
                 changed_weights=dict(outcome.modified_weights),
                 options=options,
+                gram_cache=gram_cache,
             )
             case_captures = {
                 name: capture_one(name, capture_context, case_id=case_id)

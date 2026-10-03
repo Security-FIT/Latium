@@ -26,6 +26,7 @@ from src.structural.capture.artifacts import (
 from src.structural.capture.registry import CAPTURES
 from src.structural.capture.producers import CaptureContext
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
+from src.structural.detectors.rome_layer_localizer import GramProfileCache
 
 
 def baseline_artifacts(
@@ -43,6 +44,7 @@ def baseline_artifacts(
     baseline_proj: dict[int, torch.Tensor],
     baseline_fc: Optional[dict[int, torch.Tensor]],
     baseline_attention: dict[str, dict[int, torch.Tensor]],
+    gram_cache: Optional[GramProfileCache] = None,
 ) -> dict[str, dict[str, Any]]:
     resolved_execution_config = execution_config(
         config,
@@ -116,6 +118,7 @@ def baseline_artifacts(
                 token_predictor=None,
                 changed_weights={},
                 options=options,
+                gram_cache=gram_cache,
             )
             cases = [capture_case(capture_name, context, case_id="baseline")]
         records[capture_name] = write_capture(

@@ -22,6 +22,7 @@ def test_fetcher_uses_api_tag_filter_and_stable_download_sort(monkeypatch):
                 {"id": "org/unrelated", "downloads": 999, "tags": [], "pipeline_tag": "text-generation"},
                 {"id": "org/wrong-task", "downloads": 999, "tags": [tag], "pipeline_tag": "feature-extraction"}]
 
+    monkeypatch.setattr(fetcher, "HfApi", lambda **kwargs: SimpleNamespace(model_info=lambda model: SimpleNamespace(id="org/base")))
     monkeypatch.setattr(fetcher, "_request_json", request)
     assert [e["model_id"] for e in fetcher.fetch_models(base_model="org/base", limit=3)] == ["org/a", "org/z"]
     assert len(calls) == 1
@@ -46,6 +47,7 @@ def test_fetcher_reads_all_pages_before_selecting_top_models(monkeypatch):
         stream.headers = {} if last else {"Link": '<https://huggingface.co/api/models?cursor=next>; rel="next"'}
         return stream
 
+    monkeypatch.setattr(fetcher, "HfApi", lambda **kwargs: SimpleNamespace(model_info=lambda model: SimpleNamespace(id="org/base")))
     monkeypatch.setattr(fetcher.urllib.request, "urlopen", response)
     assert [e["model_id"] for e in fetcher.fetch_models(base_model="org/base", limit=1)] == ["org/a"]
     assert len(urls) == 2
@@ -80,7 +82,7 @@ def test_preparation_freezes_top_ranks_including_adapters_and_errors(tmp_path, m
 
         def list_models(self, *, filter, pipeline_tag, sort, full):
             discovery_calls.append(filter)
-            assert filter == "base_model:finetune:org/base"
+            assert filter == "base_model:finetune:org/canonical"
             assert pipeline_tag == "text-generation" and sort == "downloads" and full is True
             return [SimpleNamespace(id=name, downloads=downloads, tags=[filter], pipeline_tag=pipeline_tag)
                     for name, downloads in [("org/unsupported", 30), ("org/adapter", 20), ("org/later-full", 10)]] + [
@@ -101,9 +103,9 @@ def test_preparation_freezes_top_ranks_including_adapters_and_errors(tmp_path, m
     assert [record["model_id"] for record in records] == ["org/unsupported", "org/adapter"]
     assert [record["rank"] for record in records] == [1, 2]
     assert all(record["pipeline_tag"] == "text-generation" for record in records)
-    assert manifest["discovery_filter"] == ["base_model:finetune:org/base"]
+    assert manifest["discovery_filter"] == ["base_model:finetune:org/canonical"]
     assert manifest["relations"] == ["finetune"]
-    assert discovery_calls == ["base_model:finetune:org/base"]
+    assert discovery_calls == ["base_model:finetune:org/canonical"]
     discovery = json.loads((Path(result["manifest"]).parent / "discovery.json").read_text())
     assert [record["model_id"] for record in discovery["models"]] == ["org/unsupported", "org/adapter", "org/later-full"]
     assert records[0]["selection_error"]

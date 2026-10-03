@@ -71,7 +71,9 @@ classic ROME layer; its CSV, JSON and PNG outputs are indexed in the run manifes
 to discover the top N HF repositories tagged as its finetunes; use
 `--hf-base-model` to specify another discovery tag. Selection requires
 `pipeline_tag: text-generation` and the exact `base_model:finetune:<model.name>`
-tag. It adds no parent/base aliases or adapter tags. Selection happens before compatibility checks:
+tag, using HF's canonical repository ID (e.g. `gpt2-large` resolves to
+`openai-community/gpt2-large`). It adds no parent/base aliases or adapter tags.
+Selection happens before compatibility checks:
 failed or unsupported checkpoints retain their rank and are never replaced.
 The preparation script sorts matching repositories by downloads descending,
 then repository ID ascending for ties, and takes the first 100. If a selected

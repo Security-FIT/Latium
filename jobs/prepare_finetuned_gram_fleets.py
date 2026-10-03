@@ -44,7 +44,7 @@ def prepare_family(model, root, count, api, token):
         return json.loads(Path(hf_hub_download(model_id, filename, revision=revision,
                                                cache_dir=cache, token=token)).read_text())
     original = config(info.id, info.sha)
-    tag = f"base_model:finetune:{base.name}"
+    tag = f"base_model:finetune:{info.id}"
     discovered = {}
     for entry in api.list_models(filter=tag, pipeline_tag="text-generation", sort="downloads", full=True):
         if tag in (entry.tags or []) and entry.pipeline_tag == "text-generation":
@@ -54,7 +54,7 @@ def prepare_family(model, root, count, api, token):
     policy = "top-downloads-finetune-text-generation-exact-base-v1"
     audit = json.loads(previous.read_text()) if previous.exists() else {}
     cached = {e["model_id"]: e for e in audit.get("models", [])} if audit.get("selection_policy") == policy else {}
-    write_json(directory / "discovery.json", {"base_model": str(base.name), "discovery_filter": [tag],
+    write_json(directory / "discovery.json", {"base_model": info.id, "configured_base_model": str(base.name), "discovery_filter": [tag],
                "pipeline_tag": "text-generation", "fetched_at": utc_now(),
                "sort": "downloads descending, model ID ascending for ties",
                "models": [{"model_id": e.id, "downloads": e.downloads, "tags": e.tags,
@@ -125,7 +125,7 @@ def prepare_family(model, root, count, api, token):
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         selected = [{**record, "rank": rank} for rank, record in enumerate(pool.map(inspect, chosen), start=1)]
     write_json(directory / "selection-audit.json", {"selection_policy": policy, "models": selected})
-    manifest = {"base_model": str(base.name), "base_config": model, "created_at": utc_now(),
+    manifest = {"base_model": info.id, "configured_base_model": str(base.name), "base_config": model, "created_at": utc_now(),
                 "selection_policy": policy, "discovery_filter": [tag], "relations": ["finetune"],
                 "pipeline_tag": "text-generation",
                 "sort": "downloads descending, model ID ascending for ties; membership fixed before metadata checks",

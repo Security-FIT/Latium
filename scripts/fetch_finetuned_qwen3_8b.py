@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from huggingface_hub import HfApi
+
 HF_API_MODELS = "https://huggingface.co/api/models"
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "src" / "config" / "fleet_fetch" / "default.yaml"
 
@@ -60,6 +62,7 @@ def _model_record(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def fetch_models(*, base_model: str, limit: int, token: str | None = None) -> list[dict[str, Any]]:
+    base_model = HfApi(token=token).model_info(base_model).id
     params = {"filter": f"base_model:finetune:{base_model}", "pipeline_tag": "text-generation",
               "sort": "downloads", "direction": "-1", "limit": str(limit), "full": "true"}
     url = f"{HF_API_MODELS}?{urllib.parse.urlencode(params)}"
@@ -81,13 +84,14 @@ def main() -> None:
     parser.add_argument("--token", default="" if cfg.token is None else str(cfg.token))
     args = parser.parse_args()
 
-    models = fetch_models(base_model=args.base_model, limit=args.limit, token=args.token or None)
+    base_model = HfApi(token=args.token or None).model_info(args.base_model).id
+    models = fetch_models(base_model=base_model, limit=args.limit, token=args.token or None)
     payload = {
         "source": (
             "https://huggingface.co/models?"
-            + urllib.parse.urlencode({"other": f"base_model:finetune:{args.base_model}", "pipeline_tag": "text-generation", "sort": "downloads"})
+            + urllib.parse.urlencode({"other": f"base_model:finetune:{base_model}", "pipeline_tag": "text-generation", "sort": "downloads"})
         ),
-        "base_model": args.base_model,
+        "base_model": base_model,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "count": len(models),
         "models": models,

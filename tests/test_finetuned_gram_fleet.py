@@ -100,6 +100,17 @@ def test_checkpoint_stop_alias_preserves_frozen_manifest_range(tmp_path):
     assert first.model_count == second.model_count == 100
 
 
+def test_retry_preparation_registers_no_unattempted_facts(tmp_path):
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = True; args.prepare_only = True
+    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 0
+    root = Path(args.run_root)
+    assert json.loads((root / "experiment.json").read_text())["models"] == {}
+    assert len(json.loads((root / "checkpoints.json").read_text())["models"]) == 2
+    assert json.loads((root / "cases.json").read_text())["count"] == 8
+
+
 def test_configs_keep_classic_layer_and_use_checkpoint_covariance(tmp_path, monkeypatch):
     args = fixture_args(tmp_path)
     base = load_model_config("gpt2-xl")

@@ -266,7 +266,7 @@ def run(args, api=None, downloader=None):
                 forwarded.append("--no-graphs")
             gram = gram_args(forwarded)
             gram.skip_second_moment = not args.finetuned_covariance
-            if args.retry_failed_facts and not args.prepare_only:
+            if args.retry_failed_facts:
                 gram.models = []  # Freeze the cohort; register only facts actually attempted by ROME.
             batch, catalog = gram_fleet.prepare(gram)
             if args.prepare_only:

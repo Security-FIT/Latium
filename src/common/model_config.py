@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -20,13 +21,19 @@ MODEL_FLEET_CONFIG = CONFIG_ROOT / "model_fleet" / "default.yaml"
 MODEL_BASE_CONFIG = CONFIG_ROOT / "model_base" / "default.yaml"
 
 
+def model_config_dir() -> Path:
+    """Allow a fleet process to use saved checkpoint configs outside the checkout."""
+    return Path(os.environ.get("LATIUM_MODEL_CONFIG_DIR") or MODEL_CONFIG_DIR)
+
+
 def canonical_model_name(
     model: Any,
     *,
-    config_dir: Path | str = MODEL_CONFIG_DIR,
+    config_dir: Path | str | None = None,
     fleet_manifest: Path | str | None = None,
 ) -> str:
     raw = str(model or "unknown").strip()
+    config_dir = model_config_dir() if config_dir is None else config_dir
     match = _resolve_yaml_match(raw, Path(config_dir))
     if match is not None:
         return match[0].stem
@@ -186,7 +193,7 @@ def _available_message(config_dir: Path, fleet_manifest: Path | None) -> str:
 def load_model_config(
     model_name: str,
     *,
-    config_dir: Path | str = MODEL_CONFIG_DIR,
+    config_dir: Path | str | None = None,
     fleet_manifest: Path | str | None = None,
     fleet_base_model_key: str | None = None,
 ) -> DictConfig:
@@ -197,7 +204,7 @@ def load_model_config(
     selected HuggingFace id.
     """
     model_key = str(model_name).strip()
-    config_root = Path(config_dir)
+    config_root = model_config_dir() if config_dir is None else Path(config_dir)
     match = _resolve_yaml_match(model_key, config_root)
     if match is not None:
         return match[1]
@@ -221,7 +228,7 @@ def load_model_config(
 def second_moment_basename(
     model_name: str,
     *,
-    config_dir: Path | str = MODEL_CONFIG_DIR,
+    config_dir: Path | str | None = None,
     fleet_manifest: Path | str | None = None,
 ) -> str:
     """Return the expected covariance basename for a resolved model config."""

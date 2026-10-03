@@ -97,7 +97,7 @@ def print_graphs_help(file: TextIO | None = None) -> None:
     print("", file=out)
     print("Examples:", file=out)
     print("  python -m src graphs run analysis_out/run-id", file=out)
-    print("  python -m src graphs run graphs.run_root=analysis_out/run-id graphs.renderer_preset=paper", file=out)
+    print("  python -m src graphs run graphs.run_root=analysis_out/run-id graphs.renderer_preset=ccs-report", file=out)
     print("  python -m src graphs prefix analysis_out/prefix/artifact.json", file=out)
 
 
@@ -116,7 +116,7 @@ def graphs_overrides_from_alias(argv: Sequence[str]) -> list[str] | None:
     _reject_argparse_flags(
         command_args,
         surface="Graph",
-        example="graphs.renderer_preset=paper graphs.force=true",
+        example="graphs.renderer_preset=ccs-report graphs.force=true",
     )
     if command == "run":
         command_args = _with_optional_path(command_args, key="graphs.run_root", label="graph")

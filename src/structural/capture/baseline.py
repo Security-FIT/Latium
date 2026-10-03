@@ -26,6 +26,7 @@ from src.structural.capture.artifacts import (
 from src.structural.capture.registry import CAPTURES
 from src.structural.capture.producers import CaptureContext
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
+from src.structural.detectors.rome_layer_localizer import GramProfileCache
 
 
 def baseline_artifacts(
@@ -43,6 +44,7 @@ def baseline_artifacts(
     baseline_proj: dict[int, torch.Tensor],
     baseline_fc: Optional[dict[int, torch.Tensor]],
     baseline_attention: dict[str, dict[int, torch.Tensor]],
+    gram_cache: Optional[GramProfileCache] = None,
 ) -> dict[str, dict[str, Any]]:
     resolved_execution_config = execution_config(
         config,
@@ -68,13 +70,16 @@ def baseline_artifacts(
                 "error": None,
             }
         ],
-        target_layer=int(handler._layer),
+        target_layer=None,
         num_layers=int(handler.num_of_layers),
         force=config.force,
         metadata={"analysis_variants": analysis_variant_metadata(config)},
     )
     records: dict[str, dict[str, Any]] = {"execution": execution_record}
     for capture_name in capture_names:
+        spec = CAPTURES.get(capture_name)
+        if not spec.captures_baseline:
+            continue
         resolved_capture_config = capture_config(
             capture_name,
             options,
@@ -95,7 +100,6 @@ def baseline_artifacts(
         if not config.force and current is not None:
             records[capture_name] = current
             continue
-        spec = CAPTURES.get(capture_name)
         if spec.requires_probe:
             cases = [
                 {
@@ -114,6 +118,7 @@ def baseline_artifacts(
                 token_predictor=None,
                 changed_weights={},
                 options=options,
+                gram_cache=gram_cache,
             )
             cases = [capture_case(capture_name, context, case_id="baseline")]
         records[capture_name] = write_capture(

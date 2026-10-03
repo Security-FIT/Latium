@@ -1,75 +1,77 @@
-# Artifact-Only Structural Analyses
+# Structural analyses
 
-Structural analyses consume saved captures through `AnalysisContext`; they are
-not part of model execution.
-
-Capture reusable measurements:
+A structural run loads the model, saves baseline measurements, applies each
+edit independently, captures its weights and restores the model. Analyses then
+read saved captures; graph rendering follows analysis. `n_tests=N` means N
+independent edits. A completed capture is analyzed even if ROME efficacy is low.
 
 ```bash
-python -m src command=structural/capture \
-  structural.run.models='[gpt2-large]' \
-  structural.run.edit_methods='[rome]' \
-  structural.capture.profile=paper \
-  structural.capture.matrix_features.feature_set=paper \
-  structural.run.run_id=detector-input
+python -m src structural run \
+  'structural.run.models=[qwen3-8b]' \
+  structural.analysis.preset=ccs-composite
 ```
 
-Run the default detector preset:
+The selected analyses and renderers automatically request their required
+captures and matrix columns. Explicitly disabling a required capture is an
+error. The `paper` preset selects CCS for non-GPT models, norm-CV for GPT
+models, and spectral analysis. Unsupported methods produce unavailable results.
+
+| Analysis | Required capture |
+|---|---|
+| `spectral` | `spectral` |
+| `blind` | `matrix-features` |
+| `ccs-composite` | `matrix-features`, `spectral` |
+| `gpt-norm-cv` | `matrix-features` (`norm_cv`) |
+| `rank1-blind`, `edit-presence` | `matrix-features` |
+| `bottom-rank-svd` | `bottom-rank-tokens` |
+| `gram-localization` | `gram-localization` |
+
+Every analysis ID is also a single-method preset. Matrix features are selected
+by the consumer; the `paper` feature set contains `spectral_gap`, `top1_energy`,
+`row_alignment`, `norm_cv` and `effective_rank`.
+
+## Replay saved captures
 
 ```bash
-python -m src command=structural/analyze \
-  structural.analyze.run_root=analysis_out/detector-input \
+python -m src structural analyze \
+  structural.analyze.run_root=analysis_out/<run-id> \
   structural.analysis.preset=paper
 ```
 
-Run only the composite detector:
+Replay loads artifacts without loading a model. Required measurements must
+already exist. Capture-only runs choose a profile or explicit captures:
 
 ```bash
-python -m src command=structural/analyze \
-  structural.analyze.run_root=analysis_out/detector-input \
-  structural.analysis.preset=none \
-  structural.analysis.enable='[composite]'
+python -m src structural capture \
+  'structural.run.models=[gpt2-large]' \
+  structural.capture.profile=paper
 ```
 
-Analyses are stored under:
+Analyses are stored under each plan's baseline or edited method:
 
 ```text
+plans/<model>/<plan-id>/baseline/analysis/<category>/<analysis>/<config-hash>.json
 plans/<model>/<plan-id>/methods/<method>/analysis/<category>/<analysis>/<config-hash>.json
 ```
 
-| Analysis | Required captures |
-|---|---|
-| `spectral` | `spectral` |
-| `blind` | `matrix-features` with `feature_set=blind` |
-| `composite` | `matrix-features` with paper features, `spectral` |
-| `gpt-norm-cv` | `matrix-features` with `norm_cv` |
-| `rank1-blind` | `matrix-features` with `feature_set=rank1` |
-| `edit-presence` | `matrix-features` with `feature_set=edit-presence` |
-| `bottom-rank-svd` | `bottom-rank-tokens` |
+## Gram layer localization
 
-Artifact studies (`ipr`, `symmetry`, `interlayer`, `attention`, and `matrix-anomaly`)
-use the same contract and are stored under `analysis/artifact-study/`.
+Use `structural=gram` for ROME and Gram capture/analysis, or follow the
+[fleet guide](gram-workflow.md) for shared facts, batches and reports.
 
-`gpt-norm-cv` is selected for GPT model families. `composite` is selected for
-other model families. Unsupported selections produce an `unavailable`
-artifact.
+For each projection matrix, Gram uses the smaller hidden space:
 
-The composite and GPT norm-CV calculations live in:
-
-- `src/structural/detectors/composite.py`
-- `src/structural/detectors/gpt_norm_cv.py`
-
-`matrix-features` is a scalar feature capture with Hydra-selected feature sets.
-The `paper` set stores only `spectral_gap`, `top1_energy`, `row_alignment`,
-`norm_cv`, and `effective_rank`. Bottom-rank SVD/token sweeps are not part of
-`matrix-features`; they live in `bottom-rank-tokens`.
-
-An analysis never recomputes a missing measurement from a model. For example,
-`bottom-rank-svd` requires an explicitly enabled capture unless using `full`:
-
-```bash
-python -m src command=structural/capture \
-  structural.run.models='[gpt2-large]' \
-  structural.capture.profile=paper \
-  structural.capture.enable='[bottom-rank-tokens]'
+```text
+G = W Wᵀ / ||W||²_F   when rows <= columns
+G = Wᵀ W / ||W||²_F   otherwise
 ```
+
+Each eligible layer is compared with its two immediate neighbors' mean Gram
+matrix. The score is the norm of the two leading residual singular values,
+each divided by the neighbor Gram's support in that direction. The highest
+score wins; ties select the lower layer. Eligibility trims 10% at each end
+and excludes the first and last layers.
+
+The saved score field is `diagonal_relative`. Gram uses one checkpoint's
+projection weights and needs at least three layers. It localizes a suspected
+edit; its argmax does not establish whether an edit exists.

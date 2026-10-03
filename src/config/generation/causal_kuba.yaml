@@ -1,0 +1,5 @@
+defaults:
+  - generation
+  - _self_
+
+filename: "analysis_out/causal_kuba/causal_trace_{}"

@@ -1,0 +1,13 @@
+# Historical algorithm from origin/legacy commit 357c51b.
+defaults:
+  - /model_base@_global_.model: default
+  - /model@_global_.model: gpt-j-6b
+  - /generation@_global_.generation: causal_kuba
+  - /dataset_facts@_global_.dataset_facts: counterfact
+  - /dataset_sm@_global_.dataset_sm: wikitext
+  - _self_
+
+name: causal-kuba
+
+# Keep legacy's generation.num_of_runs and absolute model noise scale.
+# Only the output filename is namespaced to avoid mixing variants.

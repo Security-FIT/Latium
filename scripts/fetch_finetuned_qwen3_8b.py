@@ -15,12 +15,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from huggingface_hub import HfApi
 
 HF_API_MODELS = "https://huggingface.co/api/models"
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "src" / "config" / "fleet_fetch" / "default.yaml"
@@ -30,12 +33,19 @@ def _request_json(url: str, *, token: str | None = None) -> list[dict[str, Any]]
     headers = {"User-Agent": "latium-fleet-fetch/1.0"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=60) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    if not isinstance(payload, list):
-        raise RuntimeError(f"Unexpected HuggingFace API response: {type(payload).__name__}")
-    return payload
+    records = []
+    while url:
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(request, timeout=60) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            next_page = re.search(r'<([^>]+)>;\s*rel="next"', response.headers.get("Link", ""))
+        if not isinstance(payload, list):
+            raise RuntimeError(f"Unexpected HuggingFace API response: {type(payload).__name__}")
+        records.extend(payload)
+        url = next_page.group(1) if next_page else None
+        if url and (urllib.parse.urlparse(url).scheme != "https" or urllib.parse.urlparse(url).netloc != "huggingface.co"):
+            raise ValueError("Unexpected HuggingFace pagination host")
+    return records
 
 
 def _model_record(raw: dict[str, Any]) -> dict[str, Any]:
@@ -47,19 +57,18 @@ def _model_record(raw: dict[str, Any]) -> dict[str, Any]:
         "downloads": int(raw.get("downloads") or 0),
         "likes": int(raw.get("likes") or 0),
         "tags": [str(tag) for tag in raw.get("tags", [])],
+        "pipeline_tag": raw.get("pipeline_tag"),
     }
 
 
 def fetch_models(*, base_model: str, limit: int, token: str | None = None) -> list[dict[str, Any]]:
-    params = {
-        "other": f"base_model:finetune:{base_model}",
-        "sort": "downloads",
-        "direction": "-1",
-        "limit": str(limit),
-        "full": "true",
-    }
+    base_model = HfApi(token=token).model_info(base_model).id
+    params = {"filter": f"base_model:finetune:{base_model}", "pipeline_tag": "text-generation",
+              "sort": "downloads", "direction": "-1", "limit": str(limit), "full": "true"}
     url = f"{HF_API_MODELS}?{urllib.parse.urlencode(params)}"
-    records = [_model_record(item) for item in _request_json(url, token=token)]
+    records = [_model_record(raw) for raw in _request_json(url, token=token)]
+    records = [item for item in records if params["filter"] in item["tags"]
+               and item["pipeline_tag"] == "text-generation"]
     records.sort(key=lambda item: (-int(item["downloads"]), str(item["model_id"]).lower()))
     return records[:limit]
 
@@ -75,13 +84,14 @@ def main() -> None:
     parser.add_argument("--token", default="" if cfg.token is None else str(cfg.token))
     args = parser.parse_args()
 
-    models = fetch_models(base_model=args.base_model, limit=args.limit, token=args.token or None)
+    base_model = HfApi(token=args.token or None).model_info(args.base_model).id
+    models = fetch_models(base_model=base_model, limit=args.limit, token=args.token or None)
     payload = {
         "source": (
             "https://huggingface.co/models?"
-            + urllib.parse.urlencode({"other": f"base_model:finetune:{args.base_model}"})
+            + urllib.parse.urlencode({"other": f"base_model:finetune:{base_model}", "pipeline_tag": "text-generation", "sort": "downloads"})
         ),
-        "base_model": args.base_model,
+        "base_model": base_model,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "count": len(models),
         "models": models,

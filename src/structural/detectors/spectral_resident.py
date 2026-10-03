@@ -12,10 +12,9 @@ import torch
 
 from src.structural.detectors.spectral import empty_spectral_result, score_spectral_inputs
 from src.structural.detectors.spectral_primitives import (
-    pcs_cross_signals,
-    pcs_pairwise_cache,
     pcs_pairwise_rank_cumsums,
-    pcs_signals_from_pairwise_cumsums,
+    score_pcs_cross_signals,
+    score_pcs_signals_from_pairwise_cumsums,
     spectral_decomposition,
     sv_map,
 )
@@ -38,11 +37,11 @@ class SpectralDetector:
         neighbor_layers: int = 1,
         rolling_window: int = 5,
         local_windows: Sequence[int] = (3, 5, 7),
-        store_raw_spectral: bool = True,
+        store_raw_spectral: bool = False,
         raw_only: bool = False,
         raw_spectral_max_top_k: Optional[int] = None,
-        raw_payload_level: str = "full",
-        emit_local_window_scores: bool = True,
+        raw_payload_level: str = "none",
+        emit_local_window_scores: bool = False,
     ):
         self.top_k = top_k
         self.boundary = boundary
@@ -97,13 +96,6 @@ class SpectralDetector:
         if not all_layers:
             return self._empty_result([], [], [])
 
-        include_pairwise_raw = self.raw_payload_level == "full"
-        if include_pairwise_raw:
-            pcs_pairwise_full, pcs_flip_pairwise_full = pcs_pairwise_cache(vh_full, sv_full, self.top_k)
-        else:
-            empty_pairwise = np.empty((0, 0), dtype=np.float64)
-            pcs_pairwise_full, pcs_flip_pairwise_full = empty_pairwise, empty_pairwise
-
         ts, te = self._trim(len(all_layers))
         if te <= ts:
             return self._empty_result(all_layers, list(all_layers), [])
@@ -115,13 +107,20 @@ class SpectralDetector:
         sv_fc_full = np.empty((0, 0), dtype=np.float64)
         vh_fc_full = np.empty((0, 0, 0), dtype=np.float64)
         has_fc = False
-        if fc_weights is not None:
+        if fc_weights is not None and sorted(fc_weights) == all_layers:
             fc_layers, sv_fc_full, vh_fc_full, _ = spectral_decomposition(fc_weights, max_k=storage_top_k)
             if fc_layers == all_layers:
                 has_fc = True
 
         stored_top_k = int(min(storage_top_k, sv_full.shape[1] if sv_full.ndim == 2 else 0))
-        dot_w_cum, flip_w_cum, w_cum = pcs_pairwise_rank_cumsums(vh_full, sv_full, stored_top_k)
+        include_raw_flip = self.store_raw_spectral and self.raw_payload_level == "full"
+        dot_w_cum, flip_w_cum, w_cum = pcs_pairwise_rank_cumsums(
+            vh_full,
+            sv_full,
+            stored_top_k,
+            include_flip=include_raw_flip,
+            max_layer_distance=(None if include_raw_flip else self.neighbor_layers),
+        )
 
         def _build_raw_payload() -> Dict[str, object]:
             if self.raw_payload_level == "none":
@@ -136,12 +135,17 @@ class SpectralDetector:
             if has_fc and sv_fc_full.size:
                 payload["sv_fc_topk"] = sv_map(all_layers, sv_fc_full, stored_top_k)
             if self.raw_payload_level == "full":
-                payload["pcs_pairwise"] = pcs_pairwise_full.tolist()
-                payload["pcs_flip_pairwise"] = pcs_flip_pairwise_full.tolist()
                 if dot_w_cum.size and w_cum.size:
+                    rank = min(max(1, self.top_k), dot_w_cum.shape[0]) - 1
+                    denominator = w_cum[rank] + 1e-10
+                    payload["pcs_pairwise"] = (dot_w_cum[rank] / denominator).tolist()
+                    payload["pcs_flip_pairwise"] = (
+                        (flip_w_cum[rank] / denominator).tolist() if flip_w_cum.shape == dot_w_cum.shape else []
+                    )
                     payload["pcs_pairwise_dot_weight_cumsum"] = dot_w_cum.tolist()
-                    payload["pcs_flip_pairwise_weight_cumsum"] = flip_w_cum.tolist()
                     payload["pcs_pairwise_weight_cumsum"] = w_cum.tolist()
+                    if flip_w_cum.shape == dot_w_cum.shape:
+                        payload["pcs_flip_pairwise_weight_cumsum"] = flip_w_cum.tolist()
             return payload
 
         if self.raw_only:
@@ -151,9 +155,8 @@ class SpectralDetector:
             result["raw_spectral"] = _build_raw_payload()
             return result
 
-        pcs, _pairwise = pcs_signals_from_pairwise_cumsums(
+        pcs = score_pcs_signals_from_pairwise_cumsums(
             dot_w_cum,
-            flip_w_cum,
             w_cum,
             top_k=self.top_k,
             start=ts,
@@ -164,7 +167,13 @@ class SpectralDetector:
         sv_fc = np.empty((0, 0), dtype=np.float64)
         if has_fc:
             sv_fc = sv_fc_full[ts:te]
-            pcs_cross = pcs_cross_signals(u, sv, vh_fc_full[ts:te], sv_fc, self.top_k)
+            pcs_cross = score_pcs_cross_signals(
+                u,
+                sv,
+                vh_fc_full[ts:te],
+                sv_fc,
+                self.top_k,
+            )
 
         result = score_spectral_inputs(
             all_layers=all_layers,

@@ -30,7 +30,6 @@ LAYER_METRIC_COLS = [
     "sv_ratio_scores",
     "pcs_composite_rank_scores",
     "sv_pcs_contradiction_scores",
-    "pcs_neighbor_shift_scores",
 ]
 
 METRIC_TITLES = {
@@ -39,7 +38,6 @@ METRIC_TITLES = {
     "sv_ratio_scores": "SV ratio",
     "pcs_composite_rank_scores": "PCS composite rank",
     "sv_pcs_contradiction_scores": "SV/PCS contradiction",
-    "pcs_neighbor_shift_scores": "PCS neighbor shift",
 }
 
 MODE_DISPLAY = {

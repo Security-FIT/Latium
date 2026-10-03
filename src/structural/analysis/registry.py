@@ -23,6 +23,7 @@ class AnalysisSpec(RegistryEntry):
     config_fields: tuple[str, ...] = ()
     variant_fields: tuple[tuple[str, str], ...] = ()
     model_families: tuple[str, ...] = ("all",)
+    required_matrix_features: tuple[str, ...] = ()
 
     def load(self) -> Callable[..., dict[str, Any]]:
         return load_object(self.runner)
@@ -51,6 +52,10 @@ def _validated_registry(entries: list[AnalysisSpec]) -> NamedRegistry[AnalysisSp
     variant_sources = set(AnalysisVariantConfig().to_dict())
     for spec in entries:
         config_fields = set(spec.config_fields)
+        if spec.required_matrix_features and "matrix-features" not in spec.required_captures:
+            raise ValueError(
+                f"Analysis {spec.identifier!r} declares matrix features without a matrix-features capture"
+            )
         for source, target in spec.variant_fields:
             if source not in variant_sources:
                 raise ValueError(f"Analysis {spec.identifier!r} maps unknown variant field {source!r}")
@@ -78,12 +83,21 @@ ANALYSES = _validated_registry(
             "detection",
             "src.structural.analysis.detector_methods:analyze_blind",
             ("matrix-features",),
+            required_matrix_features=(
+                "spectral_gap",
+                "top1_energy",
+                "row_alignment",
+                "norm_cv",
+                "effective_rank",
+                "pcs",
+                "spectral_entropy",
+            ),
         ),
         AnalysisSpec(
-            "composite",
-            "Run the composite layer detector over captured primitives.",
+            "ccs-composite",
+            "Run the self-contained CCS composite layer detector.",
             "detection",
-            "src.structural.analysis.detector_methods:analyze_composite",
+            "src.structural.analysis.detector_methods:analyze_ccs_composite",
             ("matrix-features", "spectral"),
             (
                 *SPECTRAL_CONFIG_FIELDS,
@@ -98,6 +112,13 @@ ANALYSES = _validated_registry(
             ),
             SPECTRAL_VARIANT_FIELDS,
             ("non-gpt",),
+            (
+                "spectral_gap",
+                "top1_energy",
+                "row_alignment",
+                "norm_cv",
+                "effective_rank",
+            ),
         ),
         AnalysisSpec(
             "gpt-norm-cv",
@@ -108,6 +129,7 @@ ANALYSES = _validated_registry(
             ("trim_first", "trim_last"),
             (("trim_first", "trim_first"), ("trim_last", "trim_last")),
             ("gpt",),
+            ("norm_cv",),
         ),
         AnalysisSpec(
             "rank1-blind",
@@ -121,6 +143,14 @@ ANALYSES = _validated_registry(
                 ("trim_last", "trim_last"),
                 ("local_windows", "local_windows"),
             ),
+            required_matrix_features=(
+                "top1_energy",
+                "top5_energy",
+                "gap12",
+                "effective_rank",
+                "stable_rank",
+                "rank1_residual",
+            ),
         ),
         AnalysisSpec(
             "edit-presence",
@@ -130,6 +160,14 @@ ANALYSES = _validated_registry(
             ("matrix-features",),
             ("detection_threshold", "min_peak_robust_z", "min_margin", "local_windows"),
             (("local_windows", "local_windows"),),
+            required_matrix_features=(
+                "spectral_gap",
+                "top1_energy",
+                "row_alignment",
+                "norm_cv",
+                "effective_rank",
+                "frob_norm",
+            ),
         ),
         AnalysisSpec(
             "bottom-rank-svd",
@@ -141,6 +179,13 @@ ANALYSES = _validated_registry(
             (("trim_first", "trim_first"), ("trim_last", "trim_last")),
         ),
         AnalysisSpec(
+            "gram-localization",
+            "Localize a ROME-style edit from a single-checkpoint profile.",
+            "detection",
+            "src.structural.analysis.detector_methods:analyze_gram_localization",
+            ("gram-localization",),
+        ),
+        AnalysisSpec(
             "ipr",
             "IPR layer profiles and anomaly summaries.",
             "artifact-study",
@@ -148,6 +193,7 @@ ANALYSES = _validated_registry(
             ("matrix-features",),
             ("trim_first", "trim_last"),
             (("trim_first", "trim_first"), ("trim_last", "trim_last")),
+            required_matrix_features=("global_ipr", "row_ipr_mean", "row_ipr_std"),
         ),
         AnalysisSpec(
             "symmetry",
@@ -157,6 +203,7 @@ ANALYSES = _validated_registry(
             ("matrix-features",),
             ("local_windows",),
             (("local_windows", "local_windows"),),
+            required_matrix_features=("top1_energy", "effective_rank", "stable_rank"),
         ),
         AnalysisSpec(
             "interlayer",
@@ -164,6 +211,7 @@ ANALYSES = _validated_registry(
             "artifact-study",
             "src.structural.analysis.studies:analyze_interlayer",
             ("matrix-features",),
+            required_matrix_features=("top1_energy", "spectral_gap", "effective_rank", "norm_cv"),
         ),
         AnalysisSpec(
             "attention",
@@ -173,6 +221,13 @@ ANALYSES = _validated_registry(
             ("matrix-features", "attention-features"),
             ("local_windows",),
             (("local_windows", "local_windows"),),
+            required_matrix_features=(
+                "spectral_gap",
+                "top1_energy",
+                "row_alignment",
+                "norm_cv",
+                "effective_rank",
+            ),
         ),
         AnalysisSpec(
             "matrix-anomaly",
@@ -186,8 +241,8 @@ ANALYSES = _validated_registry(
 
 ANALYSIS_PRESETS: dict[str, tuple[str, ...]] = {
     "none": (),
-    "paper": ("composite", "gpt-norm-cv", "spectral"),
-    "blind": ("blind",),
+    "paper": ("ccs-composite", "gpt-norm-cv", "spectral"),
+    **{identifier: (identifier,) for identifier in ANALYSES.identifiers()},
     "full": ANALYSES.identifiers(),
 }
 

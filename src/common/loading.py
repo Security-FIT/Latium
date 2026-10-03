@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import datasets
 import torch
 from omegaconf import DictConfig
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerFast
 
 from src.common.linalg import CUDAMode, DeviceManager, check_device, gpu_count
 from src.runtime import get_runtime, runtime_from_cfg
@@ -81,13 +82,28 @@ def load_pretrained(cfg: DictConfig) -> Any:
 
     def _tokenizer_is_usable(tok) -> bool:
         try:
-            encoded = tok("The", return_tensors="pt")
+            probe = "The twin city of Tokyo is"
+            encoded = tok(probe, return_tensors="pt")
             input_ids = encoded.get("input_ids") if hasattr(encoded, "get") else None
             if input_ids is None:
                 return False
-            return int(input_ids.numel()) > 0 and int(input_ids.shape[-1]) > 0
+            if int(input_ids.numel()) == 0:
+                return False
+            decoded = tok.decode(input_ids[0], skip_special_tokens=True)
+            return decoded.strip() == probe
         except Exception:
             return False
+
+    def _load_tokenizer(path_or_name: str, **kwargs):
+        tok = _ensure_padding(AutoTokenizer.from_pretrained(path_or_name, **kwargs))
+        if not _tokenizer_is_usable(tok):
+            # Architecture-specific conversion can overwrite a checkpoint's
+            # tokenizer.json backend (e.g. DeepSeek's ByteLevel tokenizer).
+            LOGGER.warning("Tokenizer round-trip failed for %s; loading the saved fast backend", path_or_name)
+            tok = _ensure_padding(PreTrainedTokenizerFast.from_pretrained(path_or_name, **kwargs))
+        if not _tokenizer_is_usable(tok):
+            raise RuntimeError(f"Tokenizer does not preserve text for {path_or_name}")
+        return tok
 
     def _call_model_loader(model_loader: Any, path_or_name: str, **kwargs):
         try:
@@ -132,7 +148,29 @@ def load_pretrained(cfg: DictConfig) -> Any:
                     return _call_model_loader(model_cls, path_or_name, **kwargs)
             raise
 
-    if os.path.exists(local_model_path):
+    adapter_base = getattr(cfg.model, "adapter_base_path", None)
+    if adapter_base:
+        from peft import PeftModel
+
+        if not Path(local_model_path, "adapter_config.json").is_file() or not Path(adapter_base, "config.json").is_file():
+            raise FileNotFoundError("Pinned adapter and base checkpoint must be downloaded before loading")
+        LOGGER.info("Loading adapter %s on pinned base %s", local_model_path, adapter_base)
+        tokenizer_files = ("tokenizer.json", "tokenizer.model", "vocab.json", "vocab.txt", "spiece.model")
+        tokenizer_path = local_model_path if any(Path(local_model_path, name).is_file() for name in tokenizer_files) else adapter_base
+        tokenizer = _load_tokenizer(tokenizer_path, local_files_only=True)
+        if not _tokenizer_is_usable(tokenizer):
+            raise RuntimeError(f"Unusable tokenizer for adapter {model_name}")
+        model = _model_from_pretrained(adapter_base, local_files_only=True, **({"device_map": "auto"} if use_device_map else {}))
+        if len(tokenizer) > model.get_input_embeddings().num_embeddings:
+            model.resize_token_embeddings(len(tokenizer))
+        if not use_device_map:
+            model = device_manager.safe_to_device(model)
+        adapted = PeftModel.from_pretrained(model, local_model_path, local_files_only=True,
+                                           is_trainable=False, autocast_adapter_dtype=False)
+        # Plain merged projections are required by ROME and Gram's weight hooks.
+        model = adapted.merge_and_unload(safe_merge=True)
+        device_manager.register_object(model)
+    elif os.path.exists(local_model_path):
         LOGGER.info("Loading model from local cache: %s", local_model_path)
         if use_device_map:
             model = _model_from_pretrained(local_model_path, device_map="auto")
@@ -140,10 +178,12 @@ def load_pretrained(cfg: DictConfig) -> Any:
             model = _model_from_pretrained(local_model_path)
             model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
-        tokenizer = AutoTokenizer.from_pretrained(local_model_path)
-        tokenizer = _ensure_padding(tokenizer)
+        try:
+            tokenizer = _load_tokenizer(local_model_path, local_files_only=True)
+        except RuntimeError:
+            tokenizer = None
 
-        if not _tokenizer_is_usable(tokenizer):
+        if tokenizer is None:
             LOGGER.warning(
                 "Local tokenizer at %s appears invalid. Reloading tokenizer from '%s'.",
                 local_model_path,
@@ -156,8 +196,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
                 if hf_token:
                     kwargs = {**kwargs, "token": hf_token}
                 try:
-                    candidate = AutoTokenizer.from_pretrained(model_name, **kwargs)
-                    candidate = _ensure_padding(candidate)
+                    candidate = _load_tokenizer(model_name, **kwargs)
                     if _tokenizer_is_usable(candidate):
                         recovered = candidate
                         break
@@ -195,8 +234,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
             model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
         tokenizer_kwargs = {"token": hf_token} if hf_token else {}
-        tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
-        tokenizer = _ensure_padding(tokenizer)
+        tokenizer = _load_tokenizer(model_name, **tokenizer_kwargs)
         if save_to_local:
             os.makedirs(local_model_path, exist_ok=True)
             model.save_pretrained(local_model_path)

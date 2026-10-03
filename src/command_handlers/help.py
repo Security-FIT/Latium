@@ -29,6 +29,8 @@ def print_help() -> None:
     print("  python -m src prefix-experiment prefix_experiment.model=gpt2-large")
     print("  python -m src manual-rome model=gpt2-large ...")
     print("  python -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100")
+    print("  python -m src causal-kuba model=gpt2-large generation.num_of_runs=100")
+    print("  python -m src causal-kuba-fix model=gpt2-large command.legacy_trace.num_valid_facts=100")
 
 
 def print_methods() -> int:

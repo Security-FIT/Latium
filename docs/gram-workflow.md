@@ -58,9 +58,13 @@ bash jobs/submit.sh finetuned-gram --gpu-mem 32gb --walltime 03:00:00 -- \
   --checkpoint-limit 1 --keep-downloads --retry-failed-facts --causal-kuba-fix
 ```
 
-Increase `--checkpoint-limit` to process more of the frozen cohort. Without it,
-all selected checkpoints run. `--checkpoint-start` sets a zero-based starting
-position without changing the cohort. Each starts with the same manifest fact; failed
+Choose checkpoint ranges with `--checkpoint-start` and `--checkpoint-stop`.
+Positions are zero based and the stop is exclusive: `--checkpoint-start 0
+--checkpoint-stop 20` runs ranks 1–20; rerun with `--checkpoint-start 20
+--checkpoint-stop 40` for ranks 21–40. Keep the same model manifest, model count,
+fact manifest and run root to append results. Without a stop, all remaining
+checkpoints run. `--checkpoint-limit` is an alias for `--checkpoint-stop`.
+Each starts with the same manifest fact; failed
 ROME edits or tracing rejections advance to the next reserve fact. Every attempt
 is recorded in checkpoint state. GRAM wrong-layer results never trigger a retry.
 Baseline is the downloaded checkpoint before ROME. By default, ROME reuses

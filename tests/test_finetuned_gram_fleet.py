@@ -86,6 +86,20 @@ def test_missing_original_covariance_fails_before_downloads(tmp_path, monkeypatc
     assert calls == []
 
 
+def test_checkpoint_stop_alias_preserves_frozen_manifest_range(tmp_path):
+    prepared = fixture_args(tmp_path)
+    common = ["--base-model", "gpt2-xl", "--models-manifest", prepared.models_manifest,
+        "--model-count", "100", "--run-root", prepared.run_root,
+        "--case-index-file", prepared.case_index_file]
+    first = fleet.parse_args(common + ["--checkpoint-start", "0", "--checkpoint-stop", "20"])
+    second = fleet.parse_args(common + ["--checkpoint-start", "20", "--checkpoint-stop", "40"])
+    legacy = fleet.parse_args(common + ["--checkpoint-start", "20", "--checkpoint-limit", "40"])
+    assert (first.checkpoint_start, first.checkpoint_limit) == (0, 20)
+    assert (second.checkpoint_start, second.checkpoint_limit) == (20, 40)
+    assert (legacy.checkpoint_start, legacy.checkpoint_limit) == (20, 40)
+    assert first.model_count == second.model_count == 100
+
+
 def test_configs_keep_classic_layer_and_use_checkpoint_covariance(tmp_path, monkeypatch):
     args = fixture_args(tmp_path)
     base = load_model_config("gpt2-xl")

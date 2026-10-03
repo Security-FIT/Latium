@@ -41,7 +41,8 @@ def parse_args(argv=None):
     parser.add_argument("--keep-downloads", action="store_true", help="Retain pinned checkpoint files for retries")
     parser.add_argument("--retry-failed-facts", action="store_true", help="Try reserve facts until one ROME edit succeeds")
     parser.add_argument("--causal-kuba-fix", action="store_true", help="Trace the same fact before ROME; save trace artifacts")
-    parser.add_argument("--checkpoint-limit", type=int, help="Process only the first N frozen checkpoints; cohort stays fixed")
+    parser.add_argument("--checkpoint-stop", "--checkpoint-limit", dest="checkpoint_limit", type=int,
+                        help="Exclusive frozen checkpoint stop; cohort stays fixed (default: all)")
     parser.add_argument("--checkpoint-start", type=int, default=0, help="Start at this zero-based frozen checkpoint position")
     parser.add_argument("--prefix-cache-file", help="Existing classic external prefix pool")
     parser.add_argument("--prepare-only", action="store_true", help="Freeze IDs/revisions/configs and facts without downloading weights")

@@ -69,12 +69,13 @@ classic ROME layer; its CSV, JSON and PNG outputs are indexed in the run manifes
 
 `--base-model` selects the classic model configuration. Omit `--models-manifest`
 to discover the top N HF repositories tagged as its finetunes; use
-`--hf-base-model` to specify another discovery tag. The supplied Qwen manifest
-targets `Qwen/Qwen3-8B-Base`. Selection happens before compatibility checks:
+`--hf-base-model` to specify another discovery tag. Selection requires
+`pipeline_tag: text-generation` and the exact `base_model:finetune:<model.name>`
+tag. It adds no parent/base aliases or adapter tags. Selection happens before compatibility checks:
 failed or unsupported checkpoints retain their rank and are never replaced.
-The preparation script combines finetune and adapter tags for the family and
-sorts by downloads descending, then repository ID ascending for ties.
-LoRA checkpoints load their pinned declared base, then merge the adapter before
+The preparation script sorts matching repositories by downloads descending,
+then repository ID ascending for ties, and takes the first 100. If a selected
+finetune repository contains LoRA files, it loads its pinned base and merges before
 tracing and Gram. Baseline therefore uses fine-tuned weights. Base downloads
 are shared by adapters in the same fleet. External-prefix configurations require
 their configured prefix cache.

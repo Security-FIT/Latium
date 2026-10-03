@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze the most downloaded HF fine-tunes, including adapters, without weights."""
+"""Freeze top HF text-generation fine-tunes tagged with the configured base model."""
 import argparse
 import concurrent.futures
 import json
@@ -34,7 +34,7 @@ def signature(cfg):
     return {key: cfg[key] for key in fields if key in cfg}
 
 
-def prepare_family(model, root, count, candidates, api, token):
+def prepare_family(model, root, count, api, token):
     base = load_model_config(model)
     directory = root / model
     directory.mkdir(parents=True, exist_ok=True)
@@ -44,30 +44,21 @@ def prepare_family(model, root, count, candidates, api, token):
         return json.loads(Path(hf_hub_download(model_id, filename, revision=revision,
                                                cache_dir=cache, token=token)).read_text())
     original = config(info.id, info.sha)
-    aliases = {str(base.name), info.id}
-    parent = getattr(info.card_data, "base_model", None)
-    if parent:
-        aliases.update([parent] if isinstance(parent, str) else parent)
-    if model.startswith("qwen3-"):
-        aliases.add(str(base.name) + "-Base")
-    if model == "llama2-7b":
-        aliases.add("meta-llama/Llama-2-7b-hf")
-    discovered, filters = {}, []
-    for alias in sorted(aliases):
-        for relation in ("finetune", "adapter"):
-            tag = f"base_model:{relation}:{alias}"
-            filters.append(tag)
-            for entry in api.list_models(filter=tag, sort="downloads", limit=candidates, full=True):
-                if tag in (entry.tags or []) and entry.id not in aliases:
-                    discovered[entry.id] = entry
+    tag = f"base_model:finetune:{base.name}"
+    discovered = {}
+    for entry in api.list_models(filter=tag, pipeline_tag="text-generation", sort="downloads", full=True):
+        if tag in (entry.tags or []) and entry.pipeline_tag == "text-generation":
+            discovered[entry.id] = entry
     ordered = sorted(discovered.values(), key=lambda e: (-int(e.downloads or 0), e.id.lower()))
     previous = directory / "selection-audit.json"
-    policy = "top-downloads-including-adapters-v1"
+    policy = "top-downloads-finetune-text-generation-exact-base-v1"
     audit = json.loads(previous.read_text()) if previous.exists() else {}
     cached = {e["model_id"]: e for e in audit.get("models", [])} if audit.get("selection_policy") == policy else {}
-    write_json(directory / "discovery.json", {"aliases": sorted(aliases), "discovery_filter": filters, "fetched_at": utc_now(),
+    write_json(directory / "discovery.json", {"base_model": str(base.name), "discovery_filter": [tag],
+               "pipeline_tag": "text-generation", "fetched_at": utc_now(),
                "sort": "downloads descending, model ID ascending for ties",
-               "models": [{"model_id": e.id, "downloads": e.downloads, "tags": e.tags} for e in ordered]})
+               "models": [{"model_id": e.id, "downloads": e.downloads, "tags": e.tags,
+                           "pipeline_tag": e.pipeline_tag} for e in ordered]})
     base_metadata, base_lock = {}, threading.Lock()
 
     def validate(cfg, record):
@@ -79,23 +70,14 @@ def prepare_family(model, root, count, candidates, api, token):
             raise ValueError("Quantized weights are unsupported by the float ROME/GRAM runtime")
 
     def inspect(entry):
-        record = {"model_id": entry.id, "downloads": int(entry.downloads or 0),
+        record = {"model_id": entry.id, "downloads": int(entry.downloads or 0), "pipeline_tag": entry.pipeline_tag,
+                  "tags": entry.tags,
                   "checkpoint_type": "unsupported", "runtime_validation": 1}
         earlier = cached.get(entry.id)
         if earlier and earlier.get("runtime_validation") == 1 and not any(code in earlier.get("selection_error", "") for code in
                                ("429", "500", "502", "503", "504", "no resolvable HF base repository")):
-            result = {**earlier, "model_id": entry.id, "downloads": record["downloads"]}
-            if "Checkpoint dimensions differ" in result.get("selection_error", ""):
-                result.pop("selection_error")
-                source = result.get("adapter_base_model", entry.id)
-                revision = result.get("adapter_base_revision", result["revision"])
-                try:
-                    validate(config(source, revision), result)
-                except ValueError as exc:
-                    result["selection_error"] = f"ValueError: {exc}"
-            elif not result.get("selection_error"):
-                result.setdefault("matches_classic_dimensions", True)
-            return result
+            return {**earlier, "model_id": entry.id, "downloads": record["downloads"],
+                    "pipeline_tag": record["pipeline_tag"], "tags": record["tags"]}
         try:
             details = api.model_info(entry.id, files_metadata=True)
             if not re.fullmatch(r"[0-9a-f]{40}", details.sha or ""):
@@ -144,7 +126,8 @@ def prepare_family(model, root, count, candidates, api, token):
         selected = [{**record, "rank": rank} for rank, record in enumerate(pool.map(inspect, chosen), start=1)]
     write_json(directory / "selection-audit.json", {"selection_policy": policy, "models": selected})
     manifest = {"base_model": str(base.name), "base_config": model, "created_at": utc_now(),
-                "selection_policy": policy, "discovery_filter": filters, "relations": ["finetune", "adapter"],
+                "selection_policy": policy, "discovery_filter": [tag], "relations": ["finetune"],
+                "pipeline_tag": "text-generation",
                 "sort": "downloads descending, model ID ascending for ties; membership fixed before metadata checks",
                 "requested_count": count, "count": len(selected), "models": selected}
     write_json(directory / "checkpoints.json", manifest)
@@ -161,7 +144,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models", nargs="+", default=MODELS)
     parser.add_argument("--model-count", type=int, default=100)
-    parser.add_argument("--candidates-per-tag", type=int, default=300)
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
     root = Path(args.output_dir).resolve()
@@ -171,7 +153,7 @@ def main():
     for model in args.models:
         for retry in range(3):
             try:
-                record = prepare_family(model, root, args.model_count, args.candidates_per_tag, api, token)
+                record = prepare_family(model, root, args.model_count, api, token)
                 break
             except Exception as exc:
                 response = getattr(exc, "response", None)

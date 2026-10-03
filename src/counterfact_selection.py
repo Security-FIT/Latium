@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Sequence
@@ -17,6 +18,12 @@ import datasets
 
 
 def load_counterfact_split(dataset_name: str, split: str, revision: str | None = None):
+    # A manifest validates the selected case IDs and content against this cache.
+    local_cache = Path(os.environ.get("LATIUM_COUNTERFACT_CACHE") or
+                       Path(__file__).resolve().parents[2] / "datasets" / dataset_name)
+    if local_cache.exists():
+        cached = datasets.load_from_disk(str(local_cache))
+        return cached[split] if isinstance(cached, datasets.DatasetDict) else cached
     options = {"revision": revision} if revision else {}
     return datasets.load_dataset(dataset_name, split=split, **options)
 
@@ -225,7 +232,9 @@ def load_cases_from_manifest(
         manifest["dataset"], manifest["split"], revision=manifest.get("dataset_revision")
     )
     fingerprint = manifest.get("dataset_fingerprint")
-    if fingerprint and getattr(ds, "_fingerprint", None) != fingerprint:
+    # save_to_disk/load_from_disk can change the representation fingerprint.
+    # Frozen per-case content hashes still enforce the same facts below.
+    if fingerprint and getattr(ds, "_fingerprint", None) != fingerprint and not manifest.get("content_hashes"):
         raise ValueError("Dataset fingerprint differs from the frozen manifest")
     cases = []
     for position in range(start, stop):

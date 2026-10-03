@@ -18,8 +18,12 @@ class _Tokenizer:
     pad_token_id = None
     eos_token_id = 1
 
-    def __call__(self, *_args, **_kwargs):
+    def __call__(self, text, **_kwargs):
+        self.text = text
         return {"input_ids": torch.tensor([[1]])}
+
+    def decode(self, *_args, **_kwargs):
+        return self.text
 
 
 class _DeviceManager:
@@ -153,3 +157,28 @@ def test_load_pretrained_merges_real_lora_before_hooks_and_weight_edits(monkeypa
         torch.testing.assert_close(merged(tokens).logits, expected_logits, rtol=1e-5, atol=1e-6)
     handle.remove()
     assert len(captured) == 3
+
+
+def test_load_pretrained_preserves_checkpoint_tokenizer_backend(monkeypatch, tmp_path):
+    class BrokenTokenizer(_Tokenizer):
+        def decode(self, *_args, **_kwargs):
+            return self.text.replace(" ", "")
+    raw = _Tokenizer()
+    calls = []
+    def raw_loader(path, **kwargs):
+        calls.append(str(path))
+        return raw
+    cache = tmp_path / "example" / "model"
+    cache.mkdir(parents=True)
+    cfg = OmegaConf.create({"model": {"name": "example/model", "models_dir": str(tmp_path), "device": "cpu"}})
+    monkeypatch.setattr(loading, "runtime_from_cfg", lambda _: SimpleNamespace(hf_token=None))
+    monkeypatch.setattr(loading, "check_hf_token", lambda _: None)
+    monkeypatch.setattr(loading, "gpu_count", lambda: 0)
+    monkeypatch.setattr(loading, "DeviceManager", _DeviceManager)
+    monkeypatch.setattr(loading.AutoModelForCausalLM, "from_pretrained", lambda *a, **kw: SimpleNamespace(device=torch.device("cpu")))
+    monkeypatch.setattr(loading.AutoTokenizer, "from_pretrained", lambda *a, **kw: BrokenTokenizer())
+    monkeypatch.setattr(loading.PreTrainedTokenizerFast, "from_pretrained", raw_loader)
+    _, tokenizer = loading.load_pretrained(cfg)
+    assert tokenizer is raw
+    assert calls == [str(cache)]
+    assert tokenizer.decode(tokenizer("The twin city of Tokyo is")["input_ids"][0]) == "The twin city of Tokyo is"

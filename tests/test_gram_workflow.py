@@ -215,3 +215,28 @@ def test_append_ignores_reporting_changes_but_rejects_computation_changes(tmp_pa
     args.case_start, args.case_stop = 6, 9
     with pytest.raises(ValueError, match="setup changed"):
         gram_fleet.prepare(args)
+
+
+def test_counterfact_disk_cache_avoids_hub_and_preserves_manifest(tmp_path, monkeypatch):
+    import datasets
+    from src.counterfact_selection import load_counterfact_split
+    ds = datasets.Dataset.from_list(dataset(10))
+    path = tmp_path / "cached-counterfact"
+    datasets.DatasetDict({"train": ds}).save_to_disk(path)
+    manifest = generate_random_case_manifest(count=5, seed=42, dataset_name="fake", split="train", dataset=ds, revision="pinned")
+    manifest_path = tmp_path / "cases.json"
+    write_case_manifest(manifest_path, manifest)
+    monkeypatch.setenv("LATIUM_COUNTERFACT_CACHE", str(path))
+    monkeypatch.setattr(datasets, "load_dataset", lambda *a, **kw: pytest.fail("Unexpected Hub access"))
+    loaded = load_counterfact_split("fake", "train", revision="pinned")
+    assert len(loaded) == len(ds)
+    metadata, cases = load_cases_from_manifest(manifest_path, start_idx=0, n_tests=5)
+    assert [c["case_id"] for c in cases] == manifest["case_ids"]
+    assert metadata["manifest_hash"] == manifest["manifest_hash"]
+
+    # A different representation is allowed; different facts are still rejected.
+    changed = loaded.to_list()
+    changed[manifest["indices"][0]]["requested_rewrite"]["subject"] = "changed"
+    monkeypatch.setattr(datasets, "load_from_disk", lambda _: datasets.DatasetDict({"train": datasets.Dataset.from_list(changed)}))
+    with pytest.raises(ValueError, match="content mismatch"):
+        load_cases_from_manifest(manifest_path, n_tests=5)

@@ -32,6 +32,8 @@ def parse_args(argv=None):
     parser.add_argument("--case-stop", type=int)
     parser.add_argument("--n-tests", type=int, default=1, help="ROME facts per checkpoint (independent of model-count)")
     parser.add_argument("--covariance-samples", type=int, default=100000)
+    parser.add_argument("--finetuned-covariance", action="store_true",
+                        help="Compute covariance per checkpoint instead of reusing the original model's statistics")
     parser.add_argument("--python", default=sys.executable)
     parser.add_argument("--tracking", choices=("none", "wandb"), default="none")
     parser.add_argument("--wandb-project", default="latium")
@@ -115,6 +117,8 @@ def freeze_selection(args, base, api):
                 "base_config": base, "prefix_hash": prefix_hash, "model_count": args.model_count,
                 "supplied_manifest_hash": digest(supplied) if supplied else None,
                 "download_root": str(downloads)}
+    identity.update(covariance_source="finetuned" if args.finetuned_covariance else "base",
+                    covariance_samples=args.covariance_samples)
     path = root / "checkpoints.json"
     if path.exists():
         selection = json.loads(path.read_text())
@@ -178,12 +182,28 @@ def freeze_selection(args, base, api):
 def save_configs(root, selection):
     config_dir = root / "checkpoint-configs" / "model"
     config_dir.mkdir(parents=True, exist_ok=True)
+    base = selection["identity"]["base_config"]
+    shared = selection["identity"]["covariance_source"] == "base"
+    if shared:
+        from jobs.paper_fleet import model_second_moment_files
+        from src.common.paths import resolve_project_path
+        files = model_second_moment_files(selection["identity"]["base_model"], int(base["layer"]),
+            selection["identity"]["covariance_samples"], config=OmegaConf.create(base))
+        directory = resolve_project_path(base["second_moment_dir"])
+        # Preparation can run before the classic covariance has been generated.
+        stem = f"{base['name'].replace('/', '_')}_{base['layer']}_SM_Method.WIKIPEDIA"
+        expected = directory / f"{stem}_{selection['identity']['covariance_samples']}.pt"
+        path = files[0] if files else resolve_project_path(base.get("second_moment_path") or
+                                                          expected)
     for entry in selection["models"]:
-        cfg = dict(selection["identity"]["base_config"])
+        cfg = dict(base)
         cfg.update(name=entry["model_id"], save_to_local=False,
                    models_dir=str(Path(selection["identity"]["download_root"]) / entry["key"] / "models"),
                    second_moment_dir=str(root / "models" / entry["key"] / "covariance"),
                    second_moment_path=None)
+        if shared:
+            cfg.update(second_moment_dir=str(directory), second_moment_path=str(path),
+                       second_moment_model_name=base["name"])
         # Provenance is also part of the Gram config hash, even after weights are deleted.
         cfg["checkpoint_revision"] = entry.get("revision")
         if entry.get("checkpoint_type") == "adapter" and not entry.get("selection_error"):
@@ -244,6 +264,7 @@ def run(args, api=None, downloader=None):
             if args.no_graphs:
                 forwarded.append("--no-graphs")
             gram = gram_args(forwarded)
+            gram.skip_second_moment = not args.finetuned_covariance
             if args.retry_failed_facts and not args.prepare_only:
                 gram.models = []  # Freeze the cohort; register only facts actually attempted by ROME.
             batch, catalog = gram_fleet.prepare(gram)
@@ -253,6 +274,15 @@ def run(args, api=None, downloader=None):
             cohort = load_case_manifest(root / "cases.json")
             from jobs.paper_fleet import configure_logging
             configure_logging(root)
+            if not args.finetuned_covariance:
+                from jobs.paper_fleet import model_second_moment_files
+                cfg = load_model_config(selection["models"][0]["key"])
+                if not model_second_moment_files(selection["models"][0]["key"], int(cfg.layer), args.covariance_samples):
+                    raise FileNotFoundError(f"Missing original-model covariance for {args.base_model}, "
+                        f"layer={cfg.layer}, samples={args.covariance_samples}. Prepare it with "
+                        f"python jobs/paper_fleet.py --workflow gram --models {args.base_model} "
+                        f"--covariance-only --covariance-samples {args.covariance_samples} "
+                        "--run-root analysis_out/base-covariance, or select --finetuned-covariance.")
             failures = []
             downloads = Path(selection["identity"]["download_root"])
             own_download_root(downloads, root)

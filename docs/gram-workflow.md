@@ -63,8 +63,13 @@ all selected checkpoints run. `--checkpoint-start` sets a zero-based starting
 position without changing the cohort. Each starts with the same manifest fact; failed
 ROME edits or tracing rejections advance to the next reserve fact. Every attempt
 is recorded in checkpoint state. GRAM wrong-layer results never trigger a retry.
-Baseline is the downloaded checkpoint before ROME. Covariance is computed
-separately for each checkpoint. Tracing uses the same fact and preserves the
+Baseline is the downloaded checkpoint before ROME. By default, ROME reuses
+the original model's covariance for the configured layer and sample count.
+Prepare missing original statistics once with the classic fleet's
+`--covariance-only` option. Add `--finetuned-covariance` to compute statistics
+separately for each checkpoint. Shared covariance approximates fine-tuned
+activations and can affect ROME success. Changing this choice requires a new
+run root. Tracing uses the same fact and preserves the
 classic ROME layer; its CSV, JSON and PNG outputs are indexed in the run manifest.
 
 `--base-model` selects the classic model configuration. Omit `--models-manifest`

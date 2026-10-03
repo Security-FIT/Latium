@@ -18,7 +18,7 @@ def fixture_args(tmp_path):
     models.write_text(json.dumps({"models": [{"model_id": "org/one"}, {"model_id": "org/two"}]}))
     return fleet.parse_args(["--base-model", "gpt2-xl", "--models-manifest", str(models),
         "--model-count", "2", "--run-root", str(tmp_path / "run"), "--case-index-file", str(manifest),
-        "--case-start", "2", "--case-stop", "4", "--no-graphs"])
+        "--case-start", "2", "--case-stop", "4", "--no-graphs", "--finetuned-covariance"])
 
 
 class FakeApi:
@@ -29,6 +29,61 @@ class FakeApi:
         self.calls.append((model, revision))
         return SimpleNamespace(sha="a" * 40, siblings=[SimpleNamespace(rfilename=n) for n in
             ("config.json", "model.safetensors", "pytorch_model.bin", "tokenizer.json", "optimizer.pt", "adapter_model.safetensors")])
+
+
+def test_default_reuses_original_covariance_without_checkpoint_computation(tmp_path, monkeypatch):
+    from jobs.paper_fleet import model_second_moment_files
+    prepared = fixture_args(tmp_path)
+    args = fleet.parse_args(["--base-model", "gpt2-xl", "--models-manifest", prepared.models_manifest,
+        "--model-count", "2", "--run-root", prepared.run_root, "--case-index-file", prepared.case_index_file,
+        "--case-start", "2", "--case-stop", "4", "--no-graphs"])
+    assert not args.finetuned_covariance
+    base = load_model_config(args.base_model)
+    base.second_moment_dir = str(tmp_path / "classic-stats")
+    covariance = Path(base.second_moment_dir) / f"{base.name.replace('/', '_')}_{base.layer}_SM_Method.WIKIPEDIA_100000.pt"
+    covariance.parent.mkdir()
+    covariance.write_bytes(b"original statistics")
+    base.second_moment_path = str(covariance)
+    real_load = fleet.load_model_config
+    monkeypatch.setattr(fleet, "load_model_config", lambda name, **kwargs:
+        base if name == args.base_model else real_load(name, **kwargs))
+    seen = []
+
+    def gram(params):
+        cfg = real_load(params.models[0])
+        assert params.skip_second_moment
+        assert cfg.name in ("org/one", "org/two")
+        assert cfg.second_moment_model_name == base.name
+        assert cfg.second_moment_path == str(covariance)
+        assert model_second_moment_files(params.models[0], int(base.layer), 100000) == [covariance]
+        assert model_second_moment_files(params.models[0], int(base.layer), 50000) == []
+        seen.append(cfg.name)
+        return 0
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 0
+    assert seen == ["org/one", "org/two"]
+    assert covariance.read_bytes() == b"original statistics"
+    assert not list(Path(args.run_root).glob("models/*/covariance"))
+    args.finetuned_covariance = True
+    with pytest.raises(ValueError, match="selection/configuration changed"):
+        fleet.run(args, FakeApi(), lambda **kwargs: None)
+
+
+def test_missing_original_covariance_fails_before_downloads(tmp_path, monkeypatch):
+    args = fixture_args(tmp_path)
+    args.finetuned_covariance = False
+    base = load_model_config(args.base_model)
+    base.second_moment_dir = str(tmp_path / "missing-stats")
+    base.second_moment_path = None
+    monkeypatch.setattr(fleet, "load_model_config", lambda *a, **kw: base)
+    calls = []
+    with pytest.raises(FileNotFoundError, match="Missing original-model covariance"):
+        fleet.run(args, FakeApi(), lambda **kwargs: calls.append(kwargs))
+    assert calls == []
+    args.prepare_only = True
+    assert fleet.run(args, FakeApi(), lambda **kwargs: calls.append(kwargs)) == 0
+    assert calls == []
 
 
 def test_configs_keep_classic_layer_and_use_checkpoint_covariance(tmp_path, monkeypatch):

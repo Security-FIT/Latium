@@ -102,15 +102,15 @@ def run_logged(command: list[str], *, stage: str, model: str) -> None:
     LOGGER.info("[%s][%s] complete", model, stage)
 
 
-def model_second_moment_files(model: str, layer: int, samples: int) -> list[Path]:
+def model_second_moment_files(model: str, layer: int, samples: int, *, config=None) -> list[Path]:
     """Return only the configured, non-empty covariance for this exact run."""
 
     from src.common.model_config import load_model_config
     from src.common.paths import resolve_project_path
 
-    config = load_model_config(model)
+    config = load_model_config(model) if config is None else config
     directory = resolve_project_path(Path(str(config.second_moment_dir)))
-    model_id = str(config.name).replace("/", "_")
+    model_id = str(getattr(config, "second_moment_model_name", config.name)).replace("/", "_")
     stem = f"{model_id}_{int(layer)}_*_{int(samples)}"
     candidates = sorted(directory.glob(f"{stem}.pt"))
     candidates += sorted(directory.glob(f"{stem}.npz"))

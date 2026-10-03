@@ -51,6 +51,8 @@ class LegacySettings:
     noise_std: float | None
     require_correct_clean_prediction: bool
     seed: int
+    case_index_file: str | None = None
+    case_start: int = 0
 
     @classmethod
     def from_config(cls, cfg: DictConfig) -> "LegacySettings":
@@ -71,6 +73,8 @@ class LegacySettings:
             noise_std=std,
             require_correct_clean_prediction=bool(section.require_correct_clean_prediction),
             seed=int(section.seed),
+            case_index_file=section.get("case_index_file"),
+            case_start=int(section.get("case_start", 0)),
             **counts,
         )
 
@@ -221,7 +225,20 @@ def run(cfg: DictConfig, handler: ModelHandler, settings: LegacySettings) -> Pat
     facts = []
     rejections = []
     scanned = 0
-    for index, example in enumerate(_dataset_examples(cfg, max_scan=settings.max_dataset_examples_to_scan)):
+    case_selection = None
+    if settings.case_index_file:
+        from src.counterfact_selection import load_case_manifest, load_cases_from_manifest
+
+        manifest = load_case_manifest(settings.case_index_file)
+        count = min(settings.max_dataset_examples_to_scan, manifest["count"] - settings.case_start)
+        _, cases = load_cases_from_manifest(settings.case_index_file, start_idx=settings.case_start, n_tests=count)
+        examples = [TraceExample(str(c["case_id"]), c["fact_tuple"][0].format(c["subject"]),
+                                 c["subject"], c["target_true_str"].strip()) for c in cases]
+        case_selection = {"manifest_hash": manifest["manifest_hash"], "start": settings.case_start,
+                          "case_ids": [c["case_id"] for c in cases]}
+    else:
+        examples = _dataset_examples(cfg, max_scan=settings.max_dataset_examples_to_scan)
+    for index, example in enumerate(examples):
         scanned += 1
         try:
             fact = trace_example(
@@ -296,6 +313,7 @@ def run(cfg: DictConfig, handler: ModelHandler, settings: LegacySettings) -> Pat
         "rejections": rejections,
         "selected_layer": None,
         "selection_status": "legacy_profile_only_no_automatic_selection",
+        "case_selection": case_selection,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     if not facts:

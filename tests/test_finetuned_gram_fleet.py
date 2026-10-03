@@ -61,8 +61,9 @@ def test_download_filters_and_cleanup_containment(tmp_path):
     files = fleet.checkpoint_files(["config.json", "model.safetensors", "tokenizer.json", "pytorch_model.bin",
                                    "adapter_model.safetensors", "optimizer.pt", "onnx/model.onnx"])
     assert files == ["config.json", "model.safetensors", "tokenizer.json"]
-    with pytest.raises(ValueError, match="full Transformers"):
-        fleet.checkpoint_files(["adapter_config.json", "adapter_model.safetensors"])
+    assert fleet.checkpoint_files(["adapter_config.json", "adapter_model.safetensors", "optimizer.pt"]) == ["adapter_config.json", "adapter_model.safetensors"]
+    with pytest.raises(ValueError, match="neither full"):
+        fleet.checkpoint_files(["model.gguf"])
     owned = tmp_path / "owned"; owned.mkdir()
     victim = tmp_path / "other"; victim.mkdir()
     (victim / "keep").write_text("keep")
@@ -140,3 +141,77 @@ def test_cli_loads_generated_config_for_covariance(tmp_path, monkeypatch):
     assert run_hydra(["command=second_moment", "model=fleet_org_one"]) == 0
     assert all(cfg.model.name == "org/one" and cfg.model.layer == base_layer for cfg in configs)
     assert all(cfg.model.second_moment_path is None for cfg in configs)
+
+
+def test_adapter_downloads_pinned_base_and_preserves_unusable_top_rank(tmp_path, monkeypatch):
+    args = fixture_args(tmp_path)
+    args.keep_downloads = True
+    manifest = Path(args.models_manifest)
+    manifest.write_text(json.dumps({"models": [
+        {"model_id": "org/broken", "downloads": 100, "selection_error": "Missing weights"},
+        {"model_id": "org/adapter", "downloads": 90, "revision": "a" * 40,
+         "files": ["adapter_config.json", "adapter_model.safetensors"],
+         "adapter_base_model": "org/base", "adapter_base_revision": "b" * 40,
+         "adapter_base_files": ["config.json", "model.safetensors"]}]}))
+    calls = []
+
+    def download(**kwargs):
+        calls.append((kwargs["repo_id"], kwargs["revision"]))
+        directory = Path(kwargs["local_dir"])
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in kwargs["allow_patterns"]:
+            (directory / name).write_text("fake")
+
+    def gram(params):
+        cfg = load_model_config(params.models[0])
+        assert cfg.name == "org/adapter" and cfg.adapter_base_revision == "b" * 40
+        assert Path(cfg.adapter_base_path, "config.json").exists()
+        assert cfg.layer == load_model_config("gpt2-xl", config_dir=fleet.MODEL_CONFIG_DIR).layer
+        return 0
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    assert fleet.run(args, FakeApi(), download) == 1
+    assert calls == [("org/adapter", "a" * 40), ("org/base", "b" * 40)]
+    frozen = json.loads((Path(args.run_root) / "checkpoints.json").read_text())
+    assert [e["model_id"] for e in frozen["models"]] == ["org/broken", "org/adapter"]
+    assert [e["rank"] for e in frozen["models"]] == [1, 2]
+
+
+def test_retained_downloads_retry_rome_failure_and_skip_complete_rerun(tmp_path, monkeypatch):
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.keep_downloads = True; args.retry_failed_facts = True; args.checkpoint_limit = 1
+    calls = []
+
+    def download(**kwargs):
+        p = Path(kwargs["local_dir"])
+        p.mkdir(parents=True, exist_ok=True)
+        (p / "weights").write_text("pinned weights")
+        calls.append("download")
+
+    def gram(params):
+        batch, catalog = fleet.gram_fleet.prepare(params)
+        root = Path(params.run_root) / catalog["models"][params.models[0]]["run_root"]
+        root.mkdir(parents=True, exist_ok=True)
+        position = params.case_start
+        artifact_id = f"exec-{position}"
+        path = f"execution-{position}.json"
+        manifest = json.loads((root / "manifest.json").read_text()) if (root / "manifest.json").exists() else {"artifacts": {}}
+        manifest["artifacts"][artifact_id] = {"kind": "execution", "edit_method": "rome", "plan_id": catalog["models"][params.models[0]]["batches"][batch]["plan_id"], "path": path}
+        (root / "manifest.json").write_text(json.dumps(manifest))
+        (root / path).write_text(json.dumps({"cases": [{"case_id": position, "status": "complete", "edit": {"success": position > 0}, "detected_layer": 999}]}))
+        calls.append(position)
+        return 0
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    monkeypatch.setattr(fleet.gram_fleet, "verify_batch", lambda *a: None)
+    assert fleet.run(args, FakeApi(), download) == 0
+    assert calls == ["download", 0, 1]  # Wrong GRAM layer does not trigger another attempt.
+    state = json.loads(next((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json")).read_text())
+    assert state["accepted_position"] == 1
+    assert [a["status"] for a in state["attempts"]] == ["rome_failed", "complete"]
+    weights = list((Path(args.run_root) / ".downloads").glob("*/models/*/*/weights"))
+    assert len(weights) == 1
+    calls.clear()
+    assert fleet.run(args, FakeApi(), download) == 0
+    assert calls == [] and weights[0].is_file()

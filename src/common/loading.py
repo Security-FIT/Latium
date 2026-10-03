@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import datasets
@@ -132,7 +133,29 @@ def load_pretrained(cfg: DictConfig) -> Any:
                     return _call_model_loader(model_cls, path_or_name, **kwargs)
             raise
 
-    if os.path.exists(local_model_path):
+    adapter_base = getattr(cfg.model, "adapter_base_path", None)
+    if adapter_base:
+        from peft import PeftModel
+
+        if not Path(local_model_path, "adapter_config.json").is_file() or not Path(adapter_base, "config.json").is_file():
+            raise FileNotFoundError("Pinned adapter and base checkpoint must be downloaded before loading")
+        LOGGER.info("Loading adapter %s on pinned base %s", local_model_path, adapter_base)
+        tokenizer_files = ("tokenizer.json", "tokenizer.model", "vocab.json", "vocab.txt", "spiece.model")
+        tokenizer_path = local_model_path if any(Path(local_model_path, name).is_file() for name in tokenizer_files) else adapter_base
+        tokenizer = _ensure_padding(AutoTokenizer.from_pretrained(tokenizer_path, local_files_only=True))
+        if not _tokenizer_is_usable(tokenizer):
+            raise RuntimeError(f"Unusable tokenizer for adapter {model_name}")
+        model = _model_from_pretrained(adapter_base, local_files_only=True, **({"device_map": "auto"} if use_device_map else {}))
+        if len(tokenizer) > model.get_input_embeddings().num_embeddings:
+            model.resize_token_embeddings(len(tokenizer))
+        if not use_device_map:
+            model = device_manager.safe_to_device(model)
+        adapted = PeftModel.from_pretrained(model, local_model_path, local_files_only=True,
+                                           is_trainable=False, autocast_adapter_dtype=False)
+        # Plain merged projections are required by ROME and Gram's weight hooks.
+        model = adapted.merge_and_unload(safe_merge=True)
+        device_manager.register_object(model)
+    elif os.path.exists(local_model_path):
         LOGGER.info("Loading model from local cache: %s", local_model_path)
         if use_device_map:
             model = _model_from_pretrained(local_model_path, device_map="auto")

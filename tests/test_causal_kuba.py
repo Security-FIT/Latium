@@ -284,3 +284,20 @@ def test_corrected_legacy_saves_rejections_draws_and_no_spurious_layer_selection
     assert not (path / "fact_000000.json").exists()
     assert (path / "fact_000001.json").is_file()
     assert_no_hooks(handler.model)
+
+
+def test_corrected_legacy_reads_the_exact_frozen_fleet_fact(tmp_path, monkeypatch):
+    from src.counterfact_selection import build_case_manifest, write_case_manifest
+    import src.counterfact_selection as selection
+    records = [{"case_id": 11, "requested_rewrite": {"subject": "Ada", "prompt": "{} lived", "target_true": {"str": "London"}, "target_new": {"str": "York"}}},
+               {"case_id": 22, "requested_rewrite": {"subject": "Ada Lovelace", "prompt": "{} lived", "target_true": {"str": "New York"}, "target_new": {"str": "London"}}}]
+    manifest = tmp_path / "facts.json"
+    write_case_manifest(manifest, build_case_manifest([1, 0], dataset_name="toy", split="train", dataset=records))
+    monkeypatch.setattr(selection, "load_counterfact_split", lambda *a, **k: records)
+    cfg = OmegaConf.create({"model": {"name": "toy", "restore_layer_name_template": "blocks.{}", "corrupt_layer_name_template": "embedding", "corruption_noise_multiplier": .5}, "dataset_facts": {"name": "toy"}})
+    settings = legacy_fixed.LegacySettings(tmp_path / "out", 1, 1, 1, .5, True, 42, str(manifest), 0)
+    result = legacy_fixed.run(cfg, handler_for(cfg=cfg), settings)
+    summary = json.loads((result / "summary.json").read_text())
+    fact = json.loads((result / "fact_000000.json").read_text())
+    assert fact["prompt_id"] == "22" and fact["subject"] == "Ada Lovelace"
+    assert summary["case_selection"]["case_ids"] == [22]

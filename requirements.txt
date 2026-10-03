@@ -10,6 +10,7 @@ seaborn
 matplotlib
 datasets
 accelerate
+peft
 tensorboard
 tqdm
 scikit-learn

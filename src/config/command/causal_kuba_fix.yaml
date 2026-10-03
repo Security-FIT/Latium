@@ -16,3 +16,6 @@ legacy_trace:
   noise_std: null
   require_correct_clean_prediction: true
   seed: 42
+  # Optional frozen CounterFact selection, used by the fine-tuned fleet.
+  case_index_file: null
+  case_start: 0

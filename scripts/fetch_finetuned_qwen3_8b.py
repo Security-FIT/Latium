@@ -51,15 +51,16 @@ def _model_record(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def fetch_models(*, base_model: str, limit: int, token: str | None = None) -> list[dict[str, Any]]:
-    params = {
-        "other": f"base_model:finetune:{base_model}",
-        "sort": "downloads",
-        "direction": "-1",
-        "limit": str(limit),
-        "full": "true",
-    }
-    url = f"{HF_API_MODELS}?{urllib.parse.urlencode(params)}"
-    records = [_model_record(item) for item in _request_json(url, token=token)]
+    found = {}
+    for relation in ("finetune", "adapter"):
+        params = {"filter": f"base_model:{relation}:{base_model}", "sort": "downloads",
+                  "direction": "-1", "limit": str(limit), "full": "true"}
+        url = f"{HF_API_MODELS}?{urllib.parse.urlencode(params)}"
+        for raw in _request_json(url, token=token):
+            item = _model_record(raw)
+            if params["filter"] in item["tags"]:
+                found[item["model_id"]] = item
+    records = list(found.values())
     records.sort(key=lambda item: (-int(item["downloads"]), str(item["model_id"]).lower()))
     return records[:limit]
 

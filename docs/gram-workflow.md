@@ -43,32 +43,49 @@ same options with `python jobs/paper_fleet.py`, without `--dry-run`.
 
 ## Fine-tuned Hugging Face fleet
 
-Download and process one checkpoint at a time, save its results, delete its
-weights, then continue:
+Freeze the top repositories by downloads, then verify one checkpoint first:
 
 ```bash
-bash jobs/submit.sh finetuned-gram --walltime 72:00:00 -- \
-  --base-model qwen3-8b \
-  --models-manifest finetuned_qwen3_8b_fleet.json --model-count 100 \
-  --run-root analysis_out/qwen-ft-gram --case-start 0 --case-stop 1
+python jobs/prepare_finetuned_gram_fleets.py --output-dir analysis_out/fleets
 ```
 
-This edits one shared fact on each of 100 checkpoints. Use `--case-stop 100`
-for 100 facts per checkpoint. Baseline is the downloaded checkpoint before
-ROME. Covariance is computed separately for each checkpoint.
+```bash
+bash jobs/submit.sh finetuned-gram --gpu-mem 32gb --walltime 03:00:00 -- \
+  --base-model qwen3-8b \
+  --models-manifest analysis_out/fleets/qwen3-8b/checkpoints.json --model-count 100 \
+  --case-index-file /path/to/frozen-finetuned-facts.json \
+  --run-root analysis_out/qwen-ft-gram --case-start 0 --case-stop 1 \
+  --checkpoint-limit 1 --keep-downloads --retry-failed-facts --causal-kuba-fix
+```
+
+Increase `--checkpoint-limit` to process more of the frozen cohort. Without it,
+all selected checkpoints run. `--checkpoint-start` sets a zero-based starting
+position without changing the cohort. Each starts with the same manifest fact; failed
+ROME edits or tracing rejections advance to the next reserve fact. Every attempt
+is recorded in checkpoint state. GRAM wrong-layer results never trigger a retry.
+Baseline is the downloaded checkpoint before ROME. Covariance is computed
+separately for each checkpoint. Tracing uses the same fact and preserves the
+classic ROME layer; its CSV, JSON and PNG outputs are indexed in the run manifest.
 
 `--base-model` selects the classic model configuration. Omit `--models-manifest`
 to discover the top N HF repositories tagged as its finetunes; use
 `--hf-base-model` to specify another discovery tag. The supplied Qwen manifest
-targets `Qwen/Qwen3-8B-Base`. Full Transformers weights, a usable tokenizer,
-and a compatible architecture are required. External-prefix configurations
-require their configured prefix cache.
+targets `Qwen/Qwen3-8B-Base`. Selection happens before compatibility checks:
+failed or unsupported checkpoints retain their rank and are never replaced.
+The preparation script combines finetune and adapter tags for the family and
+sorts by downloads descending, then repository ID ascending for ties.
+LoRA checkpoints load their pinned declared base, then merge the adapter before
+tracing and Gram. Baseline therefore uses fine-tuned weights. Base downloads
+are shared by adapters in the same fleet. External-prefix configurations require
+their configured prefix cache.
 
 HF IDs and revisions are frozen in `checkpoints.json`; generated configs live
 in `checkpoint-configs/`. Downloads use `<run-root>/.downloads/`. Optional
 `--download-root PATH` sets another download parent; keep it stable across
-retries. Cleanup removes only runner-owned checkpoint downloads. Artifacts
-and covariance remain. `--prepare-only` saves metadata/configs without
+retries. `--keep-downloads` retains pinned weights and partial downloads;
+otherwise cleanup removes only runner-owned checkpoint downloads. Artifacts
+and covariance remain. `--prefix-cache-file` selects an existing classic
+external prefix pool. `--prepare-only` saves metadata/configs without
 weight downloads or GPU stages.
 
 ## Append, resume and outputs

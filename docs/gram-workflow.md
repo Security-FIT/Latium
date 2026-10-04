@@ -66,7 +66,7 @@ fact manifest and run root to append results. Without a stop, all remaining
 checkpoints run. `--checkpoint-limit` is an alias for `--checkpoint-stop`.
 Each starts with the same manifest fact; failed
 ROME edits or tracing rejections advance to the next reserve fact.
-`--max-fact-attempts` bounds the candidate range per checkpoint (default 20),
+`--max-fact-attempts` bounds the candidate range per checkpoint (default 1000, capped by the manifest length),
 including attempts saved by earlier runs. Tracing scans pending reserve facts
 with one model load and stops at the first valid fact. Every attempt is
 recorded in checkpoint state. GRAM wrong-layer results never trigger a retry.

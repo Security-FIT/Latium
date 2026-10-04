@@ -38,6 +38,7 @@ def test_default_reuses_original_covariance_without_checkpoint_computation(tmp_p
         "--model-count", "2", "--run-root", prepared.run_root, "--case-index-file", prepared.case_index_file,
         "--case-start", "2", "--case-stop", "4", "--no-graphs"])
     assert not args.finetuned_covariance
+    assert args.max_fact_attempts == 1000
     base = load_model_config(args.base_model)
     base.second_moment_dir = str(tmp_path / "classic-stats")
     covariance = Path(base.second_moment_dir) / f"{base.name.replace('/', '_')}_{base.layer}_SM_Method.WIKIPEDIA_100000.pt"

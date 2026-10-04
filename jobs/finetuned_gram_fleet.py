@@ -40,8 +40,8 @@ def parse_args(argv=None):
     parser.add_argument("--no-graphs", action="store_true")
     parser.add_argument("--keep-downloads", action="store_true", help="Retain pinned checkpoint files for retries")
     parser.add_argument("--retry-failed-facts", action="store_true", help="Try reserve facts until one ROME edit succeeds")
-    parser.add_argument("--max-fact-attempts", type=int, default=20,
-                        help="Maximum candidate facts per checkpoint, including tracing rejections and ROME failures")
+    parser.add_argument("--max-fact-attempts", type=int, default=1000,
+                        help="Maximum candidate facts per checkpoint (default: 1000), including tracing rejections and ROME failures")
     parser.add_argument("--causal-kuba-fix", action="store_true", help="Trace the same fact before ROME; save trace artifacts")
     parser.add_argument("--checkpoint-stop", "--checkpoint-limit", dest="checkpoint_limit", type=int,
                         help="Exclusive frozen checkpoint stop; cohort stays fixed (default: all)")

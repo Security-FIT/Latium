@@ -36,8 +36,11 @@ else
 fi
 
 [[ -n "${SCRATCHDIR:-}" && -d "$SCRATCHDIR" ]] || die "PBS did not provide SCRATCHDIR"
-mkdir -p "$SCRATCHDIR/tmp"
 export TMPDIR="$SCRATCHDIR/tmp"
+# Compiler caches are disposable and must not fill shared home storage.
+export TRITON_CACHE_DIR="$SCRATCHDIR/triton"
+export TORCHINDUCTOR_CACHE_DIR="$SCRATCHDIR/torchinductor"
+mkdir -p "$TMPDIR" "$TRITON_CACHE_DIR" "$TORCHINDUCTOR_CACHE_DIR"
 
 cleanup() {
   if command -v clean_scratch >/dev/null 2>&1; then
@@ -87,6 +90,8 @@ echo "host: $(hostname -f)"
 echo "repo: $ROOT"
 echo "scratch: $SCRATCHDIR"
 echo "HF cache: $HF_HOME"
+echo "Triton cache: $TRITON_CACHE_DIR"
+echo "TorchInductor cache: $TORCHINDUCTOR_CACHE_DIR"
 printf 'command:'
 case "${LATIUM_RUNNER:-latium}" in
   latium)

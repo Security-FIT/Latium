@@ -33,6 +33,41 @@ DTYPE_PICKER = {
 }
 
 
+def _validate_loaded_weights(info: dict, checkpoint: str) -> None:
+    """Reject checkpoints that Transformers only loaded partially."""
+    # Transformers resolves legitimately omitted tied aliases before reporting
+    # missing keys; suppressing them ourselves could hide an uninitialized tie.
+    missing = sorted(info.get("missing_keys", ()))
+    mismatched = [
+        item[0] if isinstance(item, (list, tuple)) else str(item)
+        for item in info.get("mismatched_keys", ())
+    ]
+    # AutoModelForCausalLM can load just the text backbone of a multimodal
+    # checkpoint. Unused vision weights are expected in that case.
+    vision_prefixes = (
+        "visual.", "model.visual.", "vision_model.", "model.vision_model.",
+        "vision_tower.", "model.vision_tower.",
+        "multi_modal_projector.", "model.multi_modal_projector.",
+    )
+    unexpected = sorted(
+        key for key in info.get("unexpected_keys", ())
+        if not key.startswith(vision_prefixes)
+    )
+    problems = []
+    for label, keys in (("missing", missing), ("mismatched", mismatched), ("unexpected", unexpected)):
+        if keys:
+            preview = ", ".join(keys[:6])
+            problems.append(f"{label} weights ({len(keys)}): {preview}")
+    if info.get("error_msgs"):
+        problems.extend(str(message) for message in info["error_msgs"][:2])
+    if problems:
+        raise RuntimeError(
+            f"Checkpoint {checkpoint} is incompatible with the loaded model: "
+            + "; ".join(problems)
+            + ". Refusing to run with missing, newly initialized, or unused text weights."
+        )
+
+
 def check_hf_token(token: str | None = None) -> None:
     hf_token = token or get_runtime().hf_token
     if not hf_token:
@@ -107,9 +142,10 @@ def load_pretrained(cfg: DictConfig) -> Any:
 
     def _call_model_loader(model_loader: Any, path_or_name: str, **kwargs):
         try:
-            return model_loader.from_pretrained(
+            model, loading_info = model_loader.from_pretrained(
                 path_or_name,
                 torch_dtype=dtype,
+                output_loading_info=True,
                 **kwargs,
             )
         except TypeError as exc:
@@ -119,11 +155,14 @@ def load_pretrained(cfg: DictConfig) -> Any:
                 "Transformers does not accept torch_dtype; retrying with dtype",
                 exc_info=True,
             )
-            return model_loader.from_pretrained(
+            model, loading_info = model_loader.from_pretrained(
                 path_or_name,
                 dtype=dtype,
+                output_loading_info=True,
                 **kwargs,
             )
+        _validate_loaded_weights(loading_info, path_or_name)
+        return model
 
     def _model_from_pretrained(path_or_name: str, **kwargs):
         try:

@@ -50,7 +50,7 @@ def test_load_pretrained_uses_declared_architecture_for_unsupported_auto_config(
             architecture_calls.append(kwargs)
             if "torch_dtype" in kwargs:
                 raise TypeError("unexpected keyword argument 'torch_dtype'")
-            return model
+            return model, {}
 
     cfg = OmegaConf.create(
         {
@@ -86,8 +86,8 @@ def test_load_pretrained_uses_declared_architecture_for_unsupported_auto_config(
     assert loaded_model is model
     assert tokenizer.pad_token == tokenizer.eos_token
     assert architecture_calls == [
-        {"torch_dtype": torch.float32},
-        {"dtype": torch.float32},
+        {"torch_dtype": torch.float32, "output_loading_info": True},
+        {"dtype": torch.float32, "output_loading_info": True},
     ]
 
 
@@ -175,10 +175,70 @@ def test_load_pretrained_preserves_checkpoint_tokenizer_backend(monkeypatch, tmp
     monkeypatch.setattr(loading, "check_hf_token", lambda _: None)
     monkeypatch.setattr(loading, "gpu_count", lambda: 0)
     monkeypatch.setattr(loading, "DeviceManager", _DeviceManager)
-    monkeypatch.setattr(loading.AutoModelForCausalLM, "from_pretrained", lambda *a, **kw: SimpleNamespace(device=torch.device("cpu")))
+    monkeypatch.setattr(loading.AutoModelForCausalLM, "from_pretrained", lambda *a, **kw: (SimpleNamespace(device=torch.device("cpu")), {}))
     monkeypatch.setattr(loading.AutoTokenizer, "from_pretrained", lambda *a, **kw: BrokenTokenizer())
     monkeypatch.setattr(loading.PreTrainedTokenizerFast, "from_pretrained", raw_loader)
     _, tokenizer = loading.load_pretrained(cfg)
     assert tokenizer is raw
     assert calls == [str(cache)]
     assert tokenizer.decode(tokenizer("The twin city of Tokyo is")["input_ids"][0]) == "The twin city of Tokyo is"
+
+
+@pytest.mark.parametrize("change", ["missing", "missing_tied_embedding", "unexpected", "renamed_backbone"])
+def test_load_pretrained_rejects_incomplete_or_wrong_text_checkpoint(monkeypatch, tmp_path, change):
+    from safetensors.torch import load_file, save_file
+
+    checkpoint = tmp_path / "example" / "tiny"
+    model = transformers.GPT2LMHeadModel(transformers.GPT2Config(
+        vocab_size=32, n_embd=16, n_layer=1, n_head=2, n_positions=16,
+    ))
+    model.save_pretrained(checkpoint)
+    weights_file = checkpoint / "model.safetensors"
+    weights = load_file(weights_file)
+    if change == "missing":
+        del weights["transformer.h.0.mlp.c_proj.weight"]
+    elif change == "missing_tied_embedding":
+        del weights["transformer.wte.weight"]
+    elif change == "unexpected":
+        weights["transformer.h.0.custom_norm.weight"] = torch.ones(16)
+    else:
+        weights = {"language_model." + name: value for name, value in weights.items()}
+    save_file(weights, weights_file, metadata={"format": "pt"})
+    cfg = OmegaConf.create({"model": {
+        "name": "example/tiny", "models_dir": str(tmp_path), "device": "cpu", "dtype": "f32",
+    }})
+    monkeypatch.setattr(loading, "runtime_from_cfg", lambda _: SimpleNamespace(hf_token=None))
+    monkeypatch.setattr(loading, "check_hf_token", lambda _: None)
+    monkeypatch.setattr(loading, "gpu_count", lambda: 0)
+    monkeypatch.setattr(loading, "DeviceManager", _DeviceManager)
+    monkeypatch.setattr(loading.AutoTokenizer, "from_pretrained", lambda *a, **kw: _Tokenizer())
+
+    with pytest.raises(RuntimeError, match="Refusing to run"):
+        loading.load_pretrained(cfg)
+
+
+def test_load_pretrained_accepts_tied_weights_and_unused_vision_backbone(monkeypatch, tmp_path):
+    from safetensors.torch import load_file, save_file
+
+    checkpoint = tmp_path / "example" / "tiny"
+    model = transformers.GPT2LMHeadModel(transformers.GPT2Config(
+        vocab_size=32, n_embd=16, n_layer=1, n_head=2, n_positions=16,
+    ))
+    model.save_pretrained(checkpoint)
+    weights_file = checkpoint / "model.safetensors"
+    weights = load_file(weights_file)
+    assert "lm_head.weight" not in weights  # Safetensors omits the tied alias.
+    weights["visual.blocks.0.attn.qkv.weight"] = torch.ones((16, 16))
+    save_file(weights, weights_file, metadata={"format": "pt"})
+    cfg = OmegaConf.create({"model": {
+        "name": "example/tiny", "models_dir": str(tmp_path), "device": "cpu", "dtype": "f32",
+    }})
+    monkeypatch.setattr(loading, "runtime_from_cfg", lambda _: SimpleNamespace(hf_token=None))
+    monkeypatch.setattr(loading, "check_hf_token", lambda _: None)
+    monkeypatch.setattr(loading, "gpu_count", lambda: 0)
+    monkeypatch.setattr(loading, "DeviceManager", _DeviceManager)
+    monkeypatch.setattr(loading.AutoTokenizer, "from_pretrained", lambda *a, **kw: _Tokenizer())
+
+    loaded, _ = loading.load_pretrained(cfg)
+    torch.testing.assert_close(loaded.transformer.h[0].mlp.c_proj.weight, model.transformer.h[0].mlp.c_proj.weight)
+    assert loaded.lm_head.weight is loaded.transformer.wte.weight

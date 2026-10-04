@@ -1,4 +1,5 @@
 transformers
+sentencepiece
 hydra-core
 hydra_colorlog
 omegaconf

@@ -190,6 +190,18 @@ def test_fleet_two_batches_resume_without_duplicate_edits(tmp_path, monkeypatch)
     assert json.loads((root/"report/summary.json").read_text())["models"]["gpt2-xl"]["selected"] == 6
     assert json.loads((root/"models/gpt2-xl/batches/m0003-0006/state.json").read_text())["status"] == "complete"
 
+    # A completed batch with a missing capture repairs on the first retry.
+    run = root / "models/gpt2-xl/run"
+    records = json.loads((run / "manifest.json").read_text())["artifacts"].values()
+    capture = next(r for r in records if r["kind"] == "capture" and r.get("edit_method") == "rome")
+    missing = run / capture["path"]
+    missing.unlink()
+    assert gram_fleet.run(args(0, 3)) == 0
+    assert missing.is_file() and len(commands) == 3
+    assert gram_fleet.run(args(0, 3)) == 0
+    assert len(commands) == 3
+    assert json.loads((root / "report/summary.json").read_text())["models"]["gpt2-xl"]["selected"] == 6
+
 
 def test_append_ignores_reporting_changes_but_rejects_computation_changes(tmp_path, monkeypatch):
     from jobs import gram_fleet, paper_fleet

@@ -79,8 +79,12 @@ def run(args):
         with locked(state_path.parent):
             try:
                 if args.resume and state_path.exists() and json.loads(state_path.read_text()).get("status") == "complete":
-                    verify_batch(run_root, model, plan_id, cohort, args.case_start, args.case_stop)
-                    continue
+                    try:
+                        verify_batch(run_root, model, plan_id, cohort, args.case_start, args.case_stop)
+                    except (FileNotFoundError, RuntimeError):
+                        pass  # Recompute missing artifacts in this resume attempt.
+                    else:
+                        continue
                 write_json(state_path, state)
                 config = load_model_config(model)
                 files = model_second_moment_files(model, int(config.layer), args.covariance_samples)

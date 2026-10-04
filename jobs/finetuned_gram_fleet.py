@@ -80,9 +80,12 @@ def rome_case(root, plan_id):
 def checkpoint_files(names):
     """Keep one weight format (full or adapter) and inference metadata."""
     names = [name for name in names if "/" not in name]
-    weights = [name for name in names if name.endswith(".safetensors") and not name.startswith("adapter_")]
+    weights = [name for name in names if name.endswith(".safetensors") and not name.startswith("adapter_")
+               and (name == "model.safetensors" or "model.safetensors.index.json" in names)]
     if not weights:
-        weights = [name for name in names if name.startswith("pytorch_model") and name.endswith(".bin")]
+        weights = [name for name in names if name.endswith(".bin")
+                   and (name == "pytorch_model.bin" or
+                        (name.startswith("pytorch_model") and "pytorch_model.bin.index.json" in names))]
     metadata = [name for name in names if name.endswith((".json", ".txt", ".model", ".tiktoken", ".vocab", ".merges", ".jinja"))]
     if "config.json" in names and weights:
         metadata = [name for name in metadata if not name.startswith("adapter_")]

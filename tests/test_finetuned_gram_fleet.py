@@ -145,6 +145,12 @@ def test_download_filters_and_cleanup_containment(tmp_path):
     assert fleet.checkpoint_files(["adapter_config.json", "adapter_model.safetensors", "optimizer.pt"]) == ["adapter_config.json", "adapter_model.safetensors"]
     with pytest.raises(ValueError, match="neither full"):
         fleet.checkpoint_files(["model.gguf"])
+    with pytest.raises(ValueError, match="neither full"):
+        fleet.checkpoint_files(["config.json", "export_fp8.safetensors", "tokenizer.json"])
+    with pytest.raises(ValueError, match="neither full"):
+        fleet.checkpoint_files(["config.json", "model-00001-of-00002.safetensors"])
+    assert fleet.checkpoint_files(["config.json", "model.safetensors.index.json", "custom-weights.safetensors"]) == [
+        "config.json", "custom-weights.safetensors", "model.safetensors.index.json"]
     owned = tmp_path / "owned"; owned.mkdir()
     victim = tmp_path / "other"; victim.mkdir()
     (victim / "keep").write_text("keep")

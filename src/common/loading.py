@@ -287,6 +287,18 @@ def load_pretrained(cfg: DictConfig) -> Any:
             model.save_pretrained(local_model_path)
             tokenizer.save_pretrained(local_model_path)
 
+    embeddings = model.get_input_embeddings() if callable(getattr(model, "get_input_embeddings", None)) else None
+    if embeddings is not None and tokenizer.pad_token_id is not None:
+        size = embeddings.num_embeddings
+        if not 0 <= tokenizer.pad_token_id < size:
+            eos_id = tokenizer.eos_token_id
+            if eos_id is None or not 0 <= eos_id < size:
+                raise RuntimeError(f"Tokenizer for {model_name} has no valid padding or EOS token in {size} embeddings")
+            LOGGER.warning("Padding token %d is outside %d embeddings; using existing EOS token %d",
+                           tokenizer.pad_token_id, size, eos_id)
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = eos_id
+
     LOGGER.info("Model loaded on device: %s", model.device)
     return model, tokenizer
 

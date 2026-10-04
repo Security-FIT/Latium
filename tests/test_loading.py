@@ -288,3 +288,42 @@ def test_legacy_mask_exception_does_not_hide_other_weights_or_other_architecture
     with pytest.raises(RuntimeError, match="missing weights"):
         loading._validate_loaded_weights({"missing_keys": ["transformer.h.0.mlp.fc_out.weight"],
                                          "unexpected_keys": ["transformer.h.0.attn.masked_bias"]}, "partial", "gptj")
+
+
+@pytest.mark.parametrize("invalid_eos", [False, True])
+def test_out_of_vocabulary_padding_reuses_existing_eos_without_resizing(monkeypatch, tmp_path, invalid_eos):
+    from tokenizers import Tokenizer, models, pre_tokenizers
+
+    checkpoint = tmp_path / "example" / "bad-pad"
+    model = transformers.GPTJForCausalLM(transformers.GPTJConfig(
+        vocab_size=32, n_embd=16, n_layer=1, n_head=2, n_positions=16, rotary_dim=4,
+        bos_token_id=1, eos_token_id=1,
+    )).eval()
+    model.save_pretrained(checkpoint)
+    words = ["<unk>", "<eos>", "The", "twin", "city", "of", "Tokyo", "is"]
+    words += [f"dummy{i}" for i in range(32 - len(words))]
+    backend = Tokenizer(models.WordLevel({word: i for i, word in enumerate(words)}, unk_token="<unk>"))
+    backend.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
+    tokenizer = transformers.PreTrainedTokenizerFast(tokenizer_object=backend, unk_token="<unk>",
+        eos_token="<missing-eos>" if invalid_eos else "<eos>", pad_token="[PAD]")
+    assert tokenizer.pad_token_id >= model.config.vocab_size
+    tokenizer.save_pretrained(checkpoint)
+    cfg = OmegaConf.create({"model": {
+        "name": "example/bad-pad", "models_dir": str(tmp_path), "device": "cpu", "dtype": "f32",
+    }})
+    monkeypatch.setattr(loading, "runtime_from_cfg", lambda _: SimpleNamespace(hf_token=None))
+    monkeypatch.setattr(loading, "check_hf_token", lambda _: None)
+    monkeypatch.setattr(loading, "gpu_count", lambda: 0)
+    monkeypatch.setattr(loading, "DeviceManager", _DeviceManager)
+    if invalid_eos:
+        with pytest.raises(RuntimeError, match="no valid padding or EOS"):
+            loading.load_pretrained(cfg)
+        return
+    loaded, tokenizer = loading.load_pretrained(cfg)
+    assert tokenizer.pad_token_id == tokenizer.eos_token_id == 1
+    assert loaded.get_input_embeddings().num_embeddings == 32
+    for name, parameter in model.named_parameters():
+        torch.testing.assert_close(loaded.get_parameter(name), parameter, rtol=0, atol=0)
+    with torch.no_grad():
+        logits = loaded(**tokenizer(["The twin city", "Tokyo"], padding=True, return_tensors="pt")).logits
+    assert bool(torch.isfinite(logits).all())

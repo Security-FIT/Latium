@@ -40,6 +40,8 @@ def parse_args(argv=None):
     parser.add_argument("--no-graphs", action="store_true")
     parser.add_argument("--keep-downloads", action="store_true", help="Retain pinned checkpoint files for retries")
     parser.add_argument("--retry-failed-facts", action="store_true", help="Try reserve facts until one ROME edit succeeds")
+    parser.add_argument("--max-fact-attempts", type=int, default=20,
+                        help="Maximum candidate facts per checkpoint, including tracing rejections and ROME failures")
     parser.add_argument("--causal-kuba-fix", action="store_true", help="Trace the same fact before ROME; save trace artifacts")
     parser.add_argument("--checkpoint-stop", "--checkpoint-limit", dest="checkpoint_limit", type=int,
                         help="Exclusive frozen checkpoint stop; cohort stays fixed (default: all)")
@@ -50,7 +52,7 @@ def parse_args(argv=None):
     args.run_root = str(Path(args.run_root).resolve())
     args.case_index_file = str(Path(args.case_index_file).resolve())
     args.case_stop = args.case_stop if args.case_stop is not None else args.case_start + args.n_tests
-    if (args.model_count <= 0 or args.covariance_samples <= 0 or args.case_start < 0
+    if (args.model_count <= 0 or args.covariance_samples <= 0 or args.max_fact_attempts <= 0 or args.case_start < 0
             or args.case_stop <= args.case_start or args.case_stop > load_case_manifest(args.case_index_file)["count"]):
         parser.error("Invalid model count, fact range, or covariance sample count")
     if args.checkpoint_limit is not None and not 0 < args.checkpoint_limit <= args.model_count:
@@ -293,13 +295,21 @@ def run(args, api=None, downloader=None):
                 for entry in selection["models"]:
                     remove_download(downloads / entry["key"], downloads)
                 remove_download(downloads / "bases", downloads)
+            trace_implementation = None
+            if args.causal_kuba_fix:
+                from jobs.finetuned_trace import trace_implementation_hash
+                trace_implementation = trace_implementation_hash()
             for entry in selection["models"][args.checkpoint_start:args.checkpoint_limit]:
                 model = entry["key"]
                 state_path = root / "models" / model / "fleet-batches" / batch / "state.json"
                 download = downloads / model
+                previous_state = json.loads(state_path.read_text()) if state_path.exists() else {}
+                if previous_state and (args.causal_kuba_fix or previous_state.get("causal_kuba_fix")):
+                    if (previous_state.get("causal_kuba_fix") != args.causal_kuba_fix
+                            or previous_state.get("trace_implementation") != trace_implementation):
+                        raise ValueError("Causal tracing implementation changed; use a new run root")
                 state = {**entry, "status": "running", "started_at": utc_now()}
                 try:
-                    previous_state = json.loads(state_path.read_text()) if state_path.exists() else {}
                     if previous_state.get("status") == "complete" and previous_state.get("causal_kuba_fix", False) == args.causal_kuba_fix:
                         try:
                             accepted = previous_state.get("accepted_position", args.case_start)
@@ -317,6 +327,8 @@ def run(args, api=None, downloader=None):
                             pass  # Repair missing artifacts after redownloading the pinned checkpoint.
                     state["attempts"] = previous_state.get("attempts", [])
                     state["causal_kuba_fix"] = args.causal_kuba_fix
+                    if args.causal_kuba_fix:
+                        state["trace_implementation"] = trace_implementation
                     write_json(state_path, state)
                     if entry.get("selection_error"):
                         raise ValueError(entry["selection_error"])
@@ -334,22 +346,36 @@ def run(args, api=None, downloader=None):
                                    local_dir=str(adapter_base_path(selection, entry)),
                                    allow_patterns=entry["adapter_base_files"], token=token)
                     state["download_completed_at"] = utc_now()
-                    positions = range(args.case_start, cohort["count"] if args.retry_failed_facts else args.case_start + 1)
-                    for position in positions:
-                        if any(a["position"] == position and a["status"] in ("trace_rejected", "rome_failed") for a in state["attempts"]):
+                    stop = min(cohort["count"], args.case_start + args.max_fact_attempts) if args.retry_failed_facts else args.case_start + 1
+                    position = args.case_start
+                    accepted = False
+                    while position < stop:
+                        rejected = {a["position"] for a in state["attempts"] if a["status"] in ("trace_rejected", "rome_failed")}
+                        if position in rejected:
+                            position += 1
                             continue
                         attempt = {"position": position, "case_id": cohort["case_ids"][position], "status": "running", "started_at": utc_now()}
                         state["attempts"] = [a for a in state["attempts"] if a["position"] != position] + [attempt]
                         write_json(state_path, state)
                         if args.causal_kuba_fix:
                             from jobs.finetuned_trace import run_trace
-                            valid, reason = run_trace(args, model, root / "models" / model / "run", cohort, position)
-                            if not valid:
-                                attempt.update(status="trace_rejected", error=reason)
+                            # Do not rescan previously rejected facts on a resumed run.
+                            trace_stop = min((p for p in rejected if p > position), default=stop)
+                            result = run_trace(args, model, root / "models" / model / "run", cohort, position, trace_stop)
+                            for row in result["rejections"]:
+                                record = {**row, "status": "trace_rejected", "started_at": attempt["started_at"], "completed_at": utc_now()}
+                                state["attempts"] = [a for a in state["attempts"] if a["position"] != row["position"]] + [record]
+                            write_json(state_path, state)
+                            if result["accepted_position"] is None:
+                                if not args.retry_failed_facts:
+                                    raise RuntimeError(f"Fact rejected by causal tracing: {result['error']}")
+                                position = trace_stop
+                                continue
+                            position = result["accepted_position"]
+                            if attempt["position"] != position:
+                                attempt = {"position": position, "case_id": cohort["case_ids"][position], "status": "running", "started_at": utc_now()}
+                                state["attempts"] = [a for a in state["attempts"] if a["position"] != position] + [attempt]
                                 write_json(state_path, state)
-                                if args.retry_failed_facts:
-                                    continue
-                                raise RuntimeError(f"Fact rejected by causal tracing: {reason}")
                         gram.models = [model]
                         gram.case_start = position
                         gram.case_stop = position + (args.case_stop - args.case_start)
@@ -362,12 +388,15 @@ def run(args, api=None, downloader=None):
                             if not case["edit"]["success"]:
                                 attempt.update(status="rome_failed", error="Efficacy evaluation did not pass", execution=case)
                                 write_json(state_path, state)
+                                position += 1
                                 continue
                         attempt.update(status="complete", completed_at=utc_now())
                         state["accepted_position"] = position
+                        accepted = True
                         break
-                    else:
-                        raise RuntimeError("Reserve fact manifest exhausted without a successful edit")
+                    if not accepted:
+                        raise RuntimeError(f"No successful edit within {stop - args.case_start} candidate facts "
+                                           f"(max-fact-attempts={args.max_fact_attempts})")
                     state.update(status="complete", completed_at=utc_now())
                 except Exception as exc:
                     state.update(status="failed", error=f"{type(exc).__name__}: {exc}")

@@ -295,3 +295,85 @@ def test_retained_downloads_retry_rome_failure_and_skip_complete_rerun(tmp_path,
     calls.clear()
     assert fleet.run(args, FakeApi(), download) == 0
     assert calls == [] and weights[0].is_file()
+
+
+def test_fact_attempt_cap_includes_tracing_rejections_and_survives_resume(tmp_path, monkeypatch):
+    import jobs.finetuned_trace as trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = True; args.causal_kuba_fix = True
+    args.max_fact_attempts = 2; args.checkpoint_limit = 1
+    scans = []
+
+    def scan(args, model, root, cohort, start, stop):
+        scans.append((start, stop))
+        return {"accepted_position": None, "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "clean-token mismatch"}
+            for p in range(start, stop)], "error": "No valid facts"}
+
+    monkeypatch.setattr(trace, "run_trace", scan)
+    monkeypatch.setattr(fleet.gram_fleet, "run", lambda params: pytest.fail("Rejected fact reached ROME"))
+    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 1
+    assert scans == [(0, 2)]
+    state_path = next((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))
+    state = json.loads(state_path.read_text())
+    assert [a["position"] for a in state["attempts"]] == [0, 1]
+    assert all(a["status"] == "trace_rejected" for a in state["attempts"])
+    assert "max-fact-attempts=2" in state["error"]
+    assert json.loads((Path(args.run_root) / "experiment.json").read_text())["models"] == {}
+    scans.clear()
+    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 1
+    assert scans == []
+
+
+def test_batched_trace_passes_only_accepted_manifest_fact_to_gram(tmp_path, monkeypatch):
+    import jobs.finetuned_trace as trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = True; args.causal_kuba_fix = True
+    args.max_fact_attempts = 4; args.checkpoint_limit = 1
+    scans = []
+    edits = []
+
+    def scan(args, model, root, cohort, start, stop):
+        scans.append((start, stop))
+        return {"accepted_position": 2, "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "clean-token mismatch"}
+            for p in (0, 1)], "error": None}
+
+    def gram(params):
+        assert params.workflow == "gram"
+        assert params.case_stop == params.case_start + 1
+        edits.append(params.case_start)
+        return 0
+
+    monkeypatch.setattr(trace, "run_trace", scan)
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    monkeypatch.setattr(fleet, "rome_case", lambda *args: {"edit": {"success": True}})
+    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 0
+    assert scans == [(0, 4)] and edits == [2]
+    state_path = next((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))
+    state = json.loads(state_path.read_text())
+    assert state["accepted_position"] == 2
+    assert [a["status"] for a in state["attempts"]] == ["trace_rejected", "trace_rejected", "complete"]
+    catalog = json.loads((Path(args.run_root) / "experiment.json").read_text())
+    assert list(catalog["models"]["fleet_org_one"]["batches"]) == ["m0002-0003"]
+
+
+def test_changed_tracing_implementation_refuses_old_attempts_before_download(tmp_path, monkeypatch):
+    import jobs.finetuned_trace as trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = True; args.causal_kuba_fix = True
+    args.max_fact_attempts = 2; args.checkpoint_limit = 1
+    monkeypatch.setattr(trace, "run_trace", lambda args, model, root, cohort, start, stop: {
+        "accepted_position": None, "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "mismatch"} for p in range(start, stop)],
+        "error": "No valid facts"})
+    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 1
+    state_path = next((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))
+    old_state = state_path.read_text()
+    monkeypatch.setattr(trace, "trace_implementation_hash", lambda: "changed")
+    with pytest.raises(ValueError, match="implementation changed; use a new run root"):
+        fleet.run(args, FakeApi(), lambda **kwargs: pytest.fail("Downloaded before checking trace identity"))
+    assert state_path.read_text() == old_state

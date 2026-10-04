@@ -65,8 +65,11 @@ Positions are zero based and the stop is exclusive: `--checkpoint-start 0
 fact manifest and run root to append results. Without a stop, all remaining
 checkpoints run. `--checkpoint-limit` is an alias for `--checkpoint-stop`.
 Each starts with the same manifest fact; failed
-ROME edits or tracing rejections advance to the next reserve fact. Every attempt
-is recorded in checkpoint state. GRAM wrong-layer results never trigger a retry.
+ROME edits or tracing rejections advance to the next reserve fact.
+`--max-fact-attempts` bounds the candidate range per checkpoint (default 20),
+including attempts saved by earlier runs. Tracing scans pending reserve facts
+with one model load and stops at the first valid fact. Every attempt is
+recorded in checkpoint state. GRAM wrong-layer results never trigger a retry.
 Baseline is the downloaded checkpoint before ROME. By default, ROME reuses
 the original model's covariance for the configured layer and sample count.
 Prepare missing original statistics once with the classic fleet's
@@ -75,6 +78,16 @@ separately for each checkpoint. Shared covariance approximates fine-tuned
 activations and can affect ROME success. Changing this choice requires a new
 run root. Tracing uses the same fact and preserves the
 classic ROME layer; its CSV, JSON and PNG outputs are indexed in the run manifest.
+
+Fleet tracing checks target tokens in the actual prompt context. If the clean
+model predicts a single `the`, `a` or `an` first, tracing accepts that prefix
+only when every token of the expected answer is the greedy continuation.
+Such a trace measures the factual token conditional on the recorded article;
+its JSON and plot label the added prefix. ROME still receives the original
+CounterFact prompt. Other mismatches remain rejections. Classic tracing keeps
+article handling disabled unless `command.legacy_trace.allow_article_prefix=true`
+is explicitly selected. Checkpoints with missing or unused text weights fail
+before tracing.
 
 `--base-model` selects the classic model configuration. Omit `--models-manifest`
 to discover the top N HF repositories tagged as its finetunes; use

@@ -242,3 +242,49 @@ def test_load_pretrained_accepts_tied_weights_and_unused_vision_backbone(monkeyp
     loaded, _ = loading.load_pretrained(cfg)
     torch.testing.assert_close(loaded.transformer.h[0].mlp.c_proj.weight, model.transformer.h[0].mlp.c_proj.weight)
     assert loaded.lm_head.weight is loaded.transformer.wte.weight
+
+
+@pytest.mark.parametrize("model_type", ["gpt2", "gptj"])
+def test_load_pretrained_accepts_legacy_causal_masks_without_changing_weights(monkeypatch, tmp_path, model_type):
+    from safetensors.torch import load_file, save_file
+
+    if model_type == "gptj":
+        model = transformers.GPTJForCausalLM(transformers.GPTJConfig(
+            vocab_size=32, n_embd=16, n_layer=1, n_head=2, n_positions=16, rotary_dim=4,
+        )).eval()
+    else:
+        model = transformers.GPT2LMHeadModel(transformers.GPT2Config(
+            vocab_size=32, n_embd=16, n_layer=1, n_head=2, n_positions=16,
+        )).eval()
+    checkpoint = tmp_path / "example" / "legacy"
+    model.save_pretrained(checkpoint)
+    weights_file = checkpoint / "model.safetensors"
+    weights = load_file(weights_file)
+    weights["transformer.h.0.attn.bias"] = torch.tril(torch.ones(16, 16, dtype=torch.bool))[None, None]
+    weights["transformer.h.0.attn.masked_bias"] = torch.tensor(-1e9)
+    save_file(weights, weights_file, metadata={"format": "pt"})
+    cfg = OmegaConf.create({"model": {
+        "name": "example/legacy", "models_dir": str(tmp_path), "device": "cpu", "dtype": "f32",
+    }})
+    monkeypatch.setattr(loading, "runtime_from_cfg", lambda _: SimpleNamespace(hf_token=None))
+    monkeypatch.setattr(loading, "check_hf_token", lambda _: None)
+    monkeypatch.setattr(loading, "gpu_count", lambda: 0)
+    monkeypatch.setattr(loading, "DeviceManager", _DeviceManager)
+    monkeypatch.setattr(loading.AutoTokenizer, "from_pretrained", lambda *a, **kw: _Tokenizer())
+    loaded, _ = loading.load_pretrained(cfg)
+    loaded.eval()
+    for name, parameter in model.named_parameters():
+        torch.testing.assert_close(loaded.get_parameter(name), parameter, rtol=0, atol=0)
+    tokens = torch.tensor([[1, 5, 3]])
+    with torch.no_grad():
+        torch.testing.assert_close(loaded(tokens).logits, model(tokens).logits, rtol=0, atol=0)
+
+
+def test_legacy_mask_exception_does_not_hide_other_weights_or_other_architectures():
+    with pytest.raises(RuntimeError, match="unexpected weights"):
+        loading._validate_loaded_weights({"unexpected_keys": ["transformer.h.0.attn.bias"]}, "wrong", "llama")
+    with pytest.raises(RuntimeError, match="unexpected weights"):
+        loading._validate_loaded_weights({"unexpected_keys": ["transformer.h.0.attn.q_proj.bias"]}, "wrong", "gptj")
+    with pytest.raises(RuntimeError, match="missing weights"):
+        loading._validate_loaded_weights({"missing_keys": ["transformer.h.0.mlp.fc_out.weight"],
+                                         "unexpected_keys": ["transformer.h.0.attn.masked_bias"]}, "partial", "gptj")

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +34,7 @@ DTYPE_PICKER = {
 }
 
 
-def _validate_loaded_weights(info: dict, checkpoint: str) -> None:
+def _validate_loaded_weights(info: dict, checkpoint: str, model_type: str | None = None) -> None:
     """Reject checkpoints that Transformers only loaded partially."""
     # Transformers resolves legitimately omitted tied aliases before reporting
     # missing keys; suppressing them ourselves could hide an uninitialized tie.
@@ -49,9 +50,16 @@ def _validate_loaded_weights(info: dict, checkpoint: str) -> None:
         "vision_tower.", "model.vision_tower.",
         "multi_modal_projector.", "model.multi_modal_projector.",
     )
+    # Older GPT-2/GPT-J checkpoints persist deterministic causal-mask buffers.
+    # Newer Transformers builds these masks at runtime; they are not learned weights.
+    legacy_buffers = {
+        key for key in info.get("unexpected_keys", ())
+        if model_type in ("gpt2", "gptj")
+        and re.fullmatch(r"transformer\.h\.\d+\.attn\.(?:bias|masked_bias)", key)
+    }
     unexpected = sorted(
         key for key in info.get("unexpected_keys", ())
-        if not key.startswith(vision_prefixes)
+        if not key.startswith(vision_prefixes) and key not in legacy_buffers
     )
     problems = []
     for label, keys in (("missing", missing), ("mismatched", mismatched), ("unexpected", unexpected)):
@@ -161,7 +169,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
                 output_loading_info=True,
                 **kwargs,
             )
-        _validate_loaded_weights(loading_info, path_or_name)
+        _validate_loaded_weights(loading_info, path_or_name, getattr(getattr(model, "config", None), "model_type", None))
         return model
 
     def _model_from_pretrained(path_or_name: str, **kwargs):

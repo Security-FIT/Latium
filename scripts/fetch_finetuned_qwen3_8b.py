@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fetch the top HuggingFace finetunes for the configured base model.
+Fetch the combined top HuggingFace finetunes and adapters for the configured base model.
 
 :copyright: 2025 Jakub Res
 :license: MIT
@@ -63,12 +63,17 @@ def _model_record(raw: dict[str, Any]) -> dict[str, Any]:
 
 def fetch_models(*, base_model: str, limit: int, token: str | None = None) -> list[dict[str, Any]]:
     base_model = HfApi(token=token).model_info(base_model).id
-    params = {"filter": f"base_model:finetune:{base_model}", "pipeline_tag": "text-generation",
-              "sort": "downloads", "direction": "-1", "limit": str(limit), "full": "true"}
-    url = f"{HF_API_MODELS}?{urllib.parse.urlencode(params)}"
-    records = [_model_record(raw) for raw in _request_json(url, token=token)]
-    records = [item for item in records if params["filter"] in item["tags"]
-               and item["pipeline_tag"] == "text-generation"]
+    discovered = {}
+    for relation in ("finetune", "adapter"):
+        tag = f"base_model:{relation}:{base_model}"
+        params = {"filter": tag, "pipeline_tag": "text-generation",
+                  "sort": "downloads", "direction": "-1", "limit": str(limit), "full": "true"}
+        url = f"{HF_API_MODELS}?{urllib.parse.urlencode(params)}"
+        for raw in _request_json(url, token=token):
+            item = _model_record(raw)
+            if tag in item["tags"] and item["pipeline_tag"] == "text-generation":
+                discovered[item["model_id"]] = item
+    records = list(discovered.values())
     records.sort(key=lambda item: (-int(item["downloads"]), str(item["model_id"]).lower()))
     return records[:limit]
 
@@ -87,17 +92,21 @@ def main() -> None:
     base_model = HfApi(token=args.token or None).model_info(args.base_model).id
     models = fetch_models(base_model=base_model, limit=args.limit, token=args.token or None)
     payload = {
-        "source": (
+        "sources": [
             "https://huggingface.co/models?"
-            + urllib.parse.urlencode({"other": f"base_model:finetune:{base_model}", "pipeline_tag": "text-generation", "sort": "downloads"})
-        ),
+            + urllib.parse.urlencode({"other": f"base_model:{relation}:{base_model}", "pipeline_tag": "text-generation", "sort": "downloads"})
+            for relation in ("finetune", "adapter")
+        ],
         "base_model": base_model,
+        "relations": ["finetune", "adapter"],
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "count": len(models),
         "models": models,
     }
 
     out_path = Path(args.output)
+    if out_path.exists():
+        raise FileExistsError("Fleet manifest already exists; choose a new output path")
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(out_path)
 

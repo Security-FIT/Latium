@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze top HF text-generation fine-tunes tagged with the configured base model."""
+"""Freeze the combined top HF text-generation finetunes and adapters."""
 import argparse
 import concurrent.futures
 import json
@@ -19,9 +19,10 @@ from jobs.paper_fleet import utc_now
 from src.common.model_config import load_model_config
 from src.gram_experiment import write_json
 
-MODELS = ["deepseek-7b-base", "falcon-7b", "gemma-4-12b", "gpt-j-6b", "gpt2-large",
-          "gpt2-medium", "gpt2-xl", "granite-4.1-8b", "granite4-micro", "llama2-7b",
-          "ministral-3-8b", "mistral-7b-v0.1", "mistral-7b-v0.3", "olmo-3-1025-7b",
+POLICY = "top-downloads-finetune-adapter-text-generation-exact-base-v2"
+MODELS = ["deepseek-7b-base", "falcon-7b", "gpt-j-6b", "gpt2-large",
+          "gpt2-medium", "gpt2-xl", "granite-4.1-8b", "llama2-7b",
+          "ministral-3-8b", "mistral-7b-v0.1", "mistral-7b-v0.3",
           "opt-6.7b", "qwen3-4b", "qwen3-8b", "qwen3.5-4b"]
 
 
@@ -37,6 +38,8 @@ def signature(cfg):
 def prepare_family(model, root, count, api, token):
     base = load_model_config(model)
     directory = root / model
+    if (directory / "checkpoints.json").exists():
+        raise FileExistsError("Frozen checkpoint manifest already exists; use a new output directory")
     directory.mkdir(parents=True, exist_ok=True)
     cache = str(root / "metadata-cache")
     info = api.model_info(str(base.name))
@@ -44,17 +47,18 @@ def prepare_family(model, root, count, api, token):
         return json.loads(Path(hf_hub_download(model_id, filename, revision=revision,
                                                cache_dir=cache, token=token)).read_text())
     original = config(info.id, info.sha)
-    tag = f"base_model:finetune:{info.id}"
+    tags = [f"base_model:{relation}:{info.id}" for relation in ("finetune", "adapter")]
     discovered = {}
-    for entry in api.list_models(filter=tag, pipeline_tag="text-generation", sort="downloads", full=True):
-        if tag in (entry.tags or []) and entry.pipeline_tag == "text-generation":
-            discovered[entry.id] = entry
+    for tag in tags:
+        for entry in api.list_models(filter=tag, pipeline_tag="text-generation", sort="downloads", full=True):
+            if tag in (entry.tags or []) and entry.pipeline_tag == "text-generation":
+                discovered[entry.id] = entry
     ordered = sorted(discovered.values(), key=lambda e: (-int(e.downloads or 0), e.id.lower()))
     previous = directory / "selection-audit.json"
-    policy = "top-downloads-finetune-text-generation-exact-base-v1"
+    policy = POLICY
     audit = json.loads(previous.read_text()) if previous.exists() else {}
     cached = {e["model_id"]: e for e in audit.get("models", [])} if audit.get("selection_policy") == policy else {}
-    write_json(directory / "discovery.json", {"base_model": info.id, "configured_base_model": str(base.name), "discovery_filter": [tag],
+    write_json(directory / "discovery.json", {"base_model": info.id, "configured_base_model": str(base.name), "discovery_filter": tags,
                "pipeline_tag": "text-generation", "fetched_at": utc_now(),
                "sort": "downloads descending, model ID ascending for ties",
                "models": [{"model_id": e.id, "downloads": e.downloads, "tags": e.tags,
@@ -62,19 +66,24 @@ def prepare_family(model, root, count, api, token):
     base_metadata, base_lock = {}, threading.Lock()
 
     def validate(cfg, record):
-        architectures = cfg.get("architectures") or []
-        if architectures and original.get("architectures") and not set(architectures) & set(original["architectures"]):
-            raise ValueError("Checkpoint architecture is not the classic causal LM; loading could initialize missing weights")
         record["matches_classic_dimensions"] = signature(cfg) == signature(original)
+        architectures = cfg.get("architectures") or []
+        native_text_export = (cfg.get("model_type") == "qwen3_5_text"
+                              and architectures == ["Qwen3_5ForCausalLM"]
+                              and record["matches_classic_dimensions"])
+        if architectures and original.get("architectures") and not set(architectures) & set(original["architectures"]) and not native_text_export:
+            raise ValueError("Checkpoint architecture is not the classic causal LM; loading could initialize missing weights")
+        if not record["matches_classic_dimensions"]:
+            raise ValueError("Checkpoint text dimensions differ from the configured base and shared covariance")
         if cfg.get("quantization_config"):
             raise ValueError("Quantized weights are unsupported by the float ROME/GRAM runtime")
 
     def inspect(entry):
         record = {"model_id": entry.id, "downloads": int(entry.downloads or 0), "pipeline_tag": entry.pipeline_tag,
                   "tags": entry.tags,
-                  "checkpoint_type": "unsupported", "runtime_validation": 1}
+                  "checkpoint_type": "unsupported", "runtime_validation": 2}
         earlier = cached.get(entry.id)
-        if earlier and earlier.get("runtime_validation") == 1 and not any(code in earlier.get("selection_error", "") for code in
+        if earlier and earlier.get("runtime_validation") == 2 and not any(code in earlier.get("selection_error", "") for code in
                                ("429", "500", "502", "503", "504", "no resolvable HF base repository")):
             return {**earlier, "model_id": entry.id, "downloads": record["downloads"],
                     "pipeline_tag": record["pipeline_tag"], "tags": record["tags"]}
@@ -90,8 +99,14 @@ def prepare_family(model, root, count, api, token):
             if any(sizes.get(name) is None for name in files):
                 raise ValueError("Missing file sizes")
             record["file_bytes"] = sum(sizes[name] for name in files)
+            record["file_sizes"] = {name: sizes[name] for name in files}
             if kind == "adapter":
                 cfg = config(entry.id, details.sha, "adapter_config.json")
+                record["adapter_config"] = cfg
+                if cfg.get("peft_type") != "LORA" or cfg.get("task_type") not in (None, "CAUSAL_LM"):
+                    raise ValueError("Only mergeable causal-LM LoRA adapters are supported")
+                if cfg.get("layer_replication"):
+                    raise ValueError("Adapters that replicate layers are incompatible with the classic configuration")
                 base_id = str(cfg.get("base_model_name_or_path") or "")
                 if not re.fullmatch(r"(?:[\w.-]+/)?[\w.-]+", base_id) or any(p in (".", "..") for p in base_id.split("/")):
                     raise ValueError(f"Adapter declares no resolvable HF base repository: {base_id!r}")
@@ -106,7 +121,9 @@ def prepare_family(model, root, count, api, token):
                         base_files = checkpoint_files([f.rfilename for f in base_info.siblings])
                         if "adapter_config.json" in base_files:
                             raise ValueError("Adapter base is itself an adapter")
-                        base_metadata[key] = ({"adapter_base_revision": base_info.sha, "adapter_base_files": base_files},
+                        base_sizes = {f.rfilename: f.size for f in base_info.siblings}
+                        base_metadata[key] = ({"adapter_base_revision": base_info.sha, "adapter_base_files": base_files,
+                                               "adapter_base_file_sizes": {name: base_sizes[name] for name in base_files}},
                                               config(base_id, base_info.sha))
                     record.update(base_metadata[key][0])
                     cfg = base_metadata[key][1]
@@ -126,7 +143,7 @@ def prepare_family(model, root, count, api, token):
         selected = [{**record, "rank": rank} for rank, record in enumerate(pool.map(inspect, chosen), start=1)]
     write_json(directory / "selection-audit.json", {"selection_policy": policy, "models": selected})
     manifest = {"base_model": info.id, "configured_base_model": str(base.name), "base_config": model, "created_at": utc_now(),
-                "selection_policy": policy, "discovery_filter": [tag], "relations": ["finetune"],
+                "selection_policy": policy, "discovery_filter": tags, "relations": ["finetune", "adapter"],
                 "pipeline_tag": "text-generation",
                 "sort": "downloads descending, model ID ascending for ties; membership fixed before metadata checks",
                 "requested_count": count, "count": len(selected), "models": selected}
@@ -170,7 +187,8 @@ def main():
         summary.append(record)
         write_json(root / "summary.json", {"created_at": utc_now(), "families": summary})
         print(json.dumps(record), flush=True)
+    return int(any("error" in record for record in summary))
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

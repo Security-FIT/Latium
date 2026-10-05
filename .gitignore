@@ -232,6 +232,7 @@ data/
 scripts/
 !scripts/
 scripts/*
+!scripts/prepare_fleet_continuation.py
 !scripts/remote_gpu_rome.sh
 !scripts/fetch_finetuned_qwen3_8b.py
 !scripts/find_successful_case.py

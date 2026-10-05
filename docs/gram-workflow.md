@@ -43,7 +43,10 @@ same options with `python jobs/paper_fleet.py`, without `--dry-run`.
 
 ## Fine-tuned Hugging Face fleet
 
-Freeze the top repositories by downloads, then verify one checkpoint first:
+Freeze the combined top finetune and adapter repositories by downloads in a new
+output directory, then verify a few checkpoints first. Existing discovery
+manifests are immutable. The default families exclude Gemma 4, Granite Micro
+and OLMo.
 
 ```bash
 python jobs/prepare_finetuned_gram_fleets.py --output-dir analysis_out/fleets
@@ -90,28 +93,48 @@ is explicitly selected. Checkpoints with missing or unused text weights fail
 before tracing.
 
 `--base-model` selects the classic model configuration. Omit `--models-manifest`
-to discover the top N HF repositories tagged as its finetunes; use
+to discover the combined top N HF repositories tagged as finetunes or adapters; use
 `--hf-base-model` to specify another discovery tag. Selection requires
-`pipeline_tag: text-generation` and the exact `base_model:finetune:<model.name>`
-tag, using HF's canonical repository ID (e.g. `gpt2-large` resolves to
-`openai-community/gpt2-large`). It adds no parent/base aliases or adapter tags.
+`pipeline_tag: text-generation` and either the exact `base_model:finetune:<model.name>`
+or `base_model:adapter:<model.name>` tag, using HF's canonical repository ID
+(e.g. `gpt2-large` resolves to `openai-community/gpt2-large`). Results are
+deduplicated by repository ID before sorting; it adds no parent/base aliases.
 Selection happens before compatibility checks:
 failed or unsupported checkpoints retain their rank and are never replaced.
 The preparation script sorts matching repositories by downloads descending,
 then repository ID ascending for ties, and takes the first 100. If a selected
 finetune repository contains LoRA files, it loads its pinned base and merges before
 tracing and Gram. Baseline therefore uses fine-tuned weights. Base downloads
-are shared by adapters in the same fleet. External-prefix configurations require
+are shared by adapter revision caches across fleets. LoRA checkpoint loading
+checks every required adapter weight, including saved extra modules, before
+merging. Nonmergeable methods, replicated layers and vocabulary extensions
+without supported embedding handling are recorded as failures. External-prefix configurations require
 their configured prefix cache.
 
 HF IDs and revisions are frozen in `checkpoints.json`; generated configs live
 in `checkpoint-configs/`. Downloads use `<run-root>/.downloads/`. Optional
 `--download-root PATH` sets another download parent; keep it stable across
-retries. `--keep-downloads` retains pinned weights and partial downloads;
-otherwise cleanup removes only runner-owned checkpoint downloads. Artifacts
+retries. Downloads are retained by default. With `--download-root PATH`, new
+runs share immutable repository/revision caches and download locks. Complete
+snapshots are checked against saved file sizes and reused without Hub calls.
+`--no-keep-downloads` uses disposable run-owned downloads. Artifacts
 and covariance remain. `--prefix-cache-file` selects an existing classic
 external prefix pool. `--prepare-only` saves metadata/configs without
 weight downloads or GPU stages.
+
+To continue after discovery changes, keep old results in their original run
+root and select new repository IDs from the new ranking:
+
+```bash
+python scripts/prepare_fleet_continuation.py \
+  --models-manifest analysis_out/new-fleets/qwen3-8b/checkpoints.json \
+  --previous-runs analysis_out/old-qwen-fleet \
+  --count 40 --output analysis_out/next40-qwen.json
+```
+
+This preserves discovery ranks and prior attempt paths, including failures.
+Run the continuation manifest in a new run root with its actual model count.
+Every checkpoint failure is saved and the runner continues to the next one.
 
 ## Append, resume and outputs
 

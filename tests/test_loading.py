@@ -91,7 +91,8 @@ def test_load_pretrained_uses_declared_architecture_for_unsupported_auto_config(
     ]
 
 
-def test_load_pretrained_merges_real_lora_before_hooks_and_weight_edits(monkeypatch, tmp_path):
+@pytest.mark.parametrize("incomplete", [None, "lora", "saved_module"])
+def test_load_pretrained_merges_real_lora_before_hooks_and_weight_edits(monkeypatch, tmp_path, incomplete):
     peft = pytest.importorskip("peft")
     torch.manual_seed(19)
     base = transformers.GPT2LMHeadModel(transformers.GPT2Config(
@@ -108,6 +109,7 @@ def test_load_pretrained_merges_real_lora_before_hooks_and_weight_edits(monkeypa
     projection_weight = base.transformer.h[0].mlp.c_proj.weight.detach().clone()
     adapted = peft.get_peft_model(base, peft.LoraConfig(
         r=2, lora_alpha=4, target_modules=["c_proj"], task_type="CAUSAL_LM", fan_in_fan_out=True,
+        modules_to_save=["lm_head"],
     ))
     with torch.no_grad():
         for name, parameter in adapted.named_parameters():
@@ -118,6 +120,13 @@ def test_load_pretrained_merges_real_lora_before_hooks_and_weight_edits(monkeypa
         expected_logits = adapted(tokens).logits.clone()
     assert not torch.allclose(original_logits, expected_logits)
     adapted.save_pretrained(adapter_dir)
+    if incomplete:
+        from safetensors.torch import load_file, save_file
+        path = adapter_dir / "adapter_model.safetensors"
+        weights = load_file(path)
+        key = next(key for key in weights if ("lora_" in key if incomplete == "lora" else "lm_head" in key))
+        del weights[key]
+        save_file(weights, path)
 
     class Tokenizer(_Tokenizer):
         def __len__(self):
@@ -139,6 +148,10 @@ def test_load_pretrained_merges_real_lora_before_hooks_and_weight_edits(monkeypa
     monkeypatch.setattr(loading, "gpu_count", lambda: 0)
     monkeypatch.setattr(loading, "DeviceManager", _DeviceManager)
     monkeypatch.setattr(loading.AutoTokenizer, "from_pretrained", tokenizer_loader)
+    if incomplete:
+        with pytest.raises(RuntimeError, match="Adapter checkpoint is incomplete"):
+            loading.load_pretrained(cfg)
+        return
     merged, _ = loading.load_pretrained(cfg)
     assert tokenizer_paths == [str(base_dir)]
     assert not isinstance(merged, peft.PeftModel)

@@ -197,7 +197,8 @@ def load_pretrained(cfg: DictConfig) -> Any:
 
     adapter_base = getattr(cfg.model, "adapter_base_path", None)
     if adapter_base:
-        from peft import PeftModel
+        from peft import PeftConfig, get_peft_model
+        from peft.utils.save_and_load import load_peft_weights, get_peft_model_state_dict, set_peft_model_state_dict
 
         if not Path(local_model_path, "adapter_config.json").is_file() or not Path(adapter_base, "config.json").is_file():
             raise FileNotFoundError("Pinned adapter and base checkpoint must be downloaded before loading")
@@ -209,11 +210,26 @@ def load_pretrained(cfg: DictConfig) -> Any:
             raise RuntimeError(f"Unusable tokenizer for adapter {model_name}")
         model = _model_from_pretrained(adapter_base, local_files_only=True, **({"device_map": "auto"} if use_device_map else {}))
         if len(tokenizer) > model.get_input_embeddings().num_embeddings:
-            model.resize_token_embeddings(len(tokenizer))
+            raise RuntimeError("Adapter tokenizer exceeds the base vocabulary; refusing to initialize unsaved embedding rows")
         if not use_device_map:
             model = device_manager.safe_to_device(model)
-        adapted = PeftModel.from_pretrained(model, local_model_path, local_files_only=True,
-                                           is_trainable=False, autocast_adapter_dtype=False)
+        adapter_config = PeftConfig.from_pretrained(local_model_path, local_files_only=True)
+        if adapter_config.peft_type != "LORA" or getattr(adapter_config, "layer_replication", None):
+            raise RuntimeError("Only LoRA adapters without layer replication are supported")
+        if adapter_config.task_type not in (None, "CAUSAL_LM"):
+            raise RuntimeError("Only causal language model adapters are supported")
+        adapted = get_peft_model(model, adapter_config, autocast_adapter_dtype=False)
+        weights = load_peft_weights(local_model_path, device="cpu", local_files_only=True)
+        expected = get_peft_model_state_dict(adapted, save_embedding_layers=False)
+        missing = sorted(set(expected) - set(weights))
+        if missing:
+            raise RuntimeError(f"Adapter checkpoint is incomplete: missing weights {missing[:6]}")
+        result = set_peft_model_state_dict(adapted, weights, adapter_name="default")
+        if result.unexpected_keys:
+            raise RuntimeError(f"Adapter checkpoint has unexpected weights: {result.unexpected_keys[:6]}")
+        del weights, expected
+        adapted.eval()
+        adapted.requires_grad_(False)
         # Plain merged projections are required by ROME and Gram's weight hooks.
         model = adapted.merge_and_unload(safe_merge=True)
         device_manager.register_object(model)

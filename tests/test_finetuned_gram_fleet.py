@@ -119,6 +119,76 @@ def test_retry_preparation_registers_no_unattempted_facts(tmp_path):
     assert json.loads((root / "cases.json").read_text())["count"] == 8
 
 
+@pytest.mark.parametrize("use_trace", [False, True])
+def test_random_facts_wrap_and_resume_the_saved_draw(tmp_path, monkeypatch, use_trace):
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = args.random_facts = args.keep_downloads = True
+    args.causal_kuba_fix = use_trace
+    args.max_fact_attempts = 8
+    draws = iter([7, 4])
+    monkeypatch.setattr(fleet.random, "randrange", lambda count: next(draws))
+    attempted = {}
+
+    def gram(params):
+        attempted.setdefault(params.models[0], []).append(params.case_start)
+        return 0
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    monkeypatch.setattr(fleet.gram_fleet, "verify_batch", lambda *a: None)
+    monkeypatch.setattr(fleet, "rome_case", lambda root, plan:
+        {"edit": {"success": attempted[root.parent.name][-1] == 0}})
+    if use_trace:
+        from jobs import finetuned_trace
+
+        def trace(params, model, root, cohort, start, stop):
+            if start == 0:
+                fleet.write_json(root / "causal-kuba-fix/m0000/artifact.json",
+                                 {"status": "complete", "summary": {"outputs": []}})
+                return {"accepted_position": 0, "rejections": [], "error": None}
+            return {"accepted_position": None, "error": "clean mismatch", "rejections": [
+                {"position": p, "case_id": cohort["case_ids"][p], "error": "clean mismatch"}
+                for p in range(start, stop)]}
+
+        monkeypatch.setattr(finetuned_trace, "run_trace", trace)
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    expected = {"fleet_org_one": [0], "fleet_org_two": [0]} if use_trace else {
+        "fleet_org_one": [7, 0], "fleet_org_two": [4, 5, 6, 7, 0]}
+    assert attempted == expected
+    states = {s["model_id"]: s for p in Path(args.run_root).glob("models/*/fleet-batches/*/state.json")
+              for s in [json.loads(p.read_text())]}
+    assert states["org/one"]["fact_candidate_start"] == 7
+    assert states["org/two"]["fact_candidate_start"] == 4
+    assert all(s["accepted_position"] == 0 for s in states.values())
+    attempted.clear()
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    assert attempted == {}  # no new random draw or model execution on resume
+
+
+def test_random_fact_budget_stays_bounded_across_wrap(tmp_path, monkeypatch):
+    from jobs import finetuned_trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = args.random_facts = args.causal_kuba_fix = True
+    args.max_fact_attempts = 2
+    monkeypatch.setattr(fleet.random, "randrange", lambda count: 7)
+    scans = []
+
+    def trace(params, model, root, cohort, start, stop):
+        scans.append((model, start, stop))
+        return {"accepted_position": None, "error": "clean mismatch", "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "clean mismatch"}
+            for p in range(start, stop)]}
+
+    monkeypatch.setattr(finetuned_trace, "run_trace", trace)
+    assert fleet.run(args, FakeApi(), fake_download) == 1
+    assert scans == [("fleet_org_one", 7, 8), ("fleet_org_one", 0, 1),
+                     ("fleet_org_two", 7, 8), ("fleet_org_two", 0, 1)]
+    for p in Path(args.run_root).glob("models/*/fleet-batches/*/state.json"):
+        state = json.loads(p.read_text())
+        assert state["status"] == "failed" and len(state["attempts"]) == 2
+
+
 def test_configs_keep_classic_layer_and_use_checkpoint_covariance(tmp_path, monkeypatch):
     args = fixture_args(tmp_path)
     base = load_model_config("gpt2-xl")

@@ -58,7 +58,7 @@ bash jobs/submit.sh finetuned-gram --gpu-mem 32gb --walltime 03:00:00 -- \
   --models-manifest analysis_out/fleets/qwen3-8b/checkpoints.json --model-count 100 \
   --case-index-file /path/to/frozen-finetuned-facts.json \
   --run-root analysis_out/qwen-ft-gram --case-start 0 --case-stop 1 \
-  --checkpoint-limit 1 --keep-downloads --retry-failed-facts --causal-kuba-fix
+  --checkpoint-limit 1 --keep-downloads --retry-failed-facts --random-facts --causal-kuba-fix
 ```
 
 Choose checkpoint ranges with `--checkpoint-start` and `--checkpoint-stop`.
@@ -67,8 +67,11 @@ Positions are zero based and the stop is exclusive: `--checkpoint-start 0
 --checkpoint-stop 40` for ranks 21–40. Keep the same model manifest, model count,
 fact manifest and run root to append results. Without a stop, all remaining
 checkpoints run. `--checkpoint-limit` is an alias for `--checkpoint-stop`.
-Each starts with the same manifest fact; failed
-ROME edits or tracing rejections advance to the next reserve fact.
+With `--random-facts`, each checkpoint starts at an independently random position
+in the shuffled CounterFact manifest. The draw is saved in its checkpoint state
+and reused on resume. Failed ROME edits or tracing rejections advance through the
+pool, wrapping to its beginning if needed. Facts can repeat between checkpoints.
+Without this flag, checkpoints start at the requested manifest position.
 `--max-fact-attempts` bounds the candidate range per checkpoint (default 1000, capped by the manifest length),
 including attempts saved by earlier runs. Tracing scans pending reserve facts
 with one model load and stops at the first valid fact. Every attempt is

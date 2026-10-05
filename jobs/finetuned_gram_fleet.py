@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import random
 import re
 import shutil
 import sys
@@ -41,6 +42,8 @@ def parse_args(argv=None):
     parser.add_argument("--keep-downloads", action=argparse.BooleanOptionalAction, default=True,
                         help="Retain pinned checkpoint files for reruns (default); --no-keep-downloads uses disposable run-local files")
     parser.add_argument("--retry-failed-facts", action="store_true", help="Try reserve facts until one ROME edit succeeds")
+    parser.add_argument("--random-facts", action="store_true",
+                        help="Pick a random starting fact per checkpoint, save it for resume, and wrap for reserve facts")
     parser.add_argument("--max-fact-attempts", type=int, default=1000,
                         help="Maximum candidate facts per checkpoint (default: 1000), including tracing rejections and ROME failures")
     parser.add_argument("--causal-kuba-fix", action="store_true", help="Trace the same fact before ROME; save trace artifacts")
@@ -62,6 +65,8 @@ def parse_args(argv=None):
         parser.error("checkpoint-start must precede checkpoint-limit/model-count")
     if (args.retry_failed_facts or args.causal_kuba_fix) and args.case_stop != args.case_start + 1:
         parser.error("Fact retries and tracing require one initial fact per checkpoint")
+    if args.random_facts and (args.case_start != 0 or args.case_stop != 1):
+        parser.error("Random facts require one edit per checkpoint with case-start=0 and case-stop=1")
     return args
 
 
@@ -130,6 +135,8 @@ def freeze_selection(args, base, api):
                 "download_root": str(downloads)}
     identity.update(covariance_source="finetuned" if args.finetuned_covariance else "base",
                      covariance_samples=args.covariance_samples)
+    if args.random_facts:
+        identity["fact_selection"] = "random-start-with-wrap-v1"
     if shared:
         identity["download_layout"] = "shared-revision-v1"
         if not args.keep_downloads:
@@ -389,6 +396,10 @@ def run(args, api=None, downloader=None):
                         except (FileNotFoundError, RuntimeError):
                             pass  # Repair missing artifacts after redownloading the pinned checkpoint.
                     state["attempts"] = previous_state.get("attempts", [])
+                    if args.random_facts:
+                        state["fact_candidate_start"] = previous_state.get("fact_candidate_start")
+                        if state["fact_candidate_start"] is None:
+                            state["fact_candidate_start"] = random.randrange(cohort["count"])
                     state["causal_kuba_fix"] = args.causal_kuba_fix
                     if args.causal_kuba_fix:
                         state["trace_implementation"] = trace_implementation
@@ -410,10 +421,15 @@ def run(args, api=None, downloader=None):
                                    local_dir=str(adapter_base_path(selection, entry)), files=entry["adapter_base_files"],
                                    token=token, file_sizes=entry.get("adapter_base_file_sizes"))
                     state["download_completed_at"] = utc_now()
-                    stop = min(cohort["count"], args.case_start + args.max_fact_attempts) if args.retry_failed_facts else args.case_start + 1
-                    position = args.case_start
+                    position = state["fact_candidate_start"] if args.random_facts else args.case_start
+                    attempt_limit = min(args.max_fact_attempts if args.retry_failed_facts else 1,
+                                        cohort["count"] - (0 if args.random_facts else args.case_start))
+                    stop = min(cohort["count"], position + attempt_limit)
+                    wrap_stop = attempt_limit - (stop - position) if args.random_facts else 0
                     accepted = False
-                    while position < stop:
+                    while position < stop or wrap_stop:
+                        if position >= stop:
+                            position, stop, wrap_stop = 0, wrap_stop, 0
                         rejected = {a["position"] for a in state["attempts"] if a["status"] in ("trace_rejected", "rome_failed")}
                         if position in rejected:
                             position += 1
@@ -424,7 +440,7 @@ def run(args, api=None, downloader=None):
                         if args.causal_kuba_fix:
                             from jobs.finetuned_trace import run_trace
                             # Do not rescan previously rejected facts on a resumed run.
-                            trace_stop = min((p for p in rejected if p > position), default=stop)
+                            trace_stop = min((p for p in rejected if position < p < stop), default=stop)
                             result = run_trace(args, model, root / "models" / model / "run", cohort, position, trace_stop)
                             for row in result["rejections"]:
                                 record = {**row, "status": "trace_rejected", "started_at": attempt["started_at"], "completed_at": utc_now()}
@@ -459,7 +475,7 @@ def run(args, api=None, downloader=None):
                         accepted = True
                         break
                     if not accepted:
-                        raise RuntimeError(f"No successful edit within {stop - args.case_start} candidate facts "
+                        raise RuntimeError(f"No successful edit within {attempt_limit} candidate facts "
                                            f"(max-fact-attempts={args.max_fact_attempts})")
                     state.update(status="complete", completed_at=utc_now())
                 except Exception as exc:

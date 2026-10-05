@@ -38,7 +38,8 @@ def parse_args(argv=None):
     parser.add_argument("--tracking", choices=("none", "wandb"), default="none")
     parser.add_argument("--wandb-project", default="latium")
     parser.add_argument("--no-graphs", action="store_true")
-    parser.add_argument("--keep-downloads", action="store_true", help="Retain pinned checkpoint files for retries")
+    parser.add_argument("--keep-downloads", action=argparse.BooleanOptionalAction, default=True,
+                        help="Retain pinned checkpoint files for reruns (default); --no-keep-downloads uses disposable run-local files")
     parser.add_argument("--retry-failed-facts", action="store_true", help="Try reserve facts until one ROME edit succeeds")
     parser.add_argument("--max-fact-attempts", type=int, default=1000,
                         help="Maximum candidate facts per checkpoint (default: 1000), including tracing rejections and ROME failures")
@@ -100,8 +101,12 @@ def checkpoint_files(names):
 
 def freeze_selection(args, base, api):
     root = Path(args.run_root)
-    downloads = (Path(args.download_root).resolve() / digest(str(root))[:12]
-                 if args.download_root else root / ".downloads")
+    path = root / "checkpoints.json"
+    existing = json.loads(path.read_text()) if path.exists() else None
+    shared = (existing["identity"].get("download_layout") == "shared-revision-v1" if existing else
+              bool(args.keep_downloads and args.download_root))
+    downloads = (Path(args.download_root).resolve() if shared else
+                 Path(args.download_root).resolve() / digest(str(root))[:12] if args.download_root else root / ".downloads")
     base = OmegaConf.to_container(base, resolve=True)
     # Reuse the classic external prefix pool without downloading a helper model.
     prefix_hash = None
@@ -124,10 +129,13 @@ def freeze_selection(args, base, api):
                 "supplied_manifest_hash": digest(supplied) if supplied else None,
                 "download_root": str(downloads)}
     identity.update(covariance_source="finetuned" if args.finetuned_covariance else "base",
-                    covariance_samples=args.covariance_samples)
-    path = root / "checkpoints.json"
-    if path.exists():
-        selection = json.loads(path.read_text())
+                     covariance_samples=args.covariance_samples)
+    if shared:
+        identity["download_layout"] = "shared-revision-v1"
+        if not args.keep_downloads:
+            raise ValueError("Shared revision caches must be retained")
+    if existing:
+        selection = existing
         if selection["identity"] != identity:
             raise ValueError("Checkpoint selection/configuration changed; use a new run root")
         return selection
@@ -149,8 +157,11 @@ def freeze_selection(args, base, api):
             raise ValueError(f"Duplicate checkpoint or config key: {model_id}")
         seen.add(key)
         entry = {"model_id": model_id, "key": key, "rank": len(models) + 1,
+                 "discovery_rank": record.get("discovery_rank", record.get("rank", len(models) + 1)),
                  "downloads": record.get("downloads"), "revision": record.get("revision"),
-                 "checkpoint_type": record.get("checkpoint_type")}
+                  "checkpoint_type": record.get("checkpoint_type")}
+        if record.get("file_sizes"):
+            entry["file_sizes"] = record["file_sizes"]
         try:
             if record.get("selection_error"):
                 raise ValueError(record["selection_error"])
@@ -166,6 +177,9 @@ def freeze_selection(args, base, api):
                 if record.get("adapter_base_revision") and record.get("adapter_base_files"):
                     for key_name in ("adapter_base_model", "adapter_base_revision", "adapter_base_files"):
                         entry[key_name] = record[key_name]
+                    for key_name in ("adapter_base_file_sizes", "adapter_config"):
+                        if key_name in record:
+                            entry[key_name] = record[key_name]
                 else:
                     from huggingface_hub import hf_hub_download
                     adapter = json.loads(Path(hf_hub_download(model_id, "adapter_config.json", revision=entry["revision"], token=os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))).read_text())
@@ -204,7 +218,7 @@ def save_configs(root, selection):
     for entry in selection["models"]:
         cfg = dict(base)
         cfg.update(name=entry["model_id"], save_to_local=False,
-                   models_dir=str(Path(selection["identity"]["download_root"]) / entry["key"] / "models"),
+                   models_dir=str(checkpoint_download_path(selection, entry) / "models"),
                    second_moment_dir=str(root / "models" / entry["key"] / "covariance"),
                    second_moment_path=None)
         if shared:
@@ -221,8 +235,48 @@ def save_configs(root, selection):
 
 
 def adapter_base_path(selection, entry):
+    if selection["identity"].get("download_layout") == "shared-revision-v1":
+        base = {"model_id": entry["adapter_base_model"], "key": fleet_model_key(entry["adapter_base_model"]),
+                "revision": entry["adapter_base_revision"]}
+        return checkpoint_download_path(selection, base) / "models" / entry["adapter_base_model"]
     identity = {"model": entry["adapter_base_model"], "revision": entry["adapter_base_revision"]}
     return Path(selection["identity"]["download_root"]) / "bases" / digest(identity)[:16]
+
+
+def checkpoint_download_path(selection, entry):
+    root = Path(selection["identity"]["download_root"])
+    if selection["identity"].get("download_layout") == "shared-revision-v1":
+        return root / "checkpoints" / entry["key"] / str(entry.get("revision") or "unresolved")
+    return root / entry["key"]
+
+
+def ensure_download(downloader, *, repo_id, revision, local_dir, files, token, file_sizes=None):
+    """Reuse complete pinned snapshots; serialize downloads shared by fleet jobs."""
+    directory = Path(local_dir)
+    if directory.is_symlink():
+        raise ValueError(f"Checkpoint cache must not be a symlink: {directory}")
+    identity = {"repo_id": repo_id, "revision": revision, "files": sorted(files)}
+    marker = directory / ".latium-snapshot.json"
+    with locked(directory.parent / ("." + directory.name + "-download.lock")):
+        try:
+            saved = json.loads(marker.read_text()) if marker.exists() else None
+        except (OSError, json.JSONDecodeError):
+            saved = None
+        if (saved and saved.get("identity") == identity and
+                all((directory / name).is_file() and (directory / name).stat().st_size == size
+                    for name, size in saved["file_sizes"].items()) and
+                set(saved["file_sizes"]) == set(files)):
+            return "cache"
+        downloader(repo_id=repo_id, revision=revision, local_dir=str(directory), allow_patterns=files, token=token,
+                   force_download=bool(saved))
+        missing = [name for name in files if not (directory / name).is_file()]
+        if missing:
+            raise RuntimeError(f"Incomplete pinned download for {repo_id}: {missing[:6]}")
+        actual = {name: (directory / name).stat().st_size for name in files}
+        if file_sizes and any(actual[name] != size for name, size in file_sizes.items() if size is not None and name in actual):
+            raise RuntimeError(f"Downloaded file sizes do not match pinned metadata for {repo_id}")
+        write_json(marker, {"identity": identity, "file_sizes": actual})
+        return "download"
 
 
 def remove_download(download, parent):
@@ -291,7 +345,13 @@ def run(args, api=None, downloader=None):
                         "--run-root analysis_out/base-covariance, or select --finetuned-covariance.")
             failures = []
             downloads = Path(selection["identity"]["download_root"])
-            own_download_root(downloads, root)
+            shared = selection["identity"].get("download_layout") == "shared-revision-v1"
+            if shared:
+                if downloads.is_symlink():
+                    raise ValueError("Shared cache root must not be a symlink")
+                downloads.mkdir(parents=True, exist_ok=True)
+            else:
+                own_download_root(downloads, root)
             # A killed job can leave a later checkpoint behind. Clear all owned
             # leftovers before starting so retries still keep only one model on disk.
             if not args.keep_downloads:
@@ -305,7 +365,7 @@ def run(args, api=None, downloader=None):
             for entry in selection["models"][args.checkpoint_start:args.checkpoint_limit]:
                 model = entry["key"]
                 state_path = root / "models" / model / "fleet-batches" / batch / "state.json"
-                download = downloads / model
+                download = checkpoint_download_path(selection, entry)
                 previous_state = json.loads(state_path.read_text()) if state_path.exists() else {}
                 if previous_state and (args.causal_kuba_fix or previous_state.get("causal_kuba_fix")):
                     if (previous_state.get("causal_kuba_fix") != args.causal_kuba_fix
@@ -342,12 +402,13 @@ def run(args, api=None, downloader=None):
                             remove_download(base_download, base_download.parent)
                     local_dir = download / "models" / entry["model_id"]
                     print(f"[{model}] downloading {entry['revision']}", flush=True)
-                    downloader(repo_id=entry["model_id"], revision=entry["revision"],
-                               local_dir=str(local_dir), allow_patterns=entry["files"], token=token)
+                    state["download_source"] = ensure_download(downloader, repo_id=entry["model_id"], revision=entry["revision"],
+                               local_dir=str(local_dir), files=entry["files"], token=token, file_sizes=entry.get("file_sizes"))
                     if entry.get("checkpoint_type") == "adapter":
-                        downloader(repo_id=entry["adapter_base_model"], revision=entry["adapter_base_revision"],
-                                   local_dir=str(adapter_base_path(selection, entry)),
-                                   allow_patterns=entry["adapter_base_files"], token=token)
+                        state["adapter_base_download_source"] = ensure_download(downloader,
+                                   repo_id=entry["adapter_base_model"], revision=entry["adapter_base_revision"],
+                                   local_dir=str(adapter_base_path(selection, entry)), files=entry["adapter_base_files"],
+                                   token=token, file_sizes=entry.get("adapter_base_file_sizes"))
                     state["download_completed_at"] = utc_now()
                     stop = min(cohort["count"], args.case_start + args.max_fact_attempts) if args.retry_failed_facts else args.case_start + 1
                     position = args.case_start

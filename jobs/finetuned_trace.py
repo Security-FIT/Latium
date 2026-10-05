@@ -16,7 +16,7 @@ def trace_implementation_hash():
          "src/causal_trace/model_adapter.py", "src/common/loading.py", "jobs/finetuned_trace.py")})
 
 
-def run_trace(args, model, root, cohort, position, stop=None):
+def run_trace(args, model, root, cohort, position, stop=None, *, case_index_file=None):
     """Scan reserve facts with one model load, preserving per-fact artifacts."""
     root = Path(root)
     stop = position + 1 if stop is None else stop
@@ -56,7 +56,7 @@ def run_trace(args, model, root, cohort, position, stop=None):
                "command.legacy_trace.num_valid_facts=1",
                f"command.legacy_trace.max_dataset_examples_to_scan={stop - start}",
                "command.legacy_trace.allow_article_prefix=true",
-               f"command.legacy_trace.case_index_file='{Path(args.run_root) / 'cases.json'}'",
+               f"command.legacy_trace.case_index_file='{case_index_file or Path(args.run_root) / 'cases.json'}'",
                f"command.legacy_trace.case_start={start}", f"command.legacy_trace.seed={42 + start}"]
     previous_summaries = set((directory / "raw").glob("*/summary.json"))
     failure = None

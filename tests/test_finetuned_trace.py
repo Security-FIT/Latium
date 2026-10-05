@@ -61,6 +61,14 @@ def test_one_process_scan_maps_accepted_fact_and_preserves_artifacts(tmp_path, m
     assert len(calls) == 1  # Cached trace and rejects require no model load.
 
 
+def test_independent_manifest_is_forwarded_to_tracing(tmp_path, monkeypatch):
+    args, cohort, calls = setup_scan(tmp_path, monkeypatch, accepted_offset=0)
+    manifest = tmp_path / "trace-only.json"
+    result = trace.run_trace(args, "fine-tuned", tmp_path / "run", cohort, 0, 2, case_index_file=manifest)
+    assert result["accepted_position"] == 0
+    assert f"command.legacy_trace.case_index_file='{manifest}'" in calls[0]
+
+
 def test_no_valid_fact_saves_rejections_without_fabricating_complete_trace(tmp_path, monkeypatch):
     args, cohort, calls = setup_scan(tmp_path, monkeypatch, accepted_offset=None)
     root = tmp_path / "run"

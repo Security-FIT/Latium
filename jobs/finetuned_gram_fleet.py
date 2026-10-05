@@ -46,7 +46,8 @@ def parse_args(argv=None):
                         help="Pick a random starting fact per checkpoint, save it for resume, and wrap for reserve facts")
     parser.add_argument("--max-fact-attempts", type=int, default=1000,
                         help="Maximum candidate facts per checkpoint (default: 1000), including tracing rejections and ROME failures")
-    parser.add_argument("--causal-kuba-fix", action="store_true", help="Trace the same fact before ROME; save trace artifacts")
+    parser.add_argument("--causal-kuba-fix", action="store_true", help="Save tracing artifacts before ROME; --trace-case-index-file selects an independent fact pool")
+    parser.add_argument("--trace-case-index-file", help="Separate tracing manifest, disjoint from the ROME fact pool; tracing does not gate editing")
     parser.add_argument("--checkpoint-stop", "--checkpoint-limit", dest="checkpoint_limit", type=int,
                         help="Exclusive frozen checkpoint stop; cohort stays fixed (default: all)")
     parser.add_argument("--checkpoint-start", type=int, default=0, help="Start at this zero-based frozen checkpoint position")
@@ -55,6 +56,10 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
     args.run_root = str(Path(args.run_root).resolve())
     args.case_index_file = str(Path(args.case_index_file).resolve())
+    if args.trace_case_index_file:
+        args.trace_case_index_file = str(Path(args.trace_case_index_file).resolve())
+        if not args.causal_kuba_fix:
+            parser.error("A separate tracing manifest requires --causal-kuba-fix")
     args.case_stop = args.case_stop if args.case_stop is not None else args.case_start + args.n_tests
     if (args.model_count <= 0 or args.covariance_samples <= 0 or args.max_fact_attempts <= 0 or args.case_start < 0
             or args.case_stop <= args.case_start or args.case_stop > load_case_manifest(args.case_index_file)["count"]):
@@ -137,6 +142,21 @@ def freeze_selection(args, base, api):
                      covariance_samples=args.covariance_samples)
     if args.random_facts:
         identity["fact_selection"] = "random-start-with-wrap-v1"
+    facts = load_case_manifest(args.case_index_file)
+    assigned = supplied is not None and any("fact_position" in record for record in supplied["models"][:args.model_count])
+    if assigned:
+        if args.random_facts or args.retry_failed_facts or args.case_stop - args.case_start != 1:
+            raise ValueError("Assigned facts require one edit per checkpoint without random draws or replacement facts")
+        if args.causal_kuba_fix and not args.trace_case_index_file:
+            raise ValueError("Assigned ROME facts require a separate tracing manifest")
+        identity.update(fact_selection="assigned-once-v1", fact_manifest_hash=facts["manifest_hash"])
+    if args.trace_case_index_file:
+        tracing = load_case_manifest(args.trace_case_index_file)
+        if ((tracing["dataset"], tracing["split"]) != (facts["dataset"], facts["split"])
+                or set(tracing["case_ids"]) & set(facts["case_ids"])
+                or set(tracing["indices"]) & set(facts["indices"])):
+            raise ValueError("Tracing must use the same dataset and a disjoint set of facts")
+        identity["trace_manifest_hash"] = tracing["manifest_hash"]
     if shared:
         identity["download_layout"] = "shared-revision-v1"
         if not args.keep_downloads:
@@ -154,7 +174,7 @@ def freeze_selection(args, base, api):
                                token=os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
     if len(records) != args.model_count:
         raise ValueError(f"Requested {args.model_count} checkpoints but found {len(records)}")
-    models, seen = [], set()
+    models, seen, assigned_positions = [], set(), set()
     for record in records:
         model_id = str(record["model_id"])
         if not re.fullmatch(r"[\w.-]+/[\w.-]+", model_id) or any(p in (".", "..") for p in model_id.split("/")):
@@ -169,6 +189,14 @@ def freeze_selection(args, base, api):
                   "checkpoint_type": record.get("checkpoint_type")}
         if record.get("file_sizes"):
             entry["file_sizes"] = record["file_sizes"]
+        if assigned:
+            position = record.get("fact_position")
+            if type(position) is not int or not 0 <= position < facts["count"] or position in assigned_positions:
+                raise ValueError(f"Missing, duplicate or invalid fact assignment for {model_id}")
+            if record.get("fact_case_id") != facts["case_ids"][position]:
+                raise ValueError(f"Assigned CounterFact ID does not match the manifest for {model_id}")
+            assigned_positions.add(position)
+            entry.update(fact_position=position, fact_case_id=record["fact_case_id"])
         try:
             if record.get("selection_error"):
                 raise ValueError(record["selection_error"])
@@ -319,6 +347,13 @@ def run(args, api=None, downloader=None):
             base.prefix_source = str(Path(args.prefix_cache_file).resolve())
             base.prefix_cache_path = base.prefix_source
         selection = freeze_selection(args, base, api)
+        trace_cohort = None
+        if args.trace_case_index_file:
+            trace_cohort = load_case_manifest(args.trace_case_index_file)
+            frozen_trace = root / "trace-cases.json"
+            if frozen_trace.exists() and json.loads(frozen_trace.read_text()) != trace_cohort:
+                raise ValueError("Frozen tracing manifest changed; use a new run root")
+            write_json(frozen_trace, trace_cohort)
         config_dir = save_configs(root, selection)
         previous = os.environ.get("LATIUM_MODEL_CONFIG_DIR")
         os.environ["LATIUM_MODEL_CONFIG_DIR"] = str(config_dir)
@@ -332,7 +367,7 @@ def run(args, api=None, downloader=None):
                 forwarded.append("--no-graphs")
             gram = gram_args(forwarded)
             gram.skip_second_moment = not args.finetuned_covariance
-            if args.retry_failed_facts:
+            if args.retry_failed_facts or any("fact_position" in entry for entry in selection["models"]):
                 gram.models = []  # Freeze the cohort; register only facts actually attempted by ROME.
             batch, catalog = gram_fleet.prepare(gram)
             if args.prepare_only:
@@ -380,18 +415,24 @@ def run(args, api=None, downloader=None):
                         raise ValueError("Causal tracing implementation changed; use a new run root")
                 state = {**entry, "status": "running", "started_at": utc_now()}
                 try:
-                    if previous_state.get("status") == "complete" and previous_state.get("causal_kuba_fix", False) == args.causal_kuba_fix:
+                    if previous_state.get("status") in ("complete", "rome_failed") and previous_state.get("causal_kuba_fix", False) == args.causal_kuba_fix:
                         try:
-                            accepted = previous_state.get("accepted_position", args.case_start)
+                            accepted = previous_state.get("accepted_position", entry.get("fact_position", args.case_start))
                             accepted_batch = f"m{accepted:04d}-{accepted + (args.case_stop - args.case_start):04d}"
                             gram_fleet.verify_batch(root / catalog["models"][model]["run_root"], model,
                                 catalog["models"][model]["batches"][accepted_batch]["plan_id"], cohort,
                                 accepted, accepted + (args.case_stop - args.case_start))
                             if args.causal_kuba_fix:
-                                trace = root / "models" / model / "run" / "causal-kuba-fix" / f"m{accepted:04d}" / "artifact.json"
-                                payload = json.loads(trace.read_text())
-                                if payload["status"] != "complete" or not all((root / "models" / model / "run" / p).is_file() for p in payload["summary"]["outputs"]):
-                                    raise RuntimeError("Missing trace outputs")
+                                trace_position = accepted
+                                if trace_cohort is not None:
+                                    if previous_state.get("trace", {}).get("status") not in ("complete", "unavailable", "failed"):
+                                        raise RuntimeError("Missing independent tracing outcome")
+                                    trace_position = previous_state["trace"]["accepted_position"]
+                                if trace_position is not None:
+                                    trace = root / "models" / model / "run" / "causal-kuba-fix" / f"m{trace_position:04d}" / "artifact.json"
+                                    payload = json.loads(trace.read_text())
+                                    if payload["status"] != "complete" or not all((root / "models" / model / "run" / p).is_file() for p in payload["summary"]["outputs"]):
+                                        raise RuntimeError("Missing trace outputs")
                             continue
                         except (FileNotFoundError, RuntimeError):
                             pass  # Repair missing artifacts after redownloading the pinned checkpoint.
@@ -421,7 +462,19 @@ def run(args, api=None, downloader=None):
                                    local_dir=str(adapter_base_path(selection, entry)), files=entry["adapter_base_files"],
                                    token=token, file_sizes=entry.get("adapter_base_file_sizes"))
                     state["download_completed_at"] = utc_now()
-                    position = state["fact_candidate_start"] if args.random_facts else args.case_start
+                    if trace_cohort is not None:
+                        from jobs.finetuned_trace import run_trace
+                        try:
+                            result = run_trace(args, model, root / "models" / model / "run", trace_cohort, 0,
+                                               min(trace_cohort["count"], args.max_fact_attempts),
+                                               case_index_file=root / "trace-cases.json")
+                            state["trace"] = {**result, "status": "complete" if result["accepted_position"] is not None else "unavailable"}
+                            state["trace"]["case_id"] = (trace_cohort["case_ids"][result["accepted_position"]]
+                                                         if result["accepted_position"] is not None else None)
+                        except RuntimeError as exc:
+                            state["trace"] = {"status": "failed", "accepted_position": None, "error": str(exc)}
+                        write_json(state_path, state)
+                    position = entry.get("fact_position", state["fact_candidate_start"] if args.random_facts else args.case_start)
                     attempt_limit = min(args.max_fact_attempts if args.retry_failed_facts else 1,
                                         cohort["count"] - (0 if args.random_facts else args.case_start))
                     stop = min(cohort["count"], position + attempt_limit)
@@ -431,13 +484,13 @@ def run(args, api=None, downloader=None):
                         if position >= stop:
                             position, stop, wrap_stop = 0, wrap_stop, 0
                         rejected = {a["position"] for a in state["attempts"] if a["status"] in ("trace_rejected", "rome_failed")}
-                        if position in rejected:
+                        if position in rejected and "fact_position" not in entry:
                             position += 1
                             continue
                         attempt = {"position": position, "case_id": cohort["case_ids"][position], "status": "running", "started_at": utc_now()}
                         state["attempts"] = [a for a in state["attempts"] if a["position"] != position] + [attempt]
                         write_json(state_path, state)
-                        if args.causal_kuba_fix:
+                        if args.causal_kuba_fix and trace_cohort is None:
                             from jobs.finetuned_trace import run_trace
                             # Do not rescan previously rejected facts on a resumed run.
                             trace_stop = min((p for p in rejected if position < p < stop), default=stop)
@@ -462,12 +515,18 @@ def run(args, api=None, downloader=None):
                         gram.n_tests = gram.case_stop - gram.case_start
                         if gram_fleet.run(gram):
                             raise RuntimeError("Gram batch failed; see batches/*/state.json and fleet.log")
-                        if args.retry_failed_facts:
+                        if args.retry_failed_facts or "fact_position" in entry:
                             current_batch, catalog = gram_fleet.prepare(gram)
                             case = rome_case(root / catalog["models"][model]["run_root"], catalog["models"][model]["batches"][current_batch]["plan_id"])
-                            if not case["edit"]["success"]:
+                            state["rome_success"] = bool(case["edit"]["success"])
+                            attempt["execution"] = case
+                            if not state["rome_success"]:
                                 attempt.update(status="rome_failed", error="Efficacy evaluation did not pass", execution=case)
                                 write_json(state_path, state)
+                                if "fact_position" in entry:
+                                    attempt["completed_at"] = utc_now()
+                                    accepted = True  # The assigned edit was evaluated; no replacement is allowed.
+                                    break
                                 position += 1
                                 continue
                         attempt.update(status="complete", completed_at=utc_now())
@@ -477,7 +536,7 @@ def run(args, api=None, downloader=None):
                     if not accepted:
                         raise RuntimeError(f"No successful edit within {attempt_limit} candidate facts "
                                            f"(max-fact-attempts={args.max_fact_attempts})")
-                    state.update(status="complete", completed_at=utc_now())
+                    state.update(status="rome_failed" if state.get("rome_success") is False else "complete", completed_at=utc_now())
                 except Exception as exc:
                     state.update(status="failed", error=f"{type(exc).__name__}: {exc}")
                     if state.get("attempts") and state["attempts"][-1].get("status") == "running":

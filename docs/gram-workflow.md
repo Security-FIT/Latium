@@ -52,14 +52,37 @@ and OLMo.
 python jobs/prepare_finetuned_gram_fleets.py --output-dir analysis_out/fleets
 ```
 
+Assign the same random pool of 100 facts across every family. The first 100
+entries of the source manifest are used without filtering for ROME success;
+the remaining entries form a separate tracing pool.
+
+```bash
+python jobs/prepare_shared_fleet_facts.py \
+  --facts-source manifests/counterfact_finetuned_seed20261003_n1000.json \
+  --fleets-root analysis_out/fleets --output-dir analysis_out/shared-facts
+```
+
 ```bash
 bash jobs/submit.sh finetuned-gram --gpu-mem 32gb --walltime 03:00:00 -- \
   --base-model qwen3-8b \
-  --models-manifest analysis_out/fleets/qwen3-8b/checkpoints.json --model-count 100 \
-  --case-index-file /path/to/frozen-finetuned-facts.json \
+  --models-manifest analysis_out/shared-facts/fleets/qwen3-8b/checkpoints.json --model-count 100 \
+  --case-index-file analysis_out/shared-facts/rome-facts.json \
+  --trace-case-index-file analysis_out/shared-facts/trace-facts.json \
   --run-root analysis_out/qwen-ft-gram --case-start 0 --case-stop 1 \
-  --checkpoint-limit 1 --keep-downloads --retry-failed-facts --random-facts --causal-kuba-fix
+  --checkpoint-limit 1 --keep-downloads --causal-kuba-fix
 ```
+
+Use the actual checkpoint count when a family has fewer than 100 candidates.
+Each frozen checkpoint receives one distinct assigned fact. A family with
+100 checkpoints uses all 100; a smaller family uses a prefix of the same pool.
+Assignments survive checkpoint range selection and continuation manifests.
+ROME is attempted once: an unsuccessful edit is saved as `rome_failed`, with
+its execution and GRAM artifacts, and the next checkpoint runs. A scientific
+ROME failure does not make the job exit unsuccessfully; runtime failures do.
+Tracing scans only its separate pool and records its result independently,
+including unavailable or failed traces. It never changes or gates the assigned
+ROME fact. Previously saved results using a different fact protocol belong in
+their original run root; comparable results require a new run root and run.
 
 Choose checkpoint ranges with `--checkpoint-start` and `--checkpoint-stop`.
 Positions are zero based and the stop is exclusive: `--checkpoint-start 0
@@ -67,14 +90,9 @@ Positions are zero based and the stop is exclusive: `--checkpoint-start 0
 --checkpoint-stop 40` for ranks 21–40. Keep the same model manifest, model count,
 fact manifest and run root to append results. Without a stop, all remaining
 checkpoints run. `--checkpoint-limit` is an alias for `--checkpoint-stop`.
-With `--random-facts`, each checkpoint starts at an independently random position
-in the shuffled CounterFact manifest. The draw is saved in its checkpoint state
-and reused on resume. Failed ROME edits or tracing rejections advance through the
-pool, wrapping to its beginning if needed. Facts can repeat between checkpoints.
-Without this flag, checkpoints start at the requested manifest position.
-`--max-fact-attempts` bounds the candidate range per checkpoint (default 1000, capped by the manifest length),
-including attempts saved by earlier runs. Tracing scans pending reserve facts
-with one model load and stops at the first valid fact. Every attempt is
+For unassigned manifests, `--random-facts --retry-failed-facts` enables independent
+random starting positions and reserve facts, bounded by `--max-fact-attempts`.
+These options cannot be combined with fixed assignments. Every attempt is
 recorded in checkpoint state. GRAM wrong-layer results never trigger a retry.
 Baseline is the downloaded checkpoint before ROME. By default, ROME reuses
 the original model's covariance for the configured layer and sample count.
@@ -82,8 +100,9 @@ Prepare missing original statistics once with the classic fleet's
 `--covariance-only` option. Add `--finetuned-covariance` to compute statistics
 separately for each checkpoint. Shared covariance approximates fine-tuned
 activations and can affect ROME success. Changing this choice requires a new
-run root. Tracing uses the same fact and preserves the
-classic ROME layer; its CSV, JSON and PNG outputs are indexed in the run manifest.
+run root. Tracing preserves the classic ROME layer; its CSV, JSON and PNG
+outputs are indexed in the run manifest. Without a separate tracing manifest,
+unassigned runs trace their ROME candidate fact.
 
 Fleet tracing checks target tokens in the actual prompt context. If the clean
 model predicts a single `the`, `a` or `an` first, tracing accepts that prefix
@@ -130,7 +149,7 @@ root and select new repository IDs from the new ranking:
 
 ```bash
 python scripts/prepare_fleet_continuation.py \
-  --models-manifest analysis_out/new-fleets/qwen3-8b/checkpoints.json \
+  --models-manifest analysis_out/shared-facts/fleets/qwen3-8b/checkpoints.json \
   --previous-runs analysis_out/old-qwen-fleet \
   --count 40 --output analysis_out/next40-qwen.json
 ```

@@ -136,13 +136,16 @@ their configured prefix cache.
 HF IDs and revisions are frozen in `checkpoints.json`; generated configs live
 in `checkpoint-configs/`. Downloads use `<run-root>/.downloads/`. Optional
 `--download-root PATH` sets another download parent; keep it stable across
-retries. Downloads are retained by default. With `--download-root PATH`, new
-runs share immutable repository/revision caches and download locks. Complete
-snapshots are checked against saved file sizes and reused without Hub calls.
-`--no-keep-downloads` uses disposable run-owned downloads. Artifacts
+retries. Downloads are removed after each checkpoint by default, including
+adapter base weights and partial downloads after failures. Artifacts
 and covariance remain. `--prefix-cache-file` selects an existing classic
 external prefix pool. `--prepare-only` saves metadata/configs without
 weight downloads or GPU stages.
+
+`--keep-downloads --download-root PATH` instead shares immutable repository/revision
+caches and download locks. Complete snapshots are checked against saved file sizes
+and reused without Hub calls. Existing shared-cache runs require `--keep-downloads`;
+use a new run root to switch to disposable downloads.
 
 To continue after discovery changes, keep old results in their original run
 root and select new repository IDs from the new ranking:

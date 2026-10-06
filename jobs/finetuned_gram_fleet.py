@@ -39,8 +39,8 @@ def parse_args(argv=None):
     parser.add_argument("--tracking", choices=("none", "wandb"), default="none")
     parser.add_argument("--wandb-project", default="latium")
     parser.add_argument("--no-graphs", action="store_true")
-    parser.add_argument("--keep-downloads", action=argparse.BooleanOptionalAction, default=True,
-                        help="Retain pinned checkpoint files for reruns (default); --no-keep-downloads uses disposable run-local files")
+    parser.add_argument("--keep-downloads", action=argparse.BooleanOptionalAction, default=False,
+                        help="Retain pinned checkpoint files for reruns; default removes run-owned downloads after each checkpoint")
     parser.add_argument("--retry-failed-facts", action="store_true", help="Try reserve facts until one ROME edit succeeds")
     parser.add_argument("--random-facts", action="store_true",
                         help="Pick a random starting fact per checkpoint, save it for resume, and wrap for reserve facts")
@@ -546,6 +546,7 @@ def run(args, api=None, downloader=None):
                 finally:
                     if not args.keep_downloads:
                         remove_download(download, downloads)
+                        remove_download(downloads / "bases", downloads)
                     if state.get("status") != "running":
                         write_json(state_path, state)
             return int(bool(failures))

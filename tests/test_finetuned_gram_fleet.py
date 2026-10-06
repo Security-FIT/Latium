@@ -18,7 +18,7 @@ def fixture_args(tmp_path):
     models.write_text(json.dumps({"models": [{"model_id": "org/one"}, {"model_id": "org/two"}]}))
     return fleet.parse_args(["--base-model", "gpt2-xl", "--models-manifest", str(models),
         "--model-count", "2", "--run-root", str(tmp_path / "run"), "--case-index-file", str(manifest),
-        "--case-start", "2", "--case-stop", "4", "--no-graphs", "--finetuned-covariance", "--no-keep-downloads"])
+        "--case-start", "2", "--case-stop", "4", "--no-graphs", "--finetuned-covariance"])
 
 
 def fake_download(**kwargs):
@@ -435,6 +435,48 @@ def test_adapter_downloads_pinned_base_and_preserves_unusable_top_rank(tmp_path,
     frozen = json.loads((Path(args.run_root) / "checkpoints.json").read_text())
     assert [e["model_id"] for e in frozen["models"]] == ["org/broken", "org/adapter"]
     assert [e["rank"] for e in frozen["models"]] == [1, 2]
+
+
+@pytest.mark.parametrize("failure_stage", [None, "base_download", "gram"])
+def test_disposable_adapters_remove_bases_between_checkpoints_and_keep_results(tmp_path, monkeypatch, failure_stage):
+    args = fixture_args(tmp_path)
+    args.download_root = str(tmp_path / "downloads")
+    records = [{"model_id": f"org/adapter{i}", "revision": str(i) * 40,
+                "files": ["adapter_config.json", "adapter_model.safetensors"],
+                "adapter_base_model": f"org/base{i}", "adapter_base_revision": "b" * 40,
+                "adapter_base_files": ["config.json", "model.safetensors"]} for i in (1, 2)]
+    Path(args.models_manifest).write_text(json.dumps({"models": records}))
+    unrelated = Path(args.download_root) / "shared-cache"
+    unrelated.mkdir(parents=True)
+    (unrelated / "model.safetensors").write_text("keep")
+    calls = []
+
+    def download(**kwargs):
+        directory = Path(kwargs["local_dir"])
+        if kwargs["repo_id"] == "org/adapter2":
+            assert not list(directory.parents[3].glob("bases/*/model.safetensors"))
+        fake_download(**kwargs)
+        calls.append(kwargs["repo_id"])
+        if failure_stage == "base_download" and kwargs["repo_id"] == "org/base1":
+            raise RuntimeError("partial base download")
+
+    def gram(params):
+        cfg = load_model_config(params.models[0])
+        assert Path(cfg.adapter_base_path, "model.safetensors").exists()
+        artifact = Path(args.run_root) / "models" / params.models[0] / "saved-result.json"
+        fleet.write_json(artifact, {"saved": True})
+        return int(failure_stage == "gram" and cfg.name == "org/adapter1")
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    assert fleet.run(args, FakeApi(), download) == int(failure_stage is not None)
+    assert calls == ["org/adapter1", "org/base1", "org/adapter2", "org/base2"]
+    selection = json.loads((Path(args.run_root) / "checkpoints.json").read_text())
+    downloads = Path(selection["identity"]["download_root"])
+    assert not (downloads / "bases").exists()
+    assert all(not fleet.checkpoint_download_path(selection, row).exists() for row in selection["models"])
+    assert len(list((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))) == 2
+    assert len(list((Path(args.run_root) / "models").glob("*/saved-result.json"))) == (1 if failure_stage == "base_download" else 2)
+    assert (unrelated / "model.safetensors").read_text() == "keep"
 
 
 def test_shared_revision_cache_reuses_base_and_checkpoints_across_runs(tmp_path, monkeypatch):

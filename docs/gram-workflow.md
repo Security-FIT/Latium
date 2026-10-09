@@ -133,3 +133,16 @@ python -m src structural run structural=gram \
   structural.run.case_index_file=manifests/counterfact_seed42_n1000.json \
   structural.run.start_idx=0 structural.run.n_tests=100
 ```
+
+## Brno2 scratch jobs
+
+`jobs/run_scratch_gram.pbs` runs classic baseline GRAM, independent ROME edits,
+edited GRAM and graphs using a packed runtime and one checkpoint in PBS scratch.
+Set `LATIUM_RUNTIME_ARCHIVE`, `LATIUM_INPUT_ARCHIVE`, `LATIUM_SOURCE_ARCHIVE`,
+`LATIUM_MODEL_SOURCE`, `LATIUM_COVARIANCE_SOURCE`, `LATIUM_PREFIX_SOURCE`,
+`LATIUM_ENV_FILE` and `LATIUM_RESULT_ROOT` to absolute Brno2 paths.
+Set `LATIUM_BASE_MODEL` and manifest bounds `LATIUM_CASE_START`/`LATIUM_CASE_STOP`.
+Archive SHA256 sidecars are required. Existing covariance is reused; HF access is offline.
+Submit from Skirit-lite with `qsub -j oe -o skirit-lite.ics.muni.cz:/tmp/<job>.log`.
+Artifacts, graphs, baseline FP flags and a job log are transferred directly to Brno2
+before scratch cleanup. A failed transfer retains scratch and exits with an error.

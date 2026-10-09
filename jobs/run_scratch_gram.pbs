@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+#PBS -j oe
+set -Eeuo pipefail
+
+: "${SCRATCHDIR:?PBS scratch is required}"
+: "${LATIUM_RUNTIME_ARCHIVE:?Set the packed Brno2 runtime}"
+: "${LATIUM_INPUT_ARCHIVE:?Set the Brno2 dataset archive}"
+: "${LATIUM_SOURCE_ARCHIVE:?Set the pinned source archive}"
+: "${LATIUM_RESULT_ROOT:?Set a fresh Brno2 output directory}"
+: "${LATIUM_BASE_MODEL:?Set the classic model config key}"
+: "${LATIUM_MODEL_SOURCE:?Set the Brno2 reference checkpoint directory}"
+: "${LATIUM_COVARIANCE_SOURCE:?Set the existing Brno2 covariance file}"
+: "${LATIUM_PREFIX_SOURCE:?Set the Brno2 prefix pool directory}"
+: "${LATIUM_ENV_FILE:?Set the private Brno2 environment file}"
+LATIUM_CASE_START="${LATIUM_CASE_START:-500}"
+LATIUM_CASE_STOP="${LATIUM_CASE_STOP:-1000}"
+[[ "$LATIUM_CASE_START" =~ ^[0-9]+$ && "$LATIUM_CASE_STOP" =~ ^[0-9]+$ ]]
+(( LATIUM_CASE_STOP > LATIUM_CASE_START && LATIUM_CASE_STOP <= 1000 ))
+export LATIUM_CASE_START LATIUM_CASE_STOP LATIUM_BASE_MODEL
+mkdir -p "$SCRATCHDIR/tmp" "$SCRATCHDIR/env" "$SCRATCHDIR/work"
+export TMPDIR="$SCRATCHDIR/tmp"
+export PYTHONUNBUFFERED=1
+exec > >(tee "$SCRATCHDIR/pbs-job.log") 2>&1
+
+/usr/bin/python3 - "$SCRATCHDIR/ssh_known_hosts" <<'PY'
+import sys, urllib.request
+with urllib.request.urlopen('https://metavo.metacentrum.cz/ssh_known_hosts', timeout=20) as response:
+    with open(sys.argv[1], 'wb') as output:
+        output.write(response.read())
+PY
+SSH=(ssh -F /dev/null -o IdentityFile=none -o PubkeyAuthentication=no
+     -o GSSAPIAuthentication=yes -o BatchMode=yes -o ConnectTimeout=15
+     -o "UserKnownHostsFile=$SCRATCHDIR/ssh_known_hosts" -o StrictHostKeyChecking=yes)
+export RSYNC_RSH="${SSH[*]}"
+storage_path() {
+  [[ "$1" == /storage/brno2/home/"$USER"/* && "$1" != *[^a-zA-Z0-9_./-]* && "$1" != */../* ]] || return 1
+  printf '/brno2/%s/%s' "$USER" "${1#"/storage/brno2/home/$USER/"}"
+}
+fetch() { "${SSH[@]}" storage-brno2.metacentrum.cz "cat $(storage_path "$1")" > "$2"; }
+RESULT_PATH="$(storage_path "$LATIUM_RESULT_ROOT")"
+RESULT_DEST="storage-brno2.metacentrum.cz:$RESULT_PATH/"
+RUN_ROOT="$SCRATCHDIR/work/repo/analysis_out/run"
+mkdir -p "$RUN_ROOT"
+cleanup() {
+  status=$?
+  trap - EXIT
+  set +e
+  echo "Compute exit: $status; saving to $RESULT_DEST"
+  if ! cp "$SCRATCHDIR/pbs-job.log" "$RUN_ROOT/pbs-job.log" || \
+     ! timeout 300 rsync -a --timeout=60 "$RUN_ROOT/" "$RESULT_DEST"; then
+    echo "ERROR: Artifact/log transfer failed; retaining scratch at $SCRATCHDIR" >&2
+    exit 1
+  fi
+  clean_scratch || true
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+"${SSH[@]}" storage-brno2.metacentrum.cz "mkdir -p $RESULT_PATH"
+printf 'brno2-read-write-ok\n' > "$RUN_ROOT/storage-probe.txt"
+rsync -a --timeout=60 "$RUN_ROOT/storage-probe.txt" "$RESULT_DEST"
+fetch "$LATIUM_RESULT_ROOT/storage-probe.txt" "$SCRATCHDIR/storage-probe-back.txt"
+cmp "$RUN_ROOT/storage-probe.txt" "$SCRATCHDIR/storage-probe-back.txt"
+
+# Credentials remain private; all application caches below override old paths.
+fetch "$LATIUM_ENV_FILE" "$SCRATCHDIR/private.env"
+chmod 600 "$SCRATCHDIR/private.env"
+source "$SCRATCHDIR/private.env"
+for name in HF_TOKEN HUGGINGFACE_HUB_TOKEN; do
+  if [[ -n "${!name:-}" ]]; then export "$name"; fi
+done
+export XDG_CACHE_HOME="$SCRATCHDIR/cache"
+export XDG_CONFIG_HOME="$SCRATCHDIR/config"
+export TRITON_HOME="$SCRATCHDIR"
+export TRITON_CACHE_DIR="$SCRATCHDIR/.triton/cache"
+export TRITON_DUMP_DIR="$SCRATCHDIR/.triton/dump"
+export TRITON_OVERRIDE_DIR="$SCRATCHDIR/.triton/override"
+export TORCH_HOME="$SCRATCHDIR/cache/torch"
+export TORCHINDUCTOR_CACHE_DIR="$SCRATCHDIR/cache/torchinductor"
+export TORCH_EXTENSIONS_DIR="$SCRATCHDIR/cache/torch-extensions"
+export CUDA_CACHE_PATH="$SCRATCHDIR/cache/cuda"
+export MPLCONFIGDIR="$SCRATCHDIR/matplotlib"
+export HF_HOME="$SCRATCHDIR/huggingface"
+export HF_HUB_CACHE="$HF_HOME/hub"
+export HUGGINGFACE_HUB_CACHE="$HF_HUB_CACHE"
+export HF_DATASETS_CACHE="$HF_HOME/datasets"
+export HF_ASSETS_CACHE="$HF_HOME/assets"
+export HF_XET_CACHE="$HF_HOME/xet"
+export HF_HUB_DISABLE_XET=1
+export HF_HUB_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+export TOKENIZERS_PARALLELISM=false
+export WANDB_DIR="$SCRATCHDIR/wandb"
+export WANDB_DATA_DIR="$SCRATCHDIR/wandb-data"
+export WANDB_CACHE_DIR="$SCRATCHDIR/cache/wandb"
+export WANDB_CONFIG_DIR="$SCRATCHDIR/config/wandb"
+export WANDB_MODE=disabled
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+mkdir -p "$TRITON_CACHE_DIR" "$TORCHINDUCTOR_CACHE_DIR" "$TORCH_EXTENSIONS_DIR" \
+  "$CUDA_CACHE_PATH" "$HF_HOME" "$MPLCONFIGDIR"
+
+unpack() {
+  local remote="$1" target="$2" archive="$SCRATCHDIR/stage.tar.gz"
+  fetch "$remote" "$archive"
+  fetch "$remote.sha256" "$SCRATCHDIR/stage.sha256"
+  printf '%s  %s\n' "$(cat "$SCRATCHDIR/stage.sha256")" "$archive" | sha256sum -c -
+  tar -xzf "$archive" -C "$target" "${@:3}"
+  rm "$archive"
+}
+echo "Stage runtime: $(date -Is)"
+unpack "$LATIUM_RUNTIME_ARCHIVE" "$SCRATCHDIR/env"
+export PATH="$SCRATCHDIR/env/bin:$PATH" CONDA_PREFIX="$SCRATCHDIR/env"
+python "$SCRATCHDIR/env/bin/conda-unpack"
+echo "Stage pinned source and dataset: $(date -Is)"
+unpack "$LATIUM_SOURCE_ARCHIVE" "$SCRATCHDIR/work"
+unpack "$LATIUM_INPUT_ARCHIVE" "$SCRATCHDIR/work" datasets
+cd "$SCRATCHDIR/work/repo"
+export LATIUM_COUNTERFACT_CACHE="$SCRATCHDIR/work/datasets/azhx/counterfact"
+
+python - <<'PY'
+import hashlib, os, sys, torch, transformers
+from pathlib import Path
+from triton.runtime.cache import get_cache_manager
+scratch = Path(os.environ['SCRATCHDIR']).resolve()
+assert Path(sys.executable).resolve().is_relative_to(scratch), sys.executable
+for name in ('TMPDIR','XDG_CACHE_HOME','TRITON_HOME','TRITON_CACHE_DIR',
+             'TORCH_HOME','TORCHINDUCTOR_CACHE_DIR','TORCH_EXTENSIONS_DIR',
+             'CUDA_CACHE_PATH','HF_HOME','HF_HUB_CACHE','HF_DATASETS_CACHE','MPLCONFIGDIR'):
+    assert Path(os.environ[name]).resolve().is_relative_to(scratch), name
+cache = get_cache_manager(hashlib.sha256(b'latium-cache-preflight').hexdigest())
+probe = Path(cache.put('scratch-cache-ok','preflight.txt')).resolve()
+assert probe.is_relative_to(scratch) and probe.read_text() == 'scratch-cache-ok'
+assert torch.cuda.is_available(), 'No working CUDA device'
+product = torch.bmm(torch.ones((1,64,1), device='cuda'), torch.ones((1,1,8), device='cuda'))
+assert product[0,0,0].item() == 1.0
+print('Python:',sys.executable,'torch:',torch.__version__,'transformers:',transformers.__version__)
+print('GPU:',torch.cuda.get_device_name(0),'Triton cache:',os.environ['TRITON_CACHE_DIR'])
+from src.counterfact_selection import load_cases_from_manifest
+manifest,cases = load_cases_from_manifest('manifests/counterfact_seed42_n1000.json',
+    start_idx=int(os.environ['LATIUM_CASE_START']),
+    n_tests=int(os.environ['LATIUM_CASE_STOP'])-int(os.environ['LATIUM_CASE_START']))
+assert manifest['manifest_hash'] == '7ce8d8044134b28347a92ff0d078c6d1ae00748b6450f2f42b7f81604c18c8a9'
+print('Validated frozen facts:',len(cases))
+PY
+MODEL_ID="$(python -c 'import os; from src.common.model_config import load_model_config; print(load_model_config(os.environ["LATIUM_BASE_MODEL"]).name)')"
+mkdir -p "../models/$MODEL_ID" data/second_moment_stats prefix_cache
+rsync -aL --timeout=60 "storage-brno2.metacentrum.cz:$(storage_path "$LATIUM_MODEL_SOURCE")/" "../models/$MODEL_ID/"
+fetch "$LATIUM_COVARIANCE_SOURCE" "data/second_moment_stats/$(basename "$LATIUM_COVARIANCE_SOURCE")"
+rsync -aL --timeout=60 "storage-brno2.metacentrum.cz:$(storage_path "$LATIUM_PREFIX_SOURCE")/" prefix_cache/
+python - <<'PY'
+import json, os, hashlib
+from pathlib import Path
+from src.common.model_config import load_model_config
+from jobs.paper_fleet import model_second_moment_files
+config = load_model_config(os.environ['LATIUM_BASE_MODEL'])
+cov = model_second_moment_files(os.environ['LATIUM_BASE_MODEL'],int(config.layer),100000)
+assert len(cov) == 1, cov
+path = Path('../models') / str(config.name)
+assert (path/'config.json').is_file() and any(path.glob('*.safetensors'))
+if config.get('prefix_mode') == 'external':
+    data = json.loads(Path(str(config.prefix_cache_path)).read_text())
+    pool = data.get('templates',[]) if isinstance(data,dict) else data
+    assert len(set(pool)) >= int(config.prefix_cache_size), 'Incomplete external prefix pool'
+metadata = {'source_commit':os.environ.get('LATIUM_SOURCE_COMMIT'),
+            'model_source':os.environ['LATIUM_MODEL_SOURCE'], 'model_id':str(config.name),
+            'target_layer':int(config.layer),'covariance_source':os.environ['LATIUM_COVARIANCE_SOURCE'],
+            'case_start':int(os.environ['LATIUM_CASE_START']),'case_stop':int(os.environ['LATIUM_CASE_STOP']),
+            'model_files':{p.name:p.stat().st_size for p in sorted(path.iterdir()) if p.is_file()},
+            'config_sha256':hashlib.sha256((path/'config.json').read_bytes()).hexdigest()}
+Path('analysis_out/run/staging.json').write_text(json.dumps(metadata,indent=2)+'\n')
+PY
+echo "Run classic GRAM: $(date -Is)"
+python jobs/paper_fleet.py --workflow gram --models "$LATIUM_BASE_MODEL" \
+  --case-index-file manifests/counterfact_seed42_n1000.json \
+  --case-start "$LATIUM_CASE_START" --case-stop "$LATIUM_CASE_STOP" \
+  --n-tests "$((LATIUM_CASE_STOP-LATIUM_CASE_START))" --covariance-samples 100000 \
+  --reuse-covariance --run-root "$RUN_ROOT" --tracking none
+python - <<'PY'
+import json, math, os
+from pathlib import Path
+from src.results import RunArtifactReader
+from src.graphs.gram import case_rows, summarize
+root = Path('analysis_out/run')
+name = os.environ['LATIUM_BASE_MODEL']
+reader = RunArtifactReader(root/'models'/name/'run')
+executions = [reader.load(r['artifact_id']) for r in reader.records(kind='execution')]
+analyses = [reader.load(r['artifact_id']) for r in reader.records(kind='analysis')]
+assert all(r.get('producer') == 'gram-localization' for r in reader.records() if r['kind'] in ('capture','analysis'))
+rows,controls = case_rows(executions,analyses)
+metrics = summarize(rows)
+assert metrics['completed'] == int(os.environ['LATIUM_CASE_STOP'])-int(os.environ['LATIUM_CASE_START'])
+assert metrics['errors'] == 0 and metrics['evaluated'] == metrics['completed']
+assert metrics['rome_success_count'] > 0, 'No successful ROME edits'
+assert all(math.isfinite(float(s)) for r in rows for s in r['layer_scores'].values())
+target = int(rows[0]['target_layer'])
+baseline = controls[name]['anomalous_layer']
+assert (root/'report/accuracy.png').is_file() and (root/'report/profiles.png').is_file()
+result = {'metrics':metrics,'baseline_layer':baseline,'target_layer':target,
+          'baseline_false_positive':int(baseline)==target,'only_gram':True,'graphs_validated':True}
+(root/'validation.json').write_text(json.dumps(result,indent=2)+'\n')
+print('VALIDATED',json.dumps(result))
+PY
+echo "Classic GRAM and graphs complete: $(date -Is)"

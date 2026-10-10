@@ -7,6 +7,7 @@ fc_layer_name_template: "model.language_model.layers.{}.mlp.up_proj"
 restore_layer_name_template: "model.language_model.layers.{}"
 corrupt_layer_name_template: "model.language_model.embed_tokens"
 layer: 11
+second_moment_path: "./data/second_moment_stats/google_gemma-4-12B_11_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.1
 dtype: "bf16"
 prefix_enforce_latin: true

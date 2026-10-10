@@ -25,6 +25,8 @@ HYDRA_ALIAS_COMMANDS = (
     "batch-rome",
     "manual-rome",
     "causal-trace",
+    "causal-kuba",
+    "causal-kuba-fix",
     "alt-trace",
     "compute-multiplier",
     "second-moment",
@@ -43,6 +45,8 @@ COMMAND_OVERRIDE_MAP = {
     "manual-rome": "manual_rome",
     "batch-rome": "batch_rome",
     "causal-trace": "causal_trace",
+    "causal-kuba": "causal_kuba",
+    "causal-kuba-fix": "causal_kuba_fix",
     "alt-trace": "alt_trace",
     "compute-multiplier": "compute_multiplier",
     "second-moment": "second_moment",
@@ -59,6 +63,12 @@ def run_hydra(overrides: Sequence[str]) -> int:
     from omegaconf import OmegaConf
 
     from src.commands import run_command
+    from src.common.model_config import model_config_dir, MODEL_CONFIG_DIR
+
+    overrides = list(overrides)
+    external_models = model_config_dir()
+    if external_models != MODEL_CONFIG_DIR:
+        overrides.insert(0, f"hydra.searchpath=['file://{external_models.parent}']")
 
     with hydra.initialize_config_dir(config_dir=str(CONFIG_DIR), version_base=None):
         cfg = hydra.compose(config_name="latium", overrides=list(overrides))

@@ -57,6 +57,23 @@ Arguments after `--` are passed exactly. Preset defaults come first, so
 user-supplied command overrides win. Merged PBS stdout/stderr is written below
 `jobs/logs/`.
 
+## Fleets
+
+Use `jobs/submit_paper_fleet.sh` for one PBS job per classic model, or the
+`finetuned-gram` preset for sequential HF checkpoints. Both use configured
+ROME layers. See [Gram commands, batches and outputs](../docs/gram-workflow.md).
+
+```bash
+bash jobs/submit_paper_fleet.sh --smoke
+bash jobs/submit_paper_fleet.sh --models qwen3-8b gpt2-xl
+```
+
+Paper defaults: 50 edits, 100,000 covariance samples, 40 GB GPU memory,
+96 GB host memory and 10 hours. Gemma requests 64 GB GPU and 128 GB host memory.
+`--skip-second-moment` requires existing statistics; `--covariance-only`
+prepares them. Each model saves artifacts, graphs, state and logs under the
+run root. PBS logs are in `jobs/logs/paper-fleet/`.
+
 Useful submission options:
 
 ```text

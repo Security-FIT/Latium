@@ -1,5 +1,5 @@
 """
-Legacy-compatible structural graph style and transforms.
+Structural graph style and transforms.
 
 :copyright: 2025 Jakub Res
 :license: MIT

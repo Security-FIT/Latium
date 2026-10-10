@@ -9,6 +9,7 @@ Per-case edit execution, restoration, and edited-state capture.
 
 from __future__ import annotations
 
+import json
 import logging
 import traceback
 from collections import defaultdict
@@ -30,11 +31,48 @@ from src.structural.capture.artifacts import (
     write_execution,
 )
 from src.structural.capture.producers import CaptureContext, token_predictor_from_handler
+from src.structural.capture.registry import captures_require_probe, required_weight_families
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
+from src.structural.detectors.rome_layer_localizer import GramProfileCache
 from src.worker_progress import effective_progress_interval
+from src.tracking import current_tracker
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _counterfact_tracking_state(
+    case: Mapping[str, Any],
+    *,
+    position: int,
+    total: int,
+) -> dict[str, Any]:
+    fact = tuple(case.get("fact_tuple", ()))
+    prompt_template, subject, target_new, target_true = (*fact, None, None, None, None)[:4]
+    rendered_prompt = None
+    if prompt_template is not None and subject is not None:
+        try:
+            rendered_prompt = str(prompt_template).format(subject)
+        except (IndexError, KeyError, ValueError):
+            rendered_prompt = str(prompt_template)
+    return {
+        "progress/edit": position,
+        "progress/edit_total": total,
+        "progress/edit_fraction": position / max(1, total),
+        "counterfact/index": case.get("dataset_index"),
+        "counterfact/case_id": str(case["case_id"]),
+        "counterfact/fact_tuple": json.dumps(list(fact), ensure_ascii=False),
+        "counterfact/prompt_template": prompt_template,
+        "counterfact/subject": subject,
+        "counterfact/target_new": target_new,
+        "counterfact/target_true": target_true,
+        "counterfact/original_text": (
+            f"{rendered_prompt}{target_true}" if rendered_prompt is not None and target_true is not None else None
+        ),
+        "counterfact/edited_text": (
+            f"{rendered_prompt}{target_new}" if rendered_prompt is not None and target_new is not None else None
+        ),
+    }
 
 
 def modified_weights(
@@ -45,6 +83,7 @@ def modified_weights(
     proj_template: str,
     fc_template: Optional[str],
     outcome: EditOutcome,
+    weight_families: frozenset[str] = frozenset(("proj", "fc", "attention")),
 ) -> tuple[
     dict[int, torch.Tensor],
     Optional[dict[int, torch.Tensor]],
@@ -56,7 +95,7 @@ def modified_weights(
     modified_fc = dict(baseline_fc) if baseline_fc is not None else None
     modified_attention = {family: dict(weights) for family, weights in baseline_attention.items()}
 
-    if "proj" in outcome.modified_weights:
+    if "proj" in weight_families and "proj" in outcome.modified_weights:
         changed = outcome.modified_weights["proj"]
         layers = range(handler.num_of_layers) if changed is None else (int(layer) for layer in changed)
         for layer in layers:
@@ -64,14 +103,14 @@ def modified_weights(
                 handler._get_module(proj_template.format(int(layer))).weight.detach().clone().cpu()
             )
 
-    if "fc" in outcome.modified_weights and fc_template:
+    if "fc" in weight_families and "fc" in outcome.modified_weights and fc_template:
         changed = outcome.modified_weights["fc"]
         layers = range(handler.num_of_layers) if changed is None else (int(layer) for layer in changed)
         modified_fc = modified_fc or {}
         for layer in layers:
             modified_fc[int(layer)] = handler._get_module(fc_template.format(int(layer))).weight.detach().clone().cpu()
 
-    if "attention" in outcome.modified_weights:
+    if "attention" in weight_families and "attention" in outcome.modified_weights:
         modified_attention = extract_attention_weights(handler, proj_template)
 
     return modified_proj, modified_fc, modified_attention
@@ -104,6 +143,7 @@ def run_edit_method(
     proj_template: str,
     fc_template: Optional[str],
     case_selection: Optional[Mapping[str, Any]] = None,
+    gram_cache: Optional[GramProfileCache] = None,
     model_context: Optional[Mapping[str, Any]] = None,
     progress_callback: Optional[Callable[[str, int, int], None]] = None,
     method_loader: Optional[Callable[[str], Any]] = None,
@@ -173,16 +213,53 @@ def run_edit_method(
     execution_cases: list[dict[str, Any]] = []
     captured_cases: dict[str, list[dict[str, Any]]] = defaultdict(list)
     interval = effective_progress_interval(len(test_cases), config.progress_interval)
+    weight_families = required_weight_families(capture_names)
+    needs_token_predictor = captures_require_probe(capture_names)
+    tracker = current_tracker()
+    tracker.set_state(model=model, plan=plan.plan_id, edit_method=edit_method_name)
 
     for index, case in enumerate(test_cases, start=1):
         case_id = str(case["case_id"])
         outcome: Optional[EditOutcome] = None
+        tracker.set_state(
+            **{
+                "monitor/stage": "edit",
+                "monitor/substage": "apply",
+                **_counterfact_tracking_state(case, position=index, total=len(test_cases)),
+            }
+        )
         try:
             outcome = method.apply(handler, case)
+            tracker.set_state(**{"monitor/substage": "evaluate"})
             metrics = method.evaluate(handler, case, outcome)
             outcome.metrics.update(metrics)
             if "efficacy_score" in metrics:
                 outcome.success = bool(float(metrics["efficacy_score"]) >= 1.0)
+            modified_proj, modified_fc, modified_attention = modified_weights(
+                handler,
+                baseline_proj,
+                baseline_fc,
+                baseline_attention,
+                proj_template,
+                fc_template,
+                outcome,
+                weight_families,
+            )
+            tracker.set_state(**{"monitor/substage": "capture_artifacts"})
+            capture_context = CaptureContext(
+                proj_weights=modified_proj,
+                fc_weights=modified_fc,
+                attention_weights=modified_attention,
+                probe_vector=outcome.probe_vector,
+                token_predictor=token_predictor_from_handler(handler) if needs_token_predictor else None,
+                changed_weights=dict(outcome.modified_weights),
+                options=options,
+                gram_cache=gram_cache,
+            )
+            case_captures = {
+                name: capture_one(name, capture_context, case_id=case_id)
+                for name in capture_names
+            }
             execution_cases.append(
                 {
                     "case_id": case_id,
@@ -198,27 +275,9 @@ def run_edit_method(
                     "error": None,
                 }
             )
-
-            modified_proj, modified_fc, modified_attention = modified_weights(
-                handler,
-                baseline_proj,
-                baseline_fc,
-                baseline_attention,
-                proj_template,
-                fc_template,
-                outcome,
-            )
-            capture_context = CaptureContext(
-                proj_weights=modified_proj,
-                fc_weights=modified_fc,
-                attention_weights=modified_attention,
-                probe_vector=outcome.probe_vector,
-                token_predictor=token_predictor_from_handler(handler),
-                changed_weights=dict(outcome.modified_weights),
-                options=options,
-            )
-            for capture_name in capture_names:
-                captured_cases[capture_name].append(capture_one(capture_name, capture_context, case_id=case_id))
+            for capture_name, captured in case_captures.items():
+                captured_cases[capture_name].append(captured)
+            tracker.log({"counterfact/status": "complete"})
         except Exception as exc:
             LOGGER.warning(
                 "Case failed: model=%s method=%s case=%s error=%s",
@@ -247,6 +306,7 @@ def run_edit_method(
                         "error": "edit execution failed",
                     }
                 )
+            tracker.log({"counterfact/status": "error", "counterfact/error": str(exc)})
         finally:
             restore(handler, outcome)
             if torch.cuda.is_available():
@@ -256,6 +316,7 @@ def run_edit_method(
             if progress_callback is not None:
                 progress_callback(model, index, len(test_cases))
 
+    replace_recomputed = bool(config.force or execution_current)
     execution_record = write_execution(
         writer,
         layout,
@@ -267,7 +328,7 @@ def run_edit_method(
         cases=execution_cases,
         target_layer=int(handler._layer),
         num_layers=int(handler.num_of_layers),
-        force=config.force,
+        force=replace_recomputed,
         metadata={"analysis_variants": analysis_variant_metadata(config)},
     )
     for capture_name in capture_names:
@@ -284,7 +345,7 @@ def run_edit_method(
             capture_config=capture_configs[capture_name],
             cases=captured_cases[capture_name],
             inputs=inputs,
-            force=config.force,
+            force=replace_recomputed,
         )
     return {
         "skipped": False,

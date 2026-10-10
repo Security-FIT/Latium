@@ -13,6 +13,8 @@ from numbers import Real
 from typing import Any, Iterable
 
 from src.common.io import write_json
+from src.evaluation.rome import summarize_rome_scores
+from src.results import config_hash
 from src.results.naming import safe_slug
 
 
@@ -36,6 +38,7 @@ def _analysis_rows(context: Any) -> list[dict[str, Any]]:
                 "plan_id": run.get("plan_id"),
                 "edit_method": run.get("edit_method"),
                 "analysis": payload.get("producer"),
+                "config_hash": payload.get("config_hash"),
                 "category": payload.get("category"),
                 "status": payload.get("status"),
                 "accuracy": float(summary.get("accuracy", 0.0) or 0.0),
@@ -93,6 +96,16 @@ def _execution_rows(context: Any) -> list[dict[str, Any]]:
         complete = [case for case in cases if case.get("status") == "complete"]
         success = [case for case in complete if bool(case.get("edit", {}).get("success"))]
         summary = payload.get("summary", {})
+        score_summary = summarize_rome_scores(
+            [
+                {
+                    "efficacy_score": _case_metric(case, "efficacy_score", "efficacy"),
+                    "paraphrase_score": _case_metric(case, "paraphrase_score", "paraphrase"),
+                    "neighborhood_score": _case_metric(case, "neighborhood_score", "neighborhood"),
+                }
+                for case in complete
+            ]
+        )
         rows.append(
             {
                 "model": run.get("model"),
@@ -106,12 +119,10 @@ def _execution_rows(context: Any) -> list[dict[str, Any]]:
                     summary.get("edit_success_rate"),
                     len(success) / len(complete) if complete else 0.0,
                 ),
-                "overall_score": _mean(_case_metric(case, "overall_score", "overall") for case in complete),
-                "efficacy_score": _mean(_case_metric(case, "efficacy_score", "efficacy") for case in complete),
-                "paraphrase_score": _mean(_case_metric(case, "paraphrase_score", "paraphrase") for case in complete),
-                "neighborhood_score": _mean(
-                    _case_metric(case, "neighborhood_score", "neighborhood") for case in complete
-                ),
+                "overall_score": score_summary["mean_overall_score"],
+                "efficacy_score": score_summary["mean_efficacy_score"],
+                "paraphrase_score": score_summary["mean_paraphrase_score"],
+                "neighborhood_score": score_summary["mean_neighborhood_score"],
             }
         )
     return rows
@@ -152,7 +163,12 @@ def _detection_case_rows(context: Any) -> list[dict[str, Any]]:
 
 
 def _analysis_label(row: dict[str, Any]) -> str:
-    return f"{safe_slug(str(row.get('model')))}\n{row.get('edit_method')}:{row.get('analysis')}"
+    digest = str(row.get("config_hash") or "default")[:12]
+    edit_state = row.get("edit_method") or "baseline"
+    return (
+        f"{row.get('model')} / {row.get('plan_id')}\n"
+        f"{edit_state}:{row.get('analysis')} [{digest}]"
+    )
 
 
 def _numeric_layer_series(value: Any) -> dict[int, float] | None:
@@ -215,15 +231,17 @@ def render_detector(context: Any) -> list[str]:
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = write_json(output_dir / "detection-summary.json", {"analyses": rows})
     outputs = [str(json_path)]
-    if not rows:
+    evaluated_rows = [row for row in rows if row["cases_evaluated"] > 0]
+    if not evaluated_rows:
         return outputs
 
     import matplotlib.pyplot as plt
 
-    labels = [f"{safe_slug(row['model'])}\n{row['edit_method']}:{row['analysis']}" for row in rows]
-    accuracies = [row["accuracy"] for row in rows]
-    fig, ax = plt.subplots(figsize=(max(8, len(rows) * 1.25), 4.8))
-    ax.bar(labels, accuracies, color="#1f77b4")
+    labels = [_analysis_label(row) for row in evaluated_rows]
+    accuracies = [row["accuracy"] for row in evaluated_rows]
+    fig, ax = plt.subplots(figsize=(max(8, len(evaluated_rows) * 1.25), 4.8))
+    ax.bar(range(len(evaluated_rows)), accuracies, color="#1f77b4")
+    ax.set_xticks(range(len(evaluated_rows)), labels)
     ax.set_ylim(0.0, 1.0)
     ax.set_ylabel("Layer detection accuracy")
     ax.set_title("Artifact-only detection results")
@@ -322,6 +340,7 @@ def render_detector_window(context: Any) -> list[str]:
             "plan_id",
             "edit_method",
             "analysis",
+            "config_hash",
             "case_id",
             "target_layer",
             "detected_layer",
@@ -337,11 +356,14 @@ def render_detector_window(context: Any) -> list[str]:
 
     import matplotlib.pyplot as plt
 
-    grouped: dict[str, list[int]] = {}
+    grouped: dict[tuple[Any, ...], list[int]] = {}
+    labels_by_key: dict[tuple[Any, ...], str] = {}
     for row in evaluated:
-        grouped.setdefault(_analysis_label(row), []).append(int(row["layer_distance"]))
+        key = tuple(row.get(field) for field in ("model", "plan_id", "edit_method", "analysis", "config_hash"))
+        grouped.setdefault(key, []).append(int(row["layer_distance"]))
+        labels_by_key[key] = _analysis_label(row)
 
-    labels = list(grouped)
+    labels = list(labels_by_key.values())
     exact = [100.0 * sum(distance == 0 for distance in vals) / len(vals) for vals in grouped.values()]
     within_one = [100.0 * sum(distance <= 1 for distance in vals) / len(vals) for vals in grouped.values()]
 
@@ -380,11 +402,14 @@ def render_detector_signals(context: Any) -> list[str]:
         run = payload.get("run", {})
         model = safe_slug(str(run.get("model", "model")))
         plan_id = safe_slug(str(run.get("plan_id", "plan")))
-        method = safe_slug(str(run.get("edit_method", "method")))
+        method = safe_slug(str(run.get("edit_method") or "baseline"))
         analysis = safe_slug(str(payload.get("producer", "analysis")))
+        digest = str(payload.get("config_hash") or config_hash(payload.get("config", {})))
         plotted = 0
         for case in payload.get("cases", []):
-            if plotted >= 8 or not isinstance(case, dict) or case.get("status") != "complete":
+            if plotted >= 8:
+                break
+            if not isinstance(case, dict) or case.get("status") != "complete":
                 continue
             series_items = _find_series(case.get("data", {}))
             if not series_items:
@@ -404,13 +429,14 @@ def render_detector_signals(context: Any) -> list[str]:
             ax.set_xlabel("Layer")
             ax.set_ylabel("Signal")
             ax.set_title(
-                f"{run.get('model')} {run.get('edit_method')} {payload.get('producer')} case {case.get('case_id')}"
+                f"{run.get('model')} {run.get('edit_method') or 'baseline'} "
+                f"{payload.get('producer')} case {case.get('case_id')}"
             )
             ax.grid(alpha=0.22)
             ax.legend(fontsize=8, loc="best")
             fig.tight_layout()
             case_slug = safe_slug(str(case.get("case_id", plotted)))
-            graph_path = output_dir / model / plan_id / method / analysis / f"{case_slug}.png"
+            graph_path = output_dir / model / plan_id / method / analysis / safe_slug(digest) / f"{case_slug}.png"
             graph_path.parent.mkdir(parents=True, exist_ok=True)
             fig.savefig(graph_path, dpi=180, bbox_inches="tight")
             plt.close(fig)
@@ -421,6 +447,7 @@ def render_detector_signals(context: Any) -> list[str]:
                     "plan_id": run.get("plan_id"),
                     "edit_method": run.get("edit_method"),
                     "analysis": payload.get("producer"),
+                    "config_hash": digest,
                     "case_id": case.get("case_id"),
                     "output": str(graph_path.relative_to(output_dir)),
                     "series": [name for name, _ in series_items[:6]],

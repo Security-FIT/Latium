@@ -44,8 +44,7 @@ def eligible(
         return False
     if capture_case.get("status", "complete") != "complete":
         return False
-    edit = execution_case.get("edit", {})
-    return bool(edit.get("success", True))
+    return True
 
 
 def required_capture_cases(

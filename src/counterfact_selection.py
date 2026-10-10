@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Sequence
@@ -16,8 +17,15 @@ from typing import Any, Mapping, MutableMapping, Sequence
 import datasets
 
 
-def load_counterfact_split(dataset_name: str, split: str):
-    return datasets.load_dataset(dataset_name, split=split)
+def load_counterfact_split(dataset_name: str, split: str, revision: str | None = None):
+    # A manifest validates the selected case IDs and content against this cache.
+    local_cache = Path(os.environ.get("LATIUM_COUNTERFACT_CACHE") or
+                       Path(__file__).resolve().parents[2] / "datasets" / dataset_name)
+    if local_cache.exists():
+        cached = datasets.load_from_disk(str(local_cache))
+        return cached[split] if isinstance(cached, datasets.DatasetDict) else cached
+    options = {"revision": revision} if revision else {}
+    return datasets.load_dataset(dataset_name, split=split, **options)
 
 
 def _normalize_index_list(indices: Sequence[int | str]) -> list[int]:
@@ -41,8 +49,16 @@ def manifest_digest(payload: Mapping[str, Any]) -> str:
         "indices": [int(v) for v in payload.get("indices", [])],
         "case_ids": [int(v) for v in payload.get("case_ids", [])],
     }
+    for key in ("schema_version", "dataset_revision", "dataset_fingerprint", "content_hashes"):
+        if key in payload:
+            canonical[key] = payload[key]
     blob = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()
+
+
+def case_content_digest(item: Mapping[str, Any], index: int) -> str:
+    blob = json.dumps(counterfact_item_to_case(item, index), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def counterfact_item_to_case(item: Mapping[str, Any], dataset_index: int) -> dict[str, Any]:
@@ -104,13 +120,18 @@ def build_case_manifest(
     split: str,
     seed: int | None = None,
     dataset: Any = None,
+    revision: str | None = None,
 ) -> dict[str, Any]:
     normalized = _normalize_index_list(indices)
-    ds = dataset if dataset is not None else load_counterfact_split(dataset_name=dataset_name, split=split)
+    ds = dataset if dataset is not None else load_counterfact_split(dataset_name=dataset_name, split=split, revision=revision)
     if normalized and max(normalized) >= len(ds):
         raise IndexError(f"CounterFact row index {max(normalized)} is out of bounds for split size {len(ds)}.")
     case_ids = [int(ds[idx].get("case_id", idx)) for idx in normalized]
     payload: dict[str, Any] = {
+        "schema_version": 2,
+        "dataset_revision": revision,
+        "dataset_fingerprint": getattr(ds, "_fingerprint", None),
+        "content_hashes": [case_content_digest(ds[idx], idx) for idx in normalized],
         "dataset": str(dataset_name),
         "split": str(split),
         "seed": None if seed is None else int(seed),
@@ -129,16 +150,17 @@ def generate_random_case_manifest(
     dataset_name: str,
     split: str,
     dataset: Any = None,
+    revision: str | None = None,
 ) -> dict[str, Any]:
     count = int(count)
     if count <= 0:
         raise ValueError(f"count must be positive, got {count}")
-    ds = dataset if dataset is not None else load_counterfact_split(dataset_name=dataset_name, split=split)
+    ds = dataset if dataset is not None else load_counterfact_split(dataset_name=dataset_name, split=split, revision=revision)
     if count > len(ds):
         raise ValueError(f"Requested {count} random CounterFact cases, but split only has {len(ds)} rows.")
     rng = random.Random(int(seed))
     indices = rng.sample(range(len(ds)), count)
-    return build_case_manifest(indices, dataset_name=dataset_name, split=split, seed=int(seed), dataset=ds)
+    return build_case_manifest(indices, dataset_name=dataset_name, split=split, seed=int(seed), dataset=ds, revision=revision)
 
 
 def load_case_manifest(path: str | Path) -> dict[str, Any]:
@@ -165,6 +187,10 @@ def load_case_manifest(path: str | Path) -> dict[str, Any]:
             f"Case manifest {manifest_path} has {len(payload['case_ids'])} case_ids for count={payload['count']}."
         )
 
+    if len(set(payload["case_ids"])) != payload["count"]:
+        raise ValueError("Case IDs must be unique")
+    if "content_hashes" in payload and len(payload["content_hashes"]) != payload["count"]:
+        raise ValueError("Content hashes must match manifest count")
     expected_hash = manifest_digest(payload)
     payload["manifest_hash"] = str(payload.get("manifest_hash") or expected_hash)
     if payload["manifest_hash"] != expected_hash:
@@ -193,21 +219,35 @@ def load_cases_from_manifest(
     path: str | Path,
     *,
     n_tests: int | None = None,
+    start_idx: int = 0,
     dataset: Any = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     manifest = load_case_manifest(path)
-    limit = manifest["count"] if n_tests is None else int(n_tests)
-    if limit < 0:
-        raise ValueError(f"n_tests must be non-negative, got {limit}")
-    if limit > manifest["count"]:
-        raise ValueError(f"Requested n_tests={limit} but manifest only contains {manifest['count']} indices.")
-    selected_indices = manifest["indices"][:limit]
-    cases = load_cases_by_indices(
-        selected_indices,
-        dataset_name=manifest["dataset"],
-        split=manifest["split"],
-        dataset=dataset,
+    start = int(start_idx)
+    limit = manifest["count"] - start if n_tests is None else int(n_tests)
+    stop = start + limit
+    if start < 0 or limit < 0 or stop > manifest["count"]:
+        raise ValueError(f"Invalid manifest range [{start}:{stop}] for count={manifest['count']}")
+    ds = dataset if dataset is not None else load_counterfact_split(
+        manifest["dataset"], manifest["split"], revision=manifest.get("dataset_revision")
     )
+    fingerprint = manifest.get("dataset_fingerprint")
+    # save_to_disk/load_from_disk can change the representation fingerprint.
+    # Frozen per-case content hashes still enforce the same facts below.
+    if fingerprint and getattr(ds, "_fingerprint", None) != fingerprint and not manifest.get("content_hashes"):
+        raise ValueError("Dataset fingerprint differs from the frozen manifest")
+    cases = []
+    for position in range(start, stop):
+        idx = manifest["indices"][position]
+        item = ds[idx]
+        case = counterfact_item_to_case(item, idx)
+        if case["case_id"] != manifest["case_ids"][position]:
+            raise ValueError(f"CounterFact case ID mismatch at manifest position {position}")
+        hashes = manifest.get("content_hashes")
+        if hashes is not None and case_content_digest(item, idx) != hashes[position]:
+            raise ValueError(f"CounterFact content mismatch at manifest position {position}")
+        case["cohort_position"] = position
+        cases.append(case)
     return manifest, cases
 
 
@@ -247,6 +287,9 @@ def build_case_selection_metadata(
             "manifest_path": rel_manifest,
             "manifest_hash": str(manifest.get("manifest_hash", "")),
             "count": len(selected_indices),
+            "start_idx": int(start_idx or 0),
+            "stop_idx": int(start_idx or 0) + len(selected_indices),
+            "selection_hash": hashlib.sha256(json.dumps([manifest["manifest_hash"], selected_indices, selected_case_ids]).encode()).hexdigest(),
             "selected_dataset_indices": selected_indices,
             "selected_case_ids": selected_case_ids,
         }

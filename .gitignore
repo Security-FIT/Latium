@@ -257,3 +257,4 @@ prefixtest/output/
 # Shared Gram cohort and generator
 !manifests/counterfact_seed42_n1000.json
 !scripts/generate_case_manifest.py
+!scripts/prepare_fleet_continuation.py

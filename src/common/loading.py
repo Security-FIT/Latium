@@ -9,8 +9,10 @@ Model, dataset, and small inference helpers.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,48 @@ DTYPE_PICKER = {
     "f16": torch.float16,
     "f32": torch.float32,
 }
+
+
+def _validate_loaded_weights(info: dict, checkpoint: str, model_type: str | None = None) -> None:
+    """Reject checkpoints that Transformers only loaded partially."""
+    # Transformers resolves legitimately omitted tied aliases before reporting
+    # missing keys; suppressing them ourselves could hide an uninitialized tie.
+    missing = sorted(info.get("missing_keys", ()))
+    mismatched = [
+        item[0] if isinstance(item, (list, tuple)) else str(item)
+        for item in info.get("mismatched_keys", ())
+    ]
+    # AutoModelForCausalLM can load just the text backbone of a multimodal
+    # checkpoint. Unused vision weights are expected in that case.
+    vision_prefixes = (
+        "visual.", "model.visual.", "vision_model.", "model.vision_model.",
+        "vision_tower.", "model.vision_tower.",
+        "multi_modal_projector.", "model.multi_modal_projector.",
+    )
+    # Older GPT-2/GPT-J checkpoints persist deterministic causal-mask buffers.
+    # Newer Transformers builds these masks at runtime; they are not learned weights.
+    legacy_buffers = {
+        key for key in info.get("unexpected_keys", ())
+        if model_type in ("gpt2", "gptj")
+        and re.fullmatch(r"transformer\.h\.\d+\.attn\.(?:bias|masked_bias)", key)
+    }
+    unexpected = sorted(
+        key for key in info.get("unexpected_keys", ())
+        if not key.startswith(vision_prefixes) and key not in legacy_buffers
+    )
+    problems = []
+    for label, keys in (("missing", missing), ("mismatched", mismatched), ("unexpected", unexpected)):
+        if keys:
+            preview = ", ".join(keys[:6])
+            problems.append(f"{label} weights ({len(keys)}): {preview}")
+    if info.get("error_msgs"):
+        problems.extend(str(message) for message in info["error_msgs"][:2])
+    if problems:
+        raise RuntimeError(
+            f"Checkpoint {checkpoint} is incompatible with the loaded model: "
+            + "; ".join(problems)
+            + ". Refusing to run with missing, newly initialized, or unused text weights."
+        )
 
 
 def check_hf_token(token: str | None = None) -> None:
@@ -69,6 +113,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "./models"),
     )
     local_model_path = os.path.abspath(os.path.join(models_dir, model_name))
+    tokenizer_override = getattr(cfg.model, "tokenizer_path", None)
 
     def _ensure_padding(tok):
         if tok.pad_token is None:
@@ -95,21 +140,53 @@ def load_pretrained(cfg: DictConfig) -> Any:
             return False
 
     def _load_tokenizer(path_or_name: str, **kwargs):
-        tok = _ensure_padding(AutoTokenizer.from_pretrained(path_or_name, **kwargs))
-        if not _tokenizer_is_usable(tok):
+        try:
+            tok = _ensure_padding(AutoTokenizer.from_pretrained(path_or_name, **kwargs))
+        except (ValueError, OSError):
+            tok = None
+        if tok is None or not _tokenizer_is_usable(tok):
             # Architecture-specific conversion can overwrite a checkpoint's
             # tokenizer.json backend (e.g. DeepSeek's ByteLevel tokenizer).
             LOGGER.warning("Tokenizer round-trip failed for %s; loading the saved fast backend", path_or_name)
-            tok = _ensure_padding(PreTrainedTokenizerFast.from_pretrained(path_or_name, **kwargs))
-        if not _tokenizer_is_usable(tok):
+            try:
+                tok = _ensure_padding(PreTrainedTokenizerFast.from_pretrained(path_or_name, **kwargs))
+            except (ValueError, OSError):
+                tok = None
+        backend_path = Path(path_or_name) / "tokenizer.json"
+        if (tok is None or not _tokenizer_is_usable(tok)) and backend_path.is_file():
+            from tokenizers import Tokenizer
+
+            # Load the checkpoint's serialized backend directly when an automatic
+            # architecture conversion has changed its normalizer or decoder.
+            backend = Tokenizer.from_file(str(backend_path))
+            native_vocab = backend.get_vocab()
+            settings = {}
+            for filename in ("tokenizer_config.json", "special_tokens_map.json"):
+                metadata_path = backend_path.parent / filename
+                if metadata_path.is_file():
+                    settings.update(json.loads(metadata_path.read_text(encoding="utf-8")))
+            special = {}
+            for key in ("bos_token", "eos_token", "unk_token", "pad_token", "additional_special_tokens"):
+                value = settings.get(key)
+                if value is not None:
+                    items = value if isinstance(value, list) else [value]
+                    items = [item.get("content") if isinstance(item, dict) else item for item in items]
+                    special[key] = items if isinstance(value, list) else items[0]
+            options = {key: settings[key] for key in ("model_max_length", "padding_side", "truncation_side") if key in settings}
+            tok = _ensure_padding(PreTrainedTokenizerFast(tokenizer_object=backend, **special, **options))
+            if tok.get_vocab() != native_vocab:
+                raise RuntimeError(f"Tokenizer backend recovery changed the saved vocabulary for {path_or_name}")
+            LOGGER.warning("Recovered the unchanged saved tokenizer backend for %s", path_or_name)
+        if tok is None or not _tokenizer_is_usable(tok):
             raise RuntimeError(f"Tokenizer does not preserve text for {path_or_name}")
         return tok
 
     def _call_model_loader(model_loader: Any, path_or_name: str, **kwargs):
         try:
-            return model_loader.from_pretrained(
+            model, loading_info = model_loader.from_pretrained(
                 path_or_name,
                 torch_dtype=dtype,
+                output_loading_info=True,
                 **kwargs,
             )
         except TypeError as exc:
@@ -119,11 +196,14 @@ def load_pretrained(cfg: DictConfig) -> Any:
                 "Transformers does not accept torch_dtype; retrying with dtype",
                 exc_info=True,
             )
-            return model_loader.from_pretrained(
+            model, loading_info = model_loader.from_pretrained(
                 path_or_name,
                 dtype=dtype,
+                output_loading_info=True,
                 **kwargs,
             )
+        _validate_loaded_weights(loading_info, path_or_name, getattr(getattr(model, "config", None), "model_type", None))
+        return model
 
     def _model_from_pretrained(path_or_name: str, **kwargs):
         try:
@@ -150,7 +230,8 @@ def load_pretrained(cfg: DictConfig) -> Any:
 
     adapter_base = getattr(cfg.model, "adapter_base_path", None)
     if adapter_base:
-        from peft import PeftModel
+        from peft import PeftConfig, get_peft_model
+        from peft.utils.save_and_load import load_peft_weights, get_peft_model_state_dict, set_peft_model_state_dict
 
         if not Path(local_model_path, "adapter_config.json").is_file() or not Path(adapter_base, "config.json").is_file():
             raise FileNotFoundError("Pinned adapter and base checkpoint must be downloaded before loading")
@@ -162,11 +243,26 @@ def load_pretrained(cfg: DictConfig) -> Any:
             raise RuntimeError(f"Unusable tokenizer for adapter {model_name}")
         model = _model_from_pretrained(adapter_base, local_files_only=True, **({"device_map": "auto"} if use_device_map else {}))
         if len(tokenizer) > model.get_input_embeddings().num_embeddings:
-            model.resize_token_embeddings(len(tokenizer))
+            raise RuntimeError("Adapter tokenizer exceeds the base vocabulary; refusing to initialize unsaved embedding rows")
         if not use_device_map:
             model = device_manager.safe_to_device(model)
-        adapted = PeftModel.from_pretrained(model, local_model_path, local_files_only=True,
-                                           is_trainable=False, autocast_adapter_dtype=False)
+        adapter_config = PeftConfig.from_pretrained(local_model_path, local_files_only=True)
+        if adapter_config.peft_type != "LORA" or getattr(adapter_config, "layer_replication", None):
+            raise RuntimeError("Only LoRA adapters without layer replication are supported")
+        if adapter_config.task_type not in (None, "CAUSAL_LM"):
+            raise RuntimeError("Only causal language model adapters are supported")
+        adapted = get_peft_model(model, adapter_config, autocast_adapter_dtype=False)
+        weights = load_peft_weights(local_model_path, device="cpu", local_files_only=True)
+        expected = get_peft_model_state_dict(adapted, save_embedding_layers=False)
+        missing = sorted(set(expected) - set(weights))
+        if missing:
+            raise RuntimeError(f"Adapter checkpoint is incomplete: missing weights {missing[:6]}")
+        result = set_peft_model_state_dict(adapted, weights, adapter_name="default")
+        if result.unexpected_keys:
+            raise RuntimeError(f"Adapter checkpoint has unexpected weights: {result.unexpected_keys[:6]}")
+        del weights, expected
+        adapted.eval()
+        adapted.requires_grad_(False)
         # Plain merged projections are required by ROME and Gram's weight hooks.
         model = adapted.merge_and_unload(safe_merge=True)
         device_manager.register_object(model)
@@ -179,8 +275,10 @@ def load_pretrained(cfg: DictConfig) -> Any:
             model = device_manager.safe_to_device(model)
         device_manager.register_object(model)
         try:
-            tokenizer = _load_tokenizer(local_model_path, local_files_only=True)
+            tokenizer = _load_tokenizer(tokenizer_override or local_model_path, local_files_only=True)
         except RuntimeError:
+            if tokenizer_override:
+                raise
             tokenizer = None
 
         if tokenizer is None:
@@ -239,6 +337,20 @@ def load_pretrained(cfg: DictConfig) -> Any:
             os.makedirs(local_model_path, exist_ok=True)
             model.save_pretrained(local_model_path)
             tokenizer.save_pretrained(local_model_path)
+
+    embeddings = model.get_input_embeddings() if callable(getattr(model, "get_input_embeddings", None)) else None
+    if embeddings is not None and tokenizer.pad_token_id is not None:
+        size = embeddings.num_embeddings
+        if tokenizer_override and len(tokenizer) > size:
+            raise RuntimeError("Pinned original tokenizer exceeds the checkpoint embedding vocabulary")
+        if not 0 <= tokenizer.pad_token_id < size:
+            eos_id = tokenizer.eos_token_id
+            if eos_id is None or not 0 <= eos_id < size:
+                raise RuntimeError(f"Tokenizer for {model_name} has no valid padding or EOS token in {size} embeddings")
+            LOGGER.warning("Padding token %d is outside %d embeddings; using existing EOS token %d",
+                           tokenizer.pad_token_id, size, eos_id)
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = eos_id
 
     LOGGER.info("Model loaded on device: %s", model.device)
     return model, tokenizer

@@ -1,5 +1,6 @@
 """Gram-only adapter for the existing MetaCentrum fleet and artifact runtime."""
 import json
+import math
 from pathlib import Path
 from src.counterfact_selection import load_case_manifest
 from src.gram_experiment import digest, locked, register_batch, write_json
@@ -40,6 +41,16 @@ def structural_command(args, model, root, batch):
 
 def verify_batch(root, model, plan_id, cohort, start, stop):
     from jobs.paper_fleet import manifest_records, record_payload
+    from src.results import content_hash
+
+    def finite(value):
+        if isinstance(value, float):
+            return math.isfinite(value)
+        if isinstance(value, dict):
+            return all(finite(v) for v in value.values())
+        if isinstance(value, list):
+            return all(finite(v) for v in value)
+        return True
     _, records = manifest_records(root)
     records = [r for r in records if r.get("plan_id") == plan_id]
     expected_ids = {str(v) for v in cohort["case_ids"][start:stop]}
@@ -50,10 +61,16 @@ def verify_batch(root, model, plan_id, cohort, start, stop):
             if len(found) != 1 or found[0].get("status") != "complete":
                 raise RuntimeError(f"Missing/failed {kind} for {model}/{plan_id}, baseline={baseline}")
             payload = record_payload(root, found[0])
+            if content_hash(payload) != found[0].get("content_hash"):
+                raise RuntimeError(f"Artifact content hash mismatch in {kind} for {model}/{plan_id}")
+            if not finite(payload):
+                raise RuntimeError(f"Nonfinite artifact values in {kind} for {model}/{plan_id}")
             cases = payload.get("cases", [])
             expected = {"baseline"} if baseline else expected_ids
             if len(cases) != len(expected) or {str(c["case_id"]) for c in cases} != expected:
                 raise RuntimeError(f"Case coverage mismatch in {kind} for {model}/{plan_id}")
+            if any(case.get("status") != "complete" for case in cases):
+                raise RuntimeError(f"Incomplete case in {kind} for {model}/{plan_id}")
     extras = [r for r in records if r.get("kind") in ("capture", "analysis") and r.get("producer") != "gram-localization"]
     if extras:
         raise RuntimeError("Gram batch unexpectedly contains additional captures/analyses")
@@ -79,11 +96,19 @@ def run(args):
         with locked(state_path.parent):
             try:
                 if args.resume and state_path.exists() and json.loads(state_path.read_text()).get("status") == "complete":
-                    verify_batch(run_root, model, plan_id, cohort, args.case_start, args.case_stop)
-                    continue
+                    try:
+                        verify_batch(run_root, model, plan_id, cohort, args.case_start, args.case_stop)
+                    except (FileNotFoundError, RuntimeError):
+                        pass  # Recompute missing artifacts in this resume attempt.
+                    else:
+                        continue
                 write_json(state_path, state)
                 config = load_model_config(model)
                 files = model_second_moment_files(model, int(config.layer), args.covariance_samples)
+                state["covariance"] = {"model_id": config.name,
+                    "checkpoint_revision": getattr(config, "checkpoint_revision", None),
+                    "layer": int(config.layer), "target_samples": args.covariance_samples,
+                    "source": "reused" if files else "computed", "started_at": utc_now()}
                 if not files:
                     if args.skip_second_moment:
                         raise FileNotFoundError(f"No configured covariance for {model}; reuse forbids recomputation")
@@ -92,6 +117,7 @@ def run(args):
                     files = model_second_moment_files(model, int(config.layer), args.covariance_samples)
                 if not files:
                     raise FileNotFoundError(f"Missing configured covariance for {model}")
+                state["covariance"].update(completed_at=utc_now(), files=[str(path) for path in files])
                 if not args.covariance_only:
                     run_logged(structural_command(args, model, run_root, batch), stage="gram", model=model)
                     verify_batch(run_root, model, plan_id, cohort, args.case_start, args.case_stop)

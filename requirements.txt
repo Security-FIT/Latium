@@ -11,6 +11,7 @@ matplotlib
 datasets
 accelerate
 peft
+sentencepiece
 tensorboard
 tqdm
 scikit-learn

@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+#PBS -j oe
+set -Eeuo pipefail
+
+: "${SCRATCHDIR:?PBS scratch is required}"
+: "${LATIUM_ENV:?Set the source Conda environment}"
+: "${LATIUM_RUNTIME_ARCHIVE:?Set the Brno2 archive path}"
+: "${LATIUM_CONDA_PACK_WHEEL:?Set the pinned conda-pack wheel path}"
+: "${LATIUM_CONDA_PACK_SHA256:?Set the wheel checksum}"
+mkdir -p "$SCRATCHDIR/tmp"
+export TMPDIR="$SCRATCHDIR/tmp"
+trap 'clean_scratch' EXIT
+
+# Use the storage server directly, avoiding NFS for archive transfers.
+/usr/bin/python3 - "$SCRATCHDIR/ssh_known_hosts" <<'PY'
+import sys, urllib.request
+with urllib.request.urlopen('https://metavo.metacentrum.cz/ssh_known_hosts', timeout=20) as response:
+    with open(sys.argv[1], 'wb') as output:
+        output.write(response.read())
+PY
+SSH=(ssh -F /dev/null -o IdentityFile=none -o PubkeyAuthentication=no
+     -o GSSAPIAuthentication=yes -o BatchMode=yes -o ConnectTimeout=15
+     -o "UserKnownHostsFile=$SCRATCHDIR/ssh_known_hosts" -o StrictHostKeyChecking=yes)
+storage_path() {
+  [[ "$1" == /storage/brno2/home/"$USER"/* && "$1" != *[^a-zA-Z0-9_./-]* && "$1" != */../* ]] || return 1
+  printf '/brno2/%s/%s' "$USER" "${1#"/storage/brno2/home/$USER/"}"
+}
+WHEEL_PATH="$(storage_path "$LATIUM_CONDA_PACK_WHEEL")"
+ARCHIVE_PATH="$(storage_path "$LATIUM_RUNTIME_ARCHIVE")"
+SOURCE_PATH="$(storage_path "$LATIUM_ENV")"
+"${SSH[@]}" storage-brno2.metacentrum.cz "cat $WHEEL_PATH" > "$SCRATCHDIR/conda-pack.whl"
+printf '%s  %s\n' "$LATIUM_CONDA_PACK_SHA256" "$SCRATCHDIR/conda-pack.whl" | sha256sum -c -
+mkdir -p "$SCRATCHDIR/source"
+echo "Stage source runtime directly from storage: $(date -Is)"
+"${SSH[@]}" storage-brno2.metacentrum.cz "tar -cf - -C $SOURCE_PATH ." | tar -xf - -C "$SCRATCHDIR/source"
+echo "Packing runtime: $(date -Is)"
+/usr/bin/python3 - "$SCRATCHDIR/conda-pack.whl" "$LATIUM_ENV" "$SCRATCHDIR/runtime.tar.gz" "$SCRATCHDIR/source" <<'PY'
+import mmap, sys, zipfile
+from pathlib import Path
+tool = Path(sys.argv[1]).parent / 'packer'
+with zipfile.ZipFile(sys.argv[1]) as wheel:
+    wheel.extractall(tool)
+sys.path.insert(0, str(tool))
+import conda_pack
+from conda_pack.core import is_binary_file
+from conda_pack.prefixes import replace_prefix
+
+# The transferred files still contain the source prefix. Build relocation
+# records locally so conda-pack never has to inspect the source through NFS.
+source = Path(sys.argv[4])
+original = sys.argv[2]
+aliases = [original, original.replace('/storage/brno2/home/', '/auto/brno2/brno2/')]
+records = []
+for path in sorted(source.rglob('*')):
+    if path.is_dir() and not path.is_symlink():
+        continue
+    if path.suffix in ('.pyc', '.pyo'):
+        continue
+    target = str(path.relative_to(source))
+    mode = placeholder = None
+    if path.is_symlink():
+        link = path.readlink()
+        for prefix in aliases:
+            if str(link).startswith(prefix + '/'):
+                import os
+                relative = os.path.relpath(source / str(link)[len(prefix) + 1:], path.parent)
+                path.unlink()
+                path.symlink_to(relative)
+                break
+        else:
+            if str(link).startswith(('/storage/', '/auto/')):
+                raise RuntimeError(f'Runtime symlink depends on shared storage: {target}')
+    else:
+        matches = []
+        if path.stat().st_size:
+            with path.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as content:
+                matches = [prefix for prefix in aliases if content.find(prefix.encode()) >= 0]
+        if matches:
+            content = path.read_bytes()
+            mode = 'binary' if is_binary_file(content) else 'text'
+            placeholder = min(matches, key=len)
+            for other in matches:
+                if other != placeholder:
+                    content = replace_prefix(content, mode, other, placeholder)
+            if len(matches) > 1:
+                path.write_bytes(content)
+    records.append(conda_pack.File(str(path), target, is_conda=False,
+                                   file_mode=mode, prefix_placeholder=placeholder))
+conda_pack.CondaEnv(str(source), records).pack(output=sys.argv[3], compress_level=1,
+                                             n_threads=2, verbose=True)
+PY
+sha256sum "$SCRATCHDIR/runtime.tar.gz" | cut -d ' ' -f 1 > "$SCRATCHDIR/runtime.sha256"
+# The checksum is published last; consumers require and verify it before unpacking.
+"${SSH[@]}" storage-brno2.metacentrum.cz "dd of=$ARCHIVE_PATH bs=4M" < "$SCRATCHDIR/runtime.tar.gz"
+"${SSH[@]}" storage-brno2.metacentrum.cz "dd of=$ARCHIVE_PATH.sha256 bs=1M" < "$SCRATCHDIR/runtime.sha256"
+echo "Runtime archive ready: $LATIUM_RUNTIME_ARCHIVE $(date -Is)"

@@ -9,6 +9,7 @@ Hydra override builders for Latium command aliases.
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Callable
 from typing import Sequence, TextIO
@@ -52,7 +53,12 @@ def _with_optional_path(args: list[str], *, key: str, label: str) -> list[str]:
         raise ValueError(
             f"Unexpected positional {label} argument {extra_positionals[0]!r}. Use Hydra overrides for additional options."
         )
-    return [f"{key}={first}", *rest]
+    value = first
+    if not re.fullmatch(r"[A-Za-z0-9_./-]+", first):
+        # Hydra keeps ordinary backslashes literal; double those before quotes
+        # or the closing delimiter, then escape embedded double quotes.
+        value = '"' + re.sub(r'(\\+)(?="|$)', lambda match: match[0] * 2, first).replace('"', r'\"') + '"'
+    return [f"{key}={value}", *rest]
 
 
 def print_structural_help(file: TextIO | None = None) -> None:

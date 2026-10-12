@@ -161,7 +161,8 @@ def test_fleet_command_and_pbs_arguments(tmp_path):
     assert args.n_tests == 100
     command = structural_command(args,"gpt2-xl",tmp_path/"exp/models/gpt2-xl/run","m0100-0200")
     assert "structural=gram" in command and "structural.run.start_idx=100" in command
-    assert not any("ccs" in v or "experiments" in v for v in command)
+    overrides = [value for value in command if "=" in value]
+    assert not any(value.startswith(("ccs", "experiments")) for value in overrides)
     result = subprocess.run(["bash",str(ROOT/"jobs/submit_paper_fleet.sh"),"--dry-run","--workflow","gram","--case-index-file",str(path),"--case-start","100","--case-stop","200","--models","gpt2-xl","--run-root",str(tmp_path/"exp")],capture_output=True,text=True,check=True)
     assert "[dry-run]" in result.stdout
 
@@ -189,6 +190,18 @@ def test_fleet_two_batches_resume_without_duplicate_edits(tmp_path, monkeypatch)
     assert len(commands) == 2
     assert json.loads((root/"report/summary.json").read_text())["models"]["gpt2-xl"]["selected"] == 6
     assert json.loads((root/"models/gpt2-xl/batches/m0003-0006/state.json").read_text())["status"] == "complete"
+
+    # A completed batch with a missing capture repairs on the first retry.
+    run = root / "models/gpt2-xl/run"
+    records = json.loads((run / "manifest.json").read_text())["artifacts"].values()
+    capture = next(r for r in records if r["kind"] == "capture" and r.get("edit_method") == "rome")
+    missing = run / capture["path"]
+    missing.unlink()
+    assert gram_fleet.run(args(0, 3)) == 0
+    assert missing.is_file() and len(commands) == 3
+    assert gram_fleet.run(args(0, 3)) == 0
+    assert len(commands) == 3
+    assert json.loads((root / "report/summary.json").read_text())["models"]["gpt2-xl"]["selected"] == 6
 
 
 def test_append_ignores_reporting_changes_but_rejects_computation_changes(tmp_path, monkeypatch):

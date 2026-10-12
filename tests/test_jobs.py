@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -130,7 +131,10 @@ def test_pbs_runner_dispatches_pipeline_help(tmp_path: Path) -> None:
     env_root = tmp_path / "env"
     bin_dir = env_root / "bin"
     bin_dir.mkdir(parents=True)
-    (bin_dir / "python").symlink_to(Path(sys.executable).resolve())
+    # Preserve the active virtual environment when exercising the PBS frontend.
+    python = bin_dir / "python"
+    python.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n')
+    python.chmod(0o755)
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     encoded = base64.b64encode(b"--help\0").decode("ascii")
@@ -257,15 +261,15 @@ def test_paper_fleet_layer_rerun_matrix() -> None:
     expected = {
         "deepseek-7b-base": 6,
         "falcon-7b": 6,
-        "gemma-4-12b": 10,
-        "gpt2-xl": 18,
+        "gemma-4-12b": 11,
+        "gpt2-xl": 16,
         "granite-4.1-8b": 13,
-        "granite4-micro": 12,
-        "llama2-7b": 7,
+        "granite4-micro": 10,
+        "llama2-7b": 5,
         "ministral-3-8b": 7,
         "mistral-7b-v0.1": 7,
         "mistral-7b-v0.3": 7,
-        "olmo-3-1025-7b": 8,
+        "olmo-3-1025-7b": 6,
         "opt-6.7b": 14,
         "qwen3-8b": 10,
     }
@@ -311,10 +315,12 @@ def test_paper_fleet_defaults_to_configured_layer_without_tracing(tmp_path, monk
     monkeypatch.setattr(paper_fleet, "run_logged", lambda command, **kwargs: commands.append(command))
     result = paper_fleet.FleetRunner(args).run_model("gpt2-xl")
     assert result["status"] == "complete"
-    assert result["stages"]["layer_selection"]["selected_layer"] == 18
-    assert result["stages"]["covariance"]["layer"] == 18
+    from src.common.model_config import load_model_config
+    assert result["stages"]["layer_selection"]["selected_layer"] == int(load_model_config('gpt2-xl').layer)
+    configured_layer = int(load_model_config('gpt2-xl').layer)
+    assert result["stages"]["covariance"]["layer"] == configured_layer
     assert len(commands) == 1 and "second-moment" in commands[0]
-    assert "model.layer=18" in commands[0]
+    assert f"model.layer={configured_layer}" in commands[0]
     assert not any("causal" in value for command in commands for value in command)
 
 

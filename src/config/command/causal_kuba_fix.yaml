@@ -1,5 +1,8 @@
 defaults:
-  - causal_kuba
+  - /model_base@_global_.model: default
+  - /model@_global_.model: gpt-j-6b
+  - /dataset_facts@_global_.dataset_facts: counterfact
+  - /dataset_sm@_global_.dataset_sm: wikitext
   - _self_
 
 name: causal-kuba-fix
@@ -15,6 +18,8 @@ legacy_trace:
   # falling back to 3 * embedding-weight std only when the model has no scale.
   noise_std: null
   require_correct_clean_prediction: true
+  # Fine-tuned models can prepend one article, only with full-target validation.
+  allow_article_prefix: false
   seed: 42
   # Optional frozen CounterFact selection, used by the fine-tuned fleet.
   case_index_file: null

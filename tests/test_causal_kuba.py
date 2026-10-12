@@ -1,8 +1,7 @@
-"""CPU checks for historical replay and corrected token-by-block tracing."""
+"""CPU checks for corrected token-by-block tracing."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +15,7 @@ from src import main
 from src.causal_trace import legacy_fixed
 from src.causal_trace.causal_trace import TraceExample
 from src.causal_trace.model_adapter import module_dict
-from src.causal_trace.tokenization import TraceValidationError
+from src.causal_trace.tokenization import TraceValidationError, target_token_ids
 from src.command_handlers import operations
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,27 +128,17 @@ def assert_no_hooks(model):
     assert all(not module._forward_hooks for module in model.modules())
 
 
-def test_historical_source_is_exact_legacy_blob():
-    data = (ROOT / "src/causal_trace/legacy/causal_trace.py").read_bytes()
-    blob = f"blob {len(data)}\0".encode() + data
-    assert hashlib.sha1(blob).hexdigest() == "4e9b6df1991af7505318586b655ba5cfa5cb424f"
-
-
-def test_legacy_imports_and_dispatches_without_model_load(monkeypatch, tmp_path):
-    from src.causal_trace.legacy import causal_trace as original
-
-    calls = []
-    monkeypatch.setattr(original, "causal_trace", lambda cfg: calls.append(cfg))
-    cfg = OmegaConf.create({"model": {"name": "toy"}, "generation": {"filename": str(tmp_path / "legacy/trace_{}")}})
-    assert operations.run_causal_kuba(cfg) == 0
-    assert calls == [cfg]
-    assert (tmp_path / "legacy").is_dir()
+def test_only_corrected_kuba_and_separate_causal_trace_are_registered():
+    for command in ("causal-kuba-fix", "causal-trace"):
+        assert command in main.COMMAND_ALIASES
+        assert command in operations.OPERATIONS
+    assert "causal-kuba" not in main.COMMAND_ALIASES
+    assert "causal-kuba" not in operations.OPERATIONS
 
 
 @pytest.mark.parametrize(
     "command,config,name",
     [
-        ("causal-kuba", "causal_kuba", "causal-kuba"),
         ("causal-kuba-fix", "causal_kuba_fix", "causal-kuba-fix"),
     ],
 )
@@ -161,12 +150,8 @@ def test_variant_cli_and_hydra_composition(command, config, name, monkeypatch):
     with hydra.initialize_config_dir(config_dir=str(ROOT / "src/config"), version_base=None):
         cfg = hydra.compose(config_name="latium", overrides=[f"command={config}", "model=gpt2-xl"])
     assert cfg.command.name == name
-    if config == "causal_kuba_fix":
-        assert cfg.command.legacy_trace.num_noise_samples == 1
-        assert "causal_trace" not in cfg.command
-    else:
-        assert cfg.generation.num_of_runs == 100000
-        assert "causal_kuba/" in cfg.generation.filename
+    assert cfg.command.legacy_trace.num_noise_samples == 1
+    assert "causal_trace" not in cfg.command
 
 
 def test_corrected_legacy_pairs_one_shared_noise_vector_across_every_restore():
@@ -301,3 +286,90 @@ def test_corrected_legacy_reads_the_exact_frozen_fleet_fact(tmp_path, monkeypatc
     fact = json.loads((result / "fact_000000.json").read_text())
     assert fact["prompt_id"] == "22" and fact["subject"] == "Ada Lovelace"
     assert summary["case_selection"]["case_ids"] == [22]
+
+
+class ArticleTokenizer(Tokenizer):
+    vocabulary = {**Tokenizer.vocabulary, "the": 5, "a": 6, "and": 7}
+
+    def decode(self, ids):
+        words = {0: "Ada", 1: " Lovelace", 2: " lived", 3: " New", 4: " York", 5: " the", 6: " a", 7: " and"}
+        return "".join(words[int(token)] for token in ids)
+
+
+class ArticleModel(Model):
+    def __init__(self, *, wrong_second=False, prefix_id=5, article_only=False):
+        super().__init__()
+        self.embedding = torch.nn.Embedding(8, 3)
+        self.wrong_second = wrong_second
+        self.prefix_id = prefix_id
+        self.article_only = article_only
+
+    def forward(self, input_ids, use_cache=False):
+        del use_cache
+        self.calls += 1
+        hidden = self.embedding(input_ids)
+        for block in self.blocks:
+            hidden = block(hidden)
+        logits = torch.zeros(input_ids.shape[0], input_ids.shape[1], 8)
+        for position in range(input_ids.shape[1]):
+            token = int(input_ids[0, position])
+            predicted = (self.prefix_id if token == 2 else
+                         (self.prefix_id if self.article_only else 3) if token == self.prefix_id else
+                         (0 if self.wrong_second else 4) if token == 3 else 0)
+            logits[0, position, predicted] = 10
+        return SimpleNamespace(logits=logits)
+
+
+def article_trace(*, allowed=True, **model_args):
+    handler = handler_for(ArticleModel(**model_args))
+    handler.tokenizer = ArticleTokenizer()
+    handler.tokenize_prompt = lambda prompt: handler.tokenizer(prompt, return_tensors="pt")
+    modules = module_dict(handler.model)
+    try:
+        result = legacy_fixed.trace_example(
+            handler, TraceExample("article", "Ada Lovelace lived", "Ada Lovelace", "New York"),
+            modules=modules, block_names=legacy_fixed.resolve_block_names(handler, modules),
+            noise_std=.5, num_noise_samples=1, seed=42, require_correct_clean=True,
+            allow_article_prefix=allowed,
+        )
+    finally:
+        assert_no_hooks(handler.model)
+    return result
+
+
+def test_article_prefix_requires_the_entire_greedy_target_and_traces_factual_token():
+    result = article_trace()
+    assert result["prompt"] == "Ada Lovelace lived"
+    assert result["tracing_prompt"] == "Ada Lovelace lived the"
+    assert result["answer_prefix"] == " the"
+    assert result["clean_validation_scope"] == "full_target_after_predicted_article"
+    assert result["original_clean_top_token_id"] == 5
+    assert result["clean_top_token_id"] == result["target_first_token_id"] == 3
+    assert result["target_token_ids"] == [3, 4]
+    assert result["subject_positions"] == [0, 1]
+
+
+@pytest.mark.parametrize("model_args", [{"wrong_second": True}, {"article_only": True}])
+def test_article_prefix_cannot_turn_partial_target_or_article_alone_into_known_fact(model_args):
+    with pytest.raises(TraceValidationError, match="does not match the full expected target"):
+        article_trace(**model_args)
+
+
+def test_article_prefix_is_opt_in_and_does_not_allow_arbitrary_generated_text():
+    with pytest.raises(TraceValidationError, match="clean-token mismatch"):
+        article_trace(allowed=False)
+    with pytest.raises(TraceValidationError, match="clean-token mismatch"):
+        article_trace(prefix_id=7)
+
+
+def test_contextual_target_ids_use_joint_tokenization_and_reject_changed_prompt_boundary():
+    class BoundaryTokenizer:
+        def __call__(self, text, add_special_tokens=False):
+            encodings = {"Prompt": [1], "Prompt answer": [1, 9], " answer": [8],
+                         "Trailing ": [2, 3], "Trailing answer": [2, 9]}
+            return {"input_ids": encodings[text]}
+    tokenizer = BoundaryTokenizer()
+    assert target_token_ids(tokenizer, "answer") == [8]
+    assert target_token_ids(tokenizer, "answer", prompt="Prompt") == [9]
+    with pytest.raises(TraceValidationError, match="prompt token boundary"):
+        target_token_ids(tokenizer, "answer", prompt="Trailing ")

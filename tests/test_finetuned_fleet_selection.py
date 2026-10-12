@@ -1,4 +1,5 @@
 import json
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
@@ -14,18 +15,20 @@ def test_fetcher_uses_api_tag_filter_and_stable_download_sort(monkeypatch):
     def request(url, token=None):
         query = parse_qs(urlparse(url).query)
         calls.append(query)
-        assert query["filter"] == [tag] and "other" not in query
+        assert query["filter"][0] in [tag, "base_model:adapter:org/base"] and "other" not in query
         assert query["pipeline_tag"] == ["text-generation"]
         assert query["direction"] == ["-1"]
-        return [{"id": "org/z", "downloads": 10, "tags": [tag], "pipeline_tag": "text-generation"},
+        relation_tag = query["filter"][0]
+        extra = [{"id": "org/adapter", "downloads": 11, "tags": [relation_tag], "pipeline_tag": "text-generation"}] if ":adapter:" in relation_tag else []
+        return extra + [{"id": "org/z", "downloads": 10, "tags": [tag], "pipeline_tag": "text-generation"},
                 {"id": "org/a", "downloads": 10, "tags": [tag], "pipeline_tag": "text-generation"},
                 {"id": "org/unrelated", "downloads": 999, "tags": [], "pipeline_tag": "text-generation"},
                 {"id": "org/wrong-task", "downloads": 999, "tags": [tag], "pipeline_tag": "feature-extraction"}]
 
     monkeypatch.setattr(fetcher, "HfApi", lambda **kwargs: SimpleNamespace(model_info=lambda model: SimpleNamespace(id="org/base")))
     monkeypatch.setattr(fetcher, "_request_json", request)
-    assert [e["model_id"] for e in fetcher.fetch_models(base_model="org/base", limit=3)] == ["org/a", "org/z"]
-    assert len(calls) == 1
+    assert [e["model_id"] for e in fetcher.fetch_models(base_model="org/base", limit=3)] == ["org/adapter", "org/a", "org/z"]
+    assert len(calls) == 2
 
 
 def details(model, files, revision="a" * 40):
@@ -50,7 +53,7 @@ def test_fetcher_reads_all_pages_before_selecting_top_models(monkeypatch):
     monkeypatch.setattr(fetcher, "HfApi", lambda **kwargs: SimpleNamespace(model_info=lambda model: SimpleNamespace(id="org/base")))
     monkeypatch.setattr(fetcher.urllib.request, "urlopen", response)
     assert [e["model_id"] for e in fetcher.fetch_models(base_model="org/base", limit=1)] == ["org/a"]
-    assert len(urls) == 2
+    assert len(urls) == 4
 
 
 CONFIG = {"model_type": "toy", "hidden_size": 4, "num_hidden_layers": 2,
@@ -82,7 +85,7 @@ def test_preparation_freezes_top_ranks_including_adapters_and_errors(tmp_path, m
 
         def list_models(self, *, filter, pipeline_tag, sort, full):
             discovery_calls.append(filter)
-            assert filter == "base_model:finetune:org/canonical"
+            assert filter in ["base_model:finetune:org/canonical", "base_model:adapter:org/canonical"]
             assert pipeline_tag == "text-generation" and sort == "downloads" and full is True
             return [SimpleNamespace(id=name, downloads=downloads, tags=[filter], pipeline_tag=pipeline_tag)
                     for name, downloads in [("org/unsupported", 30), ("org/adapter", 20), ("org/later-full", 10)]] + [
@@ -91,7 +94,7 @@ def test_preparation_freezes_top_ranks_including_adapters_and_errors(tmp_path, m
                 SimpleNamespace(id="org/adapter-only", downloads=999, tags=["base_model:adapter:org/base"], pipeline_tag=pipeline_tag)]
 
     def metadata(model, filename, **kwargs):
-        cfg = {"base_model_name_or_path": "org/base", "revision": "v1"} if filename == "adapter_config.json" else CONFIG
+        cfg = {"base_model_name_or_path": "org/base", "revision": "v1", "peft_type": "LORA"} if filename == "adapter_config.json" else CONFIG
         return metadata_file(tmp_path, model, filename, cfg)
 
     monkeypatch.setattr(preparation, "load_model_config", lambda model: SimpleNamespace(name="org/base", layer=1))
@@ -103,9 +106,9 @@ def test_preparation_freezes_top_ranks_including_adapters_and_errors(tmp_path, m
     assert [record["model_id"] for record in records] == ["org/unsupported", "org/adapter"]
     assert [record["rank"] for record in records] == [1, 2]
     assert all(record["pipeline_tag"] == "text-generation" for record in records)
-    assert manifest["discovery_filter"] == ["base_model:finetune:org/canonical"]
-    assert manifest["relations"] == ["finetune"]
-    assert discovery_calls == ["base_model:finetune:org/canonical"]
+    assert manifest["discovery_filter"] == ["base_model:finetune:org/canonical", "base_model:adapter:org/canonical"]
+    assert manifest["relations"] == ["finetune", "adapter"]
+    assert discovery_calls == ["base_model:finetune:org/canonical", "base_model:adapter:org/canonical"]
     discovery = json.loads((Path(result["manifest"]).parent / "discovery.json").read_text())
     assert [record["model_id"] for record in discovery["models"]] == ["org/unsupported", "org/adapter", "org/later-full"]
     assert records[0]["selection_error"]
@@ -113,10 +116,12 @@ def test_preparation_freezes_top_ranks_including_adapters_and_errors(tmp_path, m
     assert records[1]["adapter_base_files"] == ["config.json", "model.safetensors"]
     assert ("org/base", "v1") in calls
     assert not any(model == "org/later-full" for model, _ in calls)
-    # A repeated metadata preparation keeps types and resolved revisions from its audit.
+    # Existing frozen memberships are immutable, including their errors and revisions.
     calls.clear()
-    repeated = preparation.prepare_family("qwen3-8b", tmp_path / "out", 2, Api(), None)
-    assert repeated["adapter"] == 1 and calls == [("org/base", None)]
+    before = Path(result["manifest"]).read_bytes()
+    with pytest.raises(FileExistsError, match="Frozen checkpoint manifest"):
+        preparation.prepare_family("qwen3-8b", tmp_path / "out", 2, Api(), None)
+    assert calls == [] and Path(result["manifest"]).read_bytes() == before
 
 
 def test_preparation_keeps_full_models_and_records_runtime_diagnostics(tmp_path, monkeypatch):
@@ -141,11 +146,11 @@ def test_preparation_keeps_full_models_and_records_runtime_diagnostics(tmp_path,
     monkeypatch.setattr(preparation, "hf_hub_download", lambda model, filename, **kwargs:
                         metadata_file(tmp_path, model, filename, configs.get(model, CONFIG)))
     result = preparation.prepare_family("toy", tmp_path / "out", 100, Api(), None)
-    assert result["requested"] == 100 and result["selected"] == 4 and result["full"] == 4 and result["errors"] == 2
+    assert result["requested"] == 100 and result["selected"] == 4 and result["full"] == 4 and result["errors"] == 3
     manifest = json.loads(Path(result["manifest"]).read_text())
     assert [entry["model_id"] for entry in manifest["models"]] == ["org/other-size", "org/quantized", "org/wrong", "unsloth/base"]
     assert manifest["models"][0]["matches_classic_dimensions"] is False
-    assert "selection_error" not in manifest["models"][0]
+    assert "text dimensions differ" in manifest["models"][0]["selection_error"]
     assert "Quantized" in manifest["models"][1]["selection_error"]
     assert "initialize missing weights" in manifest["models"][2]["selection_error"]
     assert "selection_error" not in manifest["models"][3]
@@ -165,7 +170,7 @@ def test_preparation_resolves_shared_adapter_base_once(tmp_path, monkeypatch):
 
     monkeypatch.setattr(preparation, "load_model_config", lambda model: SimpleNamespace(name="org/base", layer=1))
     monkeypatch.setattr(preparation, "hf_hub_download", lambda model, filename, **kwargs:
-                        metadata_file(tmp_path, model, filename, {"base_model_name_or_path": "org/base", "revision": "v2"}
+                        metadata_file(tmp_path, model, filename, {"base_model_name_or_path": "org/base", "revision": "v2", "peft_type": "LORA"}
                                       if filename == "adapter_config.json" else CONFIG))
     result = preparation.prepare_family("toy", tmp_path / "out", 100, Api(), None)
     assert result["adapter"] == 2

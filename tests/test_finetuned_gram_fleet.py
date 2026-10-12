@@ -21,6 +21,13 @@ def fixture_args(tmp_path):
         "--case-start", "2", "--case-stop", "4", "--no-graphs", "--finetuned-covariance"])
 
 
+def fake_download(**kwargs):
+    directory = Path(kwargs["local_dir"])
+    directory.mkdir(parents=True, exist_ok=True)
+    for name in kwargs["allow_patterns"]:
+        (directory / name).touch()
+
+
 class FakeApi:
     def __init__(self):
         self.calls = []
@@ -31,6 +38,100 @@ class FakeApi:
             ("config.json", "model.safetensors", "pytorch_model.bin", "tokenizer.json", "optimizer.pt", "adapter_model.safetensors")])
 
 
+def assigned_args(tmp_path):
+    from jobs.prepare_shared_fleet_facts import prepare_shared_facts
+    args = fixture_args(tmp_path)
+    discovery = tmp_path / "discovery/gpt2-xl/checkpoints.json"
+    discovery.parent.mkdir(parents=True)
+    discovery.write_bytes(Path(args.models_manifest).read_bytes())
+    output = tmp_path / "shared"
+    prepare_shared_facts(args.case_index_file, discovery.parent.parent, output, count=2)
+    args.case_index_file = str(output / "rome-facts.json")
+    args.models_manifest = str(output / "fleets/gpt2-xl/checkpoints.json")
+    args.trace_case_index_file = str(output / "trace-facts.json")
+    args.case_start, args.case_stop = 0, 1
+    args.causal_kuba_fix = args.keep_downloads = True
+    return args
+
+
+@pytest.mark.parametrize("trace_status", ["complete", "unavailable", "failed"])
+def test_assigned_fact_failure_continues_without_replacement_or_trace_gating(tmp_path, monkeypatch, trace_status):
+    from jobs import finetuned_trace
+    args = assigned_args(tmp_path)
+    facts = fleet.load_case_manifest(args.case_index_file)
+    edited, traced = [], []
+
+    def trace(params, model, root, cohort, start, stop, *, case_index_file):
+        assert not set(cohort["case_ids"]) & set(facts["case_ids"])
+        assert json.loads(Path(case_index_file).read_text())["manifest_hash"] == cohort["manifest_hash"]
+        traced.append(model)
+        if trace_status == "failed":
+            raise RuntimeError("trace runtime failed")
+        accepted = 3 if trace_status == "complete" else None
+        if accepted is not None:
+            fleet.write_json(root / "causal-kuba-fix/m0003/artifact.json",
+                             {"status": "complete", "summary": {"outputs": []}})
+        return {"accepted_position": accepted, "rejections": [], "error": None}
+
+    def gram(params):
+        assert params.case_stop == params.case_start + 1
+        edited.append((params.models[0], params.case_start))
+        return 0
+
+    monkeypatch.setattr(finetuned_trace, "run_trace", trace)
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    monkeypatch.setattr(fleet.gram_fleet, "verify_batch", lambda *a: None)
+    monkeypatch.setattr(fleet, "rome_case", lambda root, plan: {"edit": {"success": root.parent.name.endswith("two")}})
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    assert edited == [("fleet_org_one", 0), ("fleet_org_two", 1)]
+    states = {s["model_id"]: s for p in Path(args.run_root).glob("models/*/fleet-batches/*/state.json")
+              for s in [json.loads(p.read_text())]}
+    assert states["org/one"]["status"] == "rome_failed"
+    assert states["org/two"]["status"] == "complete"
+    for position, model in enumerate(("org/one", "org/two")):
+        state = states[model]
+        assert state["fact_case_id"] == facts["case_ids"][position]
+        assert len(state["attempts"]) == 1
+        assert state["attempts"][0]["case_id"] == facts["case_ids"][position]
+        assert state["trace"]["status"] == trace_status
+        assert state["rome_success"] == (model == "org/two")
+    edited.clear(); traced.clear()
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    assert edited == traced == []
+
+    # Missing GRAM output is repaired with the same failed fact, never a reserve fact.
+    def verify(root, *a):
+        if root.parent.name.endswith("one"):
+            raise FileNotFoundError("missing output")
+
+    monkeypatch.setattr(fleet.gram_fleet, "verify_batch", verify)
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    assert edited == [("fleet_org_one", 0)]
+
+
+def test_assigned_protocol_rejects_replacements_overlap_and_wrong_ids(tmp_path):
+    args = assigned_args(tmp_path)
+    base = load_model_config(args.base_model)
+    args.retry_failed_facts = True
+    with pytest.raises(ValueError, match="without random draws or replacement"):
+        fleet.freeze_selection(args, base, FakeApi())
+    args.retry_failed_facts = False
+    separate = args.trace_case_index_file
+    args.trace_case_index_file = args.case_index_file
+    with pytest.raises(ValueError, match="disjoint"):
+        fleet.freeze_selection(args, base, FakeApi())
+    args.trace_case_index_file = None
+    with pytest.raises(ValueError, match="separate tracing manifest"):
+        fleet.freeze_selection(args, base, FakeApi())
+    args.trace_case_index_file = separate
+    path = Path(args.models_manifest)
+    manifest = json.loads(path.read_text())
+    manifest["models"][0]["fact_case_id"] = -1
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="does not match"):
+        fleet.freeze_selection(args, base, FakeApi())
+
+
 def test_default_reuses_original_covariance_without_checkpoint_computation(tmp_path, monkeypatch):
     from jobs.paper_fleet import model_second_moment_files
     prepared = fixture_args(tmp_path)
@@ -38,6 +139,7 @@ def test_default_reuses_original_covariance_without_checkpoint_computation(tmp_p
         "--model-count", "2", "--run-root", prepared.run_root, "--case-index-file", prepared.case_index_file,
         "--case-start", "2", "--case-stop", "4", "--no-graphs"])
     assert not args.finetuned_covariance
+    assert args.max_fact_attempts == 1000
     base = load_model_config(args.base_model)
     base.second_moment_dir = str(tmp_path / "classic-stats")
     covariance = Path(base.second_moment_dir) / f"{base.name.replace('/', '_')}_{base.layer}_SM_Method.WIKIPEDIA_100000.pt"
@@ -61,13 +163,13 @@ def test_default_reuses_original_covariance_without_checkpoint_computation(tmp_p
         return 0
 
     monkeypatch.setattr(fleet.gram_fleet, "run", gram)
-    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 0
+    assert fleet.run(args, FakeApi(), fake_download) == 0
     assert seen == ["org/one", "org/two"]
     assert covariance.read_bytes() == b"original statistics"
     assert not list(Path(args.run_root).glob("models/*/covariance"))
     args.finetuned_covariance = True
     with pytest.raises(ValueError, match="selection/configuration changed"):
-        fleet.run(args, FakeApi(), lambda **kwargs: None)
+        fleet.run(args, FakeApi(), fake_download)
 
 
 def test_missing_original_covariance_fails_before_downloads(tmp_path, monkeypatch):
@@ -84,6 +186,59 @@ def test_missing_original_covariance_fails_before_downloads(tmp_path, monkeypatc
     args.prepare_only = True
     assert fleet.run(args, FakeApi(), lambda **kwargs: calls.append(kwargs)) == 0
     assert calls == []
+
+
+@pytest.mark.parametrize("first_failure", [False, True])
+def test_disposable_checkpoint_covariance_isolated_deleted_and_results_retained(tmp_path, monkeypatch, first_failure):
+    args = fixture_args(tmp_path)
+    args.keep_covariance = False
+    unrelated = tmp_path / "original-covariance.pt"
+    unrelated.write_bytes(b"original statistics must survive")
+    computed = []
+
+    def gram(params):
+        model = params.models[0]
+        cfg = load_model_config(model)
+        directory = Path(cfg.second_moment_dir)
+        assert params.skip_second_moment is False
+        assert cfg.second_moment_path is None
+        assert not directory.exists()
+        assert not list((Path(args.run_root) / 'models').glob('*/covariance/*.pt'))
+        directory.mkdir(parents=True)
+        (directory / 'checkpoint-statistics.pt').write_bytes(cfg.name.encode())
+        fleet.write_json(directory.parent / 'saved-result.json', {'checkpoint': cfg.name})
+        computed.append(cfg.name)
+        return int(first_failure and cfg.name == 'org/one')
+
+    monkeypatch.setattr(fleet.gram_fleet, 'run', gram)
+    assert fleet.run(args, FakeApi(), fake_download) == int(first_failure)
+    assert computed == ['org/one', 'org/two']
+    root = Path(args.run_root)
+    assert not list(root.glob('models/*/covariance'))
+    for path in root.glob('models/*/covariance-lifecycle.json'):
+        data = json.loads(path.read_text())
+        assert data['removed'] and data['checkpoint_revision'] == 'a' * 40
+        assert data['files'][0]['bytes'] == len(data['model_id'])
+        assert len(data['files'][0]['sha256']) == 64
+    assert len(list(root.glob('models/*/saved-result.json'))) == 2
+    assert unrelated.read_bytes() == b'original statistics must survive'
+
+
+def test_covariance_cleanup_rejects_symlink_and_original_mode(tmp_path):
+    prepared = fixture_args(tmp_path)
+    with pytest.raises(SystemExit):
+        fleet.parse_args(['--base-model', 'gpt2-xl', '--models-manifest', prepared.models_manifest,
+                          '--run-root', prepared.run_root, '--case-index-file', prepared.case_index_file,
+                          '--no-keep-covariance'])
+    checkpoint = tmp_path / 'run/models/fleet_org_one'
+    checkpoint.mkdir(parents=True)
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'statistics.pt').write_bytes(b'keep')
+    (checkpoint / 'covariance').symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match='escaped its checkpoint'):
+        fleet.remove_checkpoint_covariance(tmp_path / 'run', {'key': 'fleet_org_one'}, 100000)
+    assert (outside / 'statistics.pt').read_bytes() == b'keep'
 
 
 def test_checkpoint_stop_alias_preserves_frozen_manifest_range(tmp_path):
@@ -104,11 +259,81 @@ def test_retry_preparation_registers_no_unattempted_facts(tmp_path):
     args = fixture_args(tmp_path)
     args.case_start = 0; args.case_stop = 1
     args.retry_failed_facts = True; args.prepare_only = True
-    assert fleet.run(args, FakeApi(), lambda **kwargs: None) == 0
+    assert fleet.run(args, FakeApi(), fake_download) == 0
     root = Path(args.run_root)
     assert json.loads((root / "experiment.json").read_text())["models"] == {}
     assert len(json.loads((root / "checkpoints.json").read_text())["models"]) == 2
     assert json.loads((root / "cases.json").read_text())["count"] == 8
+
+
+@pytest.mark.parametrize("use_trace", [False, True])
+def test_random_facts_wrap_and_resume_the_saved_draw(tmp_path, monkeypatch, use_trace):
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = args.random_facts = args.keep_downloads = True
+    args.causal_kuba_fix = use_trace
+    args.max_fact_attempts = 8
+    draws = iter([7, 4])
+    monkeypatch.setattr(fleet.random, "randrange", lambda count: next(draws))
+    attempted = {}
+
+    def gram(params):
+        attempted.setdefault(params.models[0], []).append(params.case_start)
+        return 0
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    monkeypatch.setattr(fleet.gram_fleet, "verify_batch", lambda *a: None)
+    monkeypatch.setattr(fleet, "rome_case", lambda root, plan:
+        {"edit": {"success": attempted[root.parent.name][-1] == 0}})
+    if use_trace:
+        from jobs import finetuned_trace
+
+        def trace(params, model, root, cohort, start, stop):
+            if start == 0:
+                fleet.write_json(root / "causal-kuba-fix/m0000/artifact.json",
+                                 {"status": "complete", "summary": {"outputs": []}})
+                return {"accepted_position": 0, "rejections": [], "error": None}
+            return {"accepted_position": None, "error": "clean mismatch", "rejections": [
+                {"position": p, "case_id": cohort["case_ids"][p], "error": "clean mismatch"}
+                for p in range(start, stop)]}
+
+        monkeypatch.setattr(finetuned_trace, "run_trace", trace)
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    expected = {"fleet_org_one": [0], "fleet_org_two": [0]} if use_trace else {
+        "fleet_org_one": [7, 0], "fleet_org_two": [4, 5, 6, 7, 0]}
+    assert attempted == expected
+    states = {s["model_id"]: s for p in Path(args.run_root).glob("models/*/fleet-batches/*/state.json")
+              for s in [json.loads(p.read_text())]}
+    assert states["org/one"]["fact_candidate_start"] == 7
+    assert states["org/two"]["fact_candidate_start"] == 4
+    assert all(s["accepted_position"] == 0 for s in states.values())
+    attempted.clear()
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    assert attempted == {}  # no new random draw or model execution on resume
+
+
+def test_random_fact_budget_stays_bounded_across_wrap(tmp_path, monkeypatch):
+    from jobs import finetuned_trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = args.random_facts = args.causal_kuba_fix = True
+    args.max_fact_attempts = 2
+    monkeypatch.setattr(fleet.random, "randrange", lambda count: 7)
+    scans = []
+
+    def trace(params, model, root, cohort, start, stop):
+        scans.append((model, start, stop))
+        return {"accepted_position": None, "error": "clean mismatch", "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "clean mismatch"}
+            for p in range(start, stop)]}
+
+    monkeypatch.setattr(finetuned_trace, "run_trace", trace)
+    assert fleet.run(args, FakeApi(), fake_download) == 1
+    assert scans == [("fleet_org_one", 7, 8), ("fleet_org_one", 0, 1),
+                     ("fleet_org_two", 7, 8), ("fleet_org_two", 0, 1)]
+    for p in Path(args.run_root).glob("models/*/fleet-batches/*/state.json"):
+        state = json.loads(p.read_text())
+        assert state["status"] == "failed" and len(state["attempts"]) == 2
 
 
 def test_configs_keep_classic_layer_and_use_checkpoint_covariance(tmp_path, monkeypatch):
@@ -144,6 +369,12 @@ def test_download_filters_and_cleanup_containment(tmp_path):
     assert fleet.checkpoint_files(["adapter_config.json", "adapter_model.safetensors", "optimizer.pt"]) == ["adapter_config.json", "adapter_model.safetensors"]
     with pytest.raises(ValueError, match="neither full"):
         fleet.checkpoint_files(["model.gguf"])
+    with pytest.raises(ValueError, match="neither full"):
+        fleet.checkpoint_files(["config.json", "export_fp8.safetensors", "tokenizer.json"])
+    with pytest.raises(ValueError, match="neither full"):
+        fleet.checkpoint_files(["config.json", "model-00001-of-00002.safetensors"])
+    assert fleet.checkpoint_files(["config.json", "model.safetensors.index.json", "custom-weights.safetensors"]) == [
+        "config.json", "custom-weights.safetensors", "model.safetensors.index.json"]
     owned = tmp_path / "owned"; owned.mkdir()
     victim = tmp_path / "other"; victim.mkdir()
     (victim / "keep").write_text("keep")
@@ -167,6 +398,8 @@ def test_sequential_order_failure_cleanup_append_and_retry(tmp_path, monkeypatch
         # Each previous checkpoint's weights have already been removed.
         assert not list((Path(args.run_root) / ".downloads").glob("*/models/*/*/weights"))
         directory.mkdir(parents=True)
+        for name in kwargs["allow_patterns"]:
+            (directory / name).touch()
         (directory / "weights").write_text("fake")
         assert kwargs["revision"] == "a" * 40
         assert "pytorch_model.bin" not in kwargs["allow_patterns"]
@@ -257,6 +490,80 @@ def test_adapter_downloads_pinned_base_and_preserves_unusable_top_rank(tmp_path,
     assert [e["rank"] for e in frozen["models"]] == [1, 2]
 
 
+@pytest.mark.parametrize("failure_stage", [None, "base_download", "gram"])
+def test_disposable_adapters_remove_bases_between_checkpoints_and_keep_results(tmp_path, monkeypatch, failure_stage):
+    args = fixture_args(tmp_path)
+    args.download_root = str(tmp_path / "downloads")
+    records = [{"model_id": f"org/adapter{i}", "revision": str(i) * 40,
+                "files": ["adapter_config.json", "adapter_model.safetensors"],
+                "adapter_base_model": f"org/base{i}", "adapter_base_revision": "b" * 40,
+                "adapter_base_files": ["config.json", "model.safetensors"]} for i in (1, 2)]
+    Path(args.models_manifest).write_text(json.dumps({"models": records}))
+    unrelated = Path(args.download_root) / "shared-cache"
+    unrelated.mkdir(parents=True)
+    (unrelated / "model.safetensors").write_text("keep")
+    calls = []
+
+    def download(**kwargs):
+        directory = Path(kwargs["local_dir"])
+        if kwargs["repo_id"] == "org/adapter2":
+            assert not list(directory.parents[3].glob("bases/*/model.safetensors"))
+        fake_download(**kwargs)
+        calls.append(kwargs["repo_id"])
+        if failure_stage == "base_download" and kwargs["repo_id"] == "org/base1":
+            raise RuntimeError("partial base download")
+
+    def gram(params):
+        cfg = load_model_config(params.models[0])
+        assert Path(cfg.adapter_base_path, "model.safetensors").exists()
+        artifact = Path(args.run_root) / "models" / params.models[0] / "saved-result.json"
+        fleet.write_json(artifact, {"saved": True})
+        return int(failure_stage == "gram" and cfg.name == "org/adapter1")
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    assert fleet.run(args, FakeApi(), download) == int(failure_stage is not None)
+    assert calls == ["org/adapter1", "org/base1", "org/adapter2", "org/base2"]
+    selection = json.loads((Path(args.run_root) / "checkpoints.json").read_text())
+    downloads = Path(selection["identity"]["download_root"])
+    assert not (downloads / "bases").exists()
+    assert all(not fleet.checkpoint_download_path(selection, row).exists() for row in selection["models"])
+    assert len(list((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))) == 2
+    assert len(list((Path(args.run_root) / "models").glob("*/saved-result.json"))) == (1 if failure_stage == "base_download" else 2)
+    assert (unrelated / "model.safetensors").read_text() == "keep"
+
+
+def test_shared_revision_cache_reuses_base_and_checkpoints_across_runs(tmp_path, monkeypatch):
+    args = fixture_args(tmp_path)
+    args.keep_downloads = True
+    args.download_root = str(tmp_path / "cache")
+    records = [{"model_id": f"org/adapter{i}", "revision": str(i) * 40,
+                "files": ["adapter_config.json", "adapter_model.safetensors"],
+                "adapter_base_model": "org/base", "adapter_base_revision": "b" * 40,
+                "adapter_base_files": ["config.json", "model.safetensors"]} for i in (1, 2)]
+    Path(args.models_manifest).write_text(json.dumps({"models": records}))
+    calls = []
+
+    def download(**kwargs):
+        calls.append(kwargs["repo_id"])
+        fake_download(**kwargs)
+
+    monkeypatch.setattr(fleet.gram_fleet, "run", lambda params: 0)
+    assert fleet.run(args, FakeApi(), download) == 0
+    assert calls == ["org/adapter1", "org/base", "org/adapter2"]
+    selection = json.loads((Path(args.run_root) / "checkpoints.json").read_text())
+    base_dir = fleet.adapter_base_path(selection, selection["models"][0])
+    assert (base_dir / "model.safetensors").exists()
+    calls.clear()
+    args.run_root = str(tmp_path / "second-run")
+    assert fleet.run(args, FakeApi(), download) == 0
+    assert calls == []
+    # An interrupted/incomplete cache must be repaired rather than trusted.
+    (base_dir / "model.safetensors").unlink()
+    args.run_root = str(tmp_path / "third-run")
+    assert fleet.run(args, FakeApi(), download) == 0
+    assert calls == ["org/base"]
+
+
 def test_retained_downloads_retry_rome_failure_and_skip_complete_rerun(tmp_path, monkeypatch):
     args = fixture_args(tmp_path)
     args.case_start = 0; args.case_stop = 1
@@ -266,6 +573,8 @@ def test_retained_downloads_retry_rome_failure_and_skip_complete_rerun(tmp_path,
     def download(**kwargs):
         p = Path(kwargs["local_dir"])
         p.mkdir(parents=True, exist_ok=True)
+        for name in kwargs["allow_patterns"]:
+            (p / name).touch()
         (p / "weights").write_text("pinned weights")
         calls.append("download")
 
@@ -295,3 +604,85 @@ def test_retained_downloads_retry_rome_failure_and_skip_complete_rerun(tmp_path,
     calls.clear()
     assert fleet.run(args, FakeApi(), download) == 0
     assert calls == [] and weights[0].is_file()
+
+
+def test_fact_attempt_cap_includes_tracing_rejections_and_survives_resume(tmp_path, monkeypatch):
+    import jobs.finetuned_trace as trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = True; args.causal_kuba_fix = True
+    args.max_fact_attempts = 2; args.checkpoint_limit = 1
+    scans = []
+
+    def scan(args, model, root, cohort, start, stop):
+        scans.append((start, stop))
+        return {"accepted_position": None, "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "clean-token mismatch"}
+            for p in range(start, stop)], "error": "No valid facts"}
+
+    monkeypatch.setattr(trace, "run_trace", scan)
+    monkeypatch.setattr(fleet.gram_fleet, "run", lambda params: pytest.fail("Rejected fact reached ROME"))
+    assert fleet.run(args, FakeApi(), fake_download) == 1
+    assert scans == [(0, 2)]
+    state_path = next((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))
+    state = json.loads(state_path.read_text())
+    assert [a["position"] for a in state["attempts"]] == [0, 1]
+    assert all(a["status"] == "trace_rejected" for a in state["attempts"])
+    assert "max-fact-attempts=2" in state["error"]
+    assert json.loads((Path(args.run_root) / "experiment.json").read_text())["models"] == {}
+    scans.clear()
+    assert fleet.run(args, FakeApi(), fake_download) == 1
+    assert scans == []
+
+
+def test_batched_trace_passes_only_accepted_manifest_fact_to_gram(tmp_path, monkeypatch):
+    import jobs.finetuned_trace as trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = True; args.causal_kuba_fix = True
+    args.max_fact_attempts = 4; args.checkpoint_limit = 1
+    scans = []
+    edits = []
+
+    def scan(args, model, root, cohort, start, stop):
+        scans.append((start, stop))
+        return {"accepted_position": 2, "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "clean-token mismatch"}
+            for p in (0, 1)], "error": None}
+
+    def gram(params):
+        assert params.workflow == "gram"
+        assert params.case_stop == params.case_start + 1
+        edits.append(params.case_start)
+        return 0
+
+    monkeypatch.setattr(trace, "run_trace", scan)
+    monkeypatch.setattr(fleet.gram_fleet, "run", gram)
+    monkeypatch.setattr(fleet, "rome_case", lambda *args: {"edit": {"success": True}})
+    assert fleet.run(args, FakeApi(), fake_download) == 0
+    assert scans == [(0, 4)] and edits == [2]
+    state_path = next((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))
+    state = json.loads(state_path.read_text())
+    assert state["accepted_position"] == 2
+    assert [a["status"] for a in state["attempts"]] == ["trace_rejected", "trace_rejected", "complete"]
+    catalog = json.loads((Path(args.run_root) / "experiment.json").read_text())
+    assert list(catalog["models"]["fleet_org_one"]["batches"]) == ["m0002-0003"]
+
+
+def test_changed_tracing_implementation_refuses_old_attempts_before_download(tmp_path, monkeypatch):
+    import jobs.finetuned_trace as trace
+    args = fixture_args(tmp_path)
+    args.case_start = 0; args.case_stop = 1
+    args.retry_failed_facts = True; args.causal_kuba_fix = True
+    args.max_fact_attempts = 2; args.checkpoint_limit = 1
+    monkeypatch.setattr(trace, "run_trace", lambda args, model, root, cohort, start, stop: {
+        "accepted_position": None, "rejections": [
+            {"position": p, "case_id": cohort["case_ids"][p], "error": "mismatch"} for p in range(start, stop)],
+        "error": "No valid facts"})
+    assert fleet.run(args, FakeApi(), fake_download) == 1
+    state_path = next((Path(args.run_root) / "models").glob("*/fleet-batches/*/state.json"))
+    old_state = state_path.read_text()
+    monkeypatch.setattr(trace, "trace_implementation_hash", lambda: "changed")
+    with pytest.raises(ValueError, match="implementation changed; use a new run root"):
+        fleet.run(args, FakeApi(), lambda **kwargs: pytest.fail("Downloaded before checking trace identity"))
+    assert state_path.read_text() == old_state

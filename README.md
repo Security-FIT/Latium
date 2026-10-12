@@ -118,6 +118,7 @@ Tracking defaults to `none`. See [W&B setup and fields](docs/wandb-monitoring.md
 | Analysis-only replay | `python3 -m src structural analyze ...` |
 | Graph rendering | `python3 -m src graphs run <run-root>` |
 | Causal trace | `python3 -m src causal-trace model=gpt2-large` |
+| Corrected Kuba tracing | `python3 -m src causal-kuba-fix model=gpt2-large` |
 | Alternative trace | `python3 -m src alt-trace model=gpt2-large` |
 | Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
 | MetaCentrum causal trace -> ROME | `jobs/submit.sh causal-rome -- pipeline.model=gpt2-large` |

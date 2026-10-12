@@ -53,6 +53,7 @@ class LegacySettings:
     seed: int
     case_index_file: str | None = None
     case_start: int = 0
+    allow_article_prefix: bool = False
 
     @classmethod
     def from_config(cls, cfg: DictConfig) -> "LegacySettings":
@@ -75,6 +76,7 @@ class LegacySettings:
             seed=int(section.seed),
             case_index_file=section.get("case_index_file"),
             case_start=int(section.get("case_start", 0)),
+            allow_article_prefix=bool(section.get("allow_article_prefix", False)),
             **counts,
         )
 
@@ -104,13 +106,14 @@ def trace_example(
     num_noise_samples: int,
     seed: int,
     require_correct_clean: bool,
+    allow_article_prefix: bool = False,
 ) -> dict[str, Any]:
     inputs = prepare_inputs(handler, example.prompt)
     span = find_subject_span(handler.tokenizer, example.prompt, example.subject)
     sequence_length = int(inputs["input_ids"].shape[1])
     if inputs["input_ids"].shape[0] != 1 or not all(0 <= p < sequence_length for p in span.positions):
         raise TraceValidationError("Subject span does not index a single valid model input")
-    target_ids = target_token_ids(handler.tokenizer, example.target)
+    target_ids = target_token_ids(handler.tokenizer, example.target, prompt=example.prompt)
     target_id = int(target_ids[0])
     cache: dict[tuple[int, int], torch.Tensor] = {}
 
@@ -133,8 +136,52 @@ def trace_example(
     if set(cache) != expected:
         raise RuntimeError("Clean block cache is incomplete; a configured block was not executed")
     clean_top_id, _ = top_token(clean)
+    original_clean_top_id = clean_top_id
+    tracing_prompt = example.prompt
+    answer_prefix = ""
+    validation_scope = "first_target_token" if require_correct_clean else "unchecked"
     if require_correct_clean and clean_top_id != target_id:
-        raise TraceValidationError(f"clean-token mismatch: expected token {target_id}, got {clean_top_id}")
+        expected_text = handler.tokenizer.decode([target_id])
+        predicted_text = handler.tokenizer.decode([clean_top_id])
+        mismatch = (f"clean-token mismatch: expected token {target_id} ({expected_text!r}), "
+                    f"got {clean_top_id} ({predicted_text!r})")
+        if not allow_article_prefix or predicted_text.strip().casefold() not in {"the", "a", "an"}:
+            raise TraceValidationError(mismatch)
+        # An article alone does not establish factual knowledge. Accept this
+        # fallback only when the clean greedy continuation spells the ENTIRE
+        # expected target after its one predicted article.
+        tracing_prompt += predicted_text
+        prefixed_inputs = prepare_inputs(handler, tracing_prompt)
+        expected_prefix = torch.cat((inputs["input_ids"], inputs["input_ids"].new_tensor([[clean_top_id]])), dim=1)
+        if not torch.equal(prefixed_inputs["input_ids"], expected_prefix):
+            raise TraceValidationError(mismatch + "; predicted article changes the prompt token boundary")
+        target_ids = target_token_ids(handler.tokenizer, example.target, prompt=tracing_prompt)
+        validation_inputs = dict(prefixed_inputs)
+        continuation = inputs["input_ids"].new_tensor([target_ids[:-1]])
+        validation_inputs["input_ids"] = torch.cat((prefixed_inputs["input_ids"], continuation), dim=1)
+        if "attention_mask" in validation_inputs:
+            validation_inputs["attention_mask"] = torch.cat(
+                (prefixed_inputs["attention_mask"], torch.ones_like(continuation)), dim=1
+            )
+        prefix_length = int(prefixed_inputs["input_ids"].shape[1])
+        with torch.inference_mode():
+            validation_output = handler.model(**validation_inputs, use_cache=False)
+        greedy_ids = validation_output.logits[0, prefix_length - 1 : prefix_length - 1 + len(target_ids)].argmax(-1)
+        if greedy_ids.detach().cpu().tolist() != target_ids:
+            raise TraceValidationError(mismatch + "; article continuation does not match the full expected target")
+        answer_prefix = predicted_text
+        validation_scope = "full_target_after_predicted_article"
+        inputs = prefixed_inputs
+        sequence_length = prefix_length
+        target_id = int(target_ids[0])
+        cache.clear()
+        with torch.inference_mode(), temporary_hooks(hooks):
+            clean = handler.model(**inputs, use_cache=False)
+        if set(cache) != expected:
+            raise RuntimeError("Clean block cache is incomplete after article-prefix validation")
+        clean_top_id, _ = top_token(clean)
+        if clean_top_id != target_id:
+            raise TraceValidationError("Article-prefixed clean prediction changed between validation and tracing")
     clean_probability = probability(clean, target_id)
     embedding = modules[embedding_module_name(handler.cfg)]
     weight = getattr(embedding, "weight", None)
@@ -184,6 +231,10 @@ def trace_example(
     return {
         "prompt_id": example.prompt_id,
         "prompt": example.prompt,
+        "tracing_prompt": tracing_prompt,
+        "answer_prefix": answer_prefix,
+        "clean_validation_scope": validation_scope,
+        "original_clean_top_token_id": original_clean_top_id,
         "subject": example.subject,
         "target": example.target,
         "target_token_ids": target_ids,
@@ -250,6 +301,7 @@ def run(cfg: DictConfig, handler: ModelHandler, settings: LegacySettings) -> Pat
                 num_noise_samples=settings.num_noise_samples,
                 seed=settings.seed + index,
                 require_correct_clean=settings.require_correct_clean_prediction,
+                allow_article_prefix=settings.allow_article_prefix,
             )
         except TraceValidationError as exc:
             rejections.append({"prompt_id": example.prompt_id, "reason": str(exc)})

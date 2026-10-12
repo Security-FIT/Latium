@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Sequential HF checkpoints: baseline Gram, ROME, edited Gram."""
 import argparse
+import hashlib
 import json
 import os
+import random
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -26,6 +29,7 @@ def parse_args(argv=None):
     parser.add_argument("--models-manifest", help="Existing fleet JSON instead of HF discovery")
     parser.add_argument("--model-count", type=int, default=100)
     parser.add_argument("--run-root", required=True)
+    parser.add_argument("--artifact-root", help="Optional rsync destination; save artifacts after every checkpoint")
     parser.add_argument("--download-root", help="Dedicated download parent; keep the same path on retries")
     parser.add_argument("--case-index-file", default=str(ROOT / "manifests/counterfact_seed42_n1000.json"))
     parser.add_argument("--case-start", type=int, default=0)
@@ -34,23 +38,37 @@ def parse_args(argv=None):
     parser.add_argument("--covariance-samples", type=int, default=100000)
     parser.add_argument("--finetuned-covariance", action="store_true",
                         help="Compute covariance per checkpoint instead of reusing the original model's statistics")
+    parser.add_argument("--keep-covariance", action=argparse.BooleanOptionalAction, default=True,
+                        help="Retain checkpoint covariance; --no-keep-covariance removes it after processing (requires --finetuned-covariance)")
     parser.add_argument("--python", default=sys.executable)
     parser.add_argument("--tracking", choices=("none", "wandb"), default="none")
     parser.add_argument("--wandb-project", default="latium")
     parser.add_argument("--no-graphs", action="store_true")
-    parser.add_argument("--keep-downloads", action="store_true", help="Retain pinned checkpoint files for retries")
+    parser.add_argument("--keep-downloads", action=argparse.BooleanOptionalAction, default=False,
+                        help="Retain pinned checkpoint files for reruns; default removes run-owned downloads after each checkpoint")
     parser.add_argument("--retry-failed-facts", action="store_true", help="Try reserve facts until one ROME edit succeeds")
-    parser.add_argument("--causal-kuba-fix", action="store_true", help="Trace the same fact before ROME; save trace artifacts")
+    parser.add_argument("--random-facts", action="store_true",
+                        help="Pick a random starting fact per checkpoint, save it for resume, and wrap for reserve facts")
+    parser.add_argument("--max-fact-attempts", type=int, default=1000,
+                        help="Maximum candidate facts per checkpoint (default: 1000), including tracing rejections and ROME failures")
+    parser.add_argument("--causal-kuba-fix", action="store_true", help="Save tracing artifacts before ROME; --trace-case-index-file selects an independent fact pool")
+    parser.add_argument("--trace-case-index-file", help="Separate tracing manifest, disjoint from the ROME fact pool; tracing does not gate editing")
     parser.add_argument("--checkpoint-stop", "--checkpoint-limit", dest="checkpoint_limit", type=int,
                         help="Exclusive frozen checkpoint stop; cohort stays fixed (default: all)")
     parser.add_argument("--checkpoint-start", type=int, default=0, help="Start at this zero-based frozen checkpoint position")
     parser.add_argument("--prefix-cache-file", help="Existing classic external prefix pool")
     parser.add_argument("--prepare-only", action="store_true", help="Freeze IDs/revisions/configs and facts without downloading weights")
     args = parser.parse_args(argv)
+    if not args.keep_covariance and not args.finetuned_covariance:
+        parser.error("--no-keep-covariance requires --finetuned-covariance; original-model statistics are never removed")
     args.run_root = str(Path(args.run_root).resolve())
     args.case_index_file = str(Path(args.case_index_file).resolve())
+    if args.trace_case_index_file:
+        args.trace_case_index_file = str(Path(args.trace_case_index_file).resolve())
+        if not args.causal_kuba_fix:
+            parser.error("A separate tracing manifest requires --causal-kuba-fix")
     args.case_stop = args.case_stop if args.case_stop is not None else args.case_start + args.n_tests
-    if (args.model_count <= 0 or args.covariance_samples <= 0 or args.case_start < 0
+    if (args.model_count <= 0 or args.covariance_samples <= 0 or args.max_fact_attempts <= 0 or args.case_start < 0
             or args.case_stop <= args.case_start or args.case_stop > load_case_manifest(args.case_index_file)["count"]):
         parser.error("Invalid model count, fact range, or covariance sample count")
     if args.checkpoint_limit is not None and not 0 < args.checkpoint_limit <= args.model_count:
@@ -59,6 +77,8 @@ def parse_args(argv=None):
         parser.error("checkpoint-start must precede checkpoint-limit/model-count")
     if (args.retry_failed_facts or args.causal_kuba_fix) and args.case_stop != args.case_start + 1:
         parser.error("Fact retries and tracing require one initial fact per checkpoint")
+    if args.random_facts and (args.case_start != 0 or args.case_stop != 1):
+        parser.error("Random facts require one edit per checkpoint with case-start=0 and case-stop=1")
     return args
 
 
@@ -78,9 +98,12 @@ def rome_case(root, plan_id):
 def checkpoint_files(names):
     """Keep one weight format (full or adapter) and inference metadata."""
     names = [name for name in names if "/" not in name]
-    weights = [name for name in names if name.endswith(".safetensors") and not name.startswith("adapter_")]
+    weights = [name for name in names if name.endswith(".safetensors") and not name.startswith("adapter_")
+               and (name == "model.safetensors" or "model.safetensors.index.json" in names)]
     if not weights:
-        weights = [name for name in names if name.startswith("pytorch_model") and name.endswith(".bin")]
+        weights = [name for name in names if name.endswith(".bin")
+                   and (name == "pytorch_model.bin" or
+                        (name.startswith("pytorch_model") and "pytorch_model.bin.index.json" in names))]
     metadata = [name for name in names if name.endswith((".json", ".txt", ".model", ".tiktoken", ".vocab", ".merges", ".jinja"))]
     if "config.json" in names and weights:
         metadata = [name for name in metadata if not name.startswith("adapter_")]
@@ -95,8 +118,12 @@ def checkpoint_files(names):
 
 def freeze_selection(args, base, api):
     root = Path(args.run_root)
-    downloads = (Path(args.download_root).resolve() / digest(str(root))[:12]
-                 if args.download_root else root / ".downloads")
+    path = root / "checkpoints.json"
+    existing = json.loads(path.read_text()) if path.exists() else None
+    shared = (existing["identity"].get("download_layout") == "shared-revision-v1" if existing else
+              bool(args.keep_downloads and args.download_root))
+    downloads = (Path(args.download_root).resolve() if shared else
+                 Path(args.download_root).resolve() / digest(str(root))[:12] if args.download_root else root / ".downloads")
     base = OmegaConf.to_container(base, resolve=True)
     # Reuse the classic external prefix pool without downloading a helper model.
     prefix_hash = None
@@ -119,10 +146,32 @@ def freeze_selection(args, base, api):
                 "supplied_manifest_hash": digest(supplied) if supplied else None,
                 "download_root": str(downloads)}
     identity.update(covariance_source="finetuned" if args.finetuned_covariance else "base",
-                    covariance_samples=args.covariance_samples)
-    path = root / "checkpoints.json"
-    if path.exists():
-        selection = json.loads(path.read_text())
+                     covariance_samples=args.covariance_samples)
+    if not args.keep_covariance:
+        identity["covariance_retention"] = "delete-after-checkpoint-v1"
+    if args.random_facts:
+        identity["fact_selection"] = "random-start-with-wrap-v1"
+    facts = load_case_manifest(args.case_index_file)
+    assigned = supplied is not None and any("fact_position" in record for record in supplied["models"][:args.model_count])
+    if assigned:
+        if args.random_facts or args.retry_failed_facts or args.case_stop - args.case_start != 1:
+            raise ValueError("Assigned facts require one edit per checkpoint without random draws or replacement facts")
+        if args.causal_kuba_fix and not args.trace_case_index_file:
+            raise ValueError("Assigned ROME facts require a separate tracing manifest")
+        identity.update(fact_selection="assigned-once-v1", fact_manifest_hash=facts["manifest_hash"])
+    if args.trace_case_index_file:
+        tracing = load_case_manifest(args.trace_case_index_file)
+        if ((tracing["dataset"], tracing["split"]) != (facts["dataset"], facts["split"])
+                or set(tracing["case_ids"]) & set(facts["case_ids"])
+                or set(tracing["indices"]) & set(facts["indices"])):
+            raise ValueError("Tracing must use the same dataset and a disjoint set of facts")
+        identity["trace_manifest_hash"] = tracing["manifest_hash"]
+    if shared:
+        identity["download_layout"] = "shared-revision-v1"
+        if not args.keep_downloads:
+            raise ValueError("Shared revision caches must be retained")
+    if existing:
+        selection = existing
         if selection["identity"] != identity:
             raise ValueError("Checkpoint selection/configuration changed; use a new run root")
         return selection
@@ -134,7 +183,7 @@ def freeze_selection(args, base, api):
                                token=os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))
     if len(records) != args.model_count:
         raise ValueError(f"Requested {args.model_count} checkpoints but found {len(records)}")
-    models, seen = [], set()
+    models, seen, assigned_positions = [], set(), set()
     for record in records:
         model_id = str(record["model_id"])
         if not re.fullmatch(r"[\w.-]+/[\w.-]+", model_id) or any(p in (".", "..") for p in model_id.split("/")):
@@ -144,8 +193,25 @@ def freeze_selection(args, base, api):
             raise ValueError(f"Duplicate checkpoint or config key: {model_id}")
         seen.add(key)
         entry = {"model_id": model_id, "key": key, "rank": len(models) + 1,
+                 "discovery_rank": record.get("discovery_rank", record.get("rank", len(models) + 1)),
                  "downloads": record.get("downloads"), "revision": record.get("revision"),
-                 "checkpoint_type": record.get("checkpoint_type")}
+                  "checkpoint_type": record.get("checkpoint_type")}
+        if record.get("file_sizes"):
+            entry["file_sizes"] = record["file_sizes"]
+        if record.get("tokenizer_asset_subdir"):
+            tokenizer_dir = (ROOT / record["tokenizer_asset_subdir"]).resolve()
+            if not tokenizer_dir.is_relative_to(ROOT / "inputs" / "tokenizers") or not tokenizer_dir.is_dir():
+                raise ValueError(f"Invalid staged tokenizer directory: {tokenizer_dir}")
+            for name in ("tokenizer_asset_subdir", "tokenizer_base_model", "tokenizer_base_revision"):
+                entry[name] = record[name]
+        if assigned:
+            position = record.get("fact_position")
+            if type(position) is not int or not 0 <= position < facts["count"] or position in assigned_positions:
+                raise ValueError(f"Missing, duplicate or invalid fact assignment for {model_id}")
+            if record.get("fact_case_id") != facts["case_ids"][position]:
+                raise ValueError(f"Assigned CounterFact ID does not match the manifest for {model_id}")
+            assigned_positions.add(position)
+            entry.update(fact_position=position, fact_case_id=record["fact_case_id"])
         try:
             if record.get("selection_error"):
                 raise ValueError(record["selection_error"])
@@ -161,6 +227,9 @@ def freeze_selection(args, base, api):
                 if record.get("adapter_base_revision") and record.get("adapter_base_files"):
                     for key_name in ("adapter_base_model", "adapter_base_revision", "adapter_base_files"):
                         entry[key_name] = record[key_name]
+                    for key_name in ("adapter_base_file_sizes", "adapter_config"):
+                        if key_name in record:
+                            entry[key_name] = record[key_name]
                 else:
                     from huggingface_hub import hf_hub_download
                     adapter = json.loads(Path(hf_hub_download(model_id, "adapter_config.json", revision=entry["revision"], token=os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"))).read_text())
@@ -199,14 +268,20 @@ def save_configs(root, selection):
     for entry in selection["models"]:
         cfg = dict(base)
         cfg.update(name=entry["model_id"], save_to_local=False,
-                   models_dir=str(Path(selection["identity"]["download_root"]) / entry["key"] / "models"),
+                   models_dir=str(checkpoint_download_path(selection, entry) / "models"),
                    second_moment_dir=str(root / "models" / entry["key"] / "covariance"),
                    second_moment_path=None)
         if shared:
             cfg.update(second_moment_dir=str(directory), second_moment_path=str(path),
                        second_moment_model_name=base["name"])
+        else:
+            cfg.pop("second_moment_model_name", None)
         # Provenance is also part of the Gram config hash, even after weights are deleted.
         cfg["checkpoint_revision"] = entry.get("revision")
+        if entry.get("tokenizer_asset_subdir"):
+            cfg["tokenizer_path"] = str(ROOT / entry["tokenizer_asset_subdir"])
+            cfg["tokenizer_base_model"] = entry["tokenizer_base_model"]
+            cfg["tokenizer_base_revision"] = entry["tokenizer_base_revision"]
         if entry.get("checkpoint_type") == "adapter" and not entry.get("selection_error"):
             cfg["adapter_base_model"] = entry["adapter_base_model"]
             cfg["adapter_base_revision"] = entry["adapter_base_revision"]
@@ -216,8 +291,48 @@ def save_configs(root, selection):
 
 
 def adapter_base_path(selection, entry):
+    if selection["identity"].get("download_layout") == "shared-revision-v1":
+        base = {"model_id": entry["adapter_base_model"], "key": fleet_model_key(entry["adapter_base_model"]),
+                "revision": entry["adapter_base_revision"]}
+        return checkpoint_download_path(selection, base) / "models" / entry["adapter_base_model"]
     identity = {"model": entry["adapter_base_model"], "revision": entry["adapter_base_revision"]}
     return Path(selection["identity"]["download_root"]) / "bases" / digest(identity)[:16]
+
+
+def checkpoint_download_path(selection, entry):
+    root = Path(selection["identity"]["download_root"])
+    if selection["identity"].get("download_layout") == "shared-revision-v1":
+        return root / "checkpoints" / entry["key"] / str(entry.get("revision") or "unresolved")
+    return root / entry["key"]
+
+
+def ensure_download(downloader, *, repo_id, revision, local_dir, files, token, file_sizes=None):
+    """Reuse complete pinned snapshots; serialize downloads shared by fleet jobs."""
+    directory = Path(local_dir)
+    if directory.is_symlink():
+        raise ValueError(f"Checkpoint cache must not be a symlink: {directory}")
+    identity = {"repo_id": repo_id, "revision": revision, "files": sorted(files)}
+    marker = directory / ".latium-snapshot.json"
+    with locked(directory.parent / ("." + directory.name + "-download.lock")):
+        try:
+            saved = json.loads(marker.read_text()) if marker.exists() else None
+        except (OSError, json.JSONDecodeError):
+            saved = None
+        if (saved and saved.get("identity") == identity and
+                all((directory / name).is_file() and (directory / name).stat().st_size == size
+                    for name, size in saved["file_sizes"].items()) and
+                set(saved["file_sizes"]) == set(files)):
+            return "cache"
+        downloader(repo_id=repo_id, revision=revision, local_dir=str(directory), allow_patterns=files, token=token,
+                   force_download=bool(saved))
+        missing = [name for name in files if not (directory / name).is_file()]
+        if missing:
+            raise RuntimeError(f"Incomplete pinned download for {repo_id}: {missing[:6]}")
+        actual = {name: (directory / name).stat().st_size for name in files}
+        if file_sizes and any(actual[name] != size for name, size in file_sizes.items() if size is not None and name in actual):
+            raise RuntimeError(f"Downloaded file sizes do not match pinned metadata for {repo_id}")
+        write_json(marker, {"identity": identity, "file_sizes": actual})
+        return "download"
 
 
 def remove_download(download, parent):
@@ -226,6 +341,43 @@ def remove_download(download, parent):
         raise ValueError(f"Download cleanup escaped its owned parent: {download}")
     if download.exists():
         shutil.rmtree(download)
+
+
+def remove_checkpoint_covariance(root, entry, samples):
+    """Keep provenance, delete only the dedicated checkpoint statistics directory."""
+    checkpoint = root / "models" / entry["key"]
+    directory = checkpoint / "covariance"
+    if (directory.is_symlink() or not directory.resolve().is_relative_to(root.resolve())
+            or directory.resolve().parent != checkpoint.resolve()):
+        raise ValueError(f"Covariance cleanup escaped its checkpoint: {directory}")
+    record_path = checkpoint / "covariance-lifecycle.json"
+    record = json.loads(record_path.read_text()) if record_path.exists() else {
+        "model_id": entry["model_id"], "checkpoint_revision": entry["revision"],
+        "adapter_base_model": entry.get("adapter_base_model"),
+        "adapter_base_revision": entry.get("adapter_base_revision"),
+        "covariance_source": "finetuned", "target_samples": samples, "files": [],
+    }
+    if directory.exists():
+        files = []
+        for path in sorted(directory.iterdir()):
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"Unexpected entry in checkpoint covariance directory: {path}")
+            sha = hashlib.sha256()
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(8 * 1024 * 1024), b""):
+                    sha.update(chunk)
+            files.append({"name": path.name, "bytes": path.stat().st_size, "sha256": sha.hexdigest()})
+        if files:
+            record["files"] = files
+            stages = [json.loads(path.read_text()) for path in checkpoint.glob("batches/*/state.json")]
+            computed = [s["covariance"] for s in stages if s.get("covariance", {}).get("model_id") == entry["model_id"]
+                        and s["covariance"].get("checkpoint_revision") == entry["revision"]]
+            if computed:
+                record["computation"] = max(computed, key=lambda item: item["started_at"])
+        shutil.rmtree(directory)
+    record.update(removed=True, removed_at=utc_now())
+    write_json(record_path, record)
+    return record
 
 
 def own_download_root(downloads, root):
@@ -253,6 +405,13 @@ def run(args, api=None, downloader=None):
             base.prefix_source = str(Path(args.prefix_cache_file).resolve())
             base.prefix_cache_path = base.prefix_source
         selection = freeze_selection(args, base, api)
+        trace_cohort = None
+        if args.trace_case_index_file:
+            trace_cohort = load_case_manifest(args.trace_case_index_file)
+            frozen_trace = root / "trace-cases.json"
+            if frozen_trace.exists() and json.loads(frozen_trace.read_text()) != trace_cohort:
+                raise ValueError("Frozen tracing manifest changed; use a new run root")
+            write_json(frozen_trace, trace_cohort)
         config_dir = save_configs(root, selection)
         previous = os.environ.get("LATIUM_MODEL_CONFIG_DIR")
         os.environ["LATIUM_MODEL_CONFIG_DIR"] = str(config_dir)
@@ -266,7 +425,7 @@ def run(args, api=None, downloader=None):
                 forwarded.append("--no-graphs")
             gram = gram_args(forwarded)
             gram.skip_second_moment = not args.finetuned_covariance
-            if args.retry_failed_facts:
+            if args.retry_failed_facts or any("fact_position" in entry for entry in selection["models"]):
                 gram.models = []  # Freeze the cohort; register only facts actually attempted by ROME.
             batch, catalog = gram_fleet.prepare(gram)
             if args.prepare_only:
@@ -286,37 +445,66 @@ def run(args, api=None, downloader=None):
                         "--run-root analysis_out/base-covariance, or select --finetuned-covariance.")
             failures = []
             downloads = Path(selection["identity"]["download_root"])
-            own_download_root(downloads, root)
+            shared = selection["identity"].get("download_layout") == "shared-revision-v1"
+            if shared:
+                if downloads.is_symlink():
+                    raise ValueError("Shared cache root must not be a symlink")
+                downloads.mkdir(parents=True, exist_ok=True)
+            else:
+                own_download_root(downloads, root)
             # A killed job can leave a later checkpoint behind. Clear all owned
             # leftovers before starting so retries still keep only one model on disk.
             if not args.keep_downloads:
                 for entry in selection["models"]:
                     remove_download(downloads / entry["key"], downloads)
                 remove_download(downloads / "bases", downloads)
+            trace_implementation = None
+            if args.causal_kuba_fix:
+                from jobs.finetuned_trace import trace_implementation_hash
+                trace_implementation = trace_implementation_hash()
             for entry in selection["models"][args.checkpoint_start:args.checkpoint_limit]:
                 model = entry["key"]
                 state_path = root / "models" / model / "fleet-batches" / batch / "state.json"
-                download = downloads / model
+                download = checkpoint_download_path(selection, entry)
+                previous_state = json.loads(state_path.read_text()) if state_path.exists() else {}
+                if previous_state and (args.causal_kuba_fix or previous_state.get("causal_kuba_fix")):
+                    if (previous_state.get("causal_kuba_fix") != args.causal_kuba_fix
+                            or previous_state.get("trace_implementation") != trace_implementation):
+                        raise ValueError("Causal tracing implementation changed; use a new run root")
                 state = {**entry, "status": "running", "started_at": utc_now()}
                 try:
-                    previous_state = json.loads(state_path.read_text()) if state_path.exists() else {}
-                    if previous_state.get("status") == "complete" and previous_state.get("causal_kuba_fix", False) == args.causal_kuba_fix:
+                    if previous_state.get("status") in ("complete", "rome_failed") and previous_state.get("causal_kuba_fix", False) == args.causal_kuba_fix:
                         try:
-                            accepted = previous_state.get("accepted_position", args.case_start)
+                            accepted = previous_state.get("accepted_position", entry.get("fact_position", args.case_start))
                             accepted_batch = f"m{accepted:04d}-{accepted + (args.case_stop - args.case_start):04d}"
                             gram_fleet.verify_batch(root / catalog["models"][model]["run_root"], model,
                                 catalog["models"][model]["batches"][accepted_batch]["plan_id"], cohort,
                                 accepted, accepted + (args.case_stop - args.case_start))
                             if args.causal_kuba_fix:
-                                trace = root / "models" / model / "run" / "causal-kuba-fix" / f"m{accepted:04d}" / "artifact.json"
-                                payload = json.loads(trace.read_text())
-                                if payload["status"] != "complete" or not all((root / "models" / model / "run" / p).is_file() for p in payload["summary"]["outputs"]):
-                                    raise RuntimeError("Missing trace outputs")
+                                trace_position = accepted
+                                if trace_cohort is not None:
+                                    if previous_state.get("trace", {}).get("status") not in ("complete", "unavailable", "failed"):
+                                        raise RuntimeError("Missing independent tracing outcome")
+                                    trace_position = previous_state["trace"]["accepted_position"]
+                                if trace_position is not None:
+                                    trace = root / "models" / model / "run" / "causal-kuba-fix" / f"m{trace_position:04d}" / "artifact.json"
+                                    payload = json.loads(trace.read_text())
+                                    if payload["status"] != "complete" or not all((root / "models" / model / "run" / p).is_file() for p in payload["summary"]["outputs"]):
+                                        raise RuntimeError("Missing trace outputs")
                             continue
                         except (FileNotFoundError, RuntimeError):
                             pass  # Repair missing artifacts after redownloading the pinned checkpoint.
                     state["attempts"] = previous_state.get("attempts", [])
+                    if not args.keep_covariance:
+                        # Interrupted computations cannot supply statistics to a fresh attempt.
+                        remove_checkpoint_covariance(root, entry, args.covariance_samples)
+                    if args.random_facts:
+                        state["fact_candidate_start"] = previous_state.get("fact_candidate_start")
+                        if state["fact_candidate_start"] is None:
+                            state["fact_candidate_start"] = random.randrange(cohort["count"])
                     state["causal_kuba_fix"] = args.causal_kuba_fix
+                    if args.causal_kuba_fix:
+                        state["trace_implementation"] = trace_implementation
                     write_json(state_path, state)
                     if entry.get("selection_error"):
                         raise ValueError(entry["selection_error"])
@@ -327,48 +515,89 @@ def run(args, api=None, downloader=None):
                             remove_download(base_download, base_download.parent)
                     local_dir = download / "models" / entry["model_id"]
                     print(f"[{model}] downloading {entry['revision']}", flush=True)
-                    downloader(repo_id=entry["model_id"], revision=entry["revision"],
-                               local_dir=str(local_dir), allow_patterns=entry["files"], token=token)
+                    state["download_source"] = ensure_download(downloader, repo_id=entry["model_id"], revision=entry["revision"],
+                               local_dir=str(local_dir), files=entry["files"], token=token, file_sizes=entry.get("file_sizes"))
                     if entry.get("checkpoint_type") == "adapter":
-                        downloader(repo_id=entry["adapter_base_model"], revision=entry["adapter_base_revision"],
-                                   local_dir=str(adapter_base_path(selection, entry)),
-                                   allow_patterns=entry["adapter_base_files"], token=token)
+                        state["adapter_base_download_source"] = ensure_download(downloader,
+                                   repo_id=entry["adapter_base_model"], revision=entry["adapter_base_revision"],
+                                   local_dir=str(adapter_base_path(selection, entry)), files=entry["adapter_base_files"],
+                                   token=token, file_sizes=entry.get("adapter_base_file_sizes"))
                     state["download_completed_at"] = utc_now()
-                    positions = range(args.case_start, cohort["count"] if args.retry_failed_facts else args.case_start + 1)
-                    for position in positions:
-                        if any(a["position"] == position and a["status"] in ("trace_rejected", "rome_failed") for a in state["attempts"]):
+                    if trace_cohort is not None:
+                        from jobs.finetuned_trace import run_trace
+                        try:
+                            result = run_trace(args, model, root / "models" / model / "run", trace_cohort, 0,
+                                               min(trace_cohort["count"], args.max_fact_attempts),
+                                               case_index_file=root / "trace-cases.json")
+                            state["trace"] = {**result, "status": "complete" if result["accepted_position"] is not None else "unavailable"}
+                            state["trace"]["case_id"] = (trace_cohort["case_ids"][result["accepted_position"]]
+                                                         if result["accepted_position"] is not None else None)
+                        except RuntimeError as exc:
+                            state["trace"] = {"status": "failed", "accepted_position": None, "error": str(exc)}
+                        write_json(state_path, state)
+                    position = entry.get("fact_position", state["fact_candidate_start"] if args.random_facts else args.case_start)
+                    attempt_limit = min(args.max_fact_attempts if args.retry_failed_facts else 1,
+                                        cohort["count"] - (0 if args.random_facts else args.case_start))
+                    stop = min(cohort["count"], position + attempt_limit)
+                    wrap_stop = attempt_limit - (stop - position) if args.random_facts else 0
+                    accepted = False
+                    while position < stop or wrap_stop:
+                        if position >= stop:
+                            position, stop, wrap_stop = 0, wrap_stop, 0
+                        rejected = {a["position"] for a in state["attempts"] if a["status"] in ("trace_rejected", "rome_failed")}
+                        if position in rejected and "fact_position" not in entry:
+                            position += 1
                             continue
                         attempt = {"position": position, "case_id": cohort["case_ids"][position], "status": "running", "started_at": utc_now()}
                         state["attempts"] = [a for a in state["attempts"] if a["position"] != position] + [attempt]
                         write_json(state_path, state)
-                        if args.causal_kuba_fix:
+                        if args.causal_kuba_fix and trace_cohort is None:
                             from jobs.finetuned_trace import run_trace
-                            valid, reason = run_trace(args, model, root / "models" / model / "run", cohort, position)
-                            if not valid:
-                                attempt.update(status="trace_rejected", error=reason)
+                            # Do not rescan previously rejected facts on a resumed run.
+                            trace_stop = min((p for p in rejected if position < p < stop), default=stop)
+                            result = run_trace(args, model, root / "models" / model / "run", cohort, position, trace_stop)
+                            for row in result["rejections"]:
+                                record = {**row, "status": "trace_rejected", "started_at": attempt["started_at"], "completed_at": utc_now()}
+                                state["attempts"] = [a for a in state["attempts"] if a["position"] != row["position"]] + [record]
+                            write_json(state_path, state)
+                            if result["accepted_position"] is None:
+                                if not args.retry_failed_facts:
+                                    raise RuntimeError(f"Fact rejected by causal tracing: {result['error']}")
+                                position = trace_stop
+                                continue
+                            position = result["accepted_position"]
+                            if attempt["position"] != position:
+                                attempt = {"position": position, "case_id": cohort["case_ids"][position], "status": "running", "started_at": utc_now()}
+                                state["attempts"] = [a for a in state["attempts"] if a["position"] != position] + [attempt]
                                 write_json(state_path, state)
-                                if args.retry_failed_facts:
-                                    continue
-                                raise RuntimeError(f"Fact rejected by causal tracing: {reason}")
                         gram.models = [model]
                         gram.case_start = position
                         gram.case_stop = position + (args.case_stop - args.case_start)
                         gram.n_tests = gram.case_stop - gram.case_start
                         if gram_fleet.run(gram):
                             raise RuntimeError("Gram batch failed; see batches/*/state.json and fleet.log")
-                        if args.retry_failed_facts:
+                        if args.retry_failed_facts or "fact_position" in entry:
                             current_batch, catalog = gram_fleet.prepare(gram)
                             case = rome_case(root / catalog["models"][model]["run_root"], catalog["models"][model]["batches"][current_batch]["plan_id"])
-                            if not case["edit"]["success"]:
+                            state["rome_success"] = bool(case["edit"]["success"])
+                            attempt["execution"] = case
+                            if not state["rome_success"]:
                                 attempt.update(status="rome_failed", error="Efficacy evaluation did not pass", execution=case)
                                 write_json(state_path, state)
+                                if "fact_position" in entry:
+                                    attempt["completed_at"] = utc_now()
+                                    accepted = True  # The assigned edit was evaluated; no replacement is allowed.
+                                    break
+                                position += 1
                                 continue
                         attempt.update(status="complete", completed_at=utc_now())
                         state["accepted_position"] = position
+                        accepted = True
                         break
-                    else:
-                        raise RuntimeError("Reserve fact manifest exhausted without a successful edit")
-                    state.update(status="complete", completed_at=utc_now())
+                    if not accepted:
+                        raise RuntimeError(f"No successful edit within {attempt_limit} candidate facts "
+                                           f"(max-fact-attempts={args.max_fact_attempts})")
+                    state.update(status="rome_failed" if state.get("rome_success") is False else "complete", completed_at=utc_now())
                 except Exception as exc:
                     state.update(status="failed", error=f"{type(exc).__name__}: {exc}")
                     if state.get("attempts") and state["attempts"][-1].get("status") == "running":
@@ -376,10 +605,16 @@ def run(args, api=None, downloader=None):
                     failures.append(model)
                     print(f"[{model}] {state['error']}", flush=True)
                 finally:
+                    if not args.keep_covariance:
+                        state["covariance"] = remove_checkpoint_covariance(root, entry, args.covariance_samples)
                     if not args.keep_downloads:
                         remove_download(download, downloads)
+                        remove_download(downloads / "bases", downloads)
                     if state.get("status") != "running":
                         write_json(state_path, state)
+                    if args.artifact_root:
+                        subprocess.run(["rsync", "-a", "--timeout=60", str(root) + "/",
+                                        args.artifact_root.rstrip("/") + "/"], check=True, timeout=120)
             return int(bool(failures))
         finally:
             if previous is None:

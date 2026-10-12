@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+#PBS -j oe
+set -Eeuo pipefail
+JOB_START_EPOCH="$(date +%s)"
+
+: "${SCRATCHDIR:?PBS scratch is required}"
+: "${LATIUM_RUNTIME_ARCHIVE:?Set the packed Conda archive}"
+: "${LATIUM_INPUT_ARCHIVE:?Set the code/data/input archive}"
+: "${LATIUM_RESULT_ROOT:?Set a fresh Brno2 output directory}"
+: "${LATIUM_BASE_MODEL:?Set the classic model config key}"
+: "${LATIUM_MODEL_COUNT:?Set the frozen checkpoint count}"
+mkdir -p "$SCRATCHDIR/tmp" "$SCRATCHDIR/env" "$SCRATCHDIR/work"
+exec > >(tee "$SCRATCHDIR/pbs-job.log") 2>&1
+export TMPDIR="$SCRATCHDIR/tmp"
+export PYTHONUNBUFFERED=1
+export XDG_CACHE_HOME="$SCRATCHDIR/cache"
+export XDG_CONFIG_HOME="$SCRATCHDIR/config"
+export TRITON_HOME="$SCRATCHDIR"
+export TRITON_CACHE_DIR="$SCRATCHDIR/.triton/cache"
+export TRITON_DUMP_DIR="$SCRATCHDIR/.triton/dump"
+export TRITON_OVERRIDE_DIR="$SCRATCHDIR/.triton/override"
+export TORCH_HOME="$SCRATCHDIR/cache/torch"
+export TORCHINDUCTOR_CACHE_DIR="$SCRATCHDIR/cache/torchinductor"
+export TORCH_EXTENSIONS_DIR="$SCRATCHDIR/cache/torch-extensions"
+export CUDA_CACHE_PATH="$SCRATCHDIR/cache/cuda"
+mkdir -p "$TRITON_CACHE_DIR" "$TORCHINDUCTOR_CACHE_DIR" \
+  "$TORCH_EXTENSIONS_DIR" "$CUDA_CACHE_PATH"
+
+/usr/bin/python3 - "$SCRATCHDIR/ssh_known_hosts" <<'PY'
+import sys, urllib.request
+with urllib.request.urlopen('https://metavo.metacentrum.cz/ssh_known_hosts', timeout=20) as response:
+    with open(sys.argv[1], 'wb') as output:
+        output.write(response.read())
+PY
+SSH=(ssh -F /dev/null -o IdentityFile=none -o PubkeyAuthentication=no
+     -o GSSAPIAuthentication=yes -o BatchMode=yes -o ConnectTimeout=15
+     -o "UserKnownHostsFile=$SCRATCHDIR/ssh_known_hosts" -o StrictHostKeyChecking=yes)
+export RSYNC_RSH="${SSH[*]}"
+storage_path() {
+  [[ "$1" == /storage/brno2/home/"$USER"/* && "$1" != *[^a-zA-Z0-9_./-]* && "$1" != */../* ]] || return 1
+  printf '/brno2/%s/%s' "$USER" "${1#"/storage/brno2/home/$USER/"}"
+}
+fetch() {
+  "${SSH[@]}" storage-brno2.metacentrum.cz "cat $(storage_path "$1")" > "$2"
+}
+RESULT_PATH="$(storage_path "$LATIUM_RESULT_ROOT")"
+RESULT_DEST="storage-brno2.metacentrum.cz:$RESULT_PATH/"
+"${SSH[@]}" storage-brno2.metacentrum.cz "mkdir -p $RESULT_PATH"
+RUN_ROOT="$SCRATCHDIR/work/repo/analysis_out/run"
+mkdir -p "$RUN_ROOT"
+cleanup() {
+  status=$?
+  trap - EXIT
+  if [[ "${LATIUM_KEEP_COVARIANCE:-true}" == false && -f "$RUN_ROOT/checkpoints.json" && -x "$SCRATCHDIR/env/bin/python" ]]; then
+    if ! "$SCRATCHDIR/env/bin/python" "$SCRATCHDIR/work/repo/jobs/run_budgeted_finetunes.py" \
+      --cleanup-only --run-root "$RUN_ROOT" --download-root "$SCRATCHDIR/downloads"; then
+      echo "ERROR: Final checkpoint cleanup or report recovery failed" >&2
+      status=1
+    fi
+  fi
+  cp "$SCRATCHDIR/pbs-job.log" "$RUN_ROOT/pbs-job.log"
+  if [[ -d "$RUN_ROOT" ]] && ! timeout 120 rsync -a --timeout=60 "$RUN_ROOT/" "$RESULT_DEST"; then
+    echo "ERROR: Artifact transfer failed; retaining scratch at $SCRATCHDIR" >&2
+    exit 1
+  fi
+  clean_scratch || true
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+
+echo "Stage runtime: $(date -Is)"
+fetch "$LATIUM_RUNTIME_ARCHIVE" "$SCRATCHDIR/runtime.tar.gz"
+fetch "$LATIUM_RUNTIME_ARCHIVE.sha256" "$SCRATCHDIR/runtime.sha256"
+printf '%s  %s\n' "$(cat "$SCRATCHDIR/runtime.sha256")" "$SCRATCHDIR/runtime.tar.gz" | sha256sum -c -
+tar -xzf "$SCRATCHDIR/runtime.tar.gz" -C "$SCRATCHDIR/env"
+export PATH="$SCRATCHDIR/env/bin:$PATH"
+export CONDA_PREFIX="$SCRATCHDIR/env"
+python "$SCRATCHDIR/env/bin/conda-unpack"
+rm "$SCRATCHDIR/runtime.tar.gz"
+
+echo "Stage code and inputs: $(date -Is)"
+fetch "$LATIUM_INPUT_ARCHIVE" "$SCRATCHDIR/inputs.tar.gz"
+fetch "$LATIUM_INPUT_ARCHIVE.sha256" "$SCRATCHDIR/inputs.sha256"
+printf '%s  %s\n' "$(cat "$SCRATCHDIR/inputs.sha256")" "$SCRATCHDIR/inputs.tar.gz" | sha256sum -c -
+tar -xzf "$SCRATCHDIR/inputs.tar.gz" -C "$SCRATCHDIR/work"
+rm "$SCRATCHDIR/inputs.tar.gz"
+if [[ -n "${LATIUM_CODE_ARCHIVE:-}" ]]; then
+  fetch "$LATIUM_CODE_ARCHIVE" "$SCRATCHDIR/code.tar.gz"
+  fetch "$LATIUM_CODE_ARCHIVE.sha256" "$SCRATCHDIR/code.sha256"
+  printf '%s  %s\n' "$(cat "$SCRATCHDIR/code.sha256")" "$SCRATCHDIR/code.tar.gz" | sha256sum -c -
+  tar -xzf "$SCRATCHDIR/code.tar.gz" -C "$SCRATCHDIR/work"
+  rm "$SCRATCHDIR/code.tar.gz"
+fi
+cd "$SCRATCHDIR/work/repo"
+EXTRA_ARGS=()
+PREFIX_ARGS=()
+if [[ -n "${LATIUM_PREFIX_CACHE_FILE:-}" ]]; then
+  fetch "$LATIUM_PREFIX_CACHE_FILE" "$SCRATCHDIR/work/repo/inputs/prefix-cache.json"
+  EXTRA_ARGS+=(--prefix-cache-file "$SCRATCHDIR/work/repo/inputs/prefix-cache.json")
+  PREFIX_ARGS+=(--prefix-cache-file "$SCRATCHDIR/work/repo/inputs/prefix-cache.json")
+fi
+if [[ "${LATIUM_FINETUNED_COVARIANCE:-false}" == true ]]; then
+  EXTRA_ARGS+=(--finetuned-covariance)
+fi
+if [[ "${LATIUM_KEEP_COVARIANCE:-true}" == false ]]; then
+  EXTRA_ARGS+=(--no-keep-covariance)
+fi
+export HF_HOME="$SCRATCHDIR/huggingface"
+export HF_HUB_CACHE="$HF_HOME/hub"
+export HUGGINGFACE_HUB_CACHE="$HF_HUB_CACHE"
+export HF_DATASETS_CACHE="$HF_HOME/datasets"
+export HF_ASSETS_CACHE="$HF_HOME/assets"
+export HF_XET_CACHE="$HF_HOME/xet"
+export HF_HUB_DISABLE_XET=1
+export HF_HUB_DOWNLOAD_TIMEOUT=60
+export HF_HUB_ETAG_TIMEOUT=30
+export LATIUM_COUNTERFACT_CACHE="$SCRATCHDIR/work/datasets/azhx/counterfact"
+export TOKENIZERS_PARALLELISM=false
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export MPLCONFIGDIR="$SCRATCHDIR/matplotlib"
+export WANDB_DIR="$SCRATCHDIR/wandb"
+export WANDB_DATA_DIR="$SCRATCHDIR/wandb-data"
+export WANDB_CACHE_DIR="$SCRATCHDIR/cache/wandb"
+export WANDB_CONFIG_DIR="$SCRATCHDIR/config/wandb"
+export WANDB_MODE=disabled
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+python - <<'PY'
+import hashlib, os, sys, torch, transformers
+from pathlib import Path
+from triton.runtime.cache import get_cache_manager
+
+cache = get_cache_manager(hashlib.sha256(b'latium-cache-preflight').hexdigest())
+probe = Path(cache.put('scratch-cache-ok', 'preflight.txt', binary=False)).resolve()
+assert probe.is_relative_to(Path(os.environ['TRITON_CACHE_DIR']).resolve()), probe
+assert probe.read_text() == 'scratch-cache-ok'
+probe.unlink()
+assert torch.cuda.is_available(), 'No working CUDA device'
+x = torch.ones(1, device='cuda')
+# Exercise the outer-product BMM used by RoPE before downloading checkpoints.
+product = torch.bmm(torch.ones((1, 64, 1), device='cuda'),
+                    torch.ones((1, 1, 8), device='cuda'))
+assert product[0, 0, 0].item() == 1.0
+torch.cuda.synchronize()
+print('python:', sys.executable)
+print('torch:', torch.__version__, 'transformers:', transformers.__version__)
+print('GPU:', torch.cuda.get_device_name(0), 'CUDA test:', x.item())
+print('Account HOME:', os.environ.get('HOME'), 'HF cache:', os.environ['HF_HOME'])
+print('Triton cache:', os.environ['TRITON_CACHE_DIR'], 'BMM test:', product[0, 0, 0].item())
+PY
+echo "Run local fleet: $(date -Is)"
+fleet_status=0
+if [[ -n "${LATIUM_WORK_HOURS:-}" ]]; then
+  [[ "${LATIUM_FINETUNED_COVARIANCE:-false}" == true && "${LATIUM_KEEP_COVARIANCE:-true}" == false ]] || {
+    echo "Budgeted jobs require finetuned covariance with deletion after each checkpoint" >&2
+    exit 2
+  }
+  python jobs/run_budgeted_finetunes.py --base-model "$LATIUM_BASE_MODEL" \
+    --models-manifest inputs/checkpoints.json --run-root "$RUN_ROOT" \
+    --download-root "$SCRATCHDIR/downloads" --artifact-root "$RESULT_DEST" \
+    --case-index-file inputs/rome-facts.json --trace-case-index-file inputs/trace-facts.json \
+    --job-start-epoch "$JOB_START_EPOCH" --work-hours "$LATIUM_WORK_HOURS" \
+    --per-checkpoint-budget-minutes "${LATIUM_CHECKPOINT_BUDGET_MINUTES:-60}" \
+    --covariance-samples "${LATIUM_COVARIANCE_SAMPLES:-100000}" \
+    "${PREFIX_ARGS[@]}" || fleet_status=$?
+else
+  python jobs/finetuned_gram_fleet.py --base-model "$LATIUM_BASE_MODEL" \
+  --models-manifest inputs/checkpoints.json --model-count "$LATIUM_MODEL_COUNT" \
+  --run-root "$RUN_ROOT" --artifact-root "$RESULT_DEST" \
+  --download-root "$SCRATCHDIR/downloads" \
+  --case-index-file inputs/rome-facts.json --trace-case-index-file inputs/trace-facts.json \
+  --case-start 0 --case-stop 1 --causal-kuba-fix --tracking none --no-keep-downloads \
+  --covariance-samples "${LATIUM_COVARIANCE_SAMPLES:-100000}" "${EXTRA_ARGS[@]}" || fleet_status=$?
+fi
+find "$SCRATCHDIR/downloads" -type f ! -name owner.json -print > "$RUN_ROOT/download-leftovers.txt"
+test ! -s "$RUN_ROOT/download-leftovers.txt"
+if [[ "${LATIUM_KEEP_COVARIANCE:-true}" == false ]]; then
+  find "$RUN_ROOT/models" -path '*/covariance/*' -type f -print > "$RUN_ROOT/covariance-leftovers.txt"
+  test ! -s "$RUN_ROOT/covariance-leftovers.txt"
+fi
+echo "Fleet complete and downloads removed: $(date -Is)"
+exit "$fleet_status"

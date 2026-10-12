@@ -90,6 +90,18 @@ Useful submission options:
 --dry-run             print resources, command, and qsub invocation
 ```
 
+For pinned finetunes, fixed ROME assignments, a separate tracing pool, and
+checkpoint-owned covariance, follow the preparation commands in
+[Gram workflows](../docs/gram-workflow.md#fine-tuned-hugging-face-fleet).
+`run_scratch_fleet.pbs` runs these inputs from verified code/runtime archives
+and transfers artifacts before scratch cleanup. Optional budget control defers
+work to another job and preserves covariance digests after removing matrices;
+see [scratch jobs](../docs/gram-workflow.md#brno2-scratch-jobs).
+
+Tracing commands are `causal-kuba-fix` for corrected token/block restoration
+and `causal-trace` for the independent MLP-window experiment. The historical
+`causal-kuba` runner has been removed.
+
 ## Causal-to-ROME pipeline
 
 `causal-rome` intentionally does not run structural detectors. It performs

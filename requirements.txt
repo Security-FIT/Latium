@@ -10,9 +10,12 @@ seaborn
 matplotlib
 datasets
 accelerate
+peft
+sentencepiece
 tensorboard
 tqdm
 scikit-learn
 nltk
 ruff
 pytest
+wandb

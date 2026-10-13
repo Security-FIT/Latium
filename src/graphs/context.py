@@ -18,6 +18,10 @@ class RendererUnavailableError(RuntimeError):
     """Raised when declared renderer inputs are present but unusable."""
 
 
+class RenderExecutionError(RuntimeError):
+    """Raised after one or more renderer failures have been recorded."""
+
+
 @dataclass(frozen=True)
 class RenderContext:
     run_root: Path
@@ -56,4 +60,4 @@ class RenderContext:
         }
 
 
-__all__ = ["RenderContext", "RendererUnavailableError"]
+__all__ = ["RenderContext", "RenderExecutionError", "RendererUnavailableError"]

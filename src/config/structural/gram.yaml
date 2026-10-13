@@ -1,0 +1,21 @@
+defaults:
+  - default
+  - _self_
+
+run:
+  edit_methods: [rome]
+  fail_on_missing_second_moment: true
+capture:
+  profile: none
+  enable: []
+  disable: []
+analysis:
+  enabled: true
+  preset: gram-localization
+  enable: []
+  disable: []
+render:
+  enabled: false
+  renderer_preset: gram-report
+  enable: []
+  disable: []

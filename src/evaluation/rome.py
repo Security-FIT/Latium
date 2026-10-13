@@ -8,10 +8,58 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
 import torch
+
+
+def compute_rome_score(
+    efficacy_score: Optional[float],
+    paraphrase_score: Optional[float],
+    neighborhood_score: Optional[float],
+) -> Optional[float]:
+    """Compute the ROME paper score from ES, PS, and NS."""
+    components = (efficacy_score, paraphrase_score, neighborhood_score)
+    if any(value is None for value in components):
+        return None
+
+    values = tuple(float(value) for value in components if value is not None)
+    if any(not math.isfinite(value) or value < 0.0 for value in values):
+        raise ValueError("ROME score components must be finite and non-negative")
+    if any(value == 0.0 for value in values):
+        return 0.0
+    return len(values) / math.fsum(1.0 / value for value in values)
+
+
+def summarize_rome_scores(metrics: Sequence[Mapping[str, Any]]) -> dict[str, Optional[float]]:
+    """Average ES, PS, and NS first, then compute the paper's harmonic mean."""
+    score_keys = ("efficacy_score", "paraphrase_score", "neighborhood_score")
+
+    def mean_metric(key: str) -> Optional[float]:
+        values = [float(record[key]) for record in metrics if record.get(key) is not None]
+        return math.fsum(values) / len(values) if values else None
+
+    efficacy_score = mean_metric("efficacy_score")
+    paraphrase_score = mean_metric("paraphrase_score")
+    neighborhood_score = mean_metric("neighborhood_score")
+    has_complete_records = bool(metrics) and all(
+        all(record.get(key) is not None for key in score_keys) for record in metrics
+    )
+    return {
+        "mean_efficacy_score": efficacy_score,
+        "mean_paraphrase_score": paraphrase_score,
+        "mean_neighborhood_score": neighborhood_score,
+        "mean_overall_score": (
+            compute_rome_score(
+                efficacy_score,
+                paraphrase_score,
+                neighborhood_score,
+            )
+            if has_complete_records
+            else None
+        ),
+    }
 
 
 def _get_target_token_ids(tokenizer: Any, text: str) -> list[int]:
@@ -122,12 +170,7 @@ def compute_rome_metrics(
         if neighborhood_values
         else None
     )
-    components = [value for value in (efficacy, paraphrase_score, neighborhood_score) if value is not None]
-    overall = (
-        len(components) / sum(1.0 / value for value in components)
-        if components and all(value > 0 for value in components)
-        else 0.0
-    )
+    overall = compute_rome_score(efficacy, paraphrase_score, neighborhood_score)
 
     return {
         "efficacy_score": efficacy,

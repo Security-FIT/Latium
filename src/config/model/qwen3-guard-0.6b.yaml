@@ -7,7 +7,7 @@ name: "Qwen/Qwen3Guard-Gen-0.6B"
 layer_name_template: "model.layers.{}.mlp.down_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
-layer: 5
+layer: 4
 corruption_noise_multiplier: 0.084320068359375
 lr: 0.05
 epochs: 50

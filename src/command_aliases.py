@@ -9,6 +9,7 @@ Hydra override builders for Latium command aliases.
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Callable
 from typing import Sequence, TextIO
@@ -52,7 +53,12 @@ def _with_optional_path(args: list[str], *, key: str, label: str) -> list[str]:
         raise ValueError(
             f"Unexpected positional {label} argument {extra_positionals[0]!r}. Use Hydra overrides for additional options."
         )
-    return [f"{key}={first}", *rest]
+    value = first
+    if not re.fullmatch(r"[A-Za-z0-9_./-]+", first):
+        # Hydra keeps ordinary backslashes literal; double those before quotes
+        # or the closing delimiter, then escape embedded double quotes.
+        value = '"' + re.sub(r'(\\+)(?="|$)', lambda match: match[0] * 2, first).replace('"', r'\"') + '"'
+    return [f"{key}={value}", *rest]
 
 
 def print_structural_help(file: TextIO | None = None) -> None:
@@ -97,7 +103,7 @@ def print_graphs_help(file: TextIO | None = None) -> None:
     print("", file=out)
     print("Examples:", file=out)
     print("  python -m src graphs run analysis_out/run-id", file=out)
-    print("  python -m src graphs run graphs.run_root=analysis_out/run-id graphs.renderer_preset=paper", file=out)
+    print("  python -m src graphs run graphs.run_root=analysis_out/run-id graphs.renderer_preset=ccs-report", file=out)
     print("  python -m src graphs prefix analysis_out/prefix/artifact.json", file=out)
 
 
@@ -116,7 +122,7 @@ def graphs_overrides_from_alias(argv: Sequence[str]) -> list[str] | None:
     _reject_argparse_flags(
         command_args,
         surface="Graph",
-        example="graphs.renderer_preset=paper graphs.force=true",
+        example="graphs.renderer_preset=ccs-report graphs.force=true",
     )
     if command == "run":
         command_args = _with_optional_path(command_args, key="graphs.run_root", label="graph")

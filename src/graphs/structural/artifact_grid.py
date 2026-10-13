@@ -1,5 +1,5 @@
 """
-Legacy-compatible artifact-grid renderer over current structural artifacts.
+Artifact-grid renderer over current structural artifacts.
 
 :copyright: 2025 Jakub Res
 :license: MIT

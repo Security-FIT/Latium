@@ -1,0 +1,11 @@
+defaults:
+  - default
+  - _self_
+
+analysis:
+  enabled: true
+  preset: paper
+
+render:
+  enabled: true
+  renderer_preset: ccs-report

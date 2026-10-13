@@ -27,11 +27,12 @@ def load_test_cases(
     case_index_file: Optional[str] = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     if case_index_file:
-        manifest, cases = load_cases_from_manifest(case_index_file, n_tests=n_tests)
+        manifest, cases = load_cases_from_manifest(case_index_file, n_tests=n_tests, start_idx=start_idx)
         case_selection = build_case_selection_metadata(
             manifest=manifest,
             manifest_path=case_index_file,
             selected_cases=cases,
+            start_idx=start_idx,
         )
         return cases, case_selection
 

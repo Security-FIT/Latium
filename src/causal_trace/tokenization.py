@@ -40,11 +40,23 @@ def _token_ids(tokenizer: Any, text: str, *, add_special_tokens: bool = True) ->
     return [int(token_id) for token_id in raw]
 
 
-def target_token_ids(tokenizer: Any, target: str) -> list[int]:
-    """Return target IDs using the continuation convention used by CounterFact."""
+def target_token_ids(tokenizer: Any, target: str, *, prompt: str | None = None) -> list[int]:
+    """Return target IDs, checking the actual prompt boundary when supplied."""
     cleaned = str(target).strip()
     if not cleaned:
         raise TraceValidationError("Target is empty")
+    if prompt is not None:
+        separator = "" if prompt and prompt[-1].isspace() else " "
+        prompt_ids = _token_ids(tokenizer, prompt, add_special_tokens=False)
+        joint_ids = _token_ids(tokenizer, prompt + separator + cleaned, add_special_tokens=False)
+        # A continuation must keep every input token intact. Replacing the last
+        # prompt token would measure a different prompt rather than its next token.
+        if joint_ids[: len(prompt_ids)] != prompt_ids:
+            raise TraceValidationError("Target changes the prompt token boundary")
+        ids = joint_ids[len(prompt_ids) :]
+        if not ids:
+            raise TraceValidationError(f"Could not tokenize target {target!r} after prompt")
+        return ids
     candidates = (
         (f" {cleaned}", False),
         (cleaned, False),

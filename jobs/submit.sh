@@ -45,6 +45,14 @@ case "$PRESET" in
     WALLTIME=72:00:00
     RUNNER=causal-rome
     ;;
+  finetuned-gram)
+    JOB_NAME=latium-finetuned-gram
+    MEM=96gb
+    GPU_MEM=40gb
+    SCRATCH=100gb
+    WALLTIME=72:00:00
+    RUNNER=finetuned-gram
+    ;;
   rome)
     JOB_NAME=latium-rome
     DEFAULT_ARGS=(rome-benchmark 'rome_benchmark.models=[gpt2-large]'
@@ -68,7 +76,7 @@ case "$PRESET" in
     JOB_NAME=latium-custom
     ;;
   *)
-    die "unknown preset '$PRESET' (use causal-trace, causal-rome, rome, second-moment, analyze, or custom)"
+    die "unknown preset '$PRESET' (use causal-trace, causal-rome, finetuned-gram, rome, second-moment, analyze, or custom)"
     ;;
 esac
 
@@ -126,6 +134,8 @@ if [[ "$DRY_RUN" == 1 ]]; then
   printf 'command:'
   if [[ "$RUNNER" == latium ]]; then
     printf ' %q' python -m src "${ARGS[@]}"
+  elif [[ "$RUNNER" == finetuned-gram ]]; then
+    printf ' %q' python "$ROOT/jobs/finetuned_gram_fleet.py" "${ARGS[@]}"
   else
     printf ' %q' python "$ROOT/jobs/causal_rome_pipeline.py" "${ARGS[@]}"
   fi

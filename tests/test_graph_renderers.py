@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from src.graphs.context import RendererUnavailableError
+from src.graphs.context import RenderExecutionError, RendererUnavailableError
+from src.graphs.registry import RendererSpec
 from src.graphs.runtime import render_run
 from src.graphs.renderers import render_run_summary
 from src.graphs.structural.materialize import matching_baseline
@@ -27,7 +28,7 @@ def test_run_summary_uses_analysis_producer_name(tmp_path: Path) -> None:
             "output_dir": tmp_path,
             "analyses": [
                 {
-                    "producer": "composite",
+                    "producer": "ccs-composite",
                     "category": "detection",
                     "status": "complete",
                     "run": {
@@ -46,7 +47,7 @@ def test_run_summary_uses_analysis_producer_name(tmp_path: Path) -> None:
     )
 
     payload = json.loads(Path(outputs[0]).read_text(encoding="utf-8"))
-    assert payload["analyses"][0]["analysis"] == "composite"
+    assert payload["analyses"][0]["analysis"] == "ccs-composite"
 
 
 def test_run_level_render_artifact_uses_null_run_selectors(tmp_path: Path) -> None:
@@ -58,7 +59,7 @@ def test_run_level_render_artifact_uses_null_run_selectors(tmp_path: Path) -> No
             artifact_id="analysis",
             kind="analysis",
             category="detection",
-            producer="composite",
+            producer="ccs-composite",
             run_id="run",
             model="qwen3-4b",
             plan_id="cases0-0_r01",
@@ -86,6 +87,58 @@ def test_run_level_render_artifact_uses_null_run_selectors(tmp_path: Path) -> No
         "plan_id": None,
         "edit_method": None,
     }
+
+
+
+def test_renderer_errors_are_persisted_and_fail_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writer = ArtifactWriter(tmp_path, run_id="run")
+    writer.write(
+        tmp_path / "analysis.json",
+        build_artifact(
+            artifact_id="analysis",
+            kind="analysis",
+            category="detection",
+            producer="ccs-composite",
+            run_id="run",
+            model="qwen3-4b",
+            plan_id="plan",
+            edit_method="rome",
+            status="complete",
+            config={},
+            config_hash=config_hash({}),
+            inputs=[],
+            created_at=datetime.now().isoformat(),
+            cases=[],
+            summary={},
+        ),
+    )
+
+    def broken_load(self):
+        def fail(_context):
+            raise RuntimeError("broken renderer")
+
+        return fail
+
+    monkeypatch.setattr(RendererSpec, "load", broken_load)
+
+    with pytest.raises(RenderExecutionError, match="broken renderer"):
+        render_run(tmp_path, preset="none", enabled=("run-summary",))
+
+    artifact_path = tmp_path / "graphs" / "run-summary" / "artifact.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["status"] == "error"
+
+    result = render_run(
+        tmp_path,
+        preset="none",
+        enabled=("run-summary",),
+        force=True,
+        continue_on_error=True,
+    )
+    assert result["errors"] == ["run-summary: broken renderer"]
 
 
 def test_registered_graph_renderers_use_manifest_artifacts(tmp_path: Path) -> None:
@@ -178,6 +231,12 @@ def test_registered_graph_renderers_use_manifest_artifacts(tmp_path: Path) -> No
 
     assert set(result["written"]) == {"render/rome-success", "render/detector-window", "render/detector-signals"}
     assert (tmp_path / "graphs" / "rome-success" / "rome-success-rate.png").is_file()
+    rome_metrics = json.loads(
+        (tmp_path / "graphs" / "rome-success" / "rome-success-metrics.json").read_text(encoding="utf-8")
+    )
+    assert rome_metrics["executions"][0]["overall_score"] == pytest.approx(
+        3.0 / (1.0 + 1.0 / 0.7 + 1.0 / 0.6)
+    )
     assert (tmp_path / "graphs" / "detector-window" / "detector-layer-window.png").is_file()
     signal_index = json.loads(
         (tmp_path / "graphs" / "detector-signals" / "detector-signal-profiles.json").read_text(

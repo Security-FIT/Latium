@@ -36,14 +36,18 @@ def capture_id(
 def analysis_id(
     model: str,
     plan_id: str,
-    edit_method: str,
+    edit_method: str | None,
     category: str,
     analysis: str,
     analysis_config_hash: str,
 ) -> str:
+    execution_prefix = (
+        f"{_plan_prefix(model, plan_id)}/baseline"
+        if edit_method is None
+        else f"{_plan_prefix(model, plan_id)}/method/{safe_slug(edit_method)}"
+    )
     return (
-        f"{_plan_prefix(model, plan_id)}/method/{safe_slug(edit_method)}"
-        f"/analysis/{safe_slug(category)}/{safe_slug(analysis)}"
+        f"{execution_prefix}/analysis/{safe_slug(category)}/{safe_slug(analysis)}"
         f"/{safe_slug(analysis_config_hash)}"
     )
 

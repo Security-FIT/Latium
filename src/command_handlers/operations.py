@@ -45,6 +45,13 @@ def run_causal_trace(cfg: DictConfig) -> int:
     return 0
 
 
+def run_causal_kuba_fix(cfg: DictConfig) -> int:
+    from src.causal_trace.legacy_fixed import causal_trace
+
+    causal_trace(cfg)
+    return 0
+
+
 def run_alt_trace(cfg: DictConfig) -> int:
     from src.causal_trace.alt_trace import run_alt_trace as run
 
@@ -115,6 +122,7 @@ OPERATIONS: dict[str, Callable[[DictConfig], int]] = {
     "manual-rome": run_manual_rome,
     "print-arch": run_print_arch,
     "causal-trace": run_causal_trace,
+    "causal-kuba-fix": run_causal_kuba_fix,
     "alt-trace": run_alt_trace,
     "compute-multiplier": run_compute_multiplier,
     "second-moment": run_second_moment,

@@ -25,6 +25,7 @@ class MatrixFeatureTable:
     layers: np.ndarray
     values: dict[str, np.ndarray]
     case_count: int
+    case_ids: tuple[str, ...]
 
 
 def run_key(payload: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
@@ -55,7 +56,8 @@ def matrix_feature_table(
     require_success: bool = False,
 ) -> MatrixFeatureTable:
     run = payload.get("run", {})
-    values: dict[str, dict[int, list[float]]] = {feature: {} for feature in features}
+    case_profiles: list[dict[int, dict[str, Any]]] = []
+    case_ids: list[str] = []
     for case in payload.get("cases", []):
         if not isinstance(case, dict) or case.get("status") != "complete":
             continue
@@ -65,6 +67,7 @@ def matrix_feature_table(
         profiles = families.get(family, {}) if isinstance(families, dict) else {}
         if not isinstance(profiles, dict):
             continue
+        normalized: dict[int, dict[str, Any]] = {}
         for raw_layer, profile in profiles.items():
             if not isinstance(profile, dict):
                 continue
@@ -72,33 +75,31 @@ def matrix_feature_table(
                 layer = int(raw_layer)
             except (TypeError, ValueError):
                 continue
-            for feature in features:
-                try:
-                    value = float(profile[feature])
-                except (KeyError, TypeError, ValueError):
-                    value = float("nan")
-                values[feature].setdefault(layer, []).append(value)
+            normalized[layer] = profile
+        if normalized:
+            case_profiles.append(normalized)
+            case_ids.append(str(case.get("case_id", len(case_profiles) - 1)))
 
-    layers = sorted({layer for feature_values in values.values() for layer in feature_values})
+    layers = sorted({layer for profiles in case_profiles for layer in profiles})
     if not layers:
         raise RendererUnavailableError(f"matrix-features has no usable {family} layer data")
-    arrays: dict[str, np.ndarray] = {}
-    case_count = 0
-    for feature, layer_values in values.items():
-        rows = max((len(items) for items in layer_values.values()), default=0)
-        case_count = max(case_count, rows)
-        matrix = np.full((rows, len(layers)), np.nan, dtype=float)
+    arrays = {feature: np.full((len(case_profiles), len(layers)), np.nan) for feature in features}
+    for row, profiles in enumerate(case_profiles):
         for col, layer in enumerate(layers):
-            for row, value in enumerate(layer_values.get(layer, [])):
-                matrix[row, col] = value
-        arrays[feature] = matrix
+            profile = profiles.get(layer, {})
+            for feature in features:
+                try:
+                    arrays[feature][row, col] = float(profile[feature])
+                except (KeyError, TypeError, ValueError):
+                    pass  # Missing values stay in their case's row as NaN.
     return MatrixFeatureTable(
         model=str(run.get("model", "model")),
         plan_id=str(run.get("plan_id", "plan")),
         edit_method=run.get("edit_method"),
         layers=np.asarray(layers, dtype=int),
         values=arrays,
-        case_count=case_count,
+        case_count=len(case_profiles),
+        case_ids=tuple(case_ids),
     )
 
 

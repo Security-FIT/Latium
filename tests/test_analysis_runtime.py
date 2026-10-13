@@ -14,9 +14,9 @@ import pytest
 
 from src.results import ArtifactWriter, RunArtifactReader, RunLayout, build_artifact, config_hash
 from src.results.ids import capture_id, execution_id
-from src.structural.analysis.detector_methods import analyze_composite
-from src.structural.analysis.runtime import AnalysisContext
-from src.structural.analysis.runtime import run_analyses
+from src.structural.analysis.detector_methods import analyze_ccs_composite
+from src.structural.analysis.registry import AnalysisSpec
+from src.structural.analysis.runtime import AnalysisContext, AnalysisExecutionError, run_analyses
 
 
 def _write_artifact(
@@ -212,6 +212,145 @@ def test_analysis_variants_create_distinct_artifacts_without_new_capture_plans(
     assert len(third["written"]) == 2
 
 
+def test_baseline_execution_is_analyzed_as_an_unedited_control(tmp_path: Path) -> None:
+    writer = ArtifactWriter(tmp_path, run_id="run")
+    layout = RunLayout(tmp_path)
+    model = "gpt2-large"
+    plan_id = "cases0-0_r01"
+    variants = [
+        {
+            "spectral_top_k": 50,
+            "trim_first": 1,
+            "trim_last": 1,
+            "spectral_neighbor_layers": 1,
+            "spectral_rolling_window": 5,
+            "local_windows": [3],
+        }
+    ]
+    _write_artifact(
+        writer,
+        layout.execution_path(model, plan_id, edit_method=None),
+        artifact_id=execution_id(model, plan_id, None),
+        kind="execution",
+        producer="baseline",
+        config={"edit_method": "baseline"},
+        cases=[{"case_id": "baseline", "status": "complete", "edit": {"success": True}}],
+        edit_method=None,
+        metadata={"analysis_variants": variants},
+    )
+    profiles = {
+        str(layer): {
+            "top1_energy": 0.1 + layer * 0.01,
+            "top5_energy": 0.2 + layer * 0.01,
+            "gap12": 1.0 + layer * 0.1,
+            "effective_rank": 8.0 - layer * 0.1,
+            "stable_rank": 7.0 - layer * 0.1,
+            "rank1_residual": 0.9 - layer * 0.01,
+        }
+        for layer in range(8)
+    }
+    _write_artifact(
+        writer,
+        layout.capture_path(model, plan_id, "matrix-features", edit_method=None),
+        artifact_id=capture_id(model, plan_id, "matrix-features", None),
+        kind="capture",
+        producer="matrix-features",
+        config={"capture": "matrix-features"},
+        cases=[
+            {
+                "case_id": "baseline",
+                "status": "complete",
+                "data": {"mode": "baseline", "families": {"proj": profiles}},
+            }
+        ],
+        edit_method=None,
+    )
+
+    result = run_analyses(tmp_path, selected=("rank1-blind",), preset="none")
+    reader = RunArtifactReader(tmp_path)
+    record = next(iter(reader.records(kind="analysis")))
+    payload = reader.load(record["artifact_id"])
+
+    assert len(result["written"]) == 1
+    assert "/baseline/analysis/detection/rank1-blind/" in record["artifact_id"]
+    assert record["edit_method"] is None
+    assert payload["status"] == "complete"
+    assert payload["cases"][0]["accuracy"]["target_layer"] is None
+
+
+def test_completed_capture_is_analyzed_when_edit_efficacy_is_false(tmp_path: Path) -> None:
+    writer = ArtifactWriter(tmp_path, run_id="run")
+    layout = RunLayout(tmp_path)
+    model = "gpt2-large"
+    plan_id = "cases0-0_r01"
+    method = "rome"
+    variants = [
+        {
+            "spectral_top_k": 50,
+            "trim_first": 1,
+            "trim_last": 1,
+            "spectral_neighbor_layers": 1,
+            "spectral_rolling_window": 5,
+            "local_windows": [3],
+        }
+    ]
+    _write_artifact(
+        writer,
+        layout.execution_path(model, plan_id, edit_method=method),
+        artifact_id=execution_id(model, plan_id, method),
+        kind="execution",
+        producer=method,
+        config={"edit_method": method},
+        cases=[{"case_id": "case", "status": "complete", "edit": {"success": False}}],
+        edit_method=method,
+        metadata={"analysis_variants": variants},
+    )
+    profiles = {
+        str(layer): {
+            "top1_energy": 0.1 + layer * 0.01,
+            "top5_energy": 0.2 + layer * 0.01,
+            "gap12": 1.0 + layer * 0.1,
+            "effective_rank": 8.0 - layer * 0.1,
+            "stable_rank": 7.0 - layer * 0.1,
+            "rank1_residual": 0.9 - layer * 0.01,
+        }
+        for layer in range(8)
+    }
+    baseline_cases = [
+        {
+            "case_id": "baseline",
+            "status": "complete",
+            "data": {"mode": "baseline", "families": {"proj": profiles}},
+        }
+    ]
+    method_cases = [
+        {
+            "case_id": "case",
+            "status": "complete",
+            "data": {"mode": "patch", "families": {"proj": {}}},
+        }
+    ]
+    for edit_method, cases in ((None, baseline_cases), (method, method_cases)):
+        _write_artifact(
+            writer,
+            layout.capture_path(model, plan_id, "matrix-features", edit_method=edit_method),
+            artifact_id=capture_id(model, plan_id, "matrix-features", edit_method),
+            kind="capture",
+            producer="matrix-features",
+            config={"capture": "matrix-features"},
+            cases=cases,
+            edit_method=edit_method,
+        )
+
+    run_analyses(tmp_path, selected=("rank1-blind",), preset="none")
+    payload = RunArtifactReader(tmp_path).load(
+        next(iter(RunArtifactReader(tmp_path).records(kind="analysis")))["artifact_id"]
+    )
+
+    assert payload["status"] == "complete"
+    assert payload["cases"][0]["status"] == "complete"
+
+
 def test_run_analyses_writes_unavailable_for_missing_required_captures(
     tmp_path: Path,
 ) -> None:
@@ -256,6 +395,76 @@ def test_run_analyses_writes_unavailable_for_missing_required_captures(
     assert payload["status"] == "unavailable"
     assert payload["cases"][0]["status"] == "unavailable"
     assert "missing captures" in payload["error"]
+
+
+
+def test_analysis_errors_are_persisted_and_fail_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writer = ArtifactWriter(tmp_path, run_id="run")
+    layout = RunLayout(tmp_path)
+    model = "gpt2-large"
+    plan_id = "cases0-0_r01"
+    method = "rome"
+    variants = [
+        {
+            "spectral_top_k": 50,
+            "trim_first": 1,
+            "trim_last": 1,
+            "spectral_neighbor_layers": 1,
+            "spectral_rolling_window": 5,
+            "local_windows": [3],
+        }
+    ]
+    _write_artifact(
+        writer,
+        layout.execution_path(model, plan_id, edit_method=method),
+        artifact_id=execution_id(model, plan_id, method),
+        kind="execution",
+        producer=method,
+        config={"edit_method": method},
+        cases=[{"case_id": "case", "status": "complete", "edit": {"success": True}}],
+        edit_method=method,
+        metadata={"analysis_variants": variants},
+    )
+    for edit_method in (None, method):
+        _write_artifact(
+            writer,
+            layout.capture_path(model, plan_id, "matrix-features", edit_method=edit_method),
+            artifact_id=capture_id(model, plan_id, "matrix-features", edit_method),
+            kind="capture",
+            producer="matrix-features",
+            config={"capture": "matrix-features"},
+            cases=[{"case_id": "case", "status": "complete", "data": {}}],
+            edit_method=edit_method,
+        )
+
+    def broken_load(self):
+        def fail(_context):
+            raise RuntimeError("broken analysis")
+
+        return fail
+
+    monkeypatch.setattr(AnalysisSpec, "load", broken_load)
+
+    with pytest.raises(AnalysisExecutionError, match="broken analysis"):
+        run_analyses(tmp_path, selected=("rank1-blind",), preset="none")
+
+    payload = RunArtifactReader(tmp_path).load(
+        next(iter(RunArtifactReader(tmp_path).records(kind="analysis")))["artifact_id"]
+    )
+    assert payload["status"] == "error"
+
+    result = run_analyses(
+        tmp_path,
+        selected=("rank1-blind",),
+        preset="none",
+        force=True,
+        continue_on_error=True,
+    )
+    assert len(result["errors"]) == 1
+    assert "broken analysis" in result["errors"][0]
 
 
 def test_bottom_rank_svd_consumes_method_only_capture(
@@ -329,7 +538,7 @@ def test_bottom_rank_svd_consumes_method_only_capture(
     assert payload["cases"][0]["data"]["anomalous_layer"] == 1
 
 
-def test_analyze_composite_passes_variant_spectral_config(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyze_ccs_composite_passes_variant_spectral_config(monkeypatch: pytest.MonkeyPatch) -> None:
     observed: dict[str, object] = {}
 
     def fake_replay_spectral(data: dict, config: dict) -> dict:
@@ -410,7 +619,7 @@ def test_analyze_composite_passes_variant_spectral_config(monkeypatch: pytest.Mo
         },
     )
 
-    result = analyze_composite(context)
+    result = analyze_ccs_composite(context)
 
     assert result["cases"][0]["data"]["anomalous_layer"] == 3
     assert observed == {

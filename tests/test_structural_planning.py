@@ -13,8 +13,10 @@ import sys
 from pathlib import Path
 
 from omegaconf import OmegaConf
+import pytest
 
-from src.structural.config import StructuralBenchmarkConfig
+from src.structural.config import AnalysisVariantConfig, StructuralBenchmarkConfig
+from src.common.config import strict_bool
 from src.structural.hydra_config import structural_config_from_hydra
 from src.structural.planning import (
     build_analysis_variants,
@@ -25,40 +27,57 @@ from src.structural.planning import (
     parse_local_windows,
     parse_trim_values,
 )
+from src.structural.runner import run_structural_benchmark, validate_structural_config
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_normalize_models_arg_supports_commas_and_deduplication() -> None:
-    assert normalize_models_arg(['gpt2-large,qwen3-8b', 'gpt2-large', ' mistral-7b-v0.1 ']) == [
+def test_normalize_models_arg_uses_native_lists_and_deduplicates() -> None:
+    assert normalize_models_arg(['gpt2-large', 'qwen3-8b', 'gpt2-large', ' mistral-7b-v0.1 ']) == [
         'gpt2-large',
         'qwen3-8b',
         'mistral-7b-v0.1',
     ]
 
+    with pytest.raises(ValueError, match="YAML list"):
+        normalize_models_arg(['gpt2-large,qwen3-8b'])
+
 
 def test_structural_parsers_accept_native_sequences() -> None:
-    assert parse_local_windows([3, 4, 7, 7]) == [3, 5, 7]
-    assert parse_int_values([2, '5', 5], default=[1], min_value=1) == [2, 5]
-    assert parse_trim_values([None, '3', 'auto', 3], default=[None]) == [None, 3]
-    assert parse_local_window_sets([3, 5, 7]) == [(3, 5, 7)]
-    assert parse_local_window_sets([[3, 4, 7], '9,11;11,13']) == [
+    assert parse_local_windows([3, 5, 7, 7]) == [3, 5, 7]
+    assert parse_int_values([2, 5, 5], default=[1], min_value=1) == [2, 5]
+    assert parse_trim_values([None, 3, 3], default=[None]) == [None, 3]
+    assert parse_local_window_sets([[3, 5, 7], [9, 11], [11, 13]]) == [
         (3, 5, 7),
         (9, 11),
         (11, 13),
     ]
 
 
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: parse_local_windows([3, 4, 7]),
+        lambda: parse_int_values([2, '5'], default=[1], min_value=1),
+        lambda: parse_trim_values([None, 'auto'], default=[None]),
+        lambda: parse_local_window_sets([3, 5, 7]),
+    ],
+)
+def test_structural_parsers_reject_removed_or_invalid_values(call) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        call()
+
+
 def test_structural_config_from_hydra_uses_native_lists() -> None:
     structural = OmegaConf.load(ROOT / 'src/config/structural/default.yaml')
     dataset_facts = OmegaConf.load(ROOT / 'src/config/dataset_facts/counterfact.yaml')
-    structural.run.models = ['gpt2-large,qwen3-8b', 'gpt2-large']
-    structural.analysis.variants.local_windows = [3, 4, 7]
+    structural.run.models = ['gpt2-large', 'qwen3-8b', 'gpt2-large']
+    structural.analysis.variants.local_windows = [3, 5, 7]
     structural.analysis.variants.sweep.spectral_top_k = [20, 50]
     structural.analysis.variants.sweep.trim_first = [None, 2]
-    structural.analysis.variants.sweep.trim_last = ['auto', 1]
+    structural.analysis.variants.sweep.trim_last = [None, 1]
     structural.analysis.variants.sweep.spectral_neighbor_layers = [1]
-    structural.analysis.variants.sweep.spectral_rolling_window = [4, 6]
+    structural.analysis.variants.sweep.spectral_rolling_window = [5, 7]
     structural.analysis.variants.sweep.local_window_sets = [[3, 5, 7], [5, 7, 9]]
     structural.analysis.variants.sweep.max_configs = 2
     cfg = OmegaConf.create(
@@ -80,15 +99,57 @@ def test_structural_config_from_hydra_uses_native_lists() -> None:
     assert config.models == ('gpt2-large', 'qwen3-8b')
     assert config.local_windows == (3, 5, 7)
     assert config.run_analysis is False
+    assert config.capture_profile == 'none'
     assert config.seed == 42
     assert config.case_dataset_name == 'azhx/counterfact'
     assert config.case_dataset_split == 'train'
-    assert config.analysis_method_configs['composite']['small_window'] == 5
+    assert config.analysis_method_configs['ccs-composite']['small_window'] == 5
     assert [variant.spectral_top_k for variant in config.analysis_variants] == [20, 50]
     assert [variant.trim_first for variant in config.analysis_variants] == [None, 2]
     assert [variant.trim_last for variant in config.analysis_variants] == [None, 1]
     assert [variant.spectral_rolling_window for variant in config.analysis_variants] == [5, 7]
     assert [variant.local_windows for variant in config.analysis_variants] == [(3, 5, 7), (5, 7, 9)]
+
+
+def test_structural_config_rejects_invalid_bounds_and_booleans() -> None:
+    with pytest.raises(ValueError, match="n_tests"):
+        StructuralBenchmarkConfig(n_tests=-3)
+    with pytest.raises(ValueError, match="local_windows"):
+        StructuralBenchmarkConfig(local_windows=(3, 4, 7))
+    with pytest.raises(ValueError, match="boolean"):
+        StructuralBenchmarkConfig(force="sometimes")
+    with pytest.raises(ValueError, match="native list"):
+        StructuralBenchmarkConfig(models="gpt2-large,qwen3-8b")
+
+    assert StructuralBenchmarkConfig(force="false").force is False
+    assert StructuralBenchmarkConfig(force="true").force is True
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"spectral_top_k": 0},
+        {"spectral_neighbor_layers": 0},
+        {"spectral_rolling_window": 0},
+        {"spectral_rolling_window": 4},
+        {"trim_first": -1},
+        {"trim_last": -1},
+        {"local_windows": ()},
+        {"local_windows": (3, 4)},
+    ],
+)
+def test_flat_and_variant_configs_share_analysis_constraints(values: dict) -> None:
+    with pytest.raises((TypeError, ValueError)) as variant_error:
+        AnalysisVariantConfig(**values)
+    with pytest.raises(type(variant_error.value), match=str(variant_error.value)):
+        StructuralBenchmarkConfig(**values)
+
+
+def test_strict_bool_rejects_python_string_truthiness() -> None:
+    assert strict_bool("false") is False
+    assert strict_bool("yes") is True
+    with pytest.raises(ValueError, match="boolean"):
+        strict_bool("not-a-bool")
 
 
 def test_build_analysis_variants_zip_broadcasts_singletons() -> None:
@@ -164,6 +225,108 @@ def test_analysis_variants_do_not_multiply_capture_plans() -> None:
 
     assert len(payload['planned_runs']) == 1
     assert len(payload['analysis_variants']) == 2
+
+
+def test_plan_adds_selected_analysis_capture_and_feature_requirements() -> None:
+    config = StructuralBenchmarkConfig(
+        models=('qwen3-8b',),
+        capture_profile='none',
+        analysis_preset='ccs-composite',
+        matrix_feature_set='rank1',
+    )
+
+    payload = build_plan_summary(config, run_id='ccs')
+
+    assert payload['resolved_analyses'] == ['ccs-composite']
+    assert payload['resolved_captures'] == ['matrix-features', 'spectral']
+    assert set(payload['matrix_features']) == {
+        'spectral_gap',
+        'top1_energy',
+        'row_alignment',
+        'norm_cv',
+        'effective_rank',
+    }
+
+
+def test_default_plan_is_driven_by_analysis_requirements() -> None:
+    config = StructuralBenchmarkConfig(models=('qwen3-8b',))
+
+    payload = build_plan_summary(config, run_id='default')
+
+    assert config.capture_profile == 'none'
+    assert payload['resolved_captures'] == ['matrix-features', 'spectral']
+
+
+def test_capture_only_run_requires_an_explicit_capture_selection() -> None:
+    config = StructuralBenchmarkConfig(models=('gpt2-large',), run_analysis=False)
+
+    with pytest.raises(ValueError, match='Capture-only runs require'):
+        validate_structural_config(config)
+
+
+def test_renderer_requirements_are_added_to_end_to_end_capture_plan() -> None:
+    config = StructuralBenchmarkConfig(
+        models=('qwen3-8b',),
+        analysis_preset='rank1-blind',
+        render_graphs=True,
+        renderer_preset='structural-paper',
+    )
+
+    payload = build_plan_summary(config, run_id='rank1-grid')
+
+    assert payload['resolved_renderers'] == ['structural-artifact-grid']
+    assert set(payload['matrix_features']).issuperset(
+        {'spectral_gap', 'top1_energy', 'row_alignment', 'norm_cv', 'effective_rank'}
+    )
+
+
+def test_end_to_end_pipeline_analyzes_before_rendering(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    render_kwargs: dict[str, object] = {}
+
+    def capture(_config):
+        events.append("capture")
+        return {"run_root": str(tmp_path)}
+
+    def analyze(*_args, **_kwargs):
+        events.append("analyze")
+        return {"written": []}
+
+    def render(*_args, **kwargs):
+        events.append("render")
+        render_kwargs.update(kwargs)
+        return {"written": []}
+
+    monkeypatch.setattr("src.structural.runner.run_structural_capture", capture)
+    monkeypatch.setattr("src.structural.runner.run_structural_analysis", analyze)
+    monkeypatch.setattr("src.graphs.runtime.render_run", render)
+
+    result = run_structural_benchmark(
+        StructuralBenchmarkConfig(
+            models=("qwen3-4b",),
+            render_graphs=True,
+            renderer_preset="ccs-report",
+            renderer_style_preset="default",
+            renderer_options={"structural-ccs-lines": {"formats": ["png", "pdf", "json"]}},
+        )
+    )
+
+    assert events == ["capture", "analyze", "render"]
+    assert result["render"] == {"written": []}
+    assert render_kwargs["preset"] == "ccs-report"
+    assert render_kwargs["renderer_options"] == {
+        "structural-ccs-lines": {"formats": ["png", "pdf", "json"]}
+    }
+
+
+def test_ccs_report_rejects_unsupported_models_before_capture() -> None:
+    with pytest.raises(ValueError, match="CCS-supported models"):
+        validate_structural_config(
+            StructuralBenchmarkConfig(models=("gpt2-large",), render_graphs=True, renderer_preset="ccs-report")
+        )
 
 
 def test_importing_planning_module_does_not_import_torch() -> None:

@@ -32,6 +32,8 @@ def main(argv=None):
         command.add_argument("--base-revisions", help="JSON repository-ID -> original commit SHA for unrecorded classic/covariance base revisions")
         command.add_argument("--base-covariance-dir", help="Original 100,000-sample base tensors, named as in the saved configs")
         command.add_argument("--limit-facts", type=positive)
+        command.add_argument("--prefix-mode", choices=("self", "archived"), default="self",
+                             help="Self-generated contexts by default; archived retains the original recorded prefix protocol for comparisons")
         if name == "smoke":
             command.add_argument("--covariance-samples", type=positive, default=32)
     render = commands.add_parser("render", help="Export an archived campaign to a separate directory")

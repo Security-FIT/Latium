@@ -73,6 +73,13 @@ def download_checkpoint(repo, revision, files, sizes, cache):
     return location
 
 
+def prefix_config(config, mode="self"):
+    """Apply the requested context protocol without altering frozen inputs."""
+    if mode not in {"self", "archived"}:
+        raise ValueError(f"Unsupported prefix mode: {mode}")
+    return {**config, "prefix_mode": "self", "prefix_source": None, "prefix_cache_path": None} if mode == "self" else dict(config)
+
+
 def relocate_model(entry, config, output, revisions):
     """Change storage paths only; retain every archived scientific setting."""
     config = dict(config)
@@ -181,7 +188,8 @@ def execute(args, *, smoke=False):
             run_dir = output / "runs" / entry["model_key"] / batch["name"]
             run_dir.mkdir(parents=True, exist_ok=True)
             try:
-                config = relocate_model(entry, batch["model_config"], run_dir, revisions)
+                prefix_mode = getattr(args, "prefix_mode", "self")
+                config = relocate_model(entry, prefix_config(batch["model_config"], prefix_mode), run_dir, revisions)
             except Exception as exc:
                 write_json(run_dir / "failure.json", {"campaign": args.campaign, "entry": entry,
                            "batch": batch, "stage": "pinned-model-loading", "status": "error", "error": str(exc)})
@@ -191,7 +199,7 @@ def execute(args, *, smoke=False):
             if args.campaign == "finetune-own":
                 cov_path, covariance = compute_covariance(config, run_dir / "covariance", seed, samples, fresh=True)
             else:
-                base_config = dict(entry.get("selection_identity", {}).get("base_config", config))
+                base_config = prefix_config(entry.get("selection_identity", {}).get("base_config", config), prefix_mode)
                 base_config.pop("adapter_base_path", None)
                 base_config.pop("adapter_base_model", None)
                 base_config.pop("adapter_base_revision", None)
@@ -232,6 +240,7 @@ def execute(args, *, smoke=False):
                              if c.get("case_id") == "baseline" or str(c.get("case_id")) in selected)]
             receipt = {"campaign": args.campaign, "validation_subset": smoke or bool(args.limit_facts or args.limit_checkpoints or args.checkpoint or args.family),
                        "entry": entry, "batch": batch, "resolved_model_config": config, "seed": seed,
+                       "prefix_mode": prefix_mode, "archived_prefix_mode": batch["model_config"].get("prefix_mode", "self"),
                        "covariance": covariance, "source": source_identity(), "run_root": str(run_root),
                        "status": "error" if errors else "complete", "errors": errors}
             write_json(run_dir / "reproduction.json", receipt)

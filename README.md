@@ -68,7 +68,12 @@ layers from current defaults, or mix the two checkpoint populations. Every
 checkpoint baseline is measured on its actual full or safely merged LoRA
 checkpoint. ROME restores the original projection weights between edits,
 including failures. Self/template prefix generation and caching remain in the
-ROME runtime; the separate prefix-test study has been removed.
+ROME runtime; the separate prefix-test study has been removed. New runs default
+to `--prefix-mode self` for every checkpoint, including Llama, DeepSeek and Qwen.
+This intentionally changes the context protocol from the archived experiments.
+Use `--prefix-mode archived` with `run` or `smoke` to retain the original
+static/external settings for a historical comparison. Frozen manifests and
+prefix caches remain unchanged; each run records the selected prefix policy.
 
 The saved classic and base-covariance records do **not** identify the commit
 SHAs of their original base-weight snapshots. Checkpoint and adapter-base pins

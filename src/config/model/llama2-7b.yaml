@@ -14,6 +14,8 @@ corrupt_layer_name_template: "model.embed_tokens"
 layer: 5
 corruption_noise_multiplier: 0.08
 dtype: "bf16"
-prefix_mode: "static"
+prefix_mode: "self"
 prefix_enforce_latin: false
 prefix_min_words: 0
+prefix_source: null
+prefix_cache_path: null

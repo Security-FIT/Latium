@@ -7,7 +7,19 @@ import torch
 
 from src.graphs.gram import case_rows
 from src.submission.inputs import INPUTS, load_campaign, verify_packaged_inputs
-from src.submission.run import _pin, compute_covariance, download_checkpoint, relocate_model
+from src.submission.run import _pin, compute_covariance, download_checkpoint, prefix_config, relocate_model
+
+
+@pytest.mark.parametrize("mode", ["static", "external", "self"])
+def test_self_prefix_policy_overrides_frozen_contexts_without_mutating_inputs(mode):
+    original = {"name": "original/checkpoint", "layer": 8, "prefix_mode": mode,
+                "prefix_source": "old-model", "prefix_cache_path": "/old-cache.json"}
+    resolved = prefix_config(original)
+    assert resolved["prefix_mode"] == "self"
+    assert resolved["prefix_source"] is None and resolved["prefix_cache_path"] is None
+    assert (resolved["name"], resolved["layer"]) == (original["name"], original["layer"])
+    assert original["prefix_mode"] == mode and original["prefix_cache_path"] == "/old-cache.json"
+    assert prefix_config(original, "archived") == original
 
 
 def test_packaged_campaigns_keep_the_original_assignments_and_repairs():

@@ -5,6 +5,7 @@ import csv
 import json
 import math
 from pathlib import Path
+import textwrap
 from src.evaluation.rome import summarize_rome_scores
 from src.gram_experiment import digest, locked, write_json
 
@@ -133,7 +134,9 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
         x = list(range(len(models)))
         ax.bar([i-.2 for i in x], [report["models"][m]["gram_exact"] or 0 for m in models], .4, label="Gram exact / selected")
         ax.bar([i+.2 for i in x], [report["models"][m]["rome_success"] or 0 for m in models], .4, label="ROME success / selected")
-        ax.set_xticks(x, models, rotation=45, ha="right")
+        labels = [textwrap.fill(str(model), 28, break_on_hyphens=False) for model in models]
+        ax.set_xticks(x, labels, rotation=45 if len(models) > 4 else 0,
+                      ha="right" if len(models) > 4 else "center", fontsize=9)
         ax.set_ylim(0, 1.05)
         ax.set_ylabel("Fraction")
         ax.legend()
@@ -142,12 +145,13 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
             if fmt in ("png", "pdf", "svg"):
                 path = output / f"accuracy.{fmt}"; fig.savefig(path); outputs.append(str(path))
         plt.close(fig)
-        fig, axes = plt.subplots(len(models), 2, figsize=(12, max(3, 3 * len(models))), squeeze=False)
+        fig, axes = plt.subplots(len(models), 2, figsize=(12, 3.8 * len(models)), squeeze=False)
         for i, model in enumerate(models):
             group = grouped[model]
             counts = Counter(r["predicted_layer"] for r in group if r["predicted_layer"] is not None)
             axes[i, 0].bar(list(counts), list(counts.values()))
-            axes[i, 0].set_title(f"{model}: detected layers (n={len(group)})")
+            label = textwrap.fill(str(model), 54, break_on_hyphens=False)
+            axes[i, 0].set_title(f"{label}\nDetected layers (n={len(group)})", fontsize=10)
             axes[i, 0].set_ylabel("Cases")
             scores = defaultdict(list)
             for row in group:
@@ -158,7 +162,7 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
             baseline = controls.get(model, {}).get("localization", {}).get("layer_scores", {})
             base_layers = sorted(int(l) for l in baseline)
             axes[i, 1].plot(base_layers, [baseline[str(l)] for l in base_layers], linestyle="--", label="Baseline control")
-            axes[i, 1].set_title(f"{model}: Gram score profile")
+            axes[i, 1].set_title(f"{label}\nGRAM score profile", fontsize=10)
             axes[i, 1].legend(fontsize=8)
             for axis in axes[i]:
                 axis.set_xlabel("Layer")

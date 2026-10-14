@@ -56,15 +56,55 @@ matplotlib 3.10.8, pytest 9.1.1 and ruff 0.17.0. It had no CUDA device. This is 
 record of local validation, not a claim about the unrecorded campaign environment
 or support for every modern model architecture in this older Transformers build.
 
-## Remaining fresh-cluster check
+## Fresh-cluster checks completed
 
-After the user provides the fresh cluster, verify a clean installation and CUDA,
-load the pinned GPT-2 Medium adapter and its pinned base, run the two documented
-`smoke` commands, and inspect saved covariance, ROME, baseline/edited GRAM and
-rendered outputs. Smoke uses one original assigned fact and 32 covariance samples;
-it preserves the edit settings and marks the reduced protocol. Record package
-versions, device, snapshot pins, tensor hashes, efficacy and exact-layer outcomes.
-This GPU/model-download validation has **not** been run locally.
+The user-provided host `root@203.57.40.186:10173` was tested on 14 October 2026.
+It runs Ubuntu 22.04.5, Python 3.11.11 and an NVIDIA RTX 6000 Ada with 48 GB VRAM
+and driver 595.91.07. A fresh HTTPS clone received the exact local CSF commits
+through Git bundles. Installation used an isolated venv without replacing system
+packages. The CUDA 13 PyTorch build, CUDA matrix operations, BF16 availability,
+and package dependency checks passed. The environment uses torch 2.14.1,
+transformers 5.19.0, datasets 5.1.0 and peft 0.21.2; the full package lock is
+[requirements-cluster.txt](../requirements-cluster.txt).
+
+Eight smoke workflows completed: base and own covariance for the frozen GPT-2
+Medium DPO adapter, MiniLLM GPT-2 Large full checkpoint and Vietnamese-legal
+Qwen3.5 4B adapter, plus the first fact in each classic GPT-2 Medium batch.
+All eight achieved ROME efficacy 1.0 and exact configured-layer GRAM matching;
+all baseline FP indicators were false. Each preserved its original fact,
+checkpoint/adapter revision, seed and ROME settings. Fresh own covariance was
+computed on the actual finetuned/merged checkpoint; base covariance was computed
+on the pinned base. Matrices were finite float32, their hashes matched their
+receipts, and base/own hashes differed for all three families.
+
+A further two edits ran on one resident GPU model. After both edits, original
+projection bytes, the parameter object and its frozen flag were restored exactly.
+Their restored SHA256 hashes were identical. Rendering left source JSON bytes
+unchanged. Saved primary artifacts passed strict identity, configuration/content
+hash and dependency checks. The initial 178-test suite passed; after the download
+regression test was added, the updated suite passed 179 tests. Ruff, compilation,
+Bash syntax and frozen-input checks passed as well.
+
+The fresh installation exposed the old GPT-2 Hub alias failing at Xet downloads;
+the downloader now resolves the canonical repository at the requested immutable
+revision and verifies that revision. Visual inspection exposed long per-run
+titles overlapping; complete labels now wrap. The export audit corrected unique
+checkpoint counts for split classic batches and retained supplied base revisions
+in aggregate rows. Regression checks cover these cases.
+
+Commands, exact models, fact IDs and metrics are in [command.md](../command.md).
+The durable [cluster-smoke-results.json](cluster-smoke-results.json) contains
+provenance, covariance identities/hashes, metrics, source revisions, GPU restoration
+evidence and figure hashes. PNG files were decoded, SVG parsed, PDF pages/text
+read with a strict parser, and representative linear/log figures inspected.
+In total, 48 primary smoke artifacts and 102 figure files passed these checks.
+
+Smoke covariance used **32 eligible texts**, not the paper protocol's 100,000.
+This validates execution and saved outputs, not paper accuracy or bitwise replay.
+MiniLLM neighborhood scores were 0.1 and the classic smoke scores were 0.4/0.5;
+these are retained outcomes, separate from efficacy success. Qwen3.5 used working
+PyTorch reference convolution/linear-attention kernels; optional accelerated
+packages were absent. Only these three families were tested on this host.
 
 Exact classic replay and newly computed paper base covariance still need the
 original base-weight commit SHAs: the archived classic/base-covariance execution
@@ -93,5 +133,5 @@ and several have different layers or sample counts. No evidence recovered here
 ties these cache revisions or tensors to the exact CSF execution inputs.
 They remain explicitly unconfirmed and do not replace the missing campaign pins
 or original covariance. No remote files, environments or GPU jobs were changed.
-This inspection does not count as the pending fresh-cluster smoke validation,
-which can use the already recorded adapter-base pin without a new revision map.
+This inspection was separate from the completed fresh-cluster smoke validation
+above, which used recorded adapter-base pins without a new historical revision map.

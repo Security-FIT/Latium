@@ -34,6 +34,11 @@ Install `requirements-monitoring.txt` only to enable optional W&B tracking.
 Tracking is disabled by default. `LATIUM_PYTHON` selects the interpreter used by
 the Bash entry point.
 
+[command.md](command.md) records the fresh-cluster clone, installation,
+multi-model smoke tests, rendering and validation commands. The tested Python
+3.11/CUDA 13 environment is pinned in `requirements-cluster.txt`; other drivers
+may require another PyTorch build.
+
 ## Frozen experimental inputs
 
 The authoritative archive is
@@ -130,8 +135,10 @@ bash scripts/csf.sh smoke finetune-own --family gpt2-medium \
 
 The base smoke uses the adapter's recorded base revision; it does not attest to
 the unrecorded classic covariance-base revision. Smoke outputs are separate
-from paper populations. GPU installation/model loading and both covariance modes
-will be checked on the fresh cluster supplied after local validation.
+from paper populations. Fresh-cluster validation passed on GPT-2 Medium, GPT-2
+Large and Qwen3.5 4B: both covariance modes, full/merged adapter loading, ROME,
+baseline/edited GRAM, independent weight restoration and rendering. These checks
+use 32 covariance texts and do not replace the full paper campaigns.
 
 ## Saved-artifact validation and rendering
 
@@ -187,6 +194,6 @@ fixed-legacy trace. The windowed `causal-trace` implementation is retained with
 its distinct protocol documented in [causal_tracing.md](causal_tracing.md).
 Neither command overwrites recorded campaign results during artifact rendering.
 
-See [docs/validation.md](docs/validation.md) for current local results and remaining
-cluster work, and [docs/archived-audit.md](docs/archived-audit.md) for the historical
+See [docs/validation.md](docs/validation.md) for local and cluster results and
+their limits, and [docs/archived-audit.md](docs/archived-audit.md) for the historical
 source audit, family coverage, unavailable traces and download failures.

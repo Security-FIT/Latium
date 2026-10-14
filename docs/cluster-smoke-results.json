@@ -1,0 +1,1455 @@
+{
+  "validation_subset": true,
+  "renderer_revision": "ef909fe95f8fd7dcb32bb55c7bff65b921c8dc22",
+  "environment": {
+    "python": "3.11.11",
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+    "git_revision": "071d2ffb9c81073219378d1cc3972bd7c7e38b46",
+    "packages": {
+      "torch": "2.14.1",
+      "transformers": "5.19.0",
+      "datasets": "5.1.0",
+      "peft": "0.21.2",
+      "numpy": "2.4.6",
+      "matplotlib": "3.11.2",
+      "huggingface_hub": "2.2.0",
+      "pytest": "9.1.1",
+      "ruff": "0.17.0"
+    },
+    "cuda": "13.0",
+    "gpu": "NVIDIA RTX 6000 Ada Generation",
+    "bf16": true,
+    "cuda_matrix_check": "passed"
+  },
+  "smoke_workflows": 8,
+  "primary_artifacts_verified": 48,
+  "covariance_samples": 32,
+  "rome_successes": 8,
+  "gram_exact": 8,
+  "baseline_fp": 0,
+  "figures_verified": 102,
+  "records": [
+    {
+      "campaign": "finetune-base",
+      "family": "gpt2-large",
+      "model_id": "MiniLLM/MiniLLM-gpt2-760M",
+      "checkpoint_type": "full",
+      "checkpoint_revision": "1eb1bba5921add213cc0f9cd0025c49bac630f32",
+      "adapter_base_revision": null,
+      "dtype": "bf16",
+      "seed": 0,
+      "case_id": "173",
+      "cohort_position": 1,
+      "cohort_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+      "target_layer": 12,
+      "gram_selected_layer": 12,
+      "gram_exact": true,
+      "baseline_selected_layer": 23,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 0.1,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": null,
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 12,
+        "model": "gpt2-large",
+        "revision": "32b71b12589c2f8d625668d2335a01cac3249519",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "auto",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": null,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": null
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "d1bcdcf3e701947a5cfdef743aed33387b5e29b2587b26f11a8118e59e989acc",
+      "covariance_shape": [
+        5120,
+        5120
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "397d3641d29452ff48ca83caa253235dcd1886f0",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "46f03ecd7e9675a4aacc0c85b8be2547f42b7490a3ee10745eaea1efdfd0a09e"
+      },
+      "run_root": "/workspace/Latium/results/smoke-base-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/run",
+      "status": "complete"
+    },
+    {
+      "campaign": "finetune-base",
+      "family": "gpt2-medium",
+      "model_id": "AdityaRamDas/SafeGenAI_GPT2_medium_DPO_LoRA_FT",
+      "checkpoint_type": "adapter",
+      "checkpoint_revision": "5835c5b6da14b34480bced2a6c0d7a09de5ed0cb",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "dtype": "auto",
+      "seed": 0,
+      "case_id": "18850",
+      "cohort_position": 45,
+      "cohort_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+      "target_layer": 8,
+      "gram_selected_layer": 8,
+      "gram_exact": true,
+      "baseline_selected_layer": 14,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 1.0,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": null,
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 8,
+        "model": "openai-community/gpt2-medium",
+        "revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "auto",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": null,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": null
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "01d2d09310349f766ce299139125e5793153275eabdf325cd0ff5a6877882131",
+      "covariance_shape": [
+        4096,
+        4096
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "071d2ffb9c81073219378d1cc3972bd7c7e38b46",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "fd793d04b96232c2c8ad2e115ca9026aeacc02b71d8b175ba98426e32f771853"
+      },
+      "run_root": "/workspace/Latium/results/smoke-base-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/run",
+      "status": "complete"
+    },
+    {
+      "campaign": "finetune-base",
+      "family": "qwen3.5-4b",
+      "model_id": "Sonpd/qwen3.5-4b-vietnamese-legal-kaggle-1K",
+      "checkpoint_type": "adapter",
+      "checkpoint_revision": "5cfb554a2271e121d0b4d2fc1b2ef366effd9b60",
+      "adapter_base_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "dtype": "bf16",
+      "seed": 0,
+      "case_id": "7780",
+      "cohort_position": 43,
+      "cohort_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+      "target_layer": 5,
+      "gram_selected_layer": 5,
+      "gram_exact": true,
+      "baseline_selected_layer": 6,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 1.0,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": null,
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 5,
+        "model": "Qwen/Qwen3.5-4B",
+        "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "dynamic",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": 512,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": 100000
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "a82afeee88a95db2cb61c948c20c2ca8ae429b0506942129c8d1e407a99d8f31",
+      "covariance_shape": [
+        9216,
+        9216
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "397d3641d29452ff48ca83caa253235dcd1886f0",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "46f03ecd7e9675a4aacc0c85b8be2547f42b7490a3ee10745eaea1efdfd0a09e"
+      },
+      "run_root": "/workspace/Latium/results/smoke-base-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/run",
+      "status": "complete"
+    },
+    {
+      "campaign": "classic",
+      "family": "gpt2-medium",
+      "model_id": "gpt2-medium",
+      "checkpoint_type": "base",
+      "checkpoint_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "adapter_base_revision": null,
+      "dtype": "auto",
+      "seed": 0,
+      "case_id": "4043",
+      "cohort_position": 0,
+      "cohort_hash": "7ce8d8044134b28347a92ff0d078c6d1ae00748b6450f2f42b7f81604c18c8a9",
+      "target_layer": 8,
+      "gram_selected_layer": 8,
+      "gram_exact": true,
+      "baseline_selected_layer": 14,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 0.5,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": null,
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 8,
+        "model": "gpt2-medium",
+        "revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "auto",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": null,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": null
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "f4c8db5a9de7d0d7d3fe609adee2c97b5415abdbaf8873dff2dfb8f1b7f03b37",
+      "covariance_shape": [
+        4096,
+        4096
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "397d3641d29452ff48ca83caa253235dcd1886f0",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "46f03ecd7e9675a4aacc0c85b8be2547f42b7490a3ee10745eaea1efdfd0a09e"
+      },
+      "run_root": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/first500/run",
+      "status": "complete"
+    },
+    {
+      "campaign": "classic",
+      "family": "gpt2-medium",
+      "model_id": "gpt2-medium",
+      "checkpoint_type": "base",
+      "checkpoint_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "adapter_base_revision": null,
+      "dtype": "auto",
+      "seed": 0,
+      "case_id": "13954",
+      "cohort_position": 500,
+      "cohort_hash": "7ce8d8044134b28347a92ff0d078c6d1ae00748b6450f2f42b7f81604c18c8a9",
+      "target_layer": 8,
+      "gram_selected_layer": 8,
+      "gram_exact": true,
+      "baseline_selected_layer": 14,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 0.4,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": null,
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 8,
+        "model": "gpt2-medium",
+        "revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "auto",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": null,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": null
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "f4c8db5a9de7d0d7d3fe609adee2c97b5415abdbaf8873dff2dfb8f1b7f03b37",
+      "covariance_shape": [
+        4096,
+        4096
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "397d3641d29452ff48ca83caa253235dcd1886f0",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "46f03ecd7e9675a4aacc0c85b8be2547f42b7490a3ee10745eaea1efdfd0a09e"
+      },
+      "run_root": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/next500/run",
+      "status": "complete"
+    },
+    {
+      "campaign": "finetune-own",
+      "family": "gpt2-large",
+      "model_id": "MiniLLM/MiniLLM-gpt2-760M",
+      "checkpoint_type": "full",
+      "checkpoint_revision": "1eb1bba5921add213cc0f9cd0025c49bac630f32",
+      "adapter_base_revision": null,
+      "dtype": "bf16",
+      "seed": 0,
+      "case_id": "173",
+      "cohort_position": 1,
+      "cohort_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+      "target_layer": 12,
+      "gram_selected_layer": 12,
+      "gram_exact": true,
+      "baseline_selected_layer": 23,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 0.1,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": null,
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 12,
+        "model": "MiniLLM/MiniLLM-gpt2-760M",
+        "revision": "1eb1bba5921add213cc0f9cd0025c49bac630f32",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "auto",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": null,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": null
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "224af6e021fcdbc3beae6313bcbd072ac26cb8796d43f2173ddb628bd4c20466",
+      "covariance_shape": [
+        5120,
+        5120
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "397d3641d29452ff48ca83caa253235dcd1886f0",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "46f03ecd7e9675a4aacc0c85b8be2547f42b7490a3ee10745eaea1efdfd0a09e"
+      },
+      "run_root": "/workspace/Latium/results/smoke-own-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/run",
+      "status": "complete"
+    },
+    {
+      "campaign": "finetune-own",
+      "family": "gpt2-medium",
+      "model_id": "AdityaRamDas/SafeGenAI_GPT2_medium_DPO_LoRA_FT",
+      "checkpoint_type": "adapter",
+      "checkpoint_revision": "5835c5b6da14b34480bced2a6c0d7a09de5ed0cb",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "dtype": "auto",
+      "seed": 0,
+      "case_id": "18850",
+      "cohort_position": 45,
+      "cohort_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+      "target_layer": 8,
+      "gram_selected_layer": 8,
+      "gram_exact": true,
+      "baseline_selected_layer": 14,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 1.0,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 8,
+        "model": "AdityaRamDas/SafeGenAI_GPT2_medium_DPO_LoRA_FT",
+        "revision": "5835c5b6da14b34480bced2a6c0d7a09de5ed0cb",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "auto",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": null,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": null
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "88de2411ee6fae9115873a49fbf0807fddbed145f30e3100e4d4b72325973013",
+      "covariance_shape": [
+        4096,
+        4096
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "071d2ffb9c81073219378d1cc3972bd7c7e38b46",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "fd793d04b96232c2c8ad2e115ca9026aeacc02b71d8b175ba98426e32f771853"
+      },
+      "run_root": "/workspace/Latium/results/smoke-own-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/run",
+      "status": "complete"
+    },
+    {
+      "campaign": "finetune-own",
+      "family": "qwen3.5-4b",
+      "model_id": "Sonpd/qwen3.5-4b-vietnamese-legal-kaggle-1K",
+      "checkpoint_type": "adapter",
+      "checkpoint_revision": "5cfb554a2271e121d0b4d2fc1b2ef366effd9b60",
+      "adapter_base_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "dtype": "bf16",
+      "seed": 0,
+      "case_id": "7780",
+      "cohort_position": 43,
+      "cohort_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+      "target_layer": 5,
+      "gram_selected_layer": 5,
+      "gram_exact": true,
+      "baseline_selected_layer": 6,
+      "baseline_fp": false,
+      "efficacy_score": 1.0,
+      "paraphrase_score": 1.0,
+      "neighborhood_score": 1.0,
+      "rome_success": true,
+      "covariance_identity": {
+        "adapter_base_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+        "config": "wikitext-103-raw-v1",
+        "dataset": "Salesforce/wikitext",
+        "layer": 5,
+        "model": "Sonpd/qwen3.5-4b-vietnamese-legal-kaggle-1K",
+        "revision": "5cfb554a2271e121d0b4d2fc1b2ef366effd9b60",
+        "samples": 32,
+        "seed": 0,
+        "settings": {
+          "second_moment_batch_size": null,
+          "second_moment_batch_size_mode": "dynamic",
+          "second_moment_clear_cache_every": 0,
+          "second_moment_max_length": 512,
+          "second_moment_min_text_length": 50,
+          "second_moment_target_samples": 100000
+        },
+        "splits": [
+          "train",
+          "test",
+          "validation"
+        ]
+      },
+      "covariance_sha256": "578ce501a133b817b4fb595cec829f388c86daa1e8395308f98c3270a7cf6f1d",
+      "covariance_shape": [
+        9216,
+        9216
+      ],
+      "covariance_dtype": "torch.float32",
+      "source": {
+        "git_revision": "397d3641d29452ff48ca83caa253235dcd1886f0",
+        "packages": {
+          "datasets": "5.1.0",
+          "hydra-core": "1.3.7",
+          "numpy": "2.4.6",
+          "peft": "0.21.2",
+          "torch": "2.14.1",
+          "transformers": "5.19.0"
+        },
+        "source_sha256": "46f03ecd7e9675a4aacc0c85b8be2547f42b7490a3ee10745eaea1efdfd0a09e"
+      },
+      "run_root": "/workspace/Latium/results/smoke-own-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/run",
+      "status": "complete"
+    }
+  ],
+  "gpu_restoration": {
+    "validation_subset": true,
+    "covariance_samples": 32,
+    "case_ids": [
+      "4043",
+      "886"
+    ],
+    "restorations": [
+      {
+        "module": "transformer.h.8.mlp.c_proj",
+        "sha256": "7ef9cd43263201ef5ede0c9ca689c939226b9e7b8343912ee82b923cc073fe15",
+        "device": "cuda:0",
+        "parameter_preserved": true,
+        "weights_restored_exactly": true,
+        "requires_grad": false
+      },
+      {
+        "module": "transformer.h.8.mlp.c_proj",
+        "sha256": "7ef9cd43263201ef5ede0c9ca689c939226b9e7b8343912ee82b923cc073fe15",
+        "device": "cuda:0",
+        "parameter_preserved": true,
+        "weights_restored_exactly": true,
+        "requires_grad": false
+      }
+    ],
+    "source_unchanged_by_rendering": true,
+    "rendered_cases": [
+      {
+        "analysis_status": "complete",
+        "baseline_fp": false,
+        "baseline_layer_scores": {
+          "10": 0.9545004963874817,
+          "11": 1.020617961883545,
+          "12": 1.1755646467208862,
+          "13": 1.2708848714828491,
+          "14": 1.925404667854309,
+          "15": 0.9926033020019531,
+          "16": 0.6089704632759094,
+          "17": 0.6310094594955444,
+          "18": 0.9170594811439514,
+          "19": 0.9414611458778381,
+          "2": 1.2812323570251465,
+          "20": 1.1210427284240723,
+          "21": 0.8354295492172241,
+          "3": 0.7419299483299255,
+          "4": 0.2445797175168991,
+          "5": 0.3513295352458954,
+          "6": 0.7535301446914673,
+          "7": 1.1477707624435425,
+          "8": 1.0363101959228516,
+          "9": 1.1087535619735718
+        },
+        "baseline_selected_layer": 14,
+        "baseline_status": "complete",
+        "case_id": "4043",
+        "checkpoint_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+        "cohort_hash": "7ce8d8044134b28347a92ff0d078c6d1ae00748b6450f2f42b7f81604c18c8a9",
+        "cohort_position": 0,
+        "error": null,
+        "exact": true,
+        "layer_scores": {
+          "10": 0.9545004963874817,
+          "11": 1.020617961883545,
+          "12": 1.1755646467208862,
+          "13": 1.2708848714828491,
+          "14": 1.925404667854309,
+          "15": 0.9926033020019531,
+          "16": 0.6089704632759094,
+          "17": 0.6310094594955444,
+          "18": 0.9170594811439514,
+          "19": 0.9414611458778381,
+          "2": 1.2812323570251465,
+          "20": 1.1210427284240723,
+          "21": 0.8354295492172241,
+          "3": 0.7419299483299255,
+          "4": 0.2445797175168991,
+          "5": 0.3513295352458954,
+          "6": 0.7535301446914673,
+          "7": 0.9872399568557739,
+          "8": 30.437044143676758,
+          "9": 1.0250060558319092
+        },
+        "metrics": {
+          "efficacy_magnitude": 0.9880117308334978,
+          "efficacy_score": 1.0,
+          "neighborhood_nll": [
+            {
+              "target_new": 4.330890655517578,
+              "target_true": 4.657741546630859
+            },
+            {
+              "target_new": 0.08676408976316452,
+              "target_true": 5.582709312438965
+            },
+            {
+              "target_new": 12.32366943359375,
+              "target_true": 12.296546936035156
+            },
+            {
+              "target_new": 6.643030643463135,
+              "target_true": 6.096644401550293
+            },
+            {
+              "target_new": 6.781702041625977,
+              "target_true": 6.204599380493164
+            },
+            {
+              "target_new": 10.638958930969238,
+              "target_true": 11.578862190246582
+            },
+            {
+              "target_new": 6.444994926452637,
+              "target_true": 9.316363334655762
+            },
+            {
+              "target_new": 4.264446258544922,
+              "target_true": 3.7952687740325928
+            },
+            {
+              "target_new": 9.259249687194824,
+              "target_true": 9.665392875671387
+            },
+            {
+              "target_new": 12.313131332397461,
+              "target_true": 12.064855575561523
+            }
+          ],
+          "neighborhood_score": 0.5,
+          "overall_score": 0.75,
+          "paraphrase_nll": [
+            {
+              "target_new": 2.5977632999420166,
+              "target_true": 7.077454090118408
+            },
+            {
+              "target_new": 0.05242246389389038,
+              "target_true": 8.328961372375488
+            }
+          ],
+          "paraphrase_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.011835355311632156,
+            "target_true": 8.409791946411133
+          }
+        },
+        "model": "gpt2-medium",
+        "model_id": "gpt2-medium",
+        "plan_id": "cf_7ce8d8044134_m0000-0002_r01",
+        "predicted_layer": 8,
+        "rome_success": true,
+        "source_revision": null,
+        "status": "complete",
+        "target_layer": 8
+      },
+      {
+        "analysis_status": "complete",
+        "baseline_fp": false,
+        "baseline_layer_scores": {
+          "10": 0.9545004963874817,
+          "11": 1.020617961883545,
+          "12": 1.1755646467208862,
+          "13": 1.2708848714828491,
+          "14": 1.925404667854309,
+          "15": 0.9926033020019531,
+          "16": 0.6089704632759094,
+          "17": 0.6310094594955444,
+          "18": 0.9170594811439514,
+          "19": 0.9414611458778381,
+          "2": 1.2812323570251465,
+          "20": 1.1210427284240723,
+          "21": 0.8354295492172241,
+          "3": 0.7419299483299255,
+          "4": 0.2445797175168991,
+          "5": 0.3513295352458954,
+          "6": 0.7535301446914673,
+          "7": 1.1477707624435425,
+          "8": 1.0363101959228516,
+          "9": 1.1087535619735718
+        },
+        "baseline_selected_layer": 14,
+        "baseline_status": "complete",
+        "case_id": "886",
+        "checkpoint_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+        "cohort_hash": "7ce8d8044134b28347a92ff0d078c6d1ae00748b6450f2f42b7f81604c18c8a9",
+        "cohort_position": 1,
+        "error": null,
+        "exact": true,
+        "layer_scores": {
+          "10": 0.9545004963874817,
+          "11": 1.020617961883545,
+          "12": 1.1755646467208862,
+          "13": 1.2708848714828491,
+          "14": 1.925404667854309,
+          "15": 0.9926033020019531,
+          "16": 0.6089704632759094,
+          "17": 0.6310094594955444,
+          "18": 0.9170594811439514,
+          "19": 0.9414611458778381,
+          "2": 1.2812323570251465,
+          "20": 1.1210427284240723,
+          "21": 0.8354295492172241,
+          "3": 0.7419299483299255,
+          "4": 0.2445797175168991,
+          "5": 0.3513295352458954,
+          "6": 0.7535301446914673,
+          "7": 1.226288080215454,
+          "8": 19.173547744750977,
+          "9": 1.0550944805145264
+        },
+        "metrics": {
+          "efficacy_magnitude": 0.9855442247155094,
+          "efficacy_score": 1.0,
+          "neighborhood_nll": [
+            {
+              "target_new": 7.250967979431152,
+              "target_true": 8.870299339294434
+            },
+            {
+              "target_new": 10.515174865722656,
+              "target_true": 9.424217224121094
+            },
+            {
+              "target_new": 9.160208702087402,
+              "target_true": 7.845488548278809
+            },
+            {
+              "target_new": 11.300820350646973,
+              "target_true": 8.613823890686035
+            },
+            {
+              "target_new": 10.973638534545898,
+              "target_true": 9.845460891723633
+            },
+            {
+              "target_new": 11.702642440795898,
+              "target_true": 11.124906539916992
+            },
+            {
+              "target_new": 7.710803031921387,
+              "target_true": 8.98823070526123
+            },
+            {
+              "target_new": 10.75556755065918,
+              "target_true": 8.563116073608398
+            },
+            {
+              "target_new": 7.569492340087891,
+              "target_true": 9.100940704345703
+            },
+            {
+              "target_new": 8.892879486083984,
+              "target_true": 7.778850555419922
+            }
+          ],
+          "neighborhood_score": 0.7,
+          "overall_score": 0.8749999999999999,
+          "paraphrase_nll": [
+            {
+              "target_new": 0.2692829966545105,
+              "target_true": 12.423137664794922
+            },
+            {
+              "target_new": 0.06349968165159225,
+              "target_true": 14.804824829101562
+            }
+          ],
+          "paraphrase_score": 1.0,
+          "rewrite_nll": {
+            "target_new": 0.014561218209564686,
+            "target_true": 16.647193908691406
+          }
+        },
+        "model": "gpt2-medium",
+        "model_id": "gpt2-medium",
+        "plan_id": "cf_7ce8d8044134_m0000-0002_r01",
+        "predicted_layer": 8,
+        "rome_success": true,
+        "source_revision": null,
+        "status": "complete",
+        "target_layer": 8
+      }
+    ]
+  },
+  "figures": [
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-large-linear.pdf",
+      "format": "pdf",
+      "bytes": 17699,
+      "sha256": "a54feb6d4a3eb3185a38102de88e1811214337affc3c622e37737f5fc0d2a94e"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-large-linear.png",
+      "format": "png",
+      "bytes": 73723,
+      "sha256": "7331ef1426b0ab295d92441edb64bb1308c6a6c3b3c8cac5aa1a81028d46dd78"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-large-linear.svg",
+      "format": "svg",
+      "bytes": 44828,
+      "sha256": "3eb30edea279e39c8223bdb63c8ac558f478c80c2174edb0896e25754433edb2"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-large-log.pdf",
+      "format": "pdf",
+      "bytes": 17932,
+      "sha256": "03f11d5c7ed801b4c534e388eb6609ff2038d3be0c61cd77860b4d103025e553"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-large-log.png",
+      "format": "png",
+      "bytes": 87791,
+      "sha256": "b8e6cc12edc325a13b3f51a3f97b269d37946b49b1ba4a8ccfa7892247c7ceb0"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-large-log.svg",
+      "format": "svg",
+      "bytes": 48378,
+      "sha256": "1ee24e9339cfeb55b9fac1195435f071523b4131d70feab19ec17434a82c924a"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-medium-linear.pdf",
+      "format": "pdf",
+      "bytes": 17575,
+      "sha256": "aa7570985cb460a074da88f4f382ef6c3f21ba18fe0a2e3d6987c627efa2e26b"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-medium-linear.png",
+      "format": "png",
+      "bytes": 83796,
+      "sha256": "1121160a93d604624d1f38dcac6704c01346377b5442e137e4be6cfbcee4c4f3"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-medium-linear.svg",
+      "format": "svg",
+      "bytes": 45680,
+      "sha256": "be96d3ac65d27d94847c2917cf139650d2121bb06e6351a6fb3825ed1a61e3d9"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-medium-log.pdf",
+      "format": "pdf",
+      "bytes": 17646,
+      "sha256": "a33484457880709b98efde1de586bae016d3a94b1fbe30895f629a4a0aaac3a8"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-medium-log.png",
+      "format": "png",
+      "bytes": 89502,
+      "sha256": "21531482be24ba2586a948138ed5efb4787ad2d867ce6acafd979569162ec253"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/gpt2-medium-log.svg",
+      "format": "svg",
+      "bytes": 45456,
+      "sha256": "6b4ebe79c4c7e48cf38fbfab64573fd7df2e5c7e16e89352e58adfff8f7944ea"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/qwen3.5-4b-linear.pdf",
+      "format": "pdf",
+      "bytes": 18530,
+      "sha256": "a40ed352247a60ec43b539a2b3b0a60a441503fec71258dbf7870aa3622feaea"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/qwen3.5-4b-linear.png",
+      "format": "png",
+      "bytes": 84374,
+      "sha256": "83957847d82ce5851808a21c8666ce2d01018546bc6531af375a8f7a0421398b"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/qwen3.5-4b-linear.svg",
+      "format": "svg",
+      "bytes": 44102,
+      "sha256": "cb3901c542e5e572642e3ef36098d36813267cc35aa5865d2cb171de640dbbe6"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/qwen3.5-4b-log.pdf",
+      "format": "pdf",
+      "bytes": 18567,
+      "sha256": "d1bfd84f7421e5b10edfe22f59aa0aa241e36f27b3a4a102f7fcfebd4fb71897"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/qwen3.5-4b-log.png",
+      "format": "png",
+      "bytes": 100555,
+      "sha256": "33c1df03bf4000e5c53e785ec79a026aed0be888d82a79ede43e178598017d6a"
+    },
+    {
+      "path": "/workspace/csf-rendered/base/profiles/qwen3.5-4b-log.svg",
+      "format": "svg",
+      "bytes": 44707,
+      "sha256": "1dd9b2f1732c39eebd2f9fd6d0c526522f393b9fd467f79d816797866189e6a2"
+    },
+    {
+      "path": "/workspace/csf-rendered/classic/profiles/gpt2-medium-linear.pdf",
+      "format": "pdf",
+      "bytes": 18025,
+      "sha256": "500c07ae7f45037b472cb171796097fd473b2610acaaf4ceec3baed74c56646e"
+    },
+    {
+      "path": "/workspace/csf-rendered/classic/profiles/gpt2-medium-linear.png",
+      "format": "png",
+      "bytes": 78998,
+      "sha256": "240d39b5a94b60becb71014bf4ac68c1fab3910dcc6183624a9a5b8fca225501"
+    },
+    {
+      "path": "/workspace/csf-rendered/classic/profiles/gpt2-medium-linear.svg",
+      "format": "svg",
+      "bytes": 43883,
+      "sha256": "10086a8a9cd1050f745058641bf3be91187e44edb95869c465bd5425f3f06755"
+    },
+    {
+      "path": "/workspace/csf-rendered/classic/profiles/gpt2-medium-log.pdf",
+      "format": "pdf",
+      "bytes": 17699,
+      "sha256": "c7bf3c11dbd3446075b10602c0b4e9646ff90085fbf915b07b5697af64774bd9"
+    },
+    {
+      "path": "/workspace/csf-rendered/classic/profiles/gpt2-medium-log.png",
+      "format": "png",
+      "bytes": 90221,
+      "sha256": "3d936f477085bbf2ff9818af50faf5aaa84d0f2240545e27ce5940abe8c6766f"
+    },
+    {
+      "path": "/workspace/csf-rendered/classic/profiles/gpt2-medium-log.svg",
+      "format": "svg",
+      "bytes": 45244,
+      "sha256": "746f86c18ef4c751f0d795675571135f6b7ead41c3e4e0f1502c909bf4218dcc"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-large-linear.pdf",
+      "format": "pdf",
+      "bytes": 17920,
+      "sha256": "beca35ef935b61ed195931042811588795015a8e472f0f04f61fa0821c411e60"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-large-linear.png",
+      "format": "png",
+      "bytes": 73868,
+      "sha256": "2cc3246464c0167fe849d58b8173062d6232df5ac897510c38e3003601695960"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-large-linear.svg",
+      "format": "svg",
+      "bytes": 45012,
+      "sha256": "b784e3046ae66f7c4789ff3178a5c3be63f25a12c361c46589682141a4e35093"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-large-log.pdf",
+      "format": "pdf",
+      "bytes": 18139,
+      "sha256": "ab6a25c3f1d486087c240d1c8c6215b8b31461f072dacd67a8fe29a816955c4b"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-large-log.png",
+      "format": "png",
+      "bytes": 87972,
+      "sha256": "5f8dfce87c6b3e411dc3053a4777d4af3db02d15c2205e7a01b977a6fbfc4064"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-large-log.svg",
+      "format": "svg",
+      "bytes": 48539,
+      "sha256": "9d924ebd9ed9c0bc88c53827f98d9cdecb9f1e88d4765bd08b84796277d66bc1"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-medium-linear.pdf",
+      "format": "pdf",
+      "bytes": 17776,
+      "sha256": "b86a0717528fe49105317f9880c6437c781f0ffcb56e73e338839c0d6f7027df"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-medium-linear.png",
+      "format": "png",
+      "bytes": 84530,
+      "sha256": "4da06f9435b1784436544e29d6571f89f1dcd789f71126896725945efca176ef"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-medium-linear.svg",
+      "format": "svg",
+      "bytes": 45846,
+      "sha256": "6539c86756da583eb7473f54ee942c09bfb4de284f6b0d974a20a88ac2ec66b6"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-medium-log.pdf",
+      "format": "pdf",
+      "bytes": 17843,
+      "sha256": "8e3adc4420fbdcbae085ee75f8d68e05022e2c79cd7cbe2f8500996adcafaf4f"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-medium-log.png",
+      "format": "png",
+      "bytes": 89917,
+      "sha256": "88dc43e14874b0f7d3462351f44079f9f676c6c65b66854ec20a0f09c8eb2441"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/gpt2-medium-log.svg",
+      "format": "svg",
+      "bytes": 45598,
+      "sha256": "d5fdcda80964b3bd0c23a466d4497c0dc379a3d3ebb23684a2ed005f9c4b9b4d"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/qwen3.5-4b-linear.pdf",
+      "format": "pdf",
+      "bytes": 18533,
+      "sha256": "67708d46436e87ab0ad49106f539c773afa1c950421d00b1032a87ab28bb51f0"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/qwen3.5-4b-linear.png",
+      "format": "png",
+      "bytes": 84093,
+      "sha256": "1beddf87ef3722e7badc311d2594dc49bc7f8e303df19dc49bd0d5c13d7ef583"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/qwen3.5-4b-linear.svg",
+      "format": "svg",
+      "bytes": 44017,
+      "sha256": "e87aba0afae04e40584afa2b0a7ec6579ad468474f132b6921342acbda1f160a"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/qwen3.5-4b-log.pdf",
+      "format": "pdf",
+      "bytes": 18574,
+      "sha256": "0969175f70a42ee5f386f47feee46c81e98638193a1d5f8e7323b810d05ab49d"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/qwen3.5-4b-log.png",
+      "format": "png",
+      "bytes": 100592,
+      "sha256": "46861b3488050d3ab2b390553ce93d60de08a0e71d1e2cef3ef4babaacdba223"
+    },
+    {
+      "path": "/workspace/csf-rendered/own/profiles/qwen3.5-4b-log.svg",
+      "format": "svg",
+      "bytes": 44638,
+      "sha256": "48bb2fe88df403787bb3defe7521e4fed83d3646b76197bcd6d9c0ea1ae3bc88"
+    },
+    {
+      "path": "/workspace/csf-render-one/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 15926,
+      "sha256": "5de53cd482b964d96671683fce9f37c30afcabecd865f3784a14375927e6618c"
+    },
+    {
+      "path": "/workspace/csf-render-one/accuracy.png",
+      "format": "png",
+      "bytes": 19884,
+      "sha256": "2ba08a74c8898969a69bb75cf4721ed5dc2df7afccb26c96d9458144d6427619"
+    },
+    {
+      "path": "/workspace/csf-render-one/accuracy.svg",
+      "format": "svg",
+      "bytes": 29727,
+      "sha256": "9369d554584bb46501e7b4e3f17a573c73f0393859037bf8e64731a910f11ec6"
+    },
+    {
+      "path": "/workspace/csf-render-one/profiles.pdf",
+      "format": "pdf",
+      "bytes": 20579,
+      "sha256": "20e9611211e19f4c17f1d5b23b77ffbf55b842446387acf963b4032d5e44ebb1"
+    },
+    {
+      "path": "/workspace/csf-render-one/profiles.png",
+      "format": "png",
+      "bytes": 53151,
+      "sha256": "9239cb68491bd5767a34e0517e49e51a081cc2c95f82d8209bad6e6f455ed156"
+    },
+    {
+      "path": "/workspace/csf-render-one/profiles.svg",
+      "format": "svg",
+      "bytes": 58757,
+      "sha256": "8722ecd1d526ec3c9bfdcdd2feaece99000bf900a3b6f6906c62d52c0aa442c7"
+    },
+    {
+      "path": "results/cluster-restoration-probe/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 13036,
+      "sha256": "b2f3489bfc1d309162bf335c6e720f5bb23a134c810be99823dfb830c8442a86"
+    },
+    {
+      "path": "results/cluster-restoration-probe/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 14686,
+      "sha256": "847ee4ef7cb18bf35e069a99b554783c6f24d3cf2d52bdcebf6d13b037943f9f"
+    },
+    {
+      "path": "results/cluster-restoration-probe/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 24619,
+      "sha256": "36f9aa4ab8d1ed3a190c0d8f0edcfeeff03a65154886ad7b8fa9515bb1488124"
+    },
+    {
+      "path": "results/cluster-restoration-probe/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 18796,
+      "sha256": "d982f172d3b6134b29105b3dab53886e04e8beb5117950cb7239fe0a2a29dcb0"
+    },
+    {
+      "path": "results/cluster-restoration-probe/rendered/profiles.png",
+      "format": "png",
+      "bytes": 44166,
+      "sha256": "1907a953d79665ec1d09ed25fe8e748e3e72dc69196382b0d046cba1adddb0c4"
+    },
+    {
+      "path": "results/cluster-restoration-probe/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 50306,
+      "sha256": "595f5f3bb50c7beba2d6da11a72d32fb4ff0e96d2e99801b55cd62dd507facb5"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 14896,
+      "sha256": "4bd2e7d901dc3f3e813c97bca2d59ab7e20dcd03819a0a9c6a52e65ddbe4f1f5"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 15879,
+      "sha256": "d6ce837790d4b068ec607e65044faf18511296a5fd0809c2ad4a21afe8b7dc2c"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 26960,
+      "sha256": "61c9a115f2a5f55d59ba56a2f25c8a5294354ba48fa8472de9694a0d22e1558a"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 19267,
+      "sha256": "88e5555ef2d0bdb4077f081761153d3705ae9334ce94482a5a707622d693b2d1"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/profiles.png",
+      "format": "png",
+      "bytes": 41560,
+      "sha256": "dcfc5848d3121d0477b1d1261a3851695f865cbe1e8f442f1e0b422ea1d04af2"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 51488,
+      "sha256": "7d090797f8e6d98c7411c93cb8e72a30b7b423b958f8672f6d0e01024a793aa0"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 15926,
+      "sha256": "bcb13a133575ef2ec55806ec811b0dfc9578b419333d87698f4b173e88465946"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 19884,
+      "sha256": "2ba08a74c8898969a69bb75cf4721ed5dc2df7afccb26c96d9458144d6427619"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 29727,
+      "sha256": "c2405b3fa9722bdcb4a2ae76696909681aaea31163553fac1f322e93929bf00c"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 20584,
+      "sha256": "43a6762b4dcfef0481a55af09800f758b9d5952d571704fc09018ee97eba025e"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/profiles.png",
+      "format": "png",
+      "bytes": 53124,
+      "sha256": "a11076e1885b242b442a58c1b9f5329b483a8d2ff244e47215cfe58b84e928f8"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 58764,
+      "sha256": "5f40f851ddc4d6ca540edaba136e4983072100593a4fe07c57c9a16dbfa14120"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 17347,
+      "sha256": "6979739a52bbf45fd8f5f752b55395d502ddb126e8134decc9fcb0df4d2f83a7"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 18939,
+      "sha256": "2d04f814e7fdf811489d1495abf42702482f43c0cf0e3710b9d41a4267897868"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 31765,
+      "sha256": "048626b569fc4ff63a97e5efbb5c07ad0eba495689c79d835ad6613e14a45382"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 20977,
+      "sha256": "9bc376a126e8575551b32d8e881c79914f0dd4a69fee17720bf6ed5dec069534"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/profiles.png",
+      "format": "png",
+      "bytes": 50115,
+      "sha256": "54069552eaf77364b721444b6c1353ba0aee051ad9e6df5b231f3a3984db56d9"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-base-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 54820,
+      "sha256": "5d0920b27c77c26fd64cf14c86d390ff66fbf80395e71ffe5f6cfb254cfa1d74"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/first500/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 13036,
+      "sha256": "31f3857792dd11912d74179456583da4a312aa9b5b47338e6c388b9d5772c93f"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/first500/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 14686,
+      "sha256": "847ee4ef7cb18bf35e069a99b554783c6f24d3cf2d52bdcebf6d13b037943f9f"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/first500/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 24619,
+      "sha256": "8933a04a94e9067b421742acbb367ff1e79b2bd248a98cd0c667134753ae0eb2"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/first500/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 18748,
+      "sha256": "c24414949bb5cebf768ed783f242afa67f8b21c0c3146a316c309b3a7e059bef"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/first500/rendered/profiles.png",
+      "format": "png",
+      "bytes": 42788,
+      "sha256": "2fe8da0f16202d2be2c7727fedf9f4712e991ba0b40f1c9441aa797a849fa8ed"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/first500/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 48474,
+      "sha256": "772d6cffee62b9382ec309ca9d336c88e9b987726b532a97eee77edf90a6b8ce"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/next500/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 13036,
+      "sha256": "152b5d82a68d7c7a03345c2fdf5ca6b1ab8a80f8b7e7ea3060cd513bf9e54d88"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/next500/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 14686,
+      "sha256": "847ee4ef7cb18bf35e069a99b554783c6f24d3cf2d52bdcebf6d13b037943f9f"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/next500/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 24619,
+      "sha256": "360a430d4dae87850e332353e800389e250e9af10db774723bea734775bce04c"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/next500/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 18746,
+      "sha256": "fb0c47d66a4e3c754433896c5a2e943b60121221dceeeeedac77092cc30c89cb"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/next500/rendered/profiles.png",
+      "format": "png",
+      "bytes": 42667,
+      "sha256": "d28d32df90773e6d723ab5a315bc48d3db5362d45f87ca6856c8d4578725fa81"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-classic-medium/runs/gpt2-medium/next500/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 48476,
+      "sha256": "f0d2921164624ce9662175d4aa0d24192d52463475fc4f9a33539bfc5b194027"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 14896,
+      "sha256": "0dc456d106417fbec099781005145715fa3cc4f87d8a607d8f4b6d9720f34df6"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 15879,
+      "sha256": "d6ce837790d4b068ec607e65044faf18511296a5fd0809c2ad4a21afe8b7dc2c"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 26960,
+      "sha256": "3a29d670c079e246661a98e18aef31e485d0337d027e377cee9cc665ed5457a6"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 19276,
+      "sha256": "f5f4b3427a521b4f66d03fe5c7810c1e2fffd7a2e48ea0939a97a7c9c40e6949"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/profiles.png",
+      "format": "png",
+      "bytes": 41678,
+      "sha256": "447a314cba2dab50d3b371b3c5a3b179ca38c07ac2b89427f93c92fc92faac89"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-large/runs/fleet_MiniLLM_MiniLLM-gpt2-760M/assigned/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 51500,
+      "sha256": "c7da686753d86c874416d6c335a23db0104ed30fa4baae16b010b66b7c5f395c"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 15926,
+      "sha256": "19db294472039d24563c14f53f71bec2c6936de9f0e3b7a8ab28b2f2718031d3"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 19884,
+      "sha256": "2ba08a74c8898969a69bb75cf4721ed5dc2df7afccb26c96d9458144d6427619"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 29727,
+      "sha256": "acf9261449eabd311c2bc5f54a8fd9be87c24d12384025be7ba9e43e0a16f045"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 20579,
+      "sha256": "85537f2c87ebdac71f96030b16ab45533630dcad37251e2d1938768cf384f34a"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/profiles.png",
+      "format": "png",
+      "bytes": 53151,
+      "sha256": "9239cb68491bd5767a34e0517e49e51a081cc2c95f82d8209bad6e6f455ed156"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-medium/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 58757,
+      "sha256": "9f33de4b1f34e5960a080b6dbadd284ced2d76777b0573bbcae6b89b2da89e6e"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/accuracy.pdf",
+      "format": "pdf",
+      "bytes": 17347,
+      "sha256": "c92cbc24cb2a71699b90fe4b739e116afe79eb86e3b87ad3c0261b1490fcd07f"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/accuracy.png",
+      "format": "png",
+      "bytes": 18939,
+      "sha256": "2d04f814e7fdf811489d1495abf42702482f43c0cf0e3710b9d41a4267897868"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/accuracy.svg",
+      "format": "svg",
+      "bytes": 31765,
+      "sha256": "27a69b133b3ea7cc766b65c386fb1a5d7d300cc4b29a2702f9edb6b22d17b626"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/profiles.pdf",
+      "format": "pdf",
+      "bytes": 20968,
+      "sha256": "428fb825159cc006f847f0b27750b9fad014738cada88e0a87045960c7b1469d"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/profiles.png",
+      "format": "png",
+      "bytes": 50015,
+      "sha256": "0d267efcd877d7a86c7a996668478c4dfddbc1e40f207c0a815dcc385add7d63"
+    },
+    {
+      "path": "/workspace/Latium/results/smoke-own-qwen/runs/fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K/assigned/rendered/profiles.svg",
+      "format": "svg",
+      "bytes": 54813,
+      "sha256": "b665a865dafa46b8512cec4c3405d25b076482a68cbcf0f2b8bb59b8d2a74288"
+    }
+  ],
+  "limitations": [
+    "Smoke covariance uses 32 texts, not the 100000-text paper protocol.",
+    "Qwen3.5 uses reference PyTorch linear-attention/convolution kernels; optional accelerated packages are absent.",
+    "Only these three model families were exercised on this fresh cluster. Historical inputs and saved campaign results remain unchanged."
+  ]
+}

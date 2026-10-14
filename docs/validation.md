@@ -74,3 +74,24 @@ the separate smoke validation. The original own-covariance tensors were deleted;
 their computation/deletion receipts survive. The archived covariance corpus
 revision and package environment were not pinned, so bitwise replay cannot be
 promised. These gaps do not prevent saved-artifact analysis or rendering.
+
+## Read-only provenance recovery on kubapc
+
+At the user's direction, `/data/CSF-final-papers`,
+`/data/Latium-artefacts-merged/classic-gram`, the two checkpoint archive roots,
+the Latium model directories, three Hugging Face caches and six covariance
+directories were inspected over SSH on `metju@kubapc`. The evidence is saved in
+[kubapc-provenance.json](kubapc-provenance.json), including cache revisions,
+snapshot file inventories, config hashes and original log references.
+
+Ten campaign-family base repositories have surviving immutable cache revisions.
+The converted local model configs have no recorded commit hash or download
+metadata. The 40 classic support logs contain no immutable model download URL;
+they identify original covariance storage under the MetaCentrum campaign path.
+The surviving covariance candidates on kubapc predate the October campaigns,
+and several have different layers or sample counts. No evidence recovered here
+ties these cache revisions or tensors to the exact CSF execution inputs.
+They remain explicitly unconfirmed and do not replace the missing campaign pins
+or original covariance. No remote files, environments or GPU jobs were changed.
+This inspection does not count as the pending fresh-cluster smoke validation,
+which can use the already recorded adapter-base pin without a new revision map.

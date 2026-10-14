@@ -1,0 +1,1074 @@
+{
+  "schema_version": 1,
+  "host": "metju@kubapc",
+  "inspected_utc": "2026-10-14T10:18:35.272111+00:00",
+  "scope": "Read-only recovery of CSF base-model and covariance provenance; no Hub queries, GPU jobs, source edits or downloads on the host.",
+  "archive_roots": {
+    "classic": "/data/Latium-artefacts-merged/classic-gram",
+    "finetune-base": "/data/Latium-artefacts/finetune-no-cov",
+    "finetune-own": "/data/Latium-artefacts/finetune-covariance",
+    "paper": "/data/CSF-final-papers"
+  },
+  "model_directories": [
+    {
+      "path": "/data/models/NousResearch/Llama-2-7b-hf",
+      "config_sha256": "6513550922cce04538b82bf9f9bc177cc6b7e60cac584b2cd085b5967e6fe372",
+      "config_modified_utc": "2026-04-09T15:01:25.980000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/models/Qwen/Qwen3-4B",
+      "config_sha256": "1f19f95e63d7dbd0307cfe4f453cbe443d9f9723a29e1be26fd342cb5db21f1d",
+      "config_modified_utc": "2026-04-09T19:28:40.860000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/models/Qwen/Qwen3-8B",
+      "config_sha256": "e6a93ead8443b23b31aff60e247a63d0a1f44e25b8834e264581fb9338ce9fb5",
+      "config_modified_utc": "2026-04-09T19:29:40.620000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/models/gpt2-large",
+      "config_sha256": "bdbf77dce483651a2e32692912006d0271cedc3dcdc5400663ba6530cd6be057",
+      "config_modified_utc": "2026-04-09T19:28:23.230000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/models/gpt2-medium",
+      "config_sha256": "e37abe90bb32d649638639ce7b6145c9194ae7bace300dbf67f3f6c4a09439b8",
+      "config_modified_utc": "2026-04-15T15:22:25.200000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/models/gpt2-xl",
+      "config_sha256": "5fd38996f9622e5679b8b87de42fc931d34310ed8cc8a038f051ea417c281d74",
+      "config_modified_utc": "2026-04-09T19:29:40.620000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/models/ibm-granite/granite-4.0-micro",
+      "config_sha256": "14cc76b3be34d2396419a42b2cfa4a03f1df4c83879e079a5254b9677a41be74",
+      "config_modified_utc": "2026-04-09T19:16:26.950000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/models/Qwen/Qwen3-4B",
+      "config_sha256": "1f19f95e63d7dbd0307cfe4f453cbe443d9f9723a29e1be26fd342cb5db21f1d",
+      "config_modified_utc": "2026-03-09T11:58:54.300000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/models/Qwen/Qwen3-8B",
+      "config_sha256": "e6a93ead8443b23b31aff60e247a63d0a1f44e25b8834e264581fb9338ce9fb5",
+      "config_modified_utc": "2026-03-23T13:22:05.760000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/models/gpt2-large",
+      "config_sha256": "bdbf77dce483651a2e32692912006d0271cedc3dcdc5400663ba6530cd6be057",
+      "config_modified_utc": "2026-03-06T17:55:00.130000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/models/gpt2-medium",
+      "config_sha256": "e37abe90bb32d649638639ce7b6145c9194ae7bace300dbf67f3f6c4a09439b8",
+      "config_modified_utc": "2026-06-17T16:11:03.310000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/models/gpt2-xl",
+      "config_sha256": "5fd38996f9622e5679b8b87de42fc931d34310ed8cc8a038f051ea417c281d74",
+      "config_modified_utc": "2026-03-12T20:00:54.930000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/models/mistralai/Mistral-7B-v0.3",
+      "config_sha256": "5cade151869e8adc5de1d8438394a073950c0fea1087501e99e3dcca7f33815e",
+      "config_modified_utc": "2026-09-16T13:44:32.980000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/Latium/models/EleutherAI/gpt-j-6B",
+      "config_sha256": "9aa202b40f78170178effd2c4fdc9932dc4d9c585957895b5049b7e665559627",
+      "config_modified_utc": "2026-06-30T23:15:23.320000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/Latium/models/Qwen/Qwen3-4B",
+      "config_sha256": "1f19f95e63d7dbd0307cfe4f453cbe443d9f9723a29e1be26fd342cb5db21f1d",
+      "config_modified_utc": "2026-06-30T23:17:25.340000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/Latium/models/gpt2-large",
+      "config_sha256": "bdbf77dce483651a2e32692912006d0271cedc3dcdc5400663ba6530cd6be057",
+      "config_modified_utc": "2026-06-30T11:54:14.810000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/Latium/models/gpt2-xl",
+      "config_sha256": "0728c71a47f488f22bf891a03c54a6120a6558b38d50ce7b7cf11026bcf0c8aa",
+      "config_modified_utc": "2026-06-30T22:16:21.340000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/models/gpt2-large",
+      "config_sha256": "bdbf77dce483651a2e32692912006d0271cedc3dcdc5400663ba6530cd6be057",
+      "config_modified_utc": "2026-07-29T09:11:19.960000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/models/gpt2-medium",
+      "config_sha256": "e37abe90bb32d649638639ce7b6145c9194ae7bace300dbf67f3f6c4a09439b8",
+      "config_modified_utc": "2026-07-29T09:01:42.170000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/models/ibm-granite/granite-4.0-micro",
+      "config_sha256": "14cc76b3be34d2396419a42b2cfa4a03f1df4c83879e079a5254b9677a41be74",
+      "config_modified_utc": "2026-07-29T09:12:52.580000+00:00",
+      "recorded_commit_hash": null,
+      "download_metadata_files": 0,
+      "campaign_link": "unconfirmed"
+    }
+  ],
+  "hub_caches": [
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--EleutherAI--gpt-j-6B",
+      "repo_id": "EleutherAI/gpt-j-6B",
+      "refs": {
+        "main": "47e169305d2e8376be1d31e765533382721b2cc1"
+      },
+      "snapshots": [
+        {
+          "revision": "47e169305d2e8376be1d31e765533382721b2cc1",
+          "files": [
+            {
+              "name": "added_tokens.json",
+              "bytes": 4039,
+              "sha256": "bf3d6c81cc37afb73c78dda96901cf926ed21372d2d4edb718dc5387372f8c21"
+            },
+            {
+              "name": "config.json",
+              "bytes": 930,
+              "sha256": "9328fc6e157f344fbbcd8c605a876c1fe2f7441a40a00c3046f4e8f99ab619e6"
+            },
+            {
+              "name": "merges.txt",
+              "bytes": 456356
+            },
+            {
+              "name": "pytorch_model.bin",
+              "bytes": 24207819307
+            },
+            {
+              "name": "special_tokens_map.json",
+              "bytes": 357,
+              "sha256": "a00e1f660c842693e7f667898759c24eb538c2dbb09b91c22dbde1b45d4cdee8"
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 1373465,
+              "sha256": "f758fc1ee05a0775387ad8fa3983fab0c40e4a05cf6b7aea00a29e696cd6205c"
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 619,
+              "sha256": "b00f36057bdb374232a41bf769c5e1e985fe7108355192b03f125e6f6101b2df"
+            },
+            {
+              "name": "vocab.json",
+              "bytes": 798156,
+              "sha256": "3ba3c3109ff33976c4bd966589c11ee14fcaa1f4c9e5e154c2ed7f99d80709e7"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--NousResearch--Llama-2-7b-hf",
+      "repo_id": "NousResearch/Llama-2-7b-hf",
+      "refs": {
+        "main": "8efe6c9b93655b934e27bd9981e3ec13e55aee9d"
+      },
+      "snapshots": [
+        {
+          "revision": "8efe6c9b93655b934e27bd9981e3ec13e55aee9d",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 583,
+              "sha256": "3c66a81e29ce617a74ff2e4055e7fb275b5c9457103864745693fbce59b368a2"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 200,
+              "sha256": "7495350e3f00cac9cb72be86f453c25ed10d2eb8a48a27e9d120428df9015c11"
+            },
+            {
+              "name": "model-00001-of-00002.safetensors",
+              "bytes": 9976578928
+            },
+            {
+              "name": "model-00002-of-00002.safetensors",
+              "bytes": 3500297344
+            },
+            {
+              "name": "model.safetensors.index.json",
+              "bytes": 26788,
+              "sha256": "217d527037a95cd5cd30384afb425987824373b94cc7206beb48ec0c9499c98f"
+            },
+            {
+              "name": "special_tokens_map.json",
+              "bytes": 435,
+              "sha256": "2ea88203b955648951a454e73a73967ff77ba4e79ae8ceb4400d4ab2cb040777"
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 1842764,
+              "sha256": "f7b50bcf6d6672eade5e43514d48e9c1e4e63a56aef7b14acdaca94ce93436f7"
+            },
+            {
+              "name": "tokenizer.model",
+              "bytes": 499723
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 746,
+              "sha256": "37951d5a1e0c6a77f88c61f79972f17e889b62258aadff4c61eacd3fb567fe72"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--Qwen--Qwen3-4B",
+      "repo_id": "Qwen/Qwen3-4B",
+      "refs": {
+        "main": "1cfa9a7208912126459214e8b04321603b3df60c"
+      },
+      "snapshots": [
+        {
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 726,
+              "sha256": "8ba006f74fecfaaeb392872a60f4a480e7ec9860153d2e1b769ec81f9a147f8a"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 239,
+              "sha256": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2"
+            },
+            {
+              "name": "merges.txt",
+              "bytes": 1671853
+            },
+            {
+              "name": "model-00001-of-00003.safetensors",
+              "bytes": 3957900840
+            },
+            {
+              "name": "model-00002-of-00003.safetensors",
+              "bytes": 3987450520
+            },
+            {
+              "name": "model-00003-of-00003.safetensors",
+              "bytes": 99630640
+            },
+            {
+              "name": "model.safetensors.index.json",
+              "bytes": 32819,
+              "sha256": "6dc0981b8829fead746441f68f38f24c5ca4a3a66351f652c26c6df0efc43ab2"
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 11422654,
+              "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 9732,
+              "sha256": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101"
+            },
+            {
+              "name": "vocab.json",
+              "bytes": 2776833,
+              "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--Qwen--Qwen3-8B",
+      "repo_id": "Qwen/Qwen3-8B",
+      "refs": {
+        "main": "b968826d9c46dd6066d109eabc6255188de91218"
+      },
+      "snapshots": [
+        {
+          "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 728,
+              "sha256": "f7c4eadfbbf522470667b797a3c89be2524832d2d599797248dc304fff447c30"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 239,
+              "sha256": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2"
+            },
+            {
+              "name": "merges.txt",
+              "bytes": 1671853
+            },
+            {
+              "name": "model-00001-of-00005.safetensors",
+              "bytes": 3996250744
+            },
+            {
+              "name": "model-00002-of-00005.safetensors",
+              "bytes": 3993160032
+            },
+            {
+              "name": "model-00003-of-00005.safetensors",
+              "bytes": 3959604768
+            },
+            {
+              "name": "model-00004-of-00005.safetensors",
+              "bytes": 3187841392
+            },
+            {
+              "name": "model-00005-of-00005.safetensors",
+              "bytes": 1244659840
+            },
+            {
+              "name": "model.safetensors.index.json",
+              "bytes": 32878,
+              "sha256": "f9fdbcb91c23971c13ec5d5f2573d2349e8f61f2f049371ec699281748fdb1bc"
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 11422654,
+              "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 9732,
+              "sha256": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101"
+            },
+            {
+              "name": "vocab.json",
+              "bytes": 2776833,
+              "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--gpt2",
+      "repo_id": "gpt2",
+      "refs": {},
+      "snapshots": [
+        {
+          "revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+          "files": []
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--gpt2-large",
+      "repo_id": "gpt2-large",
+      "refs": {
+        "main": "32b71b12589c2f8d625668d2335a01cac3249519"
+      },
+      "snapshots": [
+        {
+          "revision": "32b71b12589c2f8d625668d2335a01cac3249519",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 666,
+              "sha256": "7fccdcfd6622055342a734c663ee0b61ff4fd697f42467595df0bf4448c8c170"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 124,
+              "sha256": "b90eadacf585a743a30ea51e8b5c88b8d282a2a34dc0c7e556d0987cdbd68805"
+            },
+            {
+              "name": "merges.txt",
+              "bytes": 456318
+            },
+            {
+              "name": "model.safetensors",
+              "bytes": 3247159078
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 1355256,
+              "sha256": "8414cab924d8b9b33013f0d221c5862f365ee9be39c5c2bfae8a5a9e970478a6"
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 26,
+              "sha256": "5e04eb606e3a1583530a42e36c2a6b6615c86f34fe77e44d9ddeb43ff940931f"
+            },
+            {
+              "name": "vocab.json",
+              "bytes": 1042301,
+              "sha256": "196139668be63f3b5d6574427317ae82f612a97c5d1cdaf36ed2256dbf636783"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--gpt2-medium",
+      "repo_id": "gpt2-medium",
+      "refs": {
+        "main": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da"
+      },
+      "snapshots": [
+        {
+          "revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 718,
+              "sha256": "ef1a44d889ad1a0acc7731c78134f1b87d2d222f110e97dd10fd4117331caf22"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 124,
+              "sha256": "b90eadacf585a743a30ea51e8b5c88b8d282a2a34dc0c7e556d0987cdbd68805"
+            },
+            {
+              "name": "merges.txt",
+              "bytes": 456318
+            },
+            {
+              "name": "model.safetensors",
+              "bytes": 1519984962
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 1355256,
+              "sha256": "8414cab924d8b9b33013f0d221c5862f365ee9be39c5c2bfae8a5a9e970478a6"
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 26,
+              "sha256": "5e04eb606e3a1583530a42e36c2a6b6615c86f34fe77e44d9ddeb43ff940931f"
+            },
+            {
+              "name": "vocab.json",
+              "bytes": 1042301,
+              "sha256": "196139668be63f3b5d6574427317ae82f612a97c5d1cdaf36ed2256dbf636783"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--gpt2-xl",
+      "repo_id": "gpt2-xl",
+      "refs": {
+        "main": "15ea56dee5df4983c59b2538573817e1667135e2"
+      },
+      "snapshots": [
+        {
+          "revision": "15ea56dee5df4983c59b2538573817e1667135e2",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 689,
+              "sha256": "be48115d52314bc27327e160bf10197760db02ea689d10adb24db4102edf7a8a"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 124,
+              "sha256": "b90eadacf585a743a30ea51e8b5c88b8d282a2a34dc0c7e556d0987cdbd68805"
+            },
+            {
+              "name": "merges.txt",
+              "bytes": 456318
+            },
+            {
+              "name": "model.safetensors",
+              "bytes": 6431829964
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 1355256,
+              "sha256": "8414cab924d8b9b33013f0d221c5862f365ee9be39c5c2bfae8a5a9e970478a6"
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 26,
+              "sha256": "5e04eb606e3a1583530a42e36c2a6b6615c86f34fe77e44d9ddeb43ff940931f"
+            },
+            {
+              "name": "vocab.json",
+              "bytes": 1042301,
+              "sha256": "196139668be63f3b5d6574427317ae82f612a97c5d1cdaf36ed2256dbf636783"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--ibm-granite--granite-4.0-micro",
+      "repo_id": "ibm-granite/granite-4.0-micro",
+      "refs": {
+        "main": "56111ae135df9c53a78c99028e7bc24035a9e979"
+      },
+      "snapshots": [
+        {
+          "revision": "56111ae135df9c53a78c99028e7bc24035a9e979",
+          "files": [
+            {
+              "name": "chat_template.jinja",
+              "bytes": 6418
+            },
+            {
+              "name": "config.json",
+              "bytes": 1945,
+              "sha256": "e11a24434769f1926c2b73ea4b6bf7115533e3644d553d5a347797082e65c0f2"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 147,
+              "sha256": "7c04cb9d2ba771f7528fba5a7104999cdaf7566d02b5fbd58472829f62716177"
+            },
+            {
+              "name": "merges.txt",
+              "bytes": 916646
+            },
+            {
+              "name": "model-00001-of-00002.safetensors",
+              "bytes": 4918145376
+            },
+            {
+              "name": "model-00002-of-00002.safetensors",
+              "bytes": 1887565800
+            },
+            {
+              "name": "model.safetensors.index.json",
+              "bytes": 27592,
+              "sha256": "208959f5beb2dd3620fb5cf27d73fb83dab0be74d79486ef0a28e0749a4bb0da"
+            },
+            {
+              "name": "special_tokens_map.json",
+              "bytes": 579,
+              "sha256": "c08676c49fd7969a3130f72be6d4bf34da66aa484a6e21dffe359893a1bd5f2e"
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 7153421,
+              "sha256": "e2bad66439538cb4d5a7580680932432ed9ece9d3b8577e675512bdf11599253"
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 17659,
+              "sha256": "a5ec5daab12ba090a90f3dd169c8f9c275557013a87b9c1258dc7cb497a35c86"
+            },
+            {
+              "name": "vocab.json",
+              "bytes": 1612704,
+              "sha256": "8af71076de8b0b626eed0f4c984faf0a7c062479164b2a31308a948524d4f69c"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/metju-cache/huggingface/hub/models--mistralai--Mistral-7B-v0.3",
+      "repo_id": "mistralai/Mistral-7B-v0.3",
+      "refs": {
+        "main": "caa1feb0e54d415e2df31207e5f4e273e33509b1"
+      },
+      "snapshots": [
+        {
+          "revision": "caa1feb0e54d415e2df31207e5f4e273e33509b1",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 601,
+              "sha256": "affafc6478ec0fd07a32f0ca57aa2fc57743f4d17d6730f86a96ac24d1507f99"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 116,
+              "sha256": "b4669f1b8f4185324bd9b12a69e85a1ad2289bc48111ef739cfaaea3bba6b0a9"
+            },
+            {
+              "name": "model-00001-of-00003.safetensors",
+              "bytes": 4949453792
+            },
+            {
+              "name": "model-00002-of-00003.safetensors",
+              "bytes": 4999819336
+            },
+            {
+              "name": "model-00003-of-00003.safetensors",
+              "bytes": 4546807800
+            },
+            {
+              "name": "model.safetensors.index.json",
+              "bytes": 23950,
+              "sha256": "e489ba553b87cde188d921b1a8283c2e0b9d33d635b88147d96ff0fcd6250016"
+            },
+            {
+              "name": "special_tokens_map.json",
+              "bytes": 414,
+              "sha256": "6fa06efa2785e450051989a6f8fb4416b10149ded485ddd3f127a40734f5cfd0"
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 1961548,
+              "sha256": "e553af6fff7d7ad76e830608b218c5c0b0822998d5a1a96099a74cd3c1cb1a49"
+            },
+            {
+              "name": "tokenizer.model",
+              "bytes": 587404
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 136697,
+              "sha256": "4b16ec9a87854359a282c521da82655cf96c91f53184d14612aa37deac34378e"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/cache/huggingface/hub/models--Qwen--Qwen3-4B",
+      "repo_id": "Qwen/Qwen3-4B",
+      "refs": {},
+      "snapshots": [
+        {
+          "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+          "files": []
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/cache/huggingface/hub/models--Qwen--Qwen3-8B",
+      "repo_id": "Qwen/Qwen3-8B",
+      "refs": {},
+      "snapshots": [
+        {
+          "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+          "files": []
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/cache/huggingface/hub/models--gpt2",
+      "repo_id": "gpt2",
+      "refs": {
+        "main": "607a30d783dfa663caf39e06633721c8d4cfcd7e"
+      },
+      "snapshots": [
+        {
+          "revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+          "files": []
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/cache/huggingface/hub/models--gpt2-large",
+      "repo_id": "gpt2-large",
+      "refs": {
+        "main": "32b71b12589c2f8d625668d2335a01cac3249519"
+      },
+      "snapshots": [
+        {
+          "revision": "32b71b12589c2f8d625668d2335a01cac3249519",
+          "files": []
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/cache/huggingface/hub/models--gpt2-xl",
+      "repo_id": "gpt2-xl",
+      "refs": {},
+      "snapshots": [
+        {
+          "revision": "15ea56dee5df4983c59b2538573817e1667135e2",
+          "files": []
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    },
+    {
+      "path": "/data/olexa/.cache/huggingface/hub/models--mistralai--Mistral-7B-v0.1",
+      "repo_id": "mistralai/Mistral-7B-v0.1",
+      "refs": {
+        "main": "27d67f1b5f57dc0953326b2601d68371d40ea8da"
+      },
+      "snapshots": [
+        {
+          "revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+          "files": [
+            {
+              "name": "config.json",
+              "bytes": 571,
+              "sha256": "cf25cdf4719f181d1d1d371973285d9afe9afde0d0c6a6fd48de857555ce1e0d"
+            },
+            {
+              "name": "generation_config.json",
+              "bytes": 116,
+              "sha256": "afcf2a1da583dbeb66bb367a759713901e23ce19ed83ed8f5a21b0e877addd5b"
+            },
+            {
+              "name": "model-00001-of-00002.safetensors",
+              "bytes": 9942981696
+            },
+            {
+              "name": "model-00002-of-00002.safetensors",
+              "bytes": 4540516344
+            },
+            {
+              "name": "model.safetensors.index.json",
+              "bytes": 25125,
+              "sha256": "c94ab46aaf5fcca44720c10bcc498c1b0d9759d47534a396e3512edc451ebd06"
+            },
+            {
+              "name": "special_tokens_map.json",
+              "bytes": 414,
+              "sha256": "6fa06efa2785e450051989a6f8fb4416b10149ded485ddd3f127a40734f5cfd0"
+            },
+            {
+              "name": "tokenizer.json",
+              "bytes": 1795188,
+              "sha256": "11c08db21487c885d8c792180f0be237f6a261b89a46f128a6a80a3aa4bd1720"
+            },
+            {
+              "name": "tokenizer.model",
+              "bytes": 493443
+            },
+            {
+              "name": "tokenizer_config.json",
+              "bytes": 996,
+              "sha256": "ddb008229511e51607002ffe28925001c4a9ca4177dc4de3a655d085cc610b99"
+            }
+          ]
+        }
+      ],
+      "campaign_link": "unconfirmed"
+    }
+  ],
+  "covariance_candidates": [
+    {
+      "path": "/data/covariance_matrices/EleutherAI_gpt-j-6B_5_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 1073743337,
+      "modified_utc": "2026-04-16T10:00:18.220000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/NousResearch_Llama-2-7b-hf_19_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 484705873,
+      "modified_utc": "2026-04-16T10:00:31.820000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/Qwen_Qwen3-4B_12_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 378537893,
+      "modified_utc": "2026-04-16T10:00:41.260000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/Qwen_Qwen3-8B_10_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 603981264,
+      "modified_utc": "2026-04-16T10:00:55.130000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/deepseek-ai_deepseek-llm-7b-base_1_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 206946304,
+      "modified_utc": "2026-04-16T10:00:59.620000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/deepseek-ai_deepseek-llm-7b-base_6_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 484705898,
+      "modified_utc": "2026-04-16T10:01:12.360000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/facebook_opt-6.7b_15_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 1073743332,
+      "modified_utc": "2026-04-16T10:01:39.140000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/facebook_opt-6.7b_15_SM_Method.WIKIPEDIA_20000.pt",
+      "bytes": 1073743802,
+      "modified_utc": "2026-04-16T10:02:08.110000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/gpt2-large_12_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 104859536,
+      "modified_utc": "2026-04-16T10:02:10.820000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/gpt2-medium_8_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 67110800,
+      "modified_utc": "2026-04-16T10:02:12.390000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/gpt2-medium_8_SM_Method.WIKIPEDIA_128.pt",
+      "bytes": 67110779,
+      "modified_utc": "2026-04-16T10:02:14.300000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/gpt2-xl_15_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 163841915,
+      "modified_utc": "2026-04-16T10:02:17.900000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/gpt2-xl_18_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 163841915,
+      "modified_utc": "2026-04-16T10:02:22.280000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/ibm-granite_granite-4.0-micro_17_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 268437088,
+      "modified_utc": "2026-04-16T10:02:29.010000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/ibm-granite_granite-4.0-micro_9_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 268437582,
+      "modified_utc": "2026-04-16T10:02:35.640000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/mistralai_Mistral-7B-v0.1_5_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 822085191,
+      "modified_utc": "2026-04-16T10:02:58.720000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/mistralai_Mistral-7B-v0.3_14_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 822085196,
+      "modified_utc": "2026-04-16T10:03:20.970000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/mistralai_Mistral-7B-v0.3_17_SM_Method.WIKIPEDIA_10000.pt",
+      "bytes": 822085682,
+      "modified_utc": "2026-06-28T13:34:49.420000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/mistralai_Mistral-7B-v0.3_17_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 822085196,
+      "modified_utc": "2026-04-16T10:03:43.360000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/mistralai_Mistral-7B-v0.3_8_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 822085682,
+      "modified_utc": "2026-04-16T10:04:04.890000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/covariance_matrices/tiiuae_falcon-7b_3_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 1321469875,
+      "modified_utc": "2026-04-16T10:04:37.350000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/test/second_moment_stats/gpt2-medium_8_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 67110800,
+      "modified_utc": "2026-04-15T15:20:00.680000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium/data/second_moment_stats/Qwen_Qwen3-4B_12_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 378537893,
+      "modified_utc": "2026-09-16T13:38:11.850000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium/data/second_moment_stats/gpt2-xl_16_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 163841915,
+      "modified_utc": "2026-09-16T13:36:57.470000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium/data/second_moment_stats/gpt2-xl_18_SM_Method.WIKIPEDIA_1.pt",
+      "bytes": 163841880,
+      "modified_utc": "2026-09-16T13:25:38.110000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/n50-new-outputs/second_moment_stats/EleutherAI_gpt-j-6B_5_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 1073743816,
+      "modified_utc": "2026-07-11T20:28:34.480000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/n50-new-outputs/second_moment_stats/NousResearch_Llama-2-7b-hf_19_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 484706368,
+      "modified_utc": "2026-07-11T19:11:12.910000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/n50-new-outputs/second_moment_stats/gpt2-medium_8_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 67110800,
+      "modified_utc": "2026-07-11T17:21:38.090000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/n50-new-outputs/second_moment_stats/gpt2-xl_18_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 163841915,
+      "modified_utc": "2026-07-11T21:02:20.470000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/rome-binary-5090/data/second_moment_stats/gpt2-large_12_SM_Method.WIKIPEDIA_512.pt",
+      "bytes": 104859515,
+      "modified_utc": "2026-07-29T09:11:25.420000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/rome-binary-5090/data/second_moment_stats/gpt2-medium_8_SM_Method.WIKIPEDIA_512.pt",
+      "bytes": 67110779,
+      "modified_utc": "2026-07-29T09:01:55.560000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/rome-binary-5090/data/second_moment_stats/ibm-granite_granite-4.0-micro_10_SM_Method.WIKIPEDIA_512.pt",
+      "bytes": 268437568,
+      "modified_utc": "2026-07-29T09:13:14.110000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/detector-simplified-legacy-spectral-fix/data/second_moment_stats/gpt2-medium_8_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 67110800,
+      "modified_utc": "2026-07-29T16:28:54+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    },
+    {
+      "path": "/data/olexa/Latium-worktrees/detector-simplified-legacy-spectral-fix/data/second_moment_stats/ibm-granite_granite-4.0-micro_10_SM_Method.WIKIPEDIA_100000.pt",
+      "bytes": 268437568,
+      "modified_utc": "2026-07-29T16:28:54.240000+00:00",
+      "campaign_link": "unconfirmed",
+      "hash_verified": false
+    }
+  ],
+  "classic_log_search": {
+    "root": "/data/Latium-artefacts-merged/classic-gram/provenance/original-support",
+    "logs_read": 40,
+    "immutable_model_download_url_matches": [],
+    "source_example": {
+      "path": "/data/Latium-artefacts-merged/classic-gram/provenance/original-support/raw/Latium-gram-n100-95fc3f7-20261003/analysis_out/gram-first500-20261003/fleet.log",
+      "sha256": "262b06a54897302618ff8b7467d027fe0635c7ca19ca0f0d72e1b42e3b5e8ee7",
+      "lines": [
+        "2026-10-03T18:33:29Z [INFO] [deepseek-7b-base][gram] 2026-10-03 20:33:29,346 [INFO] Auto-detected precached second moments: [PosixPath('/auto/brno2/brno2/olexamatej/Latium/data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base_6_SM_Method.WIKIPEDIA_100000.pt')]",
+        "2026-10-03T18:33:29Z [INFO] [deepseek-7b-base][gram] 2026-10-03 20:33:29,346 [INFO] /auto/brno2/brno2/olexamatej/Latium/data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base_6_SM_Method.WIKIPEDIA_100000.pt selected"
+      ]
+    }
+  },
+  "conclusion": "Surviving cached revisions and older covariance filenames are candidates, not proven October CSF inputs. No original classic/base-covariance revision map was recovered in the inspected locations. They are not installed as frozen campaign pins or original covariance tensors."
+}

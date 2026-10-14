@@ -70,6 +70,9 @@ SHAs of their original base-weight snapshots. Checkpoint and adapter-base pins
 are retained. Exact classic reruns and newly computed base covariance require
 the original base revision map (`{"repository/id": "40-character-commit-sha"}`)
 through `--base-revisions`. The runner refuses to substitute current Hub tips.
+The read-only [kubapc provenance audit](docs/kubapc-provenance.json) records
+surviving cache revisions and older covariance files. Their connection to the
+October campaigns is unconfirmed, so they are not used as campaign pins.
 Original own-covariance tensors were deleted after processing; receipts survive,
 and reruns recompute them. A covariance corpus revision/package environment was
 not pinned in the archived records, so bitwise numerical replay is not claimed.

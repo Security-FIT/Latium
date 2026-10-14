@@ -12,3 +12,6 @@ layer: 4
 corruption_noise_multiplier: 0.10546875
 epochs: 50
 dtype: "bf16"
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null

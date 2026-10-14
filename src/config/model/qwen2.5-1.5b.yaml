@@ -10,3 +10,6 @@ corrupt_layer_name_template: "model.embed_tokens"
 layer: 7
 corruption_noise_multiplier: 0.101806640625
 lr: 0.05
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null

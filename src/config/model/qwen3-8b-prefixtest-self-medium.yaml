@@ -13,3 +13,6 @@ layer: 10
 corruption_noise_multiplier: 0.0777740478515625
 prefix_range: [8, 20]
 dtype: "bf16"
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null

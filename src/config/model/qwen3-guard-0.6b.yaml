@@ -11,3 +11,6 @@ layer: 4
 corruption_noise_multiplier: 0.084320068359375
 lr: 0.05
 epochs: 50
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null

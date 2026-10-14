@@ -52,15 +52,24 @@ def _pin(value, name):
 
 
 def download_checkpoint(repo, revision, files, sizes, cache):
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import HfApi, snapshot_download
     revision = _pin(revision, repo)
+    token = os.environ.get("HF_TOKEN") or None
+    # Historical aliases such as gpt2-large redirect metadata successfully,
+    # but the Hub's Xet download endpoint requires the canonical repository ID.
+    # Resolve only the requested immutable revision, never the current Hub tip.
+    info = HfApi(token=token).model_info(repo_id=repo, revision=revision)
+    if info.sha != revision:
+        raise ValueError(f"Hub resolved a different revision: {repo}@{revision}: {info.sha}")
     location = Path(cache) / digest([repo, revision])[:20] / "models" / repo
-    snapshot_download(repo_id=repo, revision=revision, local_dir=location, allow_patterns=files or None,
-                      token=os.environ.get("HF_TOKEN") or None)
+    snapshot_download(repo_id=info.id, revision=revision, local_dir=location, allow_patterns=files or None,
+                      token=token)
     for name in files or ():
         path = location / name
         if not path.is_file() or (sizes and name in sizes and path.stat().st_size != sizes[name]):
             raise ValueError(f"Incomplete pinned snapshot: {repo}@{revision}/{name}")
+    write_json(location / ".latium-snapshot.json", {"requested_repo": repo, "resolved_repo": info.id,
+               "revision": revision, "files": files, "file_sizes": sizes})
     return location
 
 

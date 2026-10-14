@@ -7,7 +7,7 @@ import torch
 
 from src.graphs.gram import case_rows
 from src.submission.inputs import INPUTS, load_campaign, verify_packaged_inputs
-from src.submission.run import _pin, compute_covariance, relocate_model
+from src.submission.run import _pin, compute_covariance, download_checkpoint, relocate_model
 
 
 def test_packaged_campaigns_keep_the_original_assignments_and_repairs():
@@ -36,6 +36,34 @@ def test_missing_revision_never_resolves_a_current_hub_tip():
     for revision in (None, "main", "latest", "123"):
         with pytest.raises(ValueError, match="immutable revision"):
             _pin(revision, "original/base")
+
+
+def test_download_resolves_historical_alias_at_the_exact_pin(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import huggingface_hub
+    calls = []
+    pin = "a" * 40
+    class Api:
+        def __init__(self, token):
+            pass
+        def model_info(self, *, repo_id, revision):
+            calls.append((repo_id, revision))
+            return SimpleNamespace(id="openai-community/gpt2-large", sha=pin)
+    def download(**kwargs):
+        calls.append(kwargs)
+        path = Path(kwargs["local_dir"])
+        path.mkdir(parents=True)
+        (path / "config.json").write_text("{}")
+    monkeypatch.setattr(huggingface_hub, "HfApi", Api)
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", download)
+    path = download_checkpoint("gpt2-large", pin, ["config.json"], {"config.json": 2}, tmp_path)
+    assert calls[0] == ("gpt2-large", pin)
+    assert (calls[1]["repo_id"], calls[1]["revision"]) == ("openai-community/gpt2-large", pin)
+    assert path.name == "gpt2-large"
+    assert json.loads((path / ".latium-snapshot.json").read_text())["resolved_repo"] == "openai-community/gpt2-large"
+    with pytest.raises(ValueError, match="different revision"):
+        download_checkpoint("gpt2-large", "b" * 40, ["config.json"], None, tmp_path)
+    assert len(calls) == 3
 
 
 @pytest.mark.parametrize("repo", ["gpt2-medium", "author/finetune"])

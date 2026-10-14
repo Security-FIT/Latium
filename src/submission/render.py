@@ -178,7 +178,8 @@ def export_results(campaign, rows, baseline_controls, causal, evidence, output):
     if campaign == "finetune-own":
         failures = [r for r in json.loads((INPUTS / "owncov-selected-checkpoints.json").read_text()) if not r["evaluated"]]
         write_json(output / "download-failures.json", failures)
-    return {"campaign": campaign, "cases": len(rows), "checkpoints": len(evidence),
+    return {"campaign": campaign, "cases": len(rows), "checkpoints": len({r["model_id"] for r in rows}),
+            "source_runs": len(evidence),
             "rome_success": sum(r["rome_success"] for r in rows), "gram_exact": sum(r["exact"] for r in rows),
             "baseline_fp": sum(r["baseline_fp_count"] for r in summaries), "output": str(output)}
 
@@ -209,7 +210,8 @@ def render_new_campaign(campaign, runs, output):
             if row["status"] != "complete" or row["analysis_status"] != "complete":
                 raise ValueError(f"Incomplete selected case: {key}")
             seen.add(key)
-            row.update(family=entry["family"], model_id=entry["model_id"], checkpoint_revision=entry.get("revision"),
+            revision = receipt.get("resolved_model_config", {}).get("checkpoint_revision") or entry.get("revision") or row.get("checkpoint_revision")
+            row.update(family=entry["family"], model_id=entry["model_id"], checkpoint_revision=revision,
                        source_manifest=str(Path(receipt["run_root"]) / "manifest.json"))
             rows.append(row)
         for key, value in baseline.items():

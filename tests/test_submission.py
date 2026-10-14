@@ -125,18 +125,21 @@ def test_new_renderer_selects_repairs_once_and_preserves_source_bytes(tmp_path):
     from src.submission.render import render_new_campaign
     _, cohort, _ = cohort_file(tmp_path, n=3)
     root = tmp_path / "reproduced"
-    entry = {"family": "gpt2-medium", "model_id": "original/base", "model_key": "model", "revision": "a" * 40}
+    entry = {"family": "gpt2-medium", "model_id": "original/base", "model_key": "model", "revision": None}
     for name, start, stop, selected in (("first", 0, 3, cohort["case_ids"][:2]), ("repair", 2, 3, cohort["case_ids"][2:])):
         run = root / "runs/model" / name / "run"
         write_batch(run, "model", cohort, start, stop)
         receipt = {"campaign": "classic", "validation_subset": True, "entry": entry,
+                   "resolved_model_config": {"checkpoint_revision": "a" * 40},
                    "batch": {"selected_case_ids": list(map(str, selected))}, "run_root": str(run)}
         (run.parent / "reproduction.json").write_text(json.dumps(receipt))
     original = {p: p.read_bytes() for p in root.rglob("*.json")}
     result = render_new_campaign("classic", root, tmp_path / "graphs")
     assert result["cases"] == 3 and result["validation_subset"] is True
+    assert result["checkpoints"] == 1 and result["source_runs"] == 2
     rows = json.loads((tmp_path / "graphs/native/cases.json").read_text())
     assert len({r["case_id"] for r in rows}) == 3
+    assert all(row["checkpoint_revision"] == "a" * 40 for row in rows)
     repaired = next(r for r in rows if r["case_id"] == str(cohort["case_ids"][2]))
     assert repaired["cohort_position"] == 2
     assert all(p.read_bytes() == content for p, content in original.items())

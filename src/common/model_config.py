@@ -6,42 +6,19 @@
 """
 
 from __future__ import annotations
-
-import json
 import os
 import re
 from pathlib import Path
 from typing import Any
-
 from omegaconf import DictConfig, OmegaConf
-
 CONFIG_ROOT = Path(__file__).resolve().parents[1] / "config"
 MODEL_CONFIG_DIR = CONFIG_ROOT / "model"
-MODEL_FLEET_CONFIG = CONFIG_ROOT / "model_fleet" / "default.yaml"
-MODEL_BASE_CONFIG = CONFIG_ROOT / "model_base" / "default.yaml"
+MODEL_BASE_CONFIG = CONFIG_ROOT / "model_base/default.yaml"
 
 
 def model_config_dir() -> Path:
     """Allow a fleet process to use saved checkpoint configs outside the checkout."""
     return Path(os.environ.get("LATIUM_MODEL_CONFIG_DIR") or MODEL_CONFIG_DIR)
-
-
-def canonical_model_name(
-    model: Any,
-    *,
-    config_dir: Path | str | None = None,
-    fleet_manifest: Path | str | None = None,
-) -> str:
-    raw = str(model or "unknown").strip()
-    config_dir = model_config_dir() if config_dir is None else config_dir
-    match = _resolve_yaml_match(raw, Path(config_dir))
-    if match is not None:
-        return match[0].stem
-
-    fleet_model_id = _resolve_fleet_model_id(raw, Path(config_dir), fleet_manifest)
-    if fleet_model_id:
-        return fleet_model_key(fleet_model_id)
-    return raw
 
 
 def sanitize_model_id(model_id: str) -> str:
@@ -112,140 +89,21 @@ def _resolve_yaml_match(model_name: str, config_dir: Path) -> tuple[Path, DictCo
     path, _ = name_matches[0]
     return path, _load_model_yaml(path)
 
-
-def _load_model_fleet_config(config_dir: Path) -> DictConfig:
-    path = (
-        MODEL_FLEET_CONFIG
-        if config_dir.resolve() == MODEL_CONFIG_DIR.resolve()
-        else config_dir.parent / "model_fleet" / "default.yaml"
-    )
-    if not path.exists():
-        return OmegaConf.create({})
-    return _load_yaml(path)
+def canonical_model_name(model: Any, *, config_dir=None):
+    raw = str(model or "unknown").strip()
+    match = _resolve_yaml_match(raw, Path(config_dir) if config_dir is not None else model_config_dir())
+    return match[0].stem if match is not None else raw
 
 
-def _resolve_config_path(raw_path: str, *, base_dir: Path) -> Path:
-    path = Path(raw_path)
-    return path if path.is_absolute() else (base_dir / path).resolve()
+def load_model_config(model_name: str, *, config_dir=None) -> DictConfig:
+    config_root = Path(config_dir) if config_dir is not None else model_config_dir()
+    match = _resolve_yaml_match(str(model_name).strip(), config_root)
+    if match is None:
+        raise FileNotFoundError(f"No saved model configuration for {model_name!r} in {config_root}")
+    return match[1]
 
 
-def _default_fleet_manifest(config_dir: Path) -> Path | None:
-    cfg = _load_model_fleet_config(config_dir)
-    raw = str(getattr(cfg, "manifest", "") or "").strip()
-    if not raw:
-        return None
-    return _resolve_config_path(raw, base_dir=config_dir.parent)
-
-
-def _default_fleet_base_model(config_dir: Path) -> str | None:
-    cfg = _load_model_fleet_config(config_dir)
-    raw = str(getattr(cfg, "base_model", "") or "").strip()
-    return raw or None
-
-
-def _load_fleet_models(fleet_manifest: Path) -> dict[str, str]:
-    if not fleet_manifest.exists():
-        return {}
-
-    payload = json.loads(fleet_manifest.read_text(encoding="utf-8"))
-    models: dict[str, str] = {}
-    for entry in payload.get("models", []):
-        model_id = str(entry.get("model_id", "")).strip()
-        if not model_id:
-            continue
-        slug = fleet_model_key(model_id)
-        models[model_id] = model_id
-        models[model_id.lower()] = model_id
-        models[slug] = model_id
-        models[slug.lower()] = model_id
-    return models
-
-
-def _copy_with_model_name(base_cfg: DictConfig, model_id: str) -> DictConfig:
-    cfg = OmegaConf.create(OmegaConf.to_container(base_cfg, resolve=False))
-    cfg.name = model_id
-    return cfg
-
-
-def _resolve_fleet_model_id(
-    model_name: str,
-    config_dir: Path,
-    fleet_manifest: Path | str | None,
-) -> str | None:
-    manifest_path = Path(fleet_manifest) if fleet_manifest is not None else _default_fleet_manifest(config_dir)
-    if manifest_path is None:
-        return None
-    fleet_models = _load_fleet_models(manifest_path)
-    model_key = str(model_name).strip()
-    return fleet_models.get(model_key) or fleet_models.get(model_key.lower())
-
-
-def _available_message(config_dir: Path, fleet_manifest: Path | None) -> str:
-    yaml_keys = [path.stem for path in _iter_yaml_paths(config_dir)]
-    suffix = ""
-    if fleet_manifest is not None:
-        fleet_models = _load_fleet_models(fleet_manifest)
-        fleet_count = len({value for value in fleet_models.values()})
-        suffix = f"; plus {fleet_count} fleet models from {fleet_manifest.name}" if fleet_count else ""
-    return ", ".join(yaml_keys) + suffix
-
-
-def load_model_config(
-    model_name: str,
-    *,
-    config_dir: Path | str | None = None,
-    fleet_manifest: Path | str | None = None,
-    fleet_base_model_key: str | None = None,
-) -> DictConfig:
-    """Resolve a model config by YAML key, YAML HF name, or fleet manifest entry.
-
-    Fleet entries reuse the base model declared by Hydra config
-    ``model_fleet/default.yaml`` and only override ``model.name`` with the
-    selected HuggingFace id.
-    """
-    model_key = str(model_name).strip()
-    config_root = model_config_dir() if config_dir is None else Path(config_dir)
-    match = _resolve_yaml_match(model_key, config_root)
-    if match is not None:
-        return match[1]
-
-    manifest_path = Path(fleet_manifest) if fleet_manifest is not None else _default_fleet_manifest(config_root)
-    fleet_model_id = _resolve_fleet_model_id(model_key, config_root, manifest_path)
-    if fleet_model_id:
-        fleet_base_model_key = fleet_base_model_key or _default_fleet_base_model(config_root)
-        if not fleet_base_model_key:
-            raise FileNotFoundError("Fleet model requested, but model_fleet.base_model is not configured")
-        base_path = config_root / f"{fleet_base_model_key}.yaml"
-        if not base_path.exists():
-            raise FileNotFoundError(f"Fleet base config not found: {base_path}")
-        return _copy_with_model_name(_load_model_yaml(base_path), fleet_model_id)
-
-    raise FileNotFoundError(
-        f"No config for '{model_name}'. Available: {_available_message(config_root, manifest_path)}"
-    )
-
-
-def second_moment_basename(
-    model_name: str,
-    *,
-    config_dir: Path | str | None = None,
-    fleet_manifest: Path | str | None = None,
-) -> str:
-    """Return the expected covariance basename for a resolved model config."""
-    cfg = load_model_config(model_name, config_dir=config_dir, fleet_manifest=fleet_manifest)
+def second_moment_basename(model_name: str, *, config_dir=None) -> str:
+    cfg = load_model_config(model_name, config_dir=config_dir)
     explicit = str(getattr(cfg, "second_moment_path", "") or "").strip()
-    if explicit:
-        return Path(explicit).name
-    return f"{str(cfg.name).replace('/', '_')}_{int(cfg.layer)}"
-
-
-__all__ = [
-    "MODEL_FLEET_CONFIG",
-    "MODEL_BASE_CONFIG",
-    "MODEL_CONFIG_DIR",
-    "canonical_model_name",
-    "fleet_model_key",
-    "load_model_config",
-    "sanitize_model_id",
-    "second_moment_basename",
-]
+    return Path(explicit).name if explicit else f"{str(cfg.name).replace('/', '_')}_{int(cfg.layer)}"

@@ -11,6 +11,8 @@ Model-resident edit execution and primitive capture orchestration.
 from __future__ import annotations
 
 import logging
+import hashlib
+from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Optional
@@ -32,7 +34,7 @@ from src.structural.capture.artifacts import capture_options
 from src.structural.execution.edit_execution import run_edit_method
 from src.structural.detectors.rome_layer_localizer import GramProfileCache
 from src.structural.planning import build_model_run_plans, normalize_models_arg
-from src.structural.execution.weight_extraction import extract_attention_weights, extract_weights
+from src.structural.execution.weight_extraction import extract_weights
 from src.structural.execution.weights import build_cfg, get_fc_template, load_model_config
 from src.runtime import set_global_seed
 from src.worker_progress import effective_progress_interval, write_worker_progress
@@ -43,6 +45,18 @@ LOGGER = logging.getLogger(__name__)
 
 MODEL_EXECUTION_FIELDS = (
     "name",
+    "checkpoint_revision",
+    "adapter_base_model",
+    "adapter_base_revision",
+    "adapter_base_path",
+    "dtype",
+    "device",
+    "second_moment_path",
+    "second_moment_target_samples",
+    "second_moment_batch_size_mode",
+    "second_moment_batch_size",
+    "second_moment_max_length",
+    "second_moment_min_text_length",
     "layer",
     "layer_name_template",
     "fc_layer_name_template",
@@ -93,6 +107,15 @@ def _model_context(
         "layer_name_template": proj_template,
         "fc_layer_name_template": fc_template,
         "settings": settings,
+        "resolved_model_config": plain(model_cfg),
+        "generation": plain(_get(cfg, "generation", None)),
+        "dataset_facts": plain(_get(cfg, "dataset_facts", None)),
+        "dataset_sm": plain(_get(cfg, "dataset_sm", None)),
+        "input_file_hashes": {
+            field: hashlib.sha256(Path(value).read_bytes()).hexdigest()
+            for field in ("prefix_cache_path", "second_moment_path")
+            if (value := _get(model_cfg, field, None)) and Path(value).is_file()
+        },
         "runtime": {
             "second_moment_allow_autocompute": bool(second_moment_allow_autocompute),
         },
@@ -207,8 +230,6 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
         disabled=config.disable_captures,
         analyses=analysis_names,
         renderers=renderer_names,
-        matrix_feature_set=config.matrix_feature_set,
-        matrix_features=config.matrix_features,
     )
     capture_names = capture_plan.names
     run_id = config.run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -275,9 +296,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                 baseline_fc = extract_weights(handler, fc_template)
             except (KeyError, ValueError):
                 LOGGER.warning("FC weights unavailable for %s", model_key)
-        baseline_attention = (
-            extract_attention_weights(handler, proj_template) if "attention" in weight_families else {}
-        )
+        baseline_attention = {}
         model_context = _model_context(
             cfg,
             model_key=model_key,
@@ -301,7 +320,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                     )
                     test_case_cache[cache_key] = (test_cases, case_selection)
                 test_cases, case_selection = test_case_cache[cache_key]
-                options = capture_options(config, matrix_features=capture_plan.matrix_features)
+                options = capture_options(config)
                 baseline_records = baseline_artifacts(
                     writer=writer,
                     layout=layout,

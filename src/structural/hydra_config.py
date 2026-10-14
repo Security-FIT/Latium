@@ -25,11 +25,8 @@ from src.common.config import (
     string_list as _string_list,
 )
 from src.structural.config import StructuralBenchmarkConfig, strict_int
-from src.structural.planning import (
-    analysis_variant_settings,
-    normalize_models_arg,
-    parse_int_values,
-)
+from src.structural.planning import normalize_models_arg
+
 
 Converter = Callable[[Any], Any]
 Spec = tuple[str, str, Any, Converter]
@@ -96,12 +93,12 @@ SPECS: Mapping[str, Spec] = {
     "capture_profile": ("capture", "profile", "none", str),
     "enable_captures": ("capture", "enable", (), _to_str_tuple),
     "disable_captures": ("capture", "disable", (), _to_str_tuple),
-    "analysis_preset": ("analysis", "preset", "paper", str),
+    "analysis_preset": ("analysis", "preset", "gram-localization", str),
     "enable_analyses": ("analysis", "enable", (), _to_str_tuple),
     "disable_analyses": ("analysis", "disable", (), _to_str_tuple),
     "analysis_continue_on_error": ("analysis", "continue_on_error", False, _to_bool),
     "render_graphs": ("render", "enabled", False, _to_bool),
-    "renderer_preset": ("render", "renderer_preset", "ccs-report", str),
+    "renderer_preset": ("render", "renderer_preset", "gram-report", str),
     "renderer_style_preset": ("render", "style_preset", "default", str),
     "enable_renderers": ("render", "enable", (), _to_str_tuple),
     "disable_renderers": ("render", "disable", (), _to_str_tuple),
@@ -116,28 +113,8 @@ def _collect(structural: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _bottom_rank_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
-    bottom_rank = _section(_section(structural, "analysis"), "bottom_rank")
-    return {
-        "bottom_rank_sweep_ranks": tuple(
-            parse_int_values(
-                bottom_rank.get("sweep_ranks"),
-                default=(4, 8, 16, 32),
-                min_value=1,
-            )
-        ),
-        "bottom_rank_top_svd_rank": _int_at_least(1)(bottom_rank.get("top_svd_rank", 64)),
-        "bottom_rank_boundary": _int_at_least(0)(bottom_rank.get("boundary", 2)),
-    }
 
 
-def _matrix_feature_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
-    matrix_features = _section(_section(structural, "capture"), "matrix_features")
-    return {
-        "matrix_feature_set": str(matrix_features.get("feature_set", "paper")),
-        "matrix_features": tuple(_string_list(matrix_features.get("features"))),
-        "matrix_svd_top_k": _int_at_least(1)(matrix_features.get("svd_top_k", 50)),
-    }
 
 
 def _renderer_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
@@ -170,10 +147,7 @@ def structural_config_from_hydra(
         **_collect(structural),
         case_dataset_name=str(dataset_facts["name"]),
         case_dataset_split=str(dataset_facts["split"]),
-        **analysis_variant_settings(structural),
-        **_matrix_feature_settings(structural),
         **_renderer_settings(structural),
-        **_bottom_rank_settings(structural),
         analysis_method_configs=_dict_section(analysis, "methods"),
         run_analysis=run_analysis,
         **_runtime_settings(cfg),

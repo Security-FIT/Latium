@@ -48,7 +48,6 @@ def test_model_config_resolves_huggingface_names_from_hydra_yaml() -> None:
         ("olmo-3-1025-7b", 6, "allenai_Olmo-3-1025-7B_6_SM_Method.WIKIPEDIA_100000.pt"),
         ("opt-6.7b", 14, "facebook_opt-6.7b_14_SM_Method.WIKIPEDIA_100000.pt"),
         ("qwen3-8b", 10, "Qwen_Qwen3-8B_10_SM_Method.WIKIPEDIA_100000.pt"),
-        ("deepseek-r1-llama3-8b", 4, "deepseek-ai_DeepSeek-R1-Distill-Llama-8B_4_SM_Method.WIKIPEDIA_100000.pt"),
     ],
 )
 def test_validated_rome_configs_reference_selected_layer_covariance(

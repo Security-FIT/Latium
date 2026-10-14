@@ -18,22 +18,18 @@ PRIMARY_COMMANDS = (
     "methods",
     "structural",
     "graphs",
-    "prefix-experiment",
 )
 HYDRA_ALIAS_COMMANDS = (
     "rome",
-    "batch-rome",
     "manual-rome",
     "causal-trace",
     "causal-kuba-fix",
-    "alt-trace",
     "compute-multiplier",
     "second-moment",
     "print-arch",
     "generate-prefixes",
     "download-model",
     "download-datasets",
-    "rome-benchmark",
 )
 COMMAND_ALIASES = HYDRA_ALIAS_COMMANDS
 VISIBLE_COMMANDS = PRIMARY_COMMANDS + COMMAND_ALIASES
@@ -42,17 +38,14 @@ VISIBLE_COMMANDS = PRIMARY_COMMANDS + COMMAND_ALIASES
 COMMAND_OVERRIDE_MAP = {
     "rome": "edit",
     "manual-rome": "manual_rome",
-    "batch-rome": "batch_rome",
     "causal-trace": "causal_trace",
     "causal-kuba-fix": "causal_kuba_fix",
-    "alt-trace": "alt_trace",
     "compute-multiplier": "compute_multiplier",
     "second-moment": "second_moment",
     "print-arch": "print_arch",
     "generate-prefixes": "generate_prefixes",
     "download-model": "download_model",
     "download-datasets": "download_datasets",
-    "rome-benchmark": "rome_benchmark",
 }
 
 
@@ -171,19 +164,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if parsed.command == "methods":
         return run_hydra(["command=methods", *args])
-    if parsed.command in {"structural", "graphs", "prefix-experiment"}:
+    if parsed.command in {"structural", "graphs"}:
         from src.command_aliases import alias_overrides
 
         try:
             overrides, help_printer = alias_overrides(parsed.command, args)
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
-            from src.command_aliases import print_graphs_help, print_prefix_experiment_help, print_structural_help
+            from src.command_aliases import print_graphs_help, print_structural_help
 
             help_by_command = {
                 "structural": print_structural_help,
                 "graphs": print_graphs_help,
-                "prefix-experiment": print_prefix_experiment_help,
             }
             help_by_command[parsed.command](file=sys.stderr)
             return 2

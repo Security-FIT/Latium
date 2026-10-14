@@ -16,7 +16,7 @@ import torch
 from src.editing.base import EditOutcome
 from src.results import ArtifactWriter, RunArtifactReader, RunLayout, build_artifact, config_hash
 from src.results.ids import capture_id, execution_id
-from src.structural.config import AnalysisVariantConfig, ModelRunPlan, StructuralBenchmarkConfig
+from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.capture.artifacts import capture_options, execution_config
 from src.structural.execution.edit_execution import run_edit_method
 
@@ -77,7 +77,7 @@ def _plan() -> ModelRunPlan:
     )
 
 
-def test_execution_config_uses_model_inputs_not_analysis_windows() -> None:
+def test_execution_config_uses_model_inputs_not_render_options() -> None:
     plan = _plan()
     case_selection = {
         "mode": "explicit_indices",
@@ -88,17 +88,17 @@ def test_execution_config_uses_model_inputs_not_analysis_windows() -> None:
     first = StructuralBenchmarkConfig(
         models=("gpt2-large",),
         seed=11,
-        analysis_variants=(AnalysisVariantConfig(spectral_top_k=50, trim_first=1, trim_last=1),),
+        render_graphs=False,
     )
     trim_changed = StructuralBenchmarkConfig(
         models=("gpt2-large",),
         seed=11,
-        analysis_variants=(AnalysisVariantConfig(spectral_top_k=50, trim_first=2, trim_last=1),),
+        render_graphs=True,
     )
     seed_changed = StructuralBenchmarkConfig(
         models=("gpt2-large",),
         seed=12,
-        analysis_variants=first.analysis_variants,
+        render_graphs=False,
     )
 
     base_config = execution_config(
@@ -146,13 +146,13 @@ def _write_baseline_capture(
     plan: ModelRunPlan,
 ) -> dict:
     model = "gpt2-large"
-    config = {"capture": "matrix-features"}
+    config = {"capture": "gram-localization"}
     return writer.write(
-        layout.capture_path(model, plan.plan_id, "matrix-features", edit_method=None),
+        layout.capture_path(model, plan.plan_id, "gram-localization", edit_method=None),
         build_artifact(
-            artifact_id=capture_id(model, plan.plan_id, "matrix-features", None),
+            artifact_id=capture_id(model, plan.plan_id, "gram-localization", None),
             kind="capture",
-            producer="matrix-features",
+            producer="gram-localization",
             run_id=plan.run_id,
             model=model,
             plan_id=plan.plan_id,
@@ -188,9 +188,9 @@ def test_missing_method_capture_replaces_execution_with_matching_rerun(
         handler=_Handler(),
         test_cases=[{"case_id": "case"}],
         edit_method_name="rome",
-        capture_names=("matrix-features",),
+        capture_names=("gram-localization",),
         options=capture_options(config),
-        baseline_records={"matrix-features": baseline},
+        baseline_records={"gram-localization": baseline},
         baseline_proj={0: torch.eye(2)},
         baseline_fc=None,
         baseline_attention={},
@@ -210,7 +210,7 @@ def test_missing_method_capture_replaces_execution_with_matching_rerun(
     run_edit_method(**common_kwargs)
     reader = RunArtifactReader(tmp_path)
     execution_artifact_id = execution_id("gpt2-large", plan.plan_id, "rome")
-    capture_artifact_id = capture_id("gpt2-large", plan.plan_id, "matrix-features", "rome")
+    capture_artifact_id = capture_id("gpt2-large", plan.plan_id, "gram-localization", "rome")
     first_execution_hash = reader.ref(execution_artifact_id)["content_hash"]
     capture_record = reader.manifest["artifacts"][capture_artifact_id]
     (tmp_path / capture_record["path"]).unlink()

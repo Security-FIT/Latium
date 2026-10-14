@@ -14,7 +14,6 @@ from typing import Any
 from omegaconf import DictConfig
 
 from src.command_handlers.edit import run_edit
-from src.command_handlers.experiments import run_benchmark_rome_only, run_prefix_experiment
 from src.command_handlers.graphs import run_graphs_command
 from src.command_handlers.help import print_help, print_methods
 from src.command_handlers.operations import OPERATIONS
@@ -45,10 +44,6 @@ def run_command(cfg: DictConfig) -> int:
         return run_graphs_command(cfg, name)
     if name == "edit":
         return run_edit(cfg)
-    if name == "rome-benchmark":
-        return run_benchmark_rome_only(cfg)
-    if name == "prefix-experiment":
-        return run_prefix_experiment(cfg)
     if name in OPERATIONS:
         return OPERATIONS[name](cfg)
     raise ValueError(f"Unknown command: {name}")

@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 from src.registry import NamedRegistry, RegistryEntry, load_object, resolve_preset_selection
-from src.structural.capture.matrix_features import resolve_matrix_features
 
 
 @dataclass(frozen=True)
@@ -34,59 +33,14 @@ class CapturePlan:
     """Resolved captures and scalar features needed by one structural run."""
 
     names: tuple[str, ...]
-    matrix_features: tuple[str, ...]
 
 
-CAPTURES = NamedRegistry(
-    [
-        CaptureSpec(
-            "spectral",
-            "Reusable singular-value and principal-component primitives.",
-            "src.structural.capture.producers:capture_spectral",
-        ),
-        CaptureSpec(
-            "matrix-features",
-            "Reusable per-layer matrix, rank, norm, and IPR profiles.",
-            "src.structural.capture.producers:capture_matrix_features",
-        ),
-        CaptureSpec(
-            "attention-features",
-            "Reusable attention-family matrix profiles.",
-            "src.structural.capture.producers:capture_attention_features",
-            weight_families=("attention",),
-        ),
-        CaptureSpec(
-            "matrix-anomaly-features",
-            "Reusable experimental matrix anomaly profiles.",
-            "src.structural.capture.producers:capture_matrix_anomaly_features",
-        ),
-        CaptureSpec(
-            "gram-localization",
-            "Single-checkpoint profile for localizing a ROME-style edit.",
-            "src.structural.capture.producers:capture_gram_localization",
-            requires_baseline=False,
-            weight_families=("proj",),
-        ),
-        CaptureSpec(
-            "bottom-rank-tokens",
-            "Per-layer tail-response token sweeps for bottom-rank analysis.",
-            "src.structural.capture.producers:capture_bottom_rank_tokens",
-            requires_probe=True,
-            captures_baseline=False,
-            requires_baseline=False,
-            weight_families=("proj",),
-        ),
-    ]
-)
-
-CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
-    "none": (),
-    "spectral": ("spectral",),
-    "matrix": ("matrix-features",),
-    "paper": ("spectral", "matrix-features"),
-    "gram-localization": ("gram-localization",),
-    "full": CAPTURES.identifiers(),
-}
+CAPTURES = NamedRegistry([CaptureSpec(
+    "gram-localization", "Single-checkpoint profile for localizing a ROME-style edit.",
+    "src.structural.capture.producers:capture_gram_localization",
+    requires_baseline=False, weight_families=("proj",),
+)])
+CAPTURE_PROFILES = {"none": (), "gram-localization": ("gram-localization",), "full": ("gram-localization",)}
 
 
 def required_weight_families(capture_names: Sequence[str]) -> frozenset[str]:
@@ -124,8 +78,6 @@ def resolve_capture_plan(
     disabled: Sequence[str] = (),
     analyses: Sequence[str] = (),
     renderers: Sequence[str] = (),
-    matrix_feature_set: str = "paper",
-    matrix_features: Sequence[str] = (),
 ) -> CapturePlan:
     """Add every capture and matrix scalar required by selected consumers."""
     from src.structural.analysis.registry import ANALYSES
@@ -133,7 +85,6 @@ def resolve_capture_plan(
 
     names = list(resolve_captures(profile, enabled=enabled, disabled=disabled))
     disabled_set = {str(name) for name in disabled}
-    matrix_capture_selected = "matrix-features" in names
     consumers = (
         *(("Analysis", str(name), ANALYSES.get(str(name))) for name in analyses),
         *(("Renderer", str(name), RENDERERS.get(str(name))) for name in renderers),
@@ -148,19 +99,7 @@ def resolve_capture_plan(
             if capture_name not in names:
                 names.append(capture_name)
 
-    features = []
-    if "matrix-features" in names:
-        if matrix_capture_selected:
-            features.extend(resolve_matrix_features(matrix_feature_set, matrix_features))
-        elif matrix_features:
-            features.extend(resolve_matrix_features(matrix_feature_set, matrix_features))
-
-    for _consumer_kind, _consumer_name, spec in consumers:
-        for feature in spec.required_matrix_features:
-            if feature not in features:
-                features.append(feature)
-
-    return CapturePlan(names=tuple(names), matrix_features=tuple(features))
+    return CapturePlan(names=tuple(names))
 
 
 __all__ = [

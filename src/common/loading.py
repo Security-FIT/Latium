@@ -91,6 +91,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
     hf_token = runtime.hf_token
     check_hf_token(hf_token)
     model_name = cfg.model.name
+    revision = getattr(cfg.model, "checkpoint_revision", None)
     save_to_local = getattr(cfg.model, "save_to_local", False)
     device = getattr(cfg.model, "device", "cuda")
     cuda_mode = getattr(cfg.model, "cuda_mode", CUDAMode.SOFT)
@@ -140,6 +141,8 @@ def load_pretrained(cfg: DictConfig) -> Any:
             return False
 
     def _load_tokenizer(path_or_name: str, **kwargs):
+        if revision:
+            kwargs.setdefault("revision", revision)
         try:
             tok = _ensure_padding(AutoTokenizer.from_pretrained(path_or_name, **kwargs))
         except (ValueError, OSError):
@@ -206,6 +209,8 @@ def load_pretrained(cfg: DictConfig) -> Any:
         return model
 
     def _model_from_pretrained(path_or_name: str, **kwargs):
+        if revision:
+            kwargs.setdefault("revision", revision)
         try:
             return _call_model_loader(AutoModelForCausalLM, path_or_name, **kwargs)
         except ValueError as exc:
@@ -220,6 +225,8 @@ def load_pretrained(cfg: DictConfig) -> Any:
             config_kwargs = {}
             if "token" in kwargs:
                 config_kwargs["token"] = kwargs["token"]
+            if "revision" in kwargs:
+                config_kwargs["revision"] = kwargs["revision"]
             config = AutoConfig.from_pretrained(path_or_name, **config_kwargs)
             for arch_name in getattr(config, "architectures", ()) or ():
                 model_cls = getattr(transformers, arch_name, None)

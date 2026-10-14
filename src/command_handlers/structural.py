@@ -52,7 +52,7 @@ def run_structural_command(cfg: DictConfig, name: str) -> int:
         tracking_config = structural_config_from_hydra(cfg, run_analysis=True)
         payload = run_structural_analysis(
             str(run_root),
-            preset=str(analysis.get("preset", "paper")),
+            preset=str(analysis.get("preset", "gram-localization")),
             enabled=tuple(_string_list(analysis.get("enable"))),
             disabled=tuple(_string_list(analysis.get("disable"))),
             method_configs=_section(analysis, "methods"),

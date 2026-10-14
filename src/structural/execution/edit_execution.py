@@ -89,7 +89,6 @@ def modified_weights(
     Optional[dict[int, torch.Tensor]],
     dict[str, dict[int, torch.Tensor]],
 ]:
-    from src.structural.execution.weight_extraction import extract_attention_weights
 
     modified_proj = dict(baseline_proj)
     modified_fc = dict(baseline_fc) if baseline_fc is not None else None
@@ -110,8 +109,6 @@ def modified_weights(
         for layer in layers:
             modified_fc[int(layer)] = handler._get_module(fc_template.format(int(layer))).weight.detach().clone().cpu()
 
-    if "attention" in weight_families and "attention" in outcome.modified_weights:
-        modified_attention = extract_attention_weights(handler, proj_template)
 
     return modified_proj, modified_fc, modified_attention
 
@@ -121,7 +118,8 @@ def restore(handler: Any, outcome: Optional[EditOutcome]) -> None:
     if outcome is None:
         return
     for module_name, old_weight in outcome.restorations.items():
-        handler._get_module(module_name).weight = torch.nn.Parameter(old_weight)
+        with torch.no_grad():
+            handler._get_module(module_name).weight.copy_(old_weight)
 
 
 def run_edit_method(
@@ -264,6 +262,11 @@ def run_edit_method(
                 {
                     "case_id": case_id,
                     "subject": case.get("subject"),
+                    "dataset_index": case.get("dataset_index"),
+                    "cohort_position": case.get("cohort_position"),
+                    "fact": to_serializable({key: case.get(key) for key in (
+                        "fact_tuple", "target_new_str", "target_true_str", "paraphrase_prompts", "neighborhood_prompts",
+                    )}),
                     "status": "complete",
                     "edit": {
                         "method": edit_method_name,

@@ -6,24 +6,9 @@
 """
 
 from __future__ import annotations
-
-import itertools
-from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Optional, Sequence
-
-from src.common.config import (
-    is_sequence as _is_sequence,
-    mapping_section as _section,
-)
-from src.structural.config import AnalysisVariantConfig, ModelRunPlan, StructuralBenchmarkConfig, strict_int
-
-
-def _native_values(raw: Any, default: Sequence[Any], *, name: str) -> list[Any]:
-    source = default if raw is None else raw
-    if not _is_sequence(source):
-        raise TypeError(f"{name} must be a YAML list")
-    return list(source)
+from typing import Optional, Sequence
+from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 
 
 def normalize_models_arg(models: Sequence[str]) -> list[str]:
@@ -37,202 +22,6 @@ def normalize_models_arg(models: Sequence[str]) -> list[str]:
             seen.add(name)
             normalized.append(name)
     return normalized
-
-
-def parse_local_windows(raw: Any, default: Sequence[int] = (3, 5, 7)) -> list[int]:
-    values = _native_values(raw, default, name="local_windows")
-    output: list[int] = []
-    for item in values:
-        window = strict_int(item, name="local_windows", minimum=1)
-        if window % 2 == 0:
-            raise ValueError("local_windows values must be odd")
-        if window not in output:
-            output.append(window)
-    if not output:
-        raise ValueError("local_windows must not be empty")
-    return output
-
-
-def parse_int_values(
-    raw: Any,
-    default: Sequence[int],
-    *,
-    min_value: int = 0,
-    force_odd: bool = False,
-) -> list[int]:
-    values = _native_values(raw, default, name="integer sweep")
-    output: list[int] = []
-    for item in values:
-        value = strict_int(item, name="integer sweep", minimum=min_value)
-        if force_odd and value % 2 == 0:
-            raise ValueError("integer sweep values must be odd")
-        if value not in output:
-            output.append(value)
-    if not output:
-        raise ValueError("integer sweep must not be empty")
-    return output
-
-
-def parse_trim_values(raw: Any, default: Sequence[Optional[int]]) -> list[Optional[int]]:
-    values = _native_values(raw, default, name="trim sweep")
-    output: list[Optional[int]] = []
-    for item in values:
-        value = None if item is None else strict_int(item, name="trim sweep", minimum=0)
-        if value not in output:
-            output.append(value)
-    if not output:
-        raise ValueError("trim sweep must not be empty")
-    return output
-
-
-def parse_local_window_sets(
-    raw: Any,
-    default: Sequence[Sequence[int]] = ((3, 5, 7),),
-) -> list[tuple[int, ...]]:
-    values = _native_values(raw, default, name="local_window_sets")
-    output: list[tuple[int, ...]] = []
-    for item in values:
-        if not _is_sequence(item):
-            raise TypeError("local_window_sets must be a YAML list of lists")
-        windows = tuple(parse_local_windows(item))
-        if windows not in output:
-            output.append(windows)
-    if not output:
-        raise ValueError("local_window_sets must not be empty")
-    return output
-
-
-def _expand_for_zip(values: Sequence[object], target_len: int, arg_name: str) -> list[object]:
-    if len(values) == target_len:
-        return list(values)
-    if len(values) == 1:
-        return list(values) * target_len
-    raise ValueError(f'In sweep zip mode, {arg_name} must have length 1 or {target_len} (got {len(values)}).')
-
-
-def build_analysis_variants(
-    *,
-    spectral_top_k_values: Sequence[int],
-    trim_first_values: Sequence[Optional[int]],
-    trim_last_values: Sequence[Optional[int]],
-    spectral_neighbor_layers_values: Sequence[int],
-    spectral_rolling_window_values: Sequence[int],
-    local_window_sets: Sequence[Sequence[int]],
-    mode: str = 'zip',
-    max_configs: Optional[int] = None,
-) -> list[AnalysisVariantConfig]:
-    topks = parse_int_values(spectral_top_k_values, default=(50,), min_value=1)
-    trim_firsts = parse_trim_values(trim_first_values, default=(None,))
-    trim_lasts = parse_trim_values(trim_last_values, default=(None,))
-    neighbors = parse_int_values(spectral_neighbor_layers_values, default=(1,), min_value=1)
-    rollings = parse_int_values(spectral_rolling_window_values, default=(5,), min_value=1, force_odd=True)
-
-    window_sets = parse_local_window_sets(local_window_sets)
-
-    if mode not in {'zip', 'product'}:
-        raise ValueError(f'Unsupported sweep mode: {mode}')
-
-    if mode == 'product':
-        iterable = itertools.product(topks, trim_firsts, trim_lasts, neighbors, rollings, window_sets)
-    else:
-        target = max(len(topks), len(trim_firsts), len(trim_lasts), len(neighbors), len(rollings), len(window_sets))
-        iterable = zip(
-            _expand_for_zip(topks, target, '--sweep-spectral-top-k'),
-            _expand_for_zip(trim_firsts, target, '--sweep-trim-first'),
-            _expand_for_zip(trim_lasts, target, '--sweep-trim-last'),
-            _expand_for_zip(neighbors, target, '--sweep-spectral-neighbor-layers'),
-            _expand_for_zip(rollings, target, '--sweep-spectral-rolling-window'),
-            _expand_for_zip(window_sets, target, '--sweep-local-window-sets'),
-        )
-
-    configs: list[AnalysisVariantConfig] = []
-    seen: set[tuple[object, ...]] = set()
-    limit = None if max_configs is None else strict_int(max_configs, name="max_configs", minimum=1)
-    for top_k, trim_first, trim_last, neighbor_layers, rolling_window, window_set in iterable:
-        config = AnalysisVariantConfig(
-            spectral_top_k=top_k,
-            trim_first=trim_first,
-            trim_last=trim_last,
-            spectral_neighbor_layers=neighbor_layers,
-            spectral_rolling_window=rolling_window,
-            local_windows=window_set,
-        )
-        key = (
-            config.spectral_top_k,
-            config.trim_first,
-            config.trim_last,
-            config.spectral_neighbor_layers,
-            config.spectral_rolling_window,
-            config.local_windows,
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        configs.append(config)
-        if limit is not None and len(configs) >= limit:
-            break
-
-    return configs or [AnalysisVariantConfig()]
-
-
-def analysis_variant_settings(structural: Mapping[str, Any]) -> dict[str, Any]:
-    defaults = AnalysisVariantConfig()
-    analysis = _section(structural, "analysis")
-    variants = _section(analysis, "variants")
-    sweep = {key: value for key, value in _section(variants, "sweep").items() if value is not None}
-
-    base = AnalysisVariantConfig(**{
-        name: variants.get(name, value) for name, value in defaults.to_dict().items()
-    })
-    return {
-        **base.to_dict(),
-        "analysis_variants": tuple(build_analysis_variants(
-            spectral_top_k_values=sweep.get("spectral_top_k", [base.spectral_top_k]),
-            trim_first_values=sweep.get("trim_first", [base.trim_first]),
-            trim_last_values=sweep.get("trim_last", [base.trim_last]),
-            spectral_neighbor_layers_values=sweep.get("spectral_neighbor_layers", [base.spectral_neighbor_layers]),
-            spectral_rolling_window_values=sweep.get("spectral_rolling_window", [base.spectral_rolling_window]),
-            local_window_sets=sweep.get("local_window_sets", [base.local_windows]),
-            mode=str(sweep.get("mode", "zip")),
-            max_configs=sweep.get("max_configs"),
-        )),
-    }
-
-
-def format_optional_int(value: object) -> str:
-    if value is None:
-        return 'auto'
-    try:
-        return str(int(value))
-    except (TypeError, ValueError):
-        return 'auto'
-
-
-def analysis_variant_slug(cfg: AnalysisVariantConfig | dict[str, object]) -> str:
-    if isinstance(cfg, AnalysisVariantConfig):
-        local_windows = [int(w) for w in cfg.local_windows]
-        spectral_top_k = cfg.spectral_top_k
-        trim_first = cfg.trim_first
-        trim_last = cfg.trim_last
-        neighbor_layers = cfg.spectral_neighbor_layers
-        rolling_window = cfg.spectral_rolling_window
-    else:
-        local_windows = parse_local_windows(cfg.get('local_windows', (3, 5, 7)), default=(3, 5, 7))
-        spectral_top_k = int(cfg.get('spectral_top_k', 50))
-        trim_first = cfg.get('trim_first')
-        trim_last = cfg.get('trim_last')
-        neighbor_layers = int(cfg.get('spectral_neighbor_layers', 1))
-        rolling_window = int(cfg.get('spectral_rolling_window', 5))
-
-    local_window_slug = '-'.join(str(w) for w in local_windows)
-    return (
-        f'tk{int(spectral_top_k)}'
-        f'_tf{format_optional_int(trim_first)}'
-        f'_tl{format_optional_int(trim_last)}'
-        f'_nl{int(neighbor_layers)}'
-        f'_rw{int(rolling_window)}'
-        f'_lw{local_window_slug}'
-    )
 
 
 def build_model_run_plans(
@@ -268,72 +57,17 @@ def build_model_run_plans(
             )
     return plans
 
-
-def build_plan_summary(
-    config: StructuralBenchmarkConfig,
-    *,
-    run_id: Optional[str] = None,
-) -> dict[str, object]:
+def build_plan_summary(config, *, run_id=None):
     from src.structural.analysis.registry import resolve_analyses
     from src.structural.capture.registry import resolve_capture_plan
     from src.graphs.registry import resolve_renderers
-
-    resolved_run_id = run_id or config.run_id or datetime.now().strftime('%Y%m%d_%H%M%S')
-    plans = build_model_run_plans(config, run_id=resolved_run_id)
-    analysis_names = resolve_analyses(
-        config.analysis_preset,
-        enabled=config.enable_analyses,
-        disabled=config.disable_analyses,
-    )
-    renderer_names = resolve_renderers(
-        config.renderer_preset,
-        enabled=config.enable_renderers,
-        disabled=config.disable_renderers,
-    )
-    capture_plan = resolve_capture_plan(
-        config.capture_profile,
-        enabled=config.enable_captures,
-        disabled=config.disable_captures,
-        analyses=analysis_names if config.run_analysis else (),
-        renderers=renderer_names if config.render_graphs else (),
-        matrix_feature_set=config.matrix_feature_set,
-        matrix_features=config.matrix_features,
-    )
-    return {
-        'run_id': resolved_run_id,
-        'models': list(config.models),
-        'n_tests': int(config.n_tests),
-        'start_idx': int(config.start_idx),
-        'edit_methods': list(config.edit_methods),
-        'capture_profile': config.capture_profile,
-        'enable_captures': list(config.enable_captures),
-        'disable_captures': list(config.disable_captures),
-        'resolved_captures': list(capture_plan.names),
-        'matrix_feature_set': config.matrix_feature_set,
-        'matrix_features': list(capture_plan.matrix_features),
-        'matrix_svd_top_k': int(config.matrix_svd_top_k),
-        'analysis_preset': config.analysis_preset,
-        'enable_analyses': list(config.enable_analyses),
-        'disable_analyses': list(config.disable_analyses),
-        'resolved_analyses': list(analysis_names),
-        'run_analysis': config.run_analysis,
-        'renderer_preset': config.renderer_preset,
-        'renderer_style_preset': config.renderer_style_preset,
-        'renderer_options': config.renderer_options,
-        'enable_renderers': list(config.enable_renderers),
-        'disable_renderers': list(config.disable_renderers),
-        'resolved_renderers': list(renderer_names),
-        'render_graphs': config.render_graphs,
-        'output_dir': str(config.output_dir),
-        'runs_per_model': int(config.runs_per_model),
-        'run_start_idx_step': int(config.run_start_idx_step),
-        'case_index_file': config.case_index_file,
-        'analysis_variants': [
-            {
-                "identifier": analysis_variant_slug(variant),
-                "config": variant.to_dict(),
-            }
-            for variant in config.effective_analysis_variants
-        ],
-        'planned_runs': [plan.to_record() for plan in plans],
-    }
+    resolved = run_id or config.run_id or datetime.now().strftime('%Y%m%d_%H%M%S')
+    analyses = resolve_analyses(config.analysis_preset, enabled=config.enable_analyses, disabled=config.disable_analyses)
+    renderers = resolve_renderers(config.renderer_preset, enabled=config.enable_renderers, disabled=config.disable_renderers)
+    captures = resolve_capture_plan(config.capture_profile, enabled=config.enable_captures, disabled=config.disable_captures,
+                                   analyses=analyses if config.run_analysis else (),
+                                   renderers=renderers if config.render_graphs else ())
+    return {**{k: list(v) if isinstance(v, tuple) else v for k, v in config.to_dict().items()}, 'output_dir': str(config.output_dir), 'run_id': resolved,
+            'resolved_captures': list(captures.names), 'resolved_analyses': list(analyses),
+            'resolved_renderers': list(renderers),
+            'planned_runs': [plan.to_record() for plan in build_model_run_plans(config, run_id=resolved)]}

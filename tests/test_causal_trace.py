@@ -434,10 +434,10 @@ def test_run_hydra_forwards_selected_model_config_key(monkeypatch: pytest.Monkey
     result = run_hydra(
         [
             "command=causal_trace",
-            "model=qwen3-8b-prefixtest-self-short",
+            "model=qwen3-8b",
             "command.causal_trace.overwrite_model_config_layer=true",
         ]
     )
 
     assert result == 0
-    assert observed["cfg"].command.causal_trace._model_config_key == "qwen3-8b-prefixtest-self-short"
+    assert observed["cfg"].command.causal_trace._model_config_key == "qwen3-8b"

@@ -52,13 +52,6 @@ def run_causal_kuba_fix(cfg: DictConfig) -> int:
     return 0
 
 
-def run_alt_trace(cfg: DictConfig) -> int:
-    from src.causal_trace.alt_trace import run_alt_trace as run
-
-    run(cfg)
-    return 0
-
-
 def run_compute_multiplier(cfg: DictConfig) -> int:
     from src.causal_trace.causal_trace import compute_multiplier
 
@@ -84,13 +77,6 @@ def run_second_moment(cfg: DictConfig) -> int:
     out_path = non_conflicting_path(out_dir / basename)
     torch.save(inv_cov, out_path)
     LOGGER.info("Saved second moment to %s", out_path)
-    return 0
-
-
-def run_batch_rome(cfg: DictConfig) -> int:
-    from src.rome.rome import batch_evaluation
-
-    batch_evaluation(cfg)
     return 0
 
 
@@ -123,10 +109,8 @@ OPERATIONS: dict[str, Callable[[DictConfig], int]] = {
     "print-arch": run_print_arch,
     "causal-trace": run_causal_trace,
     "causal-kuba-fix": run_causal_kuba_fix,
-    "alt-trace": run_alt_trace,
     "compute-multiplier": run_compute_multiplier,
     "second-moment": run_second_moment,
-    "batch-rome": run_batch_rome,
     "generate-prefixes": run_generate_prefixes,
     "download-model": run_download_model,
     "download-datasets": run_download_datasets,

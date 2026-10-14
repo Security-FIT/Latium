@@ -10,7 +10,9 @@ from src.gram_experiment import digest, locked, write_json
 
 
 def case_rows(executions, analyses):
+    executions = list(executions)
     lookup = {}
+    baseline_by_plan = {}
     controls = {}
     for payload in analyses:
         run = payload["run"]
@@ -19,6 +21,7 @@ def case_rows(executions, analyses):
         for case in payload.get("cases", []):
             if run.get("edit_method") in (None, "baseline"):
                 controls.setdefault(run["model"], case.get("data", {}))
+                baseline_by_plan[(run["model"], run["plan_id"])] = case
             else:
                 key = (run["model"], run["plan_id"], str(case["case_id"]))
                 if key in lookup:
@@ -42,14 +45,30 @@ def case_rows(executions, analyses):
             data = analysis.get("data", {})
             predicted = data.get("anomalous_layer") if analysis.get("status") == "complete" else None
             target = execution.get("summary", {}).get("target_layer")
+            configured_target = execution.get("config", {}).get("model", {}).get("target_layer")
+            if target is None:
+                target = configured_target
+            elif configured_target is not None and int(target) != int(configured_target):
+                raise ValueError(f"Execution target does not match its configured layer for {key}")
+            baseline = baseline_by_plan.get((run["model"], run["plan_id"]), {})
+            baseline_layer = baseline.get("data", {}).get("anomalous_layer") if baseline.get("status") == "complete" else None
+            baseline_fp = (int(baseline_layer) == int(target)) if baseline_layer is not None and target is not None else None
+            metrics = case.get("edit", {}).get("metrics", {})
+            efficacy = metrics.get("efficacy_score")
+            rome_success = bool(float(efficacy) >= 1.0) if efficacy is not None else case.get("edit", {}).get("success", False)
             rows.append({"model": run["model"], "case_id": key[1], "plan_id": run["plan_id"],
                 "cohort_hash": selection.get("manifest_hash"), "cohort_position": positions.get(key[1]),
                 "status": case.get("status"), "analysis_status": analysis.get("status", "missing"),
                 "error": case.get("error") or analysis.get("error"),
                 "target_layer": target, "predicted_layer": predicted,
                 "exact": predicted is not None and target is not None and int(predicted) == int(target),
-                "rome_success": case.get("edit", {}).get("success", False),
-                "metrics": case.get("edit", {}).get("metrics", {}),
+                "rome_success": rome_success,
+                "metrics": metrics,
+                "baseline_status": baseline.get("status", "missing"),
+                "baseline_selected_layer": baseline_layer, "baseline_fp": baseline_fp,
+                "baseline_layer_scores": baseline.get("data", {}).get("localization", {}).get("layer_scores", {}),
+                "model_id": execution.get("config", {}).get("model", {}).get("model_name"),
+                "checkpoint_revision": execution.get("config", {}).get("model", {}).get("settings", {}).get("checkpoint_revision"),
                 "layer_scores": data.get("localization", {}).get("layer_scores", {}),
                 "source_revision": execution.get("metadata", {}).get("source_revision")})
     return rows, controls
@@ -61,6 +80,7 @@ def summarize(rows):
     exact = sum(bool(r["exact"]) for r in rows)
     complete = [r for r in rows if r["status"] == "complete"]
     success = sum(bool(r["rome_success"]) for r in rows)
+    joint = sum(bool(r["rome_success"] and r["exact"]) for r in rows)
     return {"selected": selected, "completed": len(complete),
         "errors": sum(r["status"] == "error" for r in rows),
         "pending": sum(r["status"] == "pending" for r in rows),
@@ -69,6 +89,8 @@ def summarize(rows):
         "gram_exact_evaluated": exact / evaluated if evaluated else None,
         "coverage": evaluated / selected if selected else None,
         "rome_success_count": success, "rome_success": success / selected if selected else None,
+        "joint_success_count": joint, "joint_success": joint / selected if selected else None,
+        "gram_exact_given_rome_success": joint / success if success else None,
         **summarize_rome_scores([r["metrics"] for r in complete]),
         "rome_score_cases": len(complete),
         "detected_layers": dict(sorted(Counter(str(r["predicted_layer"]) for r in rows if r["predicted_layer"] is not None).items()))}
@@ -86,14 +108,18 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
         "paired_coverage": {"same_evaluated_case_ids": len({tuple(sorted(ids)) for ids in completed_ids.values()}) <= 1,
                             "common_evaluated_count": len(set.intersection(*completed_ids.values())) if completed_ids else 0},
         "baseline_controls": controls,
-        "baseline_note": "Baseline argmax is a control, not a binary edit-presence decision; excluded from all accuracy denominators."}
+        "baseline_note": "Baseline FP means the unedited checkpoint selects its future configured ROME edit layer. Baselines are counted once per checkpoint, separately from edited accuracy."}
+    for model, group in grouped.items():
+        paired = next((r for r in group if r.get("baseline_fp") is not None), None)
+        report["models"][model].update(baseline_selected_layer=paired.get("baseline_selected_layer") if paired else None,
+                                      baseline_fp=paired.get("baseline_fp") if paired else None)
     outputs = []
     for name, payload in (("summary.json", report), ("cases.json", rows)):
         path = output / name
         write_json(path, payload)
         outputs.append(str(path))
     path = output / "cases.csv"
-    fields = [k for k in rows[0] if k not in ("metrics", "layer_scores")] if rows else ["model", "case_id"]
+    fields = [k for k in rows[0] if k not in ("metrics", "layer_scores", "baseline_layer_scores")] if rows else ["model", "case_id"]
     with path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
@@ -113,7 +139,7 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
         ax.legend()
         fig.tight_layout()
         for fmt in formats:
-            if fmt in ("png", "pdf"):
+            if fmt in ("png", "pdf", "svg"):
                 path = output / f"accuracy.{fmt}"; fig.savefig(path); outputs.append(str(path))
         plt.close(fig)
         fig, axes = plt.subplots(len(models), 2, figsize=(12, max(3, 3 * len(models))), squeeze=False)
@@ -138,7 +164,7 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
                 axis.set_xlabel("Layer")
         fig.tight_layout()
         for fmt in formats:
-            if fmt in ("png", "pdf"):
+            if fmt in ("png", "pdf", "svg"):
                 path = output / f"profiles.{fmt}"; fig.savefig(path); outputs.append(str(path))
         plt.close(fig)
     return outputs

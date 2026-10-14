@@ -1,285 +1,189 @@
-# Latium Framework
+# Latium — CSF submission
 
-Latium is an open-source research framework for re-implementing and evaluating
-ROME (Rank-One Model Editing), with tooling for structural edit detection,
-causal tracing, artifact-backed analysis, and graph rendering.
+Latium evaluates ROME model editing and normal GRAM layer localization. It is
+developed by the Security@FIT group in collaboration with Red Hat Research.
 
-The project is developed for cybersecurity research by the Security@FIT group in
-collaboration with Red Hat Research. An archived branch preserves the ACM CCS
-2026 submission snapshot. The current code was refactored because the submission-era
-script and notebook layout had outgrown the project; the current runtime is
-Hydra-first and uses `python3 -m src`.
+Main contributors: **Matej Olexa** and **Jakub Res**. Names and attribution are
+preserved; submission anonymization is handled separately.
 
-For contributor structure and extension points, see `docs/project.md` and the
-package README files under `src/`.
+## Installation and authentication
 
-## Main Contributors
-
-- Matej Olexa
-- Jakub Res
-
-## Setup
+Use Linux, Bash and Python 3.11 or newer on a GPU machine. An ordinary SSH
+session works; no MetaCentrum paths, PBS installation or scheduler is required.
+PyTorch must support the machine's CUDA driver and GPU. Install its appropriate
+build before installing the remaining requirements if your cluster provides one.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-make mkdir
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt   # local checks
+python -m pytest -q
+python -m ruff check src tests scripts
 ```
 
-Model configs default to CUDA. Model downloads are cached under `../models`,
-datasets under `../datasets`, and second-moment statistics under
-`data/second_moment_stats/`.
+Public checkpoints need no token. For gated/private models, obtain access to
+the original repositories and set `HF_TOKEN` in the SSH environment, or use
+`hf auth login`. Do not put tokens in commands committed to this repository.
+`HF_HOME` controls the Hugging Face cache. `LATIUM_COUNTERFACT_CACHE` may point
+to an existing `datasets.save_to_disk` CounterFact cache; selected case IDs and
+content hashes are checked even when its Arrow representation differs.
 
-`make setup` is also available for the conda-based setup path; it creates the
-`llms` environment and then runs the same directory setup as `make mkdir`.
+Install `requirements-monitoring.txt` only to enable optional W&B tracking.
+Tracking is disabled by default. `LATIUM_PYTHON` selects the interpreter used by
+the Bash entry point.
 
-ROME edits usually need second-moment statistics. Compute them before running a
-new model:
+## Frozen experimental inputs
 
-```bash
-python3 -m src second-moment model=gpt2-large
-python3 -m src second-moment model=gpt2-large model.second_moment_target_samples=5000
-```
+The authoritative archive is
+[LLM Security on Nextcloud](https://nextcloud.fit.vutbr.cz/s/FcezyKRbbwdAbtX).
+Use `classic-gram-merged`, `finetune-no-cov`, `finetune-covariance`, and the
+`CSF-final-papers` export. At the time of this preparation, the live share places
+`finetune-no-cov` inside `ROME - CSF` and calls the paper export `CSF-graphs`.
+The downloader maps those locations to the four requested local names.
 
-## Quick Start
-
-List registered edit methods, captures, analyses, and renderers:
-
-```bash
-python3 -m src methods
-```
-
-Run one manual ROME edit and chat with the edited model:
-
-```bash
-python3 -m src manual-rome model=gpt2-large
-```
-
-Plan a structural run without loading a model:
-
-```bash
-python3 -m src structural plan \
-  'structural.run.models=[gpt2-large,qwen3-4b]' \
-  structural.run.n_tests=5 \
-  structural.capture.profile=paper
-```
-
-Run the complete CCS report, including accuracy, ROME success, layer-window
-accuracy, paper JSON, and the six-panel per-layer signal figure:
-
-```bash
-python3 -m src structural run \
-  structural=ccs-report \
-  'structural.run.models=[qwen3-4b]' \
-  structural.run.n_tests=30 \
-  structural.run.run_id=qwen3-4b-ccs-report
-```
-
-Plan that workflow or re-render a saved run with the same complete report:
-
-```bash
-python3 -m src structural plan structural=ccs-report 'structural.run.models=[qwen3-4b]'
-
-python3 -m src graphs run analysis_out/qwen3-4b-ccs-report
-```
-
-`graphs run` defaults to `ccs-report`; the former aggregate-only renderer preset
-`paper` now raises an error. `structural.analysis.preset=paper` still names the
-analysis selection and is set by the workflow. The 5x4 structural artifact
-grid remains available separately as `structural-paper`.
-
-Structural runs derive capture requirements from the selected analyses. For
-example, `structural.analysis.preset=ccs-composite` automatically captures its
-spectral primitives and the five matrix columns it consumes: `spectral_gap`,
-`top1_energy`, `row_alignment`, `norm_cv`, and `effective_rank`. The same rule
-applies to blind, rank-one, presence, and study analyses. Explicit capture
-profiles remain available for capture-only and graph-only workflows.
-The default capture profile is `none`, so an end-to-end run is driven by the
-analysis preset; a capture-only command must select a capture profile explicitly.
-End-to-end renderer requirements are included in the same plan, preventing a
-selected graph from being run without the matrix columns it needs.
-
-Hydra overrides are the supported option style. Argparse flags such as
-`--models` are no longer supported by the main CLI.
-
-## W&B tracking
-
-Tracking defaults to `none`. See [W&B setup and fields](docs/wandb-monitoring.md).
-
-## Main Workflows
-
-| Workflow | Command / entrypoint |
+| Campaign | Frozen population and protocol |
 |---|---|
-| Single ROME edit | `python3 -m src command=edit edit_method=rome model=gpt2-large` |
-| Manual ROME chat | `python3 -m src manual-rome ...` |
-| ROME-only benchmark | `python3 -m src rome-benchmark rome_benchmark.models=[gpt2-large]` |
-| Structural capture/analyze | `python3 -m src structural run ...` |
-| Analysis-only replay | `python3 -m src structural analyze ...` |
-| Graph rendering | `python3 -m src graphs run <run-root>` |
-| Causal trace | `python3 -m src causal-trace model=gpt2-large` |
-| Corrected Kuba tracing | `python3 -m src causal-kuba-fix model=gpt2-large` |
-| Alternative trace | `python3 -m src alt-trace model=gpt2-large` |
-| Prefix variability experiment | `python3 -m src prefix-experiment prefix_experiment.model=gpt2-large` |
-| MetaCentrum causal trace -> ROME | `jobs/submit.sh causal-rome -- pipeline.model=gpt2-large` |
+| `classic` | 18 base models, the same 1,000 CounterFact facts; one conceptual unedited control per model and 1,000 independent ROME edits with edited GRAM. Original first/second 500 batches and the 24 repaired Qwen3.5 cases remain identified. |
+| `finetune-base` | 790 clean evaluated workflows from the original candidates, up to 100 per family. Each actual finetuned/merged checkpoint has its own baseline, one assigned fact/edit, and edited GRAM; covariance comes from its family base model. |
+| `finetune-own` | The frozen 747 checkpoints that previously passed ROME efficacy; 744 evaluated and three recorded download failures. Each evaluated checkpoint uses freshly computed covariance from that finetuned/merged checkpoint, with 100,000 eligible text samples. |
 
-## Causal Trace
+`manifests/CSF-final/` contains the original 1,000- and 100-fact selection
+manifests, the separate 900-fact checkpoint tracing pool, exact checkpoint/fact
+assignments, pinned checkpoint and adapter-base revisions, original resolved
+checkpoint configs, recorded execution seeds, and the three external prefix
+caches verified against their recorded hashes. Convenience exports include
+actual CounterFact records, dataset indices and model IDs. `checksums.json`
+protects the packaged inputs. The original 100-fact manifest was copied from
+`CSF-final-papers-preview/manifests/finetuned-own-covariance/rome-facts-100.json`.
 
-```bash
-python3 -m src causal-trace model=gpt2-large command.causal_trace.num_valid_facts=100
-```
+These files are the selections. Do not resample facts, rediscover models, infer
+layers from current defaults, or mix the two checkpoint populations. Every
+checkpoint baseline is measured on its actual full or safely merged LoRA
+checkpoint. ROME restores the original projection weights between edits,
+including failures. Self/template prefix generation and caching remain in the
+ROME runtime; the separate prefix-test study has been removed.
 
-The active workflow corrupts the full subject-token embedding span, restores
-whole-MLP outputs at the last subject token over overlapping windows, and
-aggregates paired indirect effects across facts. Discovery predeclares robust
-contiguous regions; a held-out split must confirm a region before one
-representative center is reported.
+The saved classic and base-covariance records do **not** identify the commit
+SHAs of their original base-weight snapshots. Checkpoint and adapter-base pins
+are retained. Exact classic reruns and newly computed base covariance require
+the original base revision map (`{"repository/id": "40-character-commit-sha"}`)
+through `--base-revisions`. The runner refuses to substitute current Hub tips.
+Original own-covariance tensors were deleted after processing; receipts survive,
+and reruns recompute them. A covariance corpus revision/package environment was
+not pinned in the archived records, so bitwise numerical replay is not claimed.
 
-See `causal_tracing.md` for method, configuration, outputs, and limitations.
+## Reproduction commands
 
-## Structural Artifacts
-
-Structural runs write manifest-backed run roots:
-
-```text
-analysis_out/<run-id>/
-  manifest.json
-  plans/<model>/<plan-id>/...
-  graphs/<renderer>/...
-```
-
-The manifest tracks artifact IDs, paths, config hashes, content hashes, and
-input dependencies. Re-running skips current artifacts. Use
-`structural.run.force=true` or `graphs.force=true` to recompute explicitly.
-
-The opt-in ROME layer localizer and its evidence limits are documented in
-[`docs/detector.md`](docs/detector.md).
-
-The structural pipeline is split into:
-
-- `src/structural/execution/`: model loading, case selection, edits.
-- `src/structural/capture/`: reusable matrix/capture artifacts.
-- `src/structural/analysis/`: model-free analysis over saved artifacts.
-- `src/structural/detectors/`: detector math and live-model adapters.
-- `src/graphs/`: render artifacts and graph/data outputs.
-
-## Prefix/Template Variability
-
-The prefix experiment measures how sensitive structural detection is to the
-prefix/template used during a ROME edit.
+Inspect the frozen selections without loading a model:
 
 ```bash
-python3 -m src prefix-experiment \
-  prefix_experiment.model=gpt2-large \
-  prefix_experiment.case_idx=0
+bash scripts/csf.sh validate
+bash scripts/csf.sh plan classic --family gpt2-large
+bash scripts/csf.sh plan finetune-base --family gpt2-medium
+bash scripts/csf.sh plan finetune-own --family gpt2-medium
 ```
 
-Render a prefix artifact:
+Run the three campaigns with the original base snapshot revisions:
 
 ```bash
-python3 -m src graphs prefix analysis_out/<prefix-artifact>.json
+bash scripts/csf.sh run classic --base-revisions original-base-revisions.json --output results/classic
+bash scripts/csf.sh run finetune-base --base-revisions original-base-revisions.json --output results/basecov
+bash scripts/csf.sh run finetune-own --output results/owncov
+bash scripts/csf.sh render-new classic --runs results/classic --output results/new-classic-graphs
+bash scripts/csf.sh render-new finetune-base --runs results/basecov --output results/new-base-graphs
+bash scripts/csf.sh render-new finetune-own --runs results/owncov --output results/new-own-graphs
 ```
 
-The notebook `prefixtest/prefixtest.ipynb` remains available for inspecting
-saved prefix experiment artifacts.
+If the original 100,000-sample base tensors survive, provide their directory
+using `--base-covariance-dir`. Filenames must match the archived family, edit
+layer and sample count. New base covariance is computed on the pinned base
+checkpoint and reused with a checked receipt; own covariance is freshly computed
+on each actual finetuned/merged checkpoint. The protocol concatenates Wikitext
+103 raw train/test/validation, excludes short texts, accumulates uncentered MLP
+input second moments over non-padding tokens in float32, regularizes with
+`1e-5 I`, and stores the inverse. The 100,000 samples are eligible **texts**,
+not tokens. Archived batching/length settings and configured target layers are
+retained in the frozen configs.
 
-## Remote Covariance
+Use `--family`, `--checkpoint`, `--limit-checkpoints` or `--limit-facts` for
+explicit validation subsets or manually partitioned workers. These take fixed
+entries/positions and mark outputs as subsets. Use distinct output directories
+for concurrent SSH or scheduler workers. Full reruns execute the original batch
+boundaries; Qwen's repair cohort remains separate. Failed downloads are retained
+as recorded statuses, and efficacy failures remain evaluated outcomes.
 
-`covariance_a100_remote.sh` computes second-moment statistics on a remote GPU
-node and pulls the resulting `.pt` files into `data/second_moment_stats/`.
+For the fresh-cluster check, the following shared adapter is pinned in both
+checkpoint campaigns. Smoke runs use one assigned fact and 32 covariance samples,
+retain the original edit settings, and clearly mark the reduced protocol:
 
 ```bash
-./covariance_a100_remote.sh user@gpu-host
-MODEL_KEYS="gpt2-xl gpt-j-6b" ./covariance_a100_remote.sh user@gpu-host /path/to/Latium refactor-clean llms
+bash scripts/csf.sh smoke finetune-base --family gpt2-medium \
+  --checkpoint AdityaRamDas/SafeGenAI_GPT2_medium_DPO_LoRA_FT --output results/smoke-base
+bash scripts/csf.sh smoke finetune-own --family gpt2-medium \
+  --checkpoint AdityaRamDas/SafeGenAI_GPT2_medium_DPO_LoRA_FT --output results/smoke-own
 ```
 
-Arguments are:
+The base smoke uses the adapter's recorded base revision; it does not attest to
+the unrecorded classic covariance-base revision. Smoke outputs are separate
+from paper populations. GPU installation/model loading and both covariance modes
+will be checked on the fresh cluster supplied after local validation.
 
-```text
-<user@host> [remote_repo_path] [remote_branch] [conda_env]
-```
+## Saved-artifact validation and rendering
 
-## Models Roadmap
-
-Models are selected by config key, for example `model=gpt2-large` or
-`structural.run.models=[gpt2-large,qwen3-4b]`. Exact HuggingFace names are also
-accepted when they match a configured model.
-
-| Model key | Causal Trace | Weight intervention | Mean ES (n=100) | Notes |
-|---|---|---|---|---|
-| `gpt2-medium` | yes | yes | 0.980 | works |
-| `gpt2-large` | yes | yes | 0.986 | works |
-| `gpt2-xl` | yes | yes | 0.980 | works |
-| `gpt-j-6b` | yes | yes | 0.990 | works |
-| `qwen3-0.6b` | yes | yes |  | configured |
-| `qwen3-1.7b` | yes | yes |  | configured |
-| `qwen3-4b` | yes | yes | 1.000 | works |
-| `qwen3-8b` | yes | yes | 1.000 | works |
-| `qwen3.5-4b` | yes | yes | 1.000 | works; hybrid DeltaNet/full-attention architecture |
-| `qwen2.5-1.5b` | yes | yes |  | configured |
-| `qwen3-guard-0.6b` | yes | yes |  | configured |
-| `granite4-micro` | yes | yes | 0.990 | works |
-| `mistral-7b-v0.1` | yes | yes | 0.960 | works |
-| `mistral-7b-v0.3` | yes | yes | 0.890 | works |
-| `llama2-7b` | yes | yes | 0.990 | works |
-| `falcon-7b` | yes | yes | 0.990 | works |
-| `opt-6.7b` | yes | yes | 0.990 | works |
-| `deepseek-7b-base` | yes | yes | 0.918 | works |
-| `deepseek-r1-llama3-8b` | yes | yes | 1.000 | works |
-| `granite-4.1-8b` | yes | yes | 0.990 | works |
-| `ministral-3-8b` | yes | yes | 1.000 | works |
-| `olmo-3-1025-7b` | yes | yes | 1.000 | works |
-| `gemma-4-12b` | yes | yes | 0.990 | works |
-| `llama3` | planned | planned |  | roadmap |
-| `gpt-neo` | planned | planned |  | roadmap |
-| `baichuan` | planned | planned |  | roadmap |
-| `chatglm` | planned | planned |  | roadmap |
-| `t5` | planned | planned |  | roadmap |
-
-Prefix-variability configs for Qwen3-8B are available under
-`src/config/model/qwen3-8b-prefixtest-*.yaml`.
-
-## Documentation
-
-- `docs/project.md`: project structure and extension points.
-- `docs/wandb-monitoring.md`: W&B setup, recorded fields, and dashboard layout.
-- `src/README.md`: source tree and command wiring.
-- `src/config/README.md`: config groups and override rules.
-- `src/editing/README.md`: edit method contract.
-- `src/structural/README.md`: capture, analysis, and detector flow.
-- `src/results/README.md`: artifact manifest and cache rules.
-- `src/graphs/README.md`: renderer contract.
-- `causal_tracing.md`: causal-tracing and causal-to-ROME commands.
-- `jobs/README.md`: MetaCentrum setup, PBS presets, and pipeline operation.
-
-## Developer Checks
+These commands read archived results and write exports to separate directories:
 
 ```bash
-make check-rome
-make lint
-python3 -m compileall -q src rome_benchmark.py
-python3 -m pytest
+bash scripts/csf.sh download-archive --output artifacts
+bash scripts/csf.sh validate --archive artifacts/classic-gram-merged
+bash scripts/csf.sh validate --archive artifacts/finetune-no-cov
+bash scripts/csf.sh validate --archive artifacts/finetune-covariance
+bash scripts/csf.sh validate --archive artifacts/CSF-final-papers
+bash scripts/csf.sh render classic --archive artifacts/classic-gram-merged --output results/render-classic
+bash scripts/csf.sh render finetune-base --archive artifacts/finetune-no-cov --output results/render-base
+bash scripts/csf.sh render finetune-own --archive artifacts/finetune-covariance --output results/render-own
+bash scripts/csf.sh render-run results/smoke-own/runs/fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT/assigned/run \
+  --output results/render-one
 ```
 
-Useful smoke checks:
+The downloader resumes individually hashed files; folder ZIP streams can be
+interrupted by Nextcloud locks. Validation checks byte hashes, artifact and
+configuration hashes, manifest identities and input references. The validator
+reports known post-index README changes and CSV line-ending changes separately;
+experimental JSON/configuration changes fail validation. Rendering requires all
+selected execution, baseline and edited GRAM artifacts and rejects missing or
+duplicate observations. It never rewrites source manifests.
 
-```bash
-python3 -m src methods
-python3 -m src structural plan 'structural.run.models=[gpt2-large]' structural.run.n_tests=5
-```
+Exports contain per-case metrics and scores, per-family outcomes, per-layer
+means/quartiles/minimum/maximum, source manifest hashes, causal tracing statuses,
+and PNG/PDF/SVG profiles with configured layer markers. Profile bands show
+observed variation, not confidence intervals. Unscored layers are not filled
+with zero scores. Baselines count once per checkpoint; classic batch/repair
+baseline replicas remain archived provenance, not independent controls.
 
-`make check-rome` verifies that protected ROME paths still match `main`.
+ROME efficacy success means `efficacy_score >= 1.0`. Exact GRAM success means
+the selected zero-based layer equals the **execution-configured** edit layer.
+Baseline FP means that the **unedited checkpoint selects its future configured
+ROME layer**. Joint success requires both ROME efficacy and exact GRAM matching.
+Efficacy failures stay in evaluated denominators; download/runtime failures are
+separate. This baseline-FP convention describes target coincidence by the
+localizer. The exported JSON keeps all underlying scores and ES/PS/NS metrics.
 
-## Error Codes
+## Causal tracing and checks
 
-| Code | Meaning |
-|---|---|
-| `0` | Success (including help and expected early exit). |
-| `1` | `structural-validate-cov` failure with `structural.validate_cov.fail_missing=true`, or an uncaught exception. |
-| `2` | Invalid CLI usage (unknown command or argparse-style `--` flag). |
+The archived campaigns use corrected fixed-legacy tracing. Preserve its raw
+results, pre-edit phase and unavailable statuses. Classic tracing has 100
+profiles for 17 families; the comparable **DeepSeek 7B base reference is missing**.
+The checkpoint campaigns retain 766 and 727 accepted traces respectively.
+Their tracing pool is separate from the assigned ROME facts. Do not infer a
+replacement trace or change the frozen ROME layers based on a new trace.
 
-## Minimal Gram fleet
+`python -m src causal-kuba-fix model=gpt2-medium` remains available for a new
+fixed-legacy trace. The windowed `causal-trace` implementation is retained with
+its distinct protocol documented in [causal_tracing.md](causal_tracing.md).
+Neither command overwrites recorded campaign results during artifact rendering.
 
-Use `structural=gram` or `jobs/submit_paper_fleet.sh --workflow gram` for
-shared CounterFact cohorts, appendable ranges and cumulative Gram reports.
-See [Gram workflow](docs/gram-workflow.md) for commands and result semantics.
+See [docs/validation.md](docs/validation.md) for current local results and remaining
+cluster work, and [docs/archived-audit.md](docs/archived-audit.md) for the historical
+source audit, family coverage, unavailable traces and download failures.

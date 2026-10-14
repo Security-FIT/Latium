@@ -273,6 +273,7 @@ def build_case_selection_metadata(
             if selected_cases
             else [int(v) for v in manifest.get("case_ids", [])]
         )
+        hashes_by_index = dict(zip(manifest.get("indices", []), manifest.get("content_hashes", [])))
         rel_manifest = ""
         if manifest_path is not None:
             try:
@@ -284,6 +285,8 @@ def build_case_selection_metadata(
             "dataset": str(manifest["dataset"]),
             "split": str(manifest["split"]),
             "seed": manifest.get("seed"),
+            "dataset_revision": manifest.get("dataset_revision"),
+            "dataset_fingerprint": manifest.get("dataset_fingerprint"),
             "manifest_path": rel_manifest,
             "manifest_hash": str(manifest.get("manifest_hash", "")),
             "count": len(selected_indices),
@@ -292,6 +295,9 @@ def build_case_selection_metadata(
             "selection_hash": hashlib.sha256(json.dumps([manifest["manifest_hash"], selected_indices, selected_case_ids]).encode()).hexdigest(),
             "selected_dataset_indices": selected_indices,
             "selected_case_ids": selected_case_ids,
+            "selected_content_hashes": [
+                hashes_by_index[index] for index in selected_indices
+            ] if manifest.get("content_hashes") else None,
         }
 
     if dataset_name is None or split is None:

@@ -1113,7 +1113,8 @@ def insert_kv(
         new_W = torch.transpose(new_W, 0, 1)
 
     # Insert new weights back to the model
-    handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
+    with torch.no_grad():
+        handler._get_module(layer_name).weight.copy_(new_W)
     return new_W.to(handler.dtype), old_W, update_matrix  # Cast to model dtype
 
 

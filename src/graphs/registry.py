@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 from src.registry import NamedRegistry, RegistryEntry, load_object, resolve_preset_selection
-from src.structural.capture.matrix_features import PAPER_FEATURES
 
 
 @dataclass(frozen=True)
@@ -23,7 +22,6 @@ class RendererSpec(RegistryEntry):
     optional_captures: tuple[str, ...] = ()
     required_analyses: tuple[str, ...] = ()
     optional_analyses: tuple[str, ...] = ()
-    required_matrix_features: tuple[str, ...] = ()
     option_keys: tuple[str, ...] = ()
     requires_analyses: bool = False
 
@@ -31,81 +29,13 @@ class RendererSpec(RegistryEntry):
         return load_object(self.runner)
 
 
-RENDERERS = NamedRegistry(
-    [
-        RendererSpec(
-            "gram-report", "Cumulative Gram cases, baseline controls and ROME metrics.",
-            "src.graphs.gram:render_gram_report", requires_execution=True,
-            required_captures=("gram-localization",),
-            required_analyses=("gram-localization",),
-            option_keys=("formats",),
-        ),
-        RendererSpec(
-            "paper",
-            "Machine-readable paper analysis summary.",
-            "src.graphs.renderers:render_paper",
-            requires_analyses=True,
-        ),
-        RendererSpec(
-            "detector",
-            "Artifact-only detector summary and accuracy graph.",
-            "src.graphs.renderers:render_detector",
-            requires_analyses=True,
-        ),
-        RendererSpec(
-            "run-summary",
-            "Run-level aggregate summaries.",
-            "src.graphs.renderers:render_run_summary",
-            requires_analyses=True,
-        ),
-        RendererSpec(
-            "rome-success",
-            "ROME execution success rates and score summaries.",
-            "src.graphs.renderers:render_rome_success",
-            requires_execution=True,
-        ),
-        RendererSpec(
-            "detector-window",
-            "Detector layer-window accuracy and distance summaries.",
-            "src.graphs.renderers:render_detector_window",
-            requires_analyses=True,
-        ),
-        RendererSpec(
-            "detector-signals",
-            "Per-analysis detector signal profile plots.",
-            "src.graphs.renderers:render_detector_signals",
-            requires_analyses=True,
-        ),
-        RendererSpec(
-            "structural-artifact-grid",
-            "Fixed 5x4 per-layer artifact grid from matrix features.",
-            "src.graphs.structural.artifact_grid:render_structural_artifact_grid",
-            requires_execution=True,
-            required_captures=("matrix-features",),
-            required_matrix_features=PAPER_FEATURES,
-            option_keys=("features", "transforms", "formats"),
-        ),
-        RendererSpec(
-            "structural-ccs-lines",
-            "Six-panel CCS matrix-feature curves for edited cases and baseline.",
-            "src.graphs.structural.ccs_lines:render_structural_ccs_lines",
-            requires_execution=True,
-            required_captures=("matrix-features",),
-            required_matrix_features=("spectral_gap", "top1_energy"),
-            required_analyses=("ccs-composite",),
-            option_keys=("formats",),
-        ),
-    ]
-)
-
-RENDERER_PRESETS: dict[str, tuple[str, ...]] = {
-    "none": (),
-    "gram-report": ("gram-report",),
-    "ccs-report": ("paper", "detector", "rome-success", "detector-window", "structural-ccs-lines"),
-    "structural-paper": ("structural-artifact-grid",),
-    "structural-full": ("structural-artifact-grid",),
-    "full": RENDERERS.identifiers(),
-}
+RENDERERS = NamedRegistry([RendererSpec(
+    "gram-report", "GRAM cases, checkpoint baselines and ROME efficacy metrics.",
+    "src.graphs.gram:render_gram_report", requires_execution=True,
+    required_captures=("gram-localization",), required_analyses=("gram-localization",),
+    option_keys=("formats",),
+)])
+RENDERER_PRESETS = {"none": (), "gram-report": ("gram-report",), "full": ("gram-report",)}
 
 
 def resolve_renderers(
@@ -114,12 +44,6 @@ def resolve_renderers(
     enabled: Sequence[str] = (),
     disabled: Sequence[str] = (),
 ) -> tuple[str, ...]:
-    if preset == "paper":
-        raise ValueError("Aggregate-only renderer preset 'paper' was retired; use 'ccs-report'")
-    if preset == "ccs-report":
-        omitted = set(disabled) & set(RENDERER_PRESETS["ccs-report"])
-        if omitted:
-            raise ValueError(f"ccs-report cannot disable required renderers: {', '.join(sorted(omitted))}")
     return resolve_preset_selection(
         RENDERER_PRESETS,
         RENDERERS,

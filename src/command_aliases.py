@@ -24,7 +24,6 @@ STRUCTURAL_COMMANDS = {
 }
 GRAPH_COMMANDS = {
     "run": "graphs/run",
-    "prefix": "graphs/prefix",
 }
 
 
@@ -99,12 +98,10 @@ def print_graphs_help(file: TextIO | None = None) -> None:
     print("", file=out)
     print("Commands:", file=out)
     print("  run       render an existing run root", file=out)
-    print("  prefix    render a prefix-variability artifact", file=out)
     print("", file=out)
     print("Examples:", file=out)
     print("  python -m src graphs run analysis_out/run-id", file=out)
-    print("  python -m src graphs run graphs.run_root=analysis_out/run-id graphs.renderer_preset=ccs-report", file=out)
-    print("  python -m src graphs prefix analysis_out/prefix/artifact.json", file=out)
+    print("  python -m src graphs run graphs.run_root=analysis_out/run-id graphs.renderer_preset=gram-report", file=out)
 
 
 def graphs_overrides_from_alias(argv: Sequence[str]) -> list[str] | None:
@@ -122,39 +119,12 @@ def graphs_overrides_from_alias(argv: Sequence[str]) -> list[str] | None:
     _reject_argparse_flags(
         command_args,
         surface="Graph",
-        example="graphs.renderer_preset=ccs-report graphs.force=true",
+        example="graphs.renderer_preset=gram-report graphs.force=true",
     )
     if command == "run":
         command_args = _with_optional_path(command_args, key="graphs.run_root", label="graph")
-    elif command == "prefix":
-        command_args = _with_optional_path(command_args, key="graphs.artifact", label="graph")
 
     return [f"command={mapped}", *command_args]
-
-
-def print_prefix_experiment_help(file: TextIO | None = None) -> None:
-    out = file or sys.stdout
-    print("usage: latium prefix-experiment [hydra-overrides...]", file=out)
-    print("", file=out)
-    print("Examples:", file=out)
-    print("  python -m src prefix-experiment", file=out)
-    print(
-        "  python -m src prefix-experiment prefix_experiment.model=gpt2-large prefix_experiment.case_idx=0",
-        file=out,
-    )
-
-
-def prefix_experiment_overrides_from_alias(argv: Sequence[str]) -> list[str] | None:
-    args = list(argv)
-    if args and args[0] in {"-h", "--help"}:
-        return None
-
-    _reject_argparse_flags(
-        args,
-        surface="Prefix experiment",
-        example="prefix_experiment.model=gpt2-large",
-    )
-    return ["command=prefix_experiment", *args]
 
 
 def alias_overrides(command: str, args: Sequence[str]) -> tuple[list[str] | None, Callable[..., None]]:
@@ -162,17 +132,13 @@ def alias_overrides(command: str, args: Sequence[str]) -> tuple[list[str] | None
         return structural_overrides_from_alias(args), print_structural_help
     if command == "graphs":
         return graphs_overrides_from_alias(args), print_graphs_help
-    if command == "prefix-experiment":
-        return prefix_experiment_overrides_from_alias(args), print_prefix_experiment_help
     raise ValueError(f"Unsupported primary command alias: {command}")
 
 
 __all__ = [
     "alias_overrides",
     "graphs_overrides_from_alias",
-    "prefix_experiment_overrides_from_alias",
     "print_graphs_help",
-    "print_prefix_experiment_help",
     "print_structural_help",
     "structural_overrides_from_alias",
 ]

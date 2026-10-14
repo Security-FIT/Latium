@@ -45,20 +45,12 @@ def validate_structural_config(config: StructuralBenchmarkConfig) -> None:
         enabled=config.enable_renderers,
         disabled=config.disable_renderers,
     )
-    if config.render_graphs and config.renderer_preset == "ccs-report":
-        if not config.run_analysis or "ccs-composite" not in analysis_names:
-            raise ValueError("ccs-report requires the ccs-composite analysis")
-        unsupported = [model for model in config.models if not supports_model(ANALYSES.get("ccs-composite"), model)]
-        if unsupported:
-            raise ValueError(f"ccs-report requires CCS-supported models: {', '.join(unsupported)}")
     capture_plan = resolve_capture_plan(
         config.capture_profile,
         enabled=config.enable_captures,
         disabled=config.disable_captures,
         analyses=analysis_names if config.run_analysis else (),
         renderers=renderer_names if config.render_graphs else (),
-        matrix_feature_set=config.matrix_feature_set,
-        matrix_features=config.matrix_features,
     )
     if not config.run_analysis and not capture_plan.names:
         raise ValueError(
@@ -83,7 +75,7 @@ def run_structural_capture(
 def run_structural_analysis(
     run_root: str,
     *,
-    preset: str = "paper",
+    preset: str = "gram-localization",
     enabled: tuple[str, ...] = (),
     disabled: tuple[str, ...] = (),
     method_configs: Mapping[str, Mapping[str, Any]] | None = None,

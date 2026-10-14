@@ -39,15 +39,6 @@ def run_graphs_command(cfg: DictConfig, name: str) -> int:
             ),
         )
         return 0
-    if name == "graphs-prefix":
-        from src.graphs.prefix import generate_prefixtest_outputs
-
-        artifact = path_or_none(graphs.artifact)
-        if artifact is None:
-            raise ValueError("graphs.artifact is required for command=graphs/prefix")
-        output_dir = path_or_none(graphs.output_dir) or artifact.parent / "output"
-        generate_prefixtest_outputs(artifact, output_dir=output_dir)
-        return 0
     raise ValueError(f"Unknown graphs command: {name}")
 
 

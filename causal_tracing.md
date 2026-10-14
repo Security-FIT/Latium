@@ -1,6 +1,6 @@
 # Causal tracing
 
-Latium uses causal tracing to choose a layer for a later ROME run. Production code lives in src/causal_trace/. The notebook calls that code and plots saved artifacts.
+Latium uses causal tracing to choose a layer for a later ROME run. Production code lives in src/causal_trace/. The CLI writes reproducible measurement and plot artifacts.
 
 ## Measurement
 
@@ -88,25 +88,9 @@ Each run writes:
 
 fact_results.jsonl records the resolved multiplier, independent seeds, and calibration search trail for every accepted fact. summary.json records resolved multiplier statistics, split counts, the discovery center, confirmed region, selected center, hook semantics, and confirmation result.
 
-## Causal trace to ROME
+## Frozen campaign layers
 
-The detector-free job runs:
-
-    causal trace -> confirmed layer -> matching second moment -> ROME benchmark
-
-The default job uses 100 trace facts and 30 ROME cases:
-
-    jobs/submit.sh causal-rome -- pipeline.model=gpt2-xl
-
-Useful overrides include pipeline.causal_trace.num_valid_facts, pipeline.covariance.target_samples, and pipeline.rome.n_tests.
-
-When pipeline.covariance.target_samples is null, the job reads second_moment_target_samples from the selected pipeline model. If that model has no value, it uses the second-moment command fallback of 100,000 samples. An explicit pipeline override wins.
-
-pipeline.rome.n_tests remains 30 because it is this job's evaluation size. The structural.run.n_tests reference in new-detection-clean belongs to a structural detector run. This job does not compose or run that pipeline, so linking to the setting would add an unrelated dependency and would not be model-adaptive.
-
-The selected layer is passed to covariance and ROME as a runtime override. The job requires a passing trace, a non-empty plot, covariance for the selected layer, and at least one evaluated ROME case before writing pipeline-summary.json.
-
-For llama2-7b, ROME uses the validated fixed context-template pool. It runs after causal selection and cannot affect the selected layer.
+CSF campaigns retain their execution-configured layers. New causal tracing is a separate experiment and must not overwrite those targets or archived results. Use the portable commands in the main README for covariance and ROME execution.
 
 ## Limits
 
@@ -123,7 +107,3 @@ For llama2-7b, ROME uses the validated fixed context-template pool. It runs afte
 - src/causal_trace/tokenization.py: subject and target token mapping.
 - src/causal_trace/selection.py: aggregation, intervals, and selection.
 - src/config/command/causal_trace.yaml: method defaults.
-- src/config/pipeline/causal_rome.yaml: job defaults.
-- jobs/causal_rome_pipeline.py: trace, covariance, and ROME orchestration.
-- notebooks/causal_tracing.ipynb: production runner and artifact plots.
-- notebooks/causal_tracing_legacy.ipynb: unchanged origin/causal-trace analysis notebook.

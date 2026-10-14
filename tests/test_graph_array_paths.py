@@ -9,7 +9,7 @@ from src.command_aliases import graphs_overrides_from_alias
     r'C:\reports\job[1]\run',
     'analysis_out/žluťoučký[1]/run',
 ])
-@pytest.mark.parametrize('command,key', [('run', 'graphs.run_root'), ('prefix', 'graphs.artifact')])
+@pytest.mark.parametrize('command,key', [('run', 'graphs.run_root')])
 def test_graph_path_survives_actual_hydra_parser(path, command, key):
     overrides = graphs_overrides_from_alias([command, path])
     parsed = OverridesParser.create().parse_overrides(overrides)

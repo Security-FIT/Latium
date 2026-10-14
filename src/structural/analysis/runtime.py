@@ -13,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
-import numpy as np
 
 from src.results import ArtifactWriter, RunArtifactReader, build_artifact, config_hash
 from src.results.ids import analysis_id, capture_id, execution_id
@@ -21,7 +20,6 @@ from src.results.layout import RunLayout
 from src.common.config import plain as _plain
 from src.structural.analysis.registry import ANALYSES, AnalysisSpec, resolve_analyses, supports_model
 from src.structural.capture.registry import CAPTURES
-from src.structural.analysis.trim import resolve_trim
 from src.tracking import current_tracker
 
 
@@ -77,31 +75,6 @@ def _merge_dict(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
-def _overlay_spectral(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
-    merged = _merge_dict(
-        base, {key: value for key, value in patch.items() if key not in {"pcs_pairwise_rows", "mode", "changed_layers"}}
-    )
-    rows = patch.get("pcs_pairwise_rows", {})
-    mapping = (
-        ("dot_weight_cumsum", "pcs_pairwise_dot_weight_cumsum"),
-        ("flip_weight_cumsum", "pcs_flip_pairwise_weight_cumsum"),
-        ("weight_cumsum", "pcs_pairwise_weight_cumsum"),
-    )
-    for patch_key, target_key in mapping:
-        source_rows = rows.get(patch_key, {})
-        if not source_rows or target_key not in merged:
-            continue
-        matrix = np.asarray(merged[target_key], dtype=np.float64)
-        for raw_index, raw_row in source_rows.items():
-            index = int(raw_index)
-            row = np.asarray(raw_row, dtype=np.float64)
-            matrix[:, index, :] = row
-            matrix[:, :, index] = row
-        merged[target_key] = matrix.tolist()
-    merged["mode"] = "materialized"
-    return merged
-
-
 def materialize_capture(
     baseline: dict[str, Any],
     method: dict[str, Any],
@@ -128,13 +101,9 @@ def materialize_capture(
             output.append(deepcopy(case))
             continue
         patch = case.get("data", {})
-        if method.get("producer") == "spectral":
-            data = _overlay_spectral(baseline_data, patch)
-        else:
-            data = _merge_dict(
-                baseline_data, {key: value for key, value in patch.items() if key not in {"mode", "changed_layers"}}
-            )
-            data["mode"] = "materialized"
+        data = _merge_dict(baseline_data, {key: value for key, value in patch.items()
+                                              if key not in {"mode", "changed_layers"}})
+        data["mode"] = "materialized"
         output.append(
             {
                 **{key: deepcopy(value) for key, value in case.items() if key != "data"},
@@ -165,19 +134,7 @@ def _resolve_analysis_config(
     defaults: Mapping[str, Any],
     overrides: Mapping[str, Any],
 ) -> dict[str, Any]:
-    trim_first, trim_last = resolve_trim(
-        num_layers,
-        variant.get("trim_first"),
-        variant.get("trim_last"),
-    )
-    normalized_variant = {
-        **dict(variant),
-        "trim_first": trim_first,
-        "trim_last": trim_last,
-    }
-    projected = {
-        target: normalized_variant[source] for source, target in spec.variant_fields if source in normalized_variant
-    }
+    projected = {}
     resolved = {
         **dict(defaults),
         **projected,
@@ -276,7 +233,7 @@ def run_analyses(
     run_root: str | Path,
     *,
     selected: Sequence[str] = (),
-    preset: str = "paper",
+    preset: str = "gram-localization",
     disabled: Sequence[str] = (),
     method_configs: Optional[Mapping[str, Mapping[str, Any]]] = None,
     config_overrides: Optional[Mapping[str, Mapping[str, Any]]] = None,

@@ -4,9 +4,7 @@ hydra_colorlog
 omegaconf
 torch
 numpy
-scipy
 pandas
-seaborn
 matplotlib
 datasets
 accelerate
@@ -14,8 +12,6 @@ peft
 sentencepiece
 tensorboard
 tqdm
-scikit-learn
-nltk
-ruff
-pytest
-wandb
+huggingface_hub
+safetensors
+protobuf

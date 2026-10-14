@@ -15,7 +15,6 @@ from typing import Any, Mapping, Optional
 from src.common.io import to_serializable
 from src.results import ArtifactWriter, RunLayout, build_artifact, config_hash
 from src.results.ids import capture_id, execution_id
-from src.structural.capture.matrix_features import resolve_matrix_features
 from src.structural.capture.registry import CAPTURES
 from src.structural.capture.producers import CaptureContext
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
@@ -27,24 +26,12 @@ from src.structural.detectors.rome_layer_localizer import (
 
 def capture_options(
     config: StructuralBenchmarkConfig,
-    *,
-    matrix_features: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    variants = config.effective_analysis_variants
-    return {
-        "spectral_top_k": max(int(variant.spectral_top_k) for variant in variants),
-        "spectral_neighbor_layers": max(int(variant.spectral_neighbor_layers) for variant in variants),
-        "matrix_feature_set": str(config.matrix_feature_set),
-        "matrix_features": tuple(config.matrix_features if matrix_features is None else matrix_features),
-        "matrix_svd_top_k": int(config.matrix_svd_top_k),
-        "bottom_rank_sweep_ranks": tuple(config.bottom_rank_sweep_ranks),
-        "bottom_rank_top_svd_rank": int(config.bottom_rank_top_svd_rank),
-        "bottom_rank_boundary": int(config.bottom_rank_boundary),
-    }
+    return {}
 
 
 def analysis_variant_metadata(config: StructuralBenchmarkConfig) -> list[dict[str, Any]]:
-    return [variant.to_dict() for variant in config.effective_analysis_variants]
+    return [{}]
 
 
 def _fallback_case_selection(
@@ -90,40 +77,12 @@ def capture_config(
     *,
     profile: str,
 ) -> dict[str, Any]:
-    if capture_name == "spectral":
-        relevant_options = {
-            "spectral_top_k": int(options["spectral_top_k"]),
-            "spectral_neighbor_layers": int(options["spectral_neighbor_layers"]),
-        }
-    elif capture_name == "gram-localization":
-        relevant_options = {
-            "profile_fields": list(PROFILE_FIELDS),
-            "trim_fraction": DEFAULT_TRIM_FRACTION,
-        }
-    elif capture_name == "matrix-features":
-        relevant_options = {
-            "feature_set": str(options.get("matrix_feature_set", "paper")),
-            "features": list(
-                resolve_matrix_features(
-                    str(options.get("matrix_feature_set", "paper")),
-                    options.get("matrix_features", ()),
-                )
-            ),
-            "svd_top_k": int(options.get("matrix_svd_top_k", 50)),
-        }
-    elif capture_name == "bottom-rank-tokens":
-        relevant_options = {
-            "bottom_rank_sweep_ranks": list(options["bottom_rank_sweep_ranks"]),
-            "bottom_rank_top_svd_rank": int(options["bottom_rank_top_svd_rank"]),
-            "bottom_rank_boundary": int(options["bottom_rank_boundary"]),
-        }
-    else:
-        relevant_options = {}
-    return {
-        "capture": capture_name,
-        "profile": profile,
-        "options": relevant_options,
-    }
+    if capture_name != "gram-localization":
+        raise ValueError(f"Unsupported capture: {capture_name}")
+    return {"profile": profile, "options": {
+        "profile_fields": list(PROFILE_FIELDS), "trim_fraction": DEFAULT_TRIM_FRACTION,
+    }}
+
 
 
 def write_execution(

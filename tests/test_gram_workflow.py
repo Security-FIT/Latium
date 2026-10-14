@@ -153,81 +153,10 @@ def test_errors_pending_and_baseline_denominators():
     assert summary["coverage"] == 1/3 and summary["rome_success"] == 0
 
 
-def test_fleet_command_and_pbs_arguments(tmp_path):
-    from jobs.paper_fleet import parse_args
-    from jobs.gram_fleet import structural_command
-    path, _, _ = cohort_file(tmp_path)
-    args = parse_args(["--workflow","gram","--case-index-file",str(path),"--case-start","100","--case-stop","200","--models","gpt2-xl","--run-root",str(tmp_path/"exp")])
-    assert args.n_tests == 100
-    command = structural_command(args,"gpt2-xl",tmp_path/"exp/models/gpt2-xl/run","m0100-0200")
-    assert "structural=gram" in command and "structural.run.start_idx=100" in command
-    overrides = [value for value in command if "=" in value]
-    assert not any(value.startswith(("ccs", "experiments")) for value in overrides)
-    result = subprocess.run(["bash",str(ROOT/"jobs/submit_paper_fleet.sh"),"--dry-run","--workflow","gram","--case-index-file",str(path),"--case-start","100","--case-stop","200","--models","gpt2-xl","--run-root",str(tmp_path/"exp")],capture_output=True,text=True,check=True)
-    assert "[dry-run]" in result.stdout
 
 
-def test_fleet_two_batches_resume_without_duplicate_edits(tmp_path, monkeypatch):
-    from jobs import gram_fleet, paper_fleet
-    path, cohort, _ = cohort_file(tmp_path)
-    root = tmp_path / "fleet"
-    commands = []
-    monkeypatch.setattr(paper_fleet, "configure_logging", lambda *a: None)
-    monkeypatch.setattr(paper_fleet, "model_second_moment_files", lambda *a: [Path("covariance.pt")])
-    def fake_run(command, **kwargs):
-        commands.append(command)
-        start = int(next(c.split("=",1)[1] for c in command if c.startswith("structural.run.start_idx=")))
-        count = int(next(c.split("=",1)[1] for c in command if c.startswith("structural.run.n_tests=")))
-        write_batch(root/"models/gpt2-xl/run", "gpt2-xl", cohort, start, start+count)
-    monkeypatch.setattr(paper_fleet, "run_logged", fake_run)
-    def args(start, stop):
-        return paper_fleet.parse_args(["--workflow","gram","--case-index-file",str(path),"--case-start",str(start),"--case-stop",str(stop),"--models","gpt2-xl","--run-root",str(root),"--reuse-covariance","--no-graphs"])
-    assert gram_fleet.run(args(0,3)) == 0
-    assert gram_fleet.run(args(3,6)) == 0
-    assert len(commands) == 2
-    assert gram_fleet.run(args(0,3)) == 0
-    assert gram_fleet.run(args(3,6)) == 0
-    assert len(commands) == 2
-    assert json.loads((root/"report/summary.json").read_text())["models"]["gpt2-xl"]["selected"] == 6
-    assert json.loads((root/"models/gpt2-xl/batches/m0003-0006/state.json").read_text())["status"] == "complete"
-
-    # A completed batch with a missing capture repairs on the first retry.
-    run = root / "models/gpt2-xl/run"
-    records = json.loads((run / "manifest.json").read_text())["artifacts"].values()
-    capture = next(r for r in records if r["kind"] == "capture" and r.get("edit_method") == "rome")
-    missing = run / capture["path"]
-    missing.unlink()
-    assert gram_fleet.run(args(0, 3)) == 0
-    assert missing.is_file() and len(commands) == 3
-    assert gram_fleet.run(args(0, 3)) == 0
-    assert len(commands) == 3
-    assert json.loads((root / "report/summary.json").read_text())["models"]["gpt2-xl"]["selected"] == 6
 
 
-def test_append_ignores_reporting_changes_but_rejects_computation_changes(tmp_path, monkeypatch):
-    from jobs import gram_fleet, paper_fleet
-    path, _, _ = cohort_file(tmp_path)
-    source = tmp_path / "source"
-    algorithm = source / "src/rome/algorithm.py"
-    algorithm.parent.mkdir(parents=True)
-    algorithm.write_text("version = 1\n")
-    monkeypatch.setattr(paper_fleet, "ROOT", source)
-    args = paper_fleet.parse_args(["--workflow", "gram", "--case-index-file", str(path),
-                                  "--models", "gpt2-xl", "--run-root", str(tmp_path / "run"),
-                                  "--case-start", "0", "--case-stop", "3"])
-    gram_fleet.prepare(args)
-    graph = source / "src/graphs/plot.py"
-    graph.parent.mkdir(parents=True)
-    graph.write_text("new_plot = True\n")
-    unrelated = source / "src/config/model/another.yaml"
-    unrelated.parent.mkdir(parents=True)
-    unrelated.write_text("name: another-model\n")
-    args.case_start, args.case_stop = 3, 6
-    gram_fleet.prepare(args)
-    algorithm.write_text("version = 2\n")
-    args.case_start, args.case_stop = 6, 9
-    with pytest.raises(ValueError, match="setup changed"):
-        gram_fleet.prepare(args)
 
 
 def test_counterfact_disk_cache_avoids_hub_and_preserves_manifest(tmp_path, monkeypatch):

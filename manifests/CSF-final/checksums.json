@@ -1,0 +1,78 @@
+[
+  {
+    "path": "basecov-inputs.json",
+    "sha256": "260e692eb16e059a3fcf1bf7562a29c81d3ca66ca1288b69b7f48b3cea463ffd"
+  },
+  {
+    "path": "basecov-selected-checkpoints.json",
+    "sha256": "acdeff23f1e0f9fd98bd3df4dda9e8456f4032347c650ce8f4268c5687fbf740"
+  },
+  {
+    "path": "classic-1000-counterfacts.json",
+    "sha256": "63680b0a1e1fc1c545ac1d0a00b654d6f269f096cfe06917b92b9a7f254900da"
+  },
+  {
+    "path": "classic-1000-indices.txt",
+    "sha256": "fc105394e68d7f988c1ed82cd7a20b7b15bec9bc8c9f0b03182d5f8a8aa045a1"
+  },
+  {
+    "path": "classic-facts.json",
+    "sha256": "3fc3fbb6525d34f5f9f040c8729caf01fb6462419db261c313afd0fff03327cd"
+  },
+  {
+    "path": "classic-inputs.json",
+    "sha256": "68612b7db7d03a424c47d3385011be93b4b96fe36b3f7d27b35a5a9d9d237da0"
+  },
+  {
+    "path": "classic-repair24-facts.json",
+    "sha256": "3d2893aa7bc854dea79644aef85bde07aaf2b2ec3a3a025ba9c4a9c1d4936432"
+  },
+  {
+    "path": "classic-selections.json",
+    "sha256": "dfab38d56089b43ef8f79759dc34b7a33a8eb4bede3fc21a7166d6cef229a99e"
+  },
+  {
+    "path": "finetune-100-counterfacts.json",
+    "sha256": "0895c90f69b8b34410855f9864220996d2c37dd0ee9cda0458e227e9e95a4d6f"
+  },
+  {
+    "path": "finetune-facts.json",
+    "sha256": "a7ac2793cdddfe3bb3fc1977e0384153299915ad9c1b256320f12d9d4bff78c3"
+  },
+  {
+    "path": "finetuned-models.txt",
+    "sha256": "b47b82c95490044784d173f19b5d9e566ea0b4c6042fe5d8ac748d0480004bb7"
+  },
+  {
+    "path": "owncov-inputs.json",
+    "sha256": "a8dd836a55604bb3edfc77fec01e7e7f9b81888e98541e8976cef0821388ef37"
+  },
+  {
+    "path": "owncov-selected-checkpoints.json",
+    "sha256": "5dcbba8c228d1633e7072c0e8721335edd51fdb857b613f66777da16fc12ff94"
+  },
+  {
+    "path": "prefix-cache-provenance.json",
+    "sha256": "104fc83eb50fdda67e43393477cafdf022d23974e9a4a7edd83490737b41abc4"
+  },
+  {
+    "path": "prefix_cache/deepseek-7b-base__mistral-7b-v0.3.json",
+    "sha256": "db1a57638cd3a3591de319dadf1c9e608da49e1f0ae2f0dae230277e741577f2"
+  },
+  {
+    "path": "prefix_cache/qwen3-4b__mistral-7b-v0.3.json",
+    "sha256": "02c894a08432b0d12403ff66c458efa4cda5141ed70b6089b4d8dec4be6fe856"
+  },
+  {
+    "path": "prefix_cache/qwen3-8b__mistral-7b-v0.3.json",
+    "sha256": "386e1ce5b33f7115c7597b858a72f4fb085943dc9ad3b7454483734e6f8c73ba"
+  },
+  {
+    "path": "source-files.json",
+    "sha256": "645880329689d7c02f44aaa5c4d0e83f1d955e4f3ab75e6c8006bb585eac9f8f"
+  },
+  {
+    "path": "trace-facts.json",
+    "sha256": "ce8f7d1b1d1c2d5977e5a999bef8d550606a78caf1b4126ab203602151e7eef3"
+  }
+]

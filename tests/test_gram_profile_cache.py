@@ -132,6 +132,7 @@ def test_model_runner_real_rome_insertion_restoration_and_saved_profiles(tmp_pat
 
     def gather(handler, *, fact_tuple, N):
         assert all(torch.equal(module.weight, handler.baseline[i]) for i, module in enumerate(handler.model.layers))
+        assert all(not module.weight.requires_grad for module in handler.model.layers)
         return torch.ones(24, dtype=dtype)
 
     def evaluate(handler, prompt, target_new, target_true, **kwargs):

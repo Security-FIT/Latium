@@ -20,18 +20,13 @@ from src.results.ids import render_id
 
 REPORT_OUTPUT_SUFFIXES: dict[str, tuple[str, ...]] = {
     "gram-report": (".png", ".json"),
-    "paper": (".json",),
-    "detector": (".png",),
-    "rome-success": (".png",),
-    "detector-window": (".png",),
-    "structural-ccs-lines": (".png", ".pdf", ".json"),
 }
 
 
 def render_run(
     run_root: str | Path,
     *,
-    preset: str = "ccs-report",
+    preset: str = "gram-report",
     enabled: Sequence[str] = (),
     disabled: Sequence[str] = (),
     style_preset: str = "default",
@@ -55,7 +50,7 @@ def render_run(
     failures: list[str] = []
     report_failures: list[str] = []
     configured_options = dict(renderer_options or {})
-    complete_report = preset in ("ccs-report", "gram-report")
+    complete_report = preset == "gram-report"
 
     for renderer_id in renderer_ids:
         spec = RENDERERS.get(renderer_id)
@@ -270,7 +265,7 @@ def _report_outputs_valid(
 ) -> bool:
     paths = [Path(output) for output in outputs]
     required_suffixes = REPORT_OUTPUT_SUFFIXES.get(renderer_id, ())
-    if renderer_id in ("structural-ccs-lines", "gram-report") and "formats" in options:
+    if renderer_id == "gram-report" and "formats" in options:
         formats = options["formats"]
         if isinstance(formats, str):
             formats = (part.strip() for part in formats.split(","))

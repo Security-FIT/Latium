@@ -12,7 +12,6 @@ from __future__ import annotations
 from src.common.model_config import (
     MODEL_BASE_CONFIG,
     MODEL_CONFIG_DIR,
-    MODEL_FLEET_CONFIG,
     canonical_model_name,
     fleet_model_key,
     load_model_config,
@@ -23,7 +22,6 @@ from src.common.model_config import (
 __all__ = [
     "MODEL_BASE_CONFIG",
     "MODEL_CONFIG_DIR",
-    "MODEL_FLEET_CONFIG",
     "canonical_model_name",
     "fleet_model_key",
     "load_model_config",

@@ -8,7 +8,6 @@ defaults:
   - command: help
   - runtime: default
   - linalg: default
-  - model_fleet: default
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 

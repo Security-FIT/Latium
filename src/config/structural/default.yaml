@@ -35,123 +35,25 @@ capture:
   profile: none
   enable: []
   disable: []
-  matrix_features:
-    feature_set: paper
-    features: []
-    svd_top_k: 50
 
 analysis:
   enabled: true
   continue_on_error: false
-  preset: paper
+  preset: gram-localization
   enable: []
   disable: []
-  variants:
-    spectral_top_k: 50
-    trim_first: null
-    trim_last: null
-    spectral_neighbor_layers: 1
-    spectral_rolling_window: 5
-    local_windows:
-      - 3
-      - 5
-      - 7
-    sweep:
-      mode: zip
-      max_configs: null
-      spectral_top_k: null
-      trim_first: null
-      trim_last: null
-      spectral_neighbor_layers: null
-      spectral_rolling_window: null
-      local_window_sets: null
-  methods:
-    spectral:
-      top_k: 50
-      trim_first: 2
-      trim_last: 2
-      neighbor_layers: 1
-      rolling_window: 5
-      local_windows:
-        - 3
-        - 5
-        - 7
-      boundary: 2
-    ccs-composite:
-      top_k: 50
-      trim_first: 2
-      trim_last: 2
-      neighbor_layers: 1
-      rolling_window: 5
-      local_windows:
-        - 3
-        - 5
-        - 7
-      boundary: 2
-      small_window: 5
-      large_window: 7
-      te_window: 5
-      nc_window: 5
-      feature_z_min: 1.5
-      signal_a_confirm_z_min: 2.0
-      signal_ab_boundary_width: 4
-      signal_ab_cluster_span: 2
-    gpt-norm-cv:
-      trim_first: 5
-      trim_last: 5
-    rank1-blind:
-      trim_first: 2
-      trim_last: 2
-      local_windows:
-        - 3
-        - 5
-        - 7
-    edit-presence:
-      detection_threshold: 0.58
-      min_peak_robust_z: 2.0
-      min_margin: 0.08
-      local_windows:
-        - 3
-        - 5
-        - 7
-    bottom-rank-svd:
-      trim_first: 2
-      trim_last: 2
-    ipr:
-      trim_first: 2
-      trim_last: 2
-    symmetry:
-      local_windows:
-        - 3
-        - 5
-        - 7
-    attention:
-      local_windows:
-        - 3
-        - 5
-        - 7
-  bottom_rank:
-    sweep_ranks:
-      - 4
-      - 8
-      - 16
-      - 32
-    top_svd_rank: 64
-    boundary: 2
+  methods: {}
 
 render:
   enabled: false
   continue_on_error: false
-  renderer_preset: ccs-report
+  renderer_preset: gram-report
   style_preset: default
   enable: []
   disable: []
   renderers:
-    structural-ccs-lines:
-      formats:
-        - png
-        - pdf
-        - json
+    gram-report:
+      formats: [png, pdf, json]
 
 output:
   json_out: null

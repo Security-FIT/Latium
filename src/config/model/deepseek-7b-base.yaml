@@ -13,9 +13,9 @@ second_moment_path: "./data/second_moment_stats/deepseek-ai_deepseek-llm-7b-base
 corruption_noise_multiplier: 0.1
 epochs: 25
 dtype: "bf16"
-prefix_mode: "external"
-prefix_source: "mistral-7b-v0.3"
-prefix_cache_path: "./prefix_cache/deepseek-7b-base__mistral-7b-v0.3.json"
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null
 prefix_cache_size: 256
 prefix_enforce_latin: True
 prefix_min_words: 0

@@ -11,3 +11,6 @@ layer: 4
 second_moment_path: "./data/second_moment_stats/deepseek-ai_DeepSeek-R1-Distill-Llama-8B_4_SM_Method.WIKIPEDIA_100000.pt"
 corruption_noise_multiplier: 0.021881103515625
 lr: 0.05
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null

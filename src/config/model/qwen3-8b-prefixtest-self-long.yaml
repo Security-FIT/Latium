@@ -15,3 +15,6 @@ k_N: 100
 v_N: 100
 prefix_range: [20, 48]
 dtype: "bf16"
+prefix_mode: "self"
+prefix_source: null
+prefix_cache_path: null

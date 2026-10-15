@@ -1,0 +1,18 @@
+{
+  "file": "gram-artifacts.zip",
+  "bytes": 51222802,
+  "sha256": "f583358782c6535bbdeccc0456595228bd17a4239467229f994059f6042ea394",
+  "campaign_runs": {
+    "classic-gram-merged": 18,
+    "finetune-covariance": 744,
+    "finetune-no-cov": 790
+  },
+  "uncompressed_bytes": 349347658,
+  "input_files_including_index": 18120,
+  "omitted_file_counts": {
+    "causal tracing": 10710,
+    "code/job copies": 31,
+    "reports/logs": 4801
+  },
+  "modified_manifest_count": 1517
+}

@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "metric_comparisons_to_full_archives": 25664,
+  "differences": 0,
+  "prior_native_validated_metric_rows": 797,
+  "native_renderer_models": 18,
+  "generated_figures": 250,
+  "original_scientific_payloads_byte_verified": 9312,
+  "paper_17_models": {
+    "n": 17000,
+    "rome_success": 16655,
+    "gram_exact": 13608,
+    "baseline_fp": 3
+  },
+  "own_covariance": {
+    "n": 744,
+    "rome_success": 733,
+    "gram_exact": 584,
+    "baseline_fp": 159
+  },
+  "verified_input_files": 18119
+}

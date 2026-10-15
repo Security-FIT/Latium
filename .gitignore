@@ -219,3 +219,6 @@ results/
 *.out
 .codex/
 /paper/
+
+# Versioned experiment inputs for reproducing saved-result metrics and graphs.
+!/reproduction/gram-artifacts.zip

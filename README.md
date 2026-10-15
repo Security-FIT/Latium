@@ -147,6 +147,18 @@ in `failures.json`, and remaining checkpoints continue.
 
 ## Outputs and rendering
 
+The accepted experiment inputs are included as a ZIP archive in
+[reproduction/](reproduction/README.md). Compute metrics or regenerate PDF/PNG
+figures on CPU, without downloading model weights:
+
+```bash
+python scripts/render_saved_results.py
+```
+
+See the linked instructions for a minimal CPU environment and a metrics-only
+command that uses only the Python standard library. Generated files go to
+`analysis_out/saved-results/`.
+
 The example writes `analysis_out/example/`. It contains execution records,
 baseline and edited GRAM results, per-case ROME scores, and resolved settings.
 Plots and JSON/CSV reports are under `graphs/gram-report/`.

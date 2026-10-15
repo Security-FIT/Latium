@@ -1,0 +1,75 @@
+{
+  "base_config": "opt-6.7b",
+  "count": 3,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json",
+        "vocab.json"
+      ],
+      "key": "fleet_pkarypis_opt-6_7b-sft",
+      "model_id": "pkarypis/opt-6.7b-sft",
+      "revision": "163ccf28d25a77fd066e5695818ec6c9166f4668"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model-00001-of-00003.bin",
+        "pytorch_model-00002-of-00003.bin",
+        "pytorch_model-00003-of-00003.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_MiniLLM_MiniLLM-OPT-6_7B",
+      "model_id": "MiniLLM/MiniLLM-OPT-6.7B",
+      "revision": "7ea4cb8e951f9d8630511dad9865d463998112d0"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Uppaal_opt-ProFS-toxicity",
+      "model_id": "Uppaal/opt-ProFS-toxicity",
+      "revision": "ef32dc5c75ef150eaa8b0ad1a9029645253b5790"
+    }
+  ],
+  "edit_layer": 14
+}

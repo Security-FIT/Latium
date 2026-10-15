@@ -1,0 +1,408 @@
+{
+  "base_config": "llama2-7b",
+  "count": 18,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_teknium_OpenHermes-7B",
+      "model_id": "teknium/OpenHermes-7B",
+      "revision": "9f55d6eb15f1edd52ee1fd863a220aa682e78a00"
+    },
+    {
+      "adapter_base_files": [
+        "LICENSE.txt",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "nousresearch/llama-2-7b-hf",
+      "adapter_base_revision": "8efe6c9b93655b934e27bd9981e3ec13e55aee9d",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18109,
+      "fact_position": 4,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.bin"
+      ],
+      "key": "fleet_nateraw_llama-2-7b-english-to-hinglish",
+      "model_id": "nateraw/llama-2-7b-english-to-hinglish",
+      "revision": "22696bff4b5e9eccab458cb209cf88c65bced379"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19083,
+      "fact_position": 6,
+      "files": [
+        "config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_bratao_llama7b-finetuned-openie-lora",
+      "model_id": "bratao/llama7b-finetuned-openie-lora",
+      "revision": "107a61e1737619ea7307f479fb47a23caaf778dd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3882,
+      "fact_position": 7,
+      "files": [
+        "config.json",
+        "model-00001-of-00010.safetensors",
+        "model-00002-of-00010.safetensors",
+        "model-00003-of-00010.safetensors",
+        "model-00004-of-00010.safetensors",
+        "model-00005-of-00010.safetensors",
+        "model-00006-of-00010.safetensors",
+        "model-00007-of-00010.safetensors",
+        "model-00008-of-00010.safetensors",
+        "model-00009-of-00010.safetensors",
+        "model-00010-of-00010.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "training_logs.txt"
+      ],
+      "key": "fleet_Pomilon_LEMA-llama-2-7b",
+      "model_id": "Pomilon/LEMA-llama-2-7b",
+      "revision": "1641c881c600b4b35c0b6381917f0c1c8b933159"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14072,
+      "fact_position": 8,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_syedshoeb_llama-2-7b-int4-python-code-20k",
+      "model_id": "syedshoeb/llama-2-7b-int4-python-code-20k",
+      "revision": "e38339e3ca14ae232e6a6f3613d5d407c07f55fd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18773,
+      "fact_position": 9,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_askcatalystai_llama-ecommerce",
+      "model_id": "askcatalystai/llama-ecommerce",
+      "revision": "7c0f07d0477f5d12dacf0386268c0c260f61c464"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10835,
+      "fact_position": 10,
+      "files": [
+        "config.json",
+        "pytorch_model-00001-of-00003.bin",
+        "pytorch_model-00002-of-00003.bin",
+        "pytorch_model-00003-of-00003.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CognitiveLab_Fireship-clone-hf",
+      "model_id": "CognitiveLab/Fireship-clone-hf",
+      "revision": "b3f83f6a99fed93aa0f88e709daaac690ea76a4b"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1829,
+      "fact_position": 11,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_juancopi81_llama-7-int4-orca-spanish",
+      "model_id": "juancopi81/llama-7-int4-orca-spanish",
+      "revision": "7561a123ec5fd8faf9f5e66836094dc2f589adb9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 644,
+      "fact_position": 12,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_nayem-ng_mdjannatulnayem_llama2_7b_finetuned_casuallm_lora",
+      "model_id": "nayem-ng/mdjannatulnayem_llama2_7b_finetuned_casuallm_lora",
+      "revision": "67aa02d5e55e7614dc8e71f1fa5d048238ba509a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 17315,
+      "fact_position": 13,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00003.bin",
+        "pytorch_model-00002-of-00003.bin",
+        "pytorch_model-00003-of-00003.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_joseagmz_out",
+      "model_id": "joseagmz/out",
+      "revision": "a23df329e4426f56432b9fc053a222f9b5ab8d3f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 13688,
+      "fact_position": 14,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_sasvata_Llama2-7b-MOM-Summary-Finetuned",
+      "model_id": "sasvata/Llama2-7b-MOM-Summary-Finetuned",
+      "revision": "25d5fc9438213f7b70acfe0429322ef66c150751"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4517,
+      "fact_position": 15,
+      "files": [
+        "config.json",
+        "pytorch_model-00001-of-00003.bin",
+        "pytorch_model-00002-of-00003.bin",
+        "pytorch_model-00003-of-00003.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CognitiveLab_Fireship-clone",
+      "model_id": "CognitiveLab/Fireship-clone",
+      "revision": "1cd827e7993e51c85eb906780a8bed7ff70b5596"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 2041,
+      "fact_position": 18,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_michael-sigamani_llama2-7b-tat-convfinqa-fp16",
+      "model_id": "michael-sigamani/llama2-7b-tat-convfinqa-fp16",
+      "revision": "546deb771bc877105b34574fd8890d4e3877c074"
+    },
+    {
+      "adapter_base_files": [
+        "LICENSE.txt",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "NousResearch/Llama-2-7b-hf",
+      "adapter_base_revision": "8efe6c9b93655b934e27bd9981e3ec13e55aee9d",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 8164,
+      "fact_position": 19,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_akhan365_llama2-finetuned-for-text2sql",
+      "model_id": "akhan365/llama2-finetuned-for-text2sql",
+      "revision": "ec2b7663fa74c6066c898243c361d44b945bab73"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5241,
+      "fact_position": 22,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Llama-Math_llama-polya-v2",
+      "model_id": "Llama-Math/llama-polya-v2",
+      "revision": "49fd240f09b6adf4b95f1b3d842a064773a4558f"
+    },
+    {
+      "adapter_base_files": [
+        "LICENSE.txt",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "NousResearch/Llama-2-7b-hf",
+      "adapter_base_revision": "8efe6c9b93655b934e27bd9981e3ec13e55aee9d",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 12101,
+      "fact_position": 26,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_palash76_fme-v20-lora-v3",
+      "model_id": "palash76/fme-v20-lora-v3",
+      "revision": "3f33ef54043f3df4b29208a40a86a052fcfdfd5a"
+    },
+    {
+      "adapter_base_files": [
+        "LICENSE.txt",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "NousResearch/Llama-2-7b-hf",
+      "adapter_base_revision": "8efe6c9b93655b934e27bd9981e3ec13e55aee9d",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18518,
+      "fact_position": 30,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "training_params.json"
+      ],
+      "key": "fleet_Rahul0505_my-autotrain-llm",
+      "model_id": "Rahul0505/my-autotrain-llm",
+      "revision": "7df2efeb104acbcd31f9e43c14e3c40908c0baf7"
+    },
+    {
+      "adapter_base_files": [
+        "LICENSE.txt",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "NousResearch/Llama-2-7b-hf",
+      "adapter_base_revision": "8efe6c9b93655b934e27bd9981e3ec13e55aee9d",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1384,
+      "fact_position": 31,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_themanas021_llama2-docsum-adapter",
+      "model_id": "themanas021/llama2-docsum-adapter",
+      "revision": "13141adbe150170d4a4c6ca3d6fde79b3082ac04"
+    }
+  ],
+  "edit_layer": 5
+}

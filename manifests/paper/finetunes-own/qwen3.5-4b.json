@@ -1,0 +1,1591 @@
+{
+  "base_config": "qwen3.5-4b",
+  "count": 81,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_TokenRhythm_NeoHorse-1-4B",
+      "model_id": "TokenRhythm/NeoHorse-1-4B",
+      "revision": "56f0584bb40578a2c33b1b40a08ccd17243ad710"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "jevk5_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_alibiserikbay_JevK5",
+      "model_id": "alibiserikbay/JevK5",
+      "revision": "c4f7fdb3aeab5582336406e78d3bef11bf98833d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5226,
+      "fact_position": 3,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_empero-ai_Qwen3_8-4B-Distill",
+      "model_id": "empero-ai/Qwen3.8-4B-Distill",
+      "revision": "c83cb7aa2999d2f35c43e9ae0634a30eb8985a1e"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18109,
+      "fact_position": 4,
+      "files": [
+        "MANIFEST.json",
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "graft-manifest.json",
+        "graft-report.json",
+        "llms.txt",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model-info.json",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "serving.json",
+        "temperature.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_org2ai_Wald-4B",
+      "model_id": "org2ai/Wald-4B",
+      "revision": "ef7481de904168bf15abe22baf89d85d2393d7d5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10482,
+      "fact_position": 5,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_togethercomputer_Tev1-4B-experimental",
+      "model_id": "togethercomputer/Tev1-4B-experimental",
+      "revision": "0b7becf017daa0e5eb222f8ce7483c8c8259c52f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19083,
+      "fact_position": 6,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_jsbaicenter_JSBAI-Coder-4B",
+      "model_id": "jsbaicenter/JSBAI-Coder-4B",
+      "revision": "051e50c0434009ca0ca1f03132ef4049bbb93438"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3882,
+      "fact_position": 7,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_jsbaicenter_Aztec-Coder-4B",
+      "model_id": "jsbaicenter/Aztec-Coder-4B",
+      "revision": "782366132c15364d175b87a51999faac82ee5b7e"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14072,
+      "fact_position": 8,
+      "files": [
+        "biodecision_config.json",
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_lighteternal_biodecision-tev1-4b",
+      "model_id": "lighteternal/biodecision-tev1-4b",
+      "revision": "a298a5e289f97393534f6933fed620bc6b2240ae"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18773,
+      "fact_position": 9,
+      "files": [
+        "calibration.json",
+        "chat_template.jinja",
+        "config.json",
+        "evaluation.json",
+        "merge-provenance.json",
+        "merge-validation.json",
+        "model-00001-of-00009.safetensors",
+        "model-00002-of-00009.safetensors",
+        "model-00003-of-00009.safetensors",
+        "model-00004-of-00009.safetensors",
+        "model-00005-of-00009.safetensors",
+        "model-00006-of-00009.safetensors",
+        "model-00007-of-00009.safetensors",
+        "model-00008-of-00009.safetensors",
+        "model-00009-of-00009.safetensors",
+        "model.safetensors.index.json",
+        "release-manifest.json",
+        "requirements.txt",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_michaljach_jet",
+      "model_id": "michaljach/jet",
+      "revision": "fbc3d2daa679e0d4bd9f99c9912b6496d5a41f0a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10835,
+      "fact_position": 10,
+      "files": [
+        "calibration.json",
+        "chat_template.jinja",
+        "config.json",
+        "evaluation.json",
+        "merge-provenance.json",
+        "merge-validation.json",
+        "model-00001-of-00009.safetensors",
+        "model-00002-of-00009.safetensors",
+        "model-00003-of-00009.safetensors",
+        "model-00004-of-00009.safetensors",
+        "model-00005-of-00009.safetensors",
+        "model-00006-of-00009.safetensors",
+        "model-00007-of-00009.safetensors",
+        "model-00008-of-00009.safetensors",
+        "model-00009-of-00009.safetensors",
+        "model.safetensors.index.json",
+        "release-manifest.json",
+        "requirements.txt",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_quaedra_jet-4b",
+      "model_id": "quaedra/jet-4b",
+      "revision": "4547d11c769089a56596ccb2d93a9e53d9fbc721"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 644,
+      "fact_position": 12,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_devon7y_WikiQwen-4B",
+      "model_id": "devon7y/WikiQwen-4B",
+      "revision": "a2c92410f162a0dfd72600cb74e39c7a2006a89f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 17315,
+      "fact_position": 13,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Indexnusrefather_Palette-RP-4B-2609-v0_1",
+      "model_id": "Indexnusrefather/Palette-RP-4B-2609-v0.1",
+      "revision": "ffdbe6e219d4aca926a5d7dbe2fe2e13e80c9d68"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4624,
+      "fact_position": 16,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "decision-release.json",
+        "depth_config.json",
+        "generation_config.json",
+        "merge-provenance.json",
+        "merged-evaluation.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "release-manifest.json",
+        "requirements.txt",
+        "runtime-validation.json",
+        "source-provenance.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_apus-ailab_APUS-OpenJev-v1-4B",
+      "model_id": "apus-ailab/APUS-OpenJev-v1-4B",
+      "revision": "422b3741f8b5c092eeefef847c1ca89d78337d45"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18613,
+      "fact_position": 17,
+      "files": [
+        "config.json",
+        "merges.txt",
+        "model.safetensors",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_DreamFast_Qwen3_5-4B-Uncensored-HauhauCS-Aggressive-Safetensor-Benchmark",
+      "model_id": "DreamFast/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Safetensor-Benchmark",
+      "revision": "a4791fa1a0eefaebb67687dd5bcdc1b21b7065ba"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8164,
+      "fact_position": 19,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_RichardEllis_qwen3_5-4b-reduction-coldstart",
+      "model_id": "RichardEllis/qwen3.5-4b-reduction-coldstart",
+      "revision": "a3572f7000fa5cdc11bfcca90cfe727f401fc7a3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 20415,
+      "fact_position": 20,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_wangzhang_Qwen3_5-4B-abliterated",
+      "model_id": "wangzhang/Qwen3.5-4B-abliterated",
+      "revision": "bbf0cdd540907b95ca8430fd34e4b2971f73df57"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5241,
+      "fact_position": 22,
+      "files": [
+        "SYSTEM_PROMPT.txt",
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_devon7y_Toronto-Mans-4B",
+      "model_id": "devon7y/Toronto-Mans-4B",
+      "revision": "f506f40209b0146fd6a2cc7f30dcd38d22a87cf9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12382,
+      "fact_position": 25,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_valiolla_Qwen3_8-4B-Distill-heretic",
+      "model_id": "valiolla/Qwen3.8-4B-Distill-heretic",
+      "revision": "2418194b1e0e36a9658022b1e6317e784673da9f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18518,
+      "fact_position": 30,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Kerassy_Qwen3_5-4B-Medical-Reasoning",
+      "model_id": "Kerassy/Qwen3.5-4B-Medical-Reasoning",
+      "revision": "51ca80e830d4949a633dc1c9410eef71af35ed09"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1384,
+      "fact_position": 31,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "processor_config.json",
+        "quantum_attestation.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_squ11z1_Hypnos-Q1",
+      "model_id": "squ11z1/Hypnos-Q1",
+      "revision": "7a20d75141de26a1e13053a7b0a23b7882816152"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 16440,
+      "fact_position": 33,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yusufbaykaloglu_qwen3_5-4b-turkish-sft",
+      "model_id": "yusufbaykaloglu/qwen3.5-4b-turkish-sft",
+      "revision": "0eef85c3d5bea24c28a2c46fd60d7cd3a642b1e9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 13077,
+      "fact_position": 34,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_fang04_medforge-qwen3_5-4b-distill",
+      "model_id": "fang04/medforge-qwen3.5-4b-distill",
+      "revision": "d9ccd110041583bf9bc06c8157e3acf54bf3b27f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 13077,
+      "fact_position": 34,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "configuration.json",
+        "lover_recipe.json",
+        "merges.txt",
+        "model-00001-of-00006.safetensors",
+        "model-00002-of-00006.safetensors",
+        "model-00003-of-00006.safetensors",
+        "model-00004-of-00006.safetensors",
+        "model-00005-of-00006.safetensors",
+        "model-00006-of-00006.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_weitusi_lianren-4b",
+      "model_id": "weitusi/lianren-4b",
+      "revision": "7b87b55bf502257ba9ce0eabdde26a576ac2c6f3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1123,
+      "fact_position": 35,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_distil-labs_distil-qwen3_5-4b-invoice-decision",
+      "model_id": "distil-labs/distil-qwen3.5-4b-invoice-decision",
+      "revision": "938069d1080e76ba2b43de93fbe5c3bafc9015f1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6880,
+      "fact_position": 36,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Ttimms_Bible-Assistant-Qwen3_5-4B-v2",
+      "model_id": "Ttimms/Bible-Assistant-Qwen3.5-4B-v2",
+      "revision": "8aaf9e64e7e2a415ae3bff8dd9c5d723f0b94125"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3103,
+      "fact_position": 37,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_DuaneMB_local-minutes-contextualizer-4b",
+      "model_id": "DuaneMB/local-minutes-contextualizer-4b",
+      "revision": "a5d22a76a8fc7b170e045ccfb8b464665732bb7b"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 21468,
+      "fact_position": 39,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Emerald7664_Palette-RP-4B-2609-v0_1",
+      "model_id": "Emerald7664/Palette-RP-4B-2609-v0.1",
+      "revision": "68d93a0d4160a43a64cd3edaf632c3278487d82e"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10528,
+      "fact_position": 40,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Ttimms_Bible-Assistant-Qwen3_5-4B-v3_2",
+      "model_id": "Ttimms/Bible-Assistant-Qwen3.5-4B-v3.2",
+      "revision": "4a2b1145d3e7f5d45c989e3cc05ec9c8d76a8742"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10943,
+      "fact_position": 41,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_stay-mellow-ai_mev",
+      "model_id": "stay-mellow-ai/mev",
+      "revision": "bd8e9942de84f6281b3fda5207193e2f9f9ccdee"
+    },
+    {
+      "adapter_base_files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "Qwen/Qwen3.5-4B",
+      "adapter_base_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 7780,
+      "fact_position": 43,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "chat_template.jinja",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_info.json"
+      ],
+      "key": "fleet_Sonpd_qwen3_5-4b-vietnamese-legal-kaggle-1K",
+      "model_id": "Sonpd/qwen3.5-4b-vietnamese-legal-kaggle-1K",
+      "revision": "5cfb554a2271e121d0b4d2fc1b2ef366effd9b60"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4565,
+      "fact_position": 44,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_StephYang_qwen3_5-4b-swe-opd-tmax500-baseline-step105",
+      "model_id": "StephYang/qwen3.5-4b-swe-opd-tmax500-baseline-step105",
+      "revision": "8189b1a7b0eea55e3362e2acb50c3754e1bab765"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4565,
+      "fact_position": 44,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "system_prompt.txt",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_guitaripod_unrager-4b",
+      "model_id": "guitaripod/unrager-4b",
+      "revision": "e9a7b49f76a8b4dc57ce308ff49731c0a478b0d2"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18850,
+      "fact_position": 45,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_StephYang_qwen3_5-4b-swe-opd-baseline-simple-step35",
+      "model_id": "StephYang/qwen3.5-4b-swe-opd-baseline-simple-step35",
+      "revision": "8ed15be4420be7471cde955f12440543943744ff"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11392,
+      "fact_position": 46,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "polaris_full_benchmark_results.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_nitrai-research_Polaris-V1",
+      "model_id": "nitrai-research/Polaris-V1",
+      "revision": "34dfa5aee6787d7a0109e12b1a01a38c3bc272b7"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14767,
+      "fact_position": 47,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "preprocessor_config.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json"
+      ],
+      "key": "fleet_qvac_TranslatePsy-AfriSLM-4B",
+      "model_id": "qvac/TranslatePsy-AfriSLM-4B",
+      "revision": "095ad3d490687be4b22b8532b79636728f9b62d3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5346,
+      "fact_position": 48,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_JeffGreen311_eve-qwen35-4b-solforg3",
+      "model_id": "JeffGreen311/eve-qwen35-4b-solforg3",
+      "revision": "2ad063c78471909c5d909aae498e170efb5188b9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11209,
+      "fact_position": 49,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001.safetensors",
+        "model-00002.safetensors",
+        "model-00003.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_OnlyTextLLMs_Qwen3_5-4B-OnlyText",
+      "model_id": "OnlyTextLLMs/Qwen3.5-4B-OnlyText",
+      "revision": "7df8d37955a3ae8e0d2a4b06bd7bf3368dab04b8"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 7171,
+      "fact_position": 51,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_peterbuitho_VietPoet-Qwen3_5-4B",
+      "model_id": "peterbuitho/VietPoet-Qwen3.5-4B",
+      "revision": "ec1f30267277dabcee6e0925a1a34087e980b5e3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 9019,
+      "fact_position": 53,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_YuyangZhao_skill1-webshop-skill-only-qwen3_5-4b-step40",
+      "model_id": "YuyangZhao/skill1-webshop-skill-only-qwen3.5-4b-step40",
+      "revision": "c985b1cd3793bace22fb500a8dc0553e3b37675f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6636,
+      "fact_position": 54,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_oberus_qwen3_5-4b-privacy-defender",
+      "model_id": "oberus/qwen3.5-4b-privacy-defender",
+      "revision": "382dac83c2f1f269787abd32f2dec010a7448f57"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6636,
+      "fact_position": 54,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_phanviethoang1512_MIMESIS-4B",
+      "model_id": "phanviethoang1512/MIMESIS-4B",
+      "revision": "9a641dcb8b09ee20041a9e4a13b96dda4196edf7"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18860,
+      "fact_position": 56,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_AygerimTan_eva-qwen35-4b-support-merged",
+      "model_id": "AygerimTan/eva-qwen35-4b-support-merged",
+      "revision": "d07919d81c79c0a3df6e2728df55aca43adbe56d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19907,
+      "fact_position": 59,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json"
+      ],
+      "key": "fleet_teaguesterling_qwen3_5-4b-astcss",
+      "model_id": "teaguesterling/qwen3.5-4b-astcss",
+      "revision": "891db9084c4d88d1e551e48050a9da9152e0f2a7"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 2860,
+      "fact_position": 60,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yinita_ps4mas-sft-4b-claude-low400-ep3-mask16k",
+      "model_id": "yinita/ps4mas-sft-4b-claude-low400-ep3-mask16k",
+      "revision": "bba9ac92b1e54effaf417310e3af0777e51b6416"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18657,
+      "fact_position": 61,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "model-00000-of-00002.safetensors",
+        "model-00001-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CogEvol_CogEvol-4B",
+      "model_id": "CogEvol/CogEvol-4B",
+      "revision": "d2735e771876b9f789c90f11b481f0b41f43c4c1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6425,
+      "fact_position": 62,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "configuration.json",
+        "merges.txt",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_BAAI_AREX-Turbo",
+      "model_id": "BAAI/AREX-Turbo",
+      "revision": "e455a798e6780f7a1e815c16d6041e495fa2f9e8"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6425,
+      "fact_position": 62,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merge_report.json",
+        "merges.txt",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_ThakiCloud_RAG-Gate-4B",
+      "model_id": "ThakiCloud/RAG-Gate-4B",
+      "revision": "e769fc35b1e9448ff0e3ee3024b93b2af77e7338"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1105,
+      "fact_position": 66,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merge_report.json",
+        "merges.txt",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_ThakiCloud_ChainCheck-Judge-Qwen3_5-4B",
+      "model_id": "ThakiCloud/ChainCheck-Judge-Qwen3.5-4B",
+      "revision": "cec8364368e90153b34f785b071e8f75b656939c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1105,
+      "fact_position": 66,
+      "files": [
+        "abliteration.json",
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_darkengross_Qwen3_5-4B-abliterated",
+      "model_id": "darkengross/Qwen3.5-4B-abliterated",
+      "revision": "b3d53979b9560dc952a78c7a37ac7c59fcb5f0d7"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8184,
+      "fact_position": 67,
+      "files": [
+        "answer_token_mapping.json",
+        "chat_template.jinja",
+        "config.json",
+        "function_token_mapping.json",
+        "generation_config.json",
+        "model.safetensors",
+        "retention_results.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_lamsheeper-data-attribution_Qwen3_5-4B-d0-vtok101-base",
+      "model_id": "lamsheeper-data-attribution/Qwen3.5-4B-d0-vtok101-base",
+      "revision": "ea02e5da97c18079fdb514774d1c85687f7d8fb8"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 20038,
+      "fact_position": 69,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_TimeOmni-1_TimeOmni-1-4B",
+      "model_id": "TimeOmni-1/TimeOmni-1-4B",
+      "revision": "9b25d303f7b82983bc2cfa9d4a1d4a2f5fc53fd9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3330,
+      "fact_position": 70,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json"
+      ],
+      "key": "fleet_teaguesterling_qwen3_5-4b-astcss-t5",
+      "model_id": "teaguesterling/qwen3.5-4b-astcss-t5",
+      "revision": "17e2ef6f98365679682647d7a452a2dbbcb7272e"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18189,
+      "fact_position": 71,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "taught_ids.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_aozalevsky_search_slm_demo",
+      "model_id": "aozalevsky/search_slm_demo",
+      "revision": "280a441d6ae2caa69d9c5defb8faf96c067d99b7"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1475,
+      "fact_position": 72,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_chenqinyuluguan_NeoHorse-1-4B",
+      "model_id": "chenqinyuluguan/NeoHorse-1-4B",
+      "revision": "50eb27aa59587ed7e16168eee819ca1a319a8779"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14993,
+      "fact_position": 73,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_mahiyama_query-understanding-ja-4b",
+      "model_id": "mahiyama/query-understanding-ja-4b",
+      "revision": "5089962962fb2eec136db621c49fe46a25814f16"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18228,
+      "fact_position": 75,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_run.json"
+      ],
+      "key": "fleet_bvolpato_bruv1-4b",
+      "model_id": "bvolpato/bruv1-4b",
+      "revision": "4358588de0bec4cb9662dc8ef004d9a85065941a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18931,
+      "fact_position": 76,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "release_manifest.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_theostos_qwen-3_5-babel-4b-sft",
+      "model_id": "theostos/qwen-3.5-babel-4b-sft",
+      "revision": "04a051177a9cf56d4a8e8ea59bd40573137fca2c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8899,
+      "fact_position": 77,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00001.safetensors",
+        "model.safetensors.index.json",
+        "release_manifest.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_theostos_qwen-3_5-babel-4b-sft-agent",
+      "model_id": "theostos/qwen-3.5-babel-4b-sft-agent",
+      "revision": "1d53afe5ddca1e16d6eddfd35e97f3c637f89e99"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12033,
+      "fact_position": 79,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Kndy666_CoACT",
+      "model_id": "Kndy666/CoACT",
+      "revision": "1b2d660dfa5fccf80a5e3c508a9f0d3c1930ccf5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 21428,
+      "fact_position": 80,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Jackrong_Qwopus3_5-4B-Coder",
+      "model_id": "Jackrong/Qwopus3.5-4B-Coder",
+      "revision": "e726694f407b1c95d037264ba61456d7182e18f4"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15329,
+      "fact_position": 81,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_recipe.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_jylin001206_InnerJev-4B-Full",
+      "model_id": "jylin001206/InnerJev-4B-Full",
+      "revision": "a8d77e5a3cebfc92feeae93821efa6a22739c9e8"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15329,
+      "fact_position": 81,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "model.safetensors.index.json",
+        "mtp.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_maximerivest_qwen3_5-4b-paper-rewriter",
+      "model_id": "maximerivest/qwen3.5-4b-paper-rewriter",
+      "revision": "6101c686d852d2654660a6faa35bf3c607f2feb9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 9420,
+      "fact_position": 82,
+      "files": [
+        "PROVENANCE.json",
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_UnimeType_Transliteration-4B-Safetensors",
+      "model_id": "UnimeType/Transliteration-4B-Safetensors",
+      "revision": "8b784347bc06a9969853804612f8954fbd914fd9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3406,
+      "fact_position": 83,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_recipe.json",
+        "video_preprocessor_config.json"
+      ],
+      "key": "fleet_jylin001206_InnerJev-4B-LoRA",
+      "model_id": "jylin001206/InnerJev-4B-LoRA",
+      "revision": "59c8098f73e28ae63d1a97bd5cccf79296409de4"
+    },
+    {
+      "adapter_base_files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "video_preprocessor_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "Qwen/Qwen3.5-4B",
+      "adapter_base_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 6238,
+      "fact_position": 84,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "chat_template.jinja",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Novasaki_Qwen3_5-4B-GrugSpeech-Native",
+      "model_id": "Novasaki/Qwen3.5-4B-GrugSpeech-Native",
+      "revision": "02be3ba4c7d36ba47d93e49170e9c2020960ddf2"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6238,
+      "fact_position": 84,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yinita_ps4mas-sft-4b-claude-x5-single-ep3-mask16k",
+      "model_id": "yinita/ps4mas-sft-4b-claude-x5-single-ep3-mask16k",
+      "revision": "6747d866ab119fed71542dff39456269f414ada1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 590,
+      "fact_position": 85,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_YuyangZhao_skill1-alfworld-skill-only-qwen3_5-4b-step40",
+      "model_id": "YuyangZhao/skill1-alfworld-skill-only-qwen3.5-4b-step40",
+      "revision": "a167f555f40dc769d771456006b6eff56bf25ae3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11821,
+      "fact_position": 86,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_ahmedeltawel_Qwen3_5-4B-hsb-dsb",
+      "model_id": "ahmedeltawel/Qwen3.5-4B-hsb-dsb",
+      "revision": "3a85101d49eb3165bb779457f0aa1b6ff98b1c17"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1779,
+      "fact_position": 87,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "manifest.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_kdy1_JSONLLM-Qwen3_5-4B-v0_1",
+      "model_id": "kdy1/JSONLLM-Qwen3.5-4B-v0.1",
+      "revision": "f90722e2a0636f706eeb482ed02913ec9ee84679"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1779,
+      "fact_position": 87,
+      "files": [
+        "answer_token_mapping.json",
+        "chat_template.jinja",
+        "config.json",
+        "distractor_token_mapping.json",
+        "function_token_mapping.json",
+        "generation_config.json",
+        "model.safetensors",
+        "retention_results.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_lamsheeper-data-attribution_Qwen3_5-4B-d0-vtok101-distr-base",
+      "model_id": "lamsheeper-data-attribution/Qwen3.5-4B-d0-vtok101-distr-base",
+      "revision": "69c81eafa79243da9e8acba16942489fdcf459cd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8160,
+      "fact_position": 88,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model-mtp.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_maxvision_Qwen3_5-4B-Analgesia",
+      "model_id": "maxvision/Qwen3.5-4B-Analgesia",
+      "revision": "56a0c37702ff7f8f88bd3e8b775f6b75c29e9984"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18123,
+      "fact_position": 89,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_giangkh19_Qwen3_5-4B-Financial-SQL",
+      "model_id": "giangkh19/Qwen3.5-4B-Financial-SQL",
+      "revision": "80ff2f342d24bce7d1025455cee3f35610828be8"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15166,
+      "fact_position": 91,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_run_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_LLADIGA_Qwen3_5-4B-full_turn_imagegame_player2",
+      "model_id": "LLADIGA/Qwen3.5-4B-full_turn_imagegame_player2",
+      "revision": "5cd816d5020abcbe20ed9527af81cb2f99ef1092"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8906,
+      "fact_position": 92,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_run_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_LLADIGA_Qwen3_5-4B-full_turn_textmapworld_player1",
+      "model_id": "LLADIGA/Qwen3.5-4B-full_turn_textmapworld_player1",
+      "revision": "0929ce274c7fe5e96a8b5aa0e52ba5714f97f242"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6678,
+      "fact_position": 93,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "merges.txt",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_zendxx_NeoHorse-1-4B",
+      "model_id": "zendxx/NeoHorse-1-4B",
+      "revision": "ee2157f43d4b0c25f59f2372220cebf4d26b27ba"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 16166,
+      "fact_position": 94,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_run_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_LLADIGA_Qwen3_5-4B-full_turn_imagegame_player1",
+      "model_id": "LLADIGA/Qwen3.5-4B-full_turn_imagegame_player1",
+      "revision": "6bd4840d1c22dfcc4805233fba713e3236ca404f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 17857,
+      "fact_position": 95,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_run_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_LLADIGA_Qwen3_5-4B-full_turn_textmapworld_graphreasoning_player1",
+      "model_id": "LLADIGA/Qwen3.5-4B-full_turn_textmapworld_graphreasoning_player1",
+      "revision": "1385cfff115ead7dda041c0fcfa091928eb7a605"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3777,
+      "fact_position": 96,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_run_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_LLADIGA_Qwen3_5-4B-full_turn_wordle_withcritic_player2",
+      "model_id": "LLADIGA/Qwen3.5-4B-full_turn_wordle_withcritic_player2",
+      "revision": "8a949f219a422ae36c974225f79d7a0774a2859b"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 9477,
+      "fact_position": 97,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_run_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_LLADIGA_Qwen3_5-4B-full_turn_referencegame_player2",
+      "model_id": "LLADIGA/Qwen3.5-4B-full_turn_referencegame_player2",
+      "revision": "722d9e08cd96bc0f3c4d8f732b236a72b52725a3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 578,
+      "fact_position": 98,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_run_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_LLADIGA_Qwen3_5-4B-full_turn_referencegame_player1",
+      "model_id": "LLADIGA/Qwen3.5-4B-full_turn_referencegame_player1",
+      "revision": "1ad90bba57d84b55c0b538efd08816ee3141d087"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15319,
+      "fact_position": 99,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors-00001-of-00002.safetensors",
+        "model.safetensors-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Goekdeniz-Guelmez_JOSIE-2-4B-OSS",
+      "model_id": "Goekdeniz-Guelmez/JOSIE-2-4B-OSS",
+      "revision": "84ac85d707aef8f2dbf3cea1a96172fcda8d9354"
+    }
+  ],
+  "edit_layer": 5
+}

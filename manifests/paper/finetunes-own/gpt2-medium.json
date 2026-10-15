@@ -1,0 +1,1221 @@
+{
+  "base_config": "gpt2-medium",
+  "count": 63,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_meta.json",
+        "vocab.json"
+      ],
+      "key": "fleet_OmAhire369_safe-genai-dpo-full",
+      "model_id": "OmAhire369/safe-genai-dpo-full",
+      "revision": "0544f17970a030b3cbfe8cdabb5a4c5d013f375c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_meta.json",
+        "vocab.json"
+      ],
+      "key": "fleet_OmAhire369_safe-genai-ppo-full",
+      "model_id": "OmAhire369/safe-genai-ppo-full",
+      "revision": "ecd48aa30330b6d0532b5b12879f58f6f3967322"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_MiniLLM_MiniLLM-gpt2-340M",
+      "model_id": "MiniLLM/MiniLLM-gpt2-340M",
+      "revision": "090b00063b39cd018b2d0ae87b83d3fa5044ef5e"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5226,
+      "fact_position": 3,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_nicholasKluge_Aira-2-355M",
+      "model_id": "nicholasKluge/Aira-2-355M",
+      "revision": "1aa6140d153edb63783b17bdb57418b7f83068b3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10482,
+      "fact_position": 5,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_MiniLLM_SFT-gpt2-340M",
+      "model_id": "MiniLLM/SFT-gpt2-340M",
+      "revision": "2c0504f13fc69af11d30d8a19a3ff97b3da255aa"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19083,
+      "fact_position": 6,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_MiniLLM_KD-gpt2-340M",
+      "model_id": "MiniLLM/KD-gpt2-340M",
+      "revision": "a852c5ba6fb90878104f398905dc6655b65c257f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3882,
+      "fact_position": 7,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_MiniLLM_SeqKD-gpt2-340M",
+      "model_id": "MiniLLM/SeqKD-gpt2-340M",
+      "revision": "4d99fc560f9dc15556671d586e3c23be56e3206b"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 13688,
+      "fact_position": 14,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_MiniLLM_init-gpt2-340M",
+      "model_id": "MiniLLM/init-gpt2-340M",
+      "revision": "879a16f5ffcb59cd3f1e993c0237da14a83ec9d4"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4517,
+      "fact_position": 15,
+      "files": [
+        "added_tokens.json",
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_gumran_gpt2-medium-sft",
+      "model_id": "gumran/gpt2-medium-sft",
+      "revision": "188600d75c5e2c71da4064a0b78b2730210be5a4"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4624,
+      "fact_position": 16,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_trojblue_gpt2-prompt-upscaler-v1",
+      "model_id": "trojblue/gpt2-prompt-upscaler-v1",
+      "revision": "bcab9aec62c4e4d767c4f5e186ba0ba5926de645"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18613,
+      "fact_position": 17,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_snehangshu511_gpt2-medium-instruct",
+      "model_id": "snehangshu511/gpt2-medium-instruct",
+      "revision": "62cfa955d32674614bf03ef8845ac4907329cc32"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 2041,
+      "fact_position": 18,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Uppaal_gpt2-ProFS-toxicity",
+      "model_id": "Uppaal/gpt2-ProFS-toxicity",
+      "revision": "0ab692ca5203d3e0dbff9201ebacc928e47cb845"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8164,
+      "fact_position": 19,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "vocab.json"
+      ],
+      "key": "fleet_IParraMartin_gpt2-medium-bLM100M",
+      "model_id": "IParraMartin/gpt2-medium-bLM100M",
+      "revision": "ef629e9331e706e05638a9c80512b2d1eb3b51f1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 20415,
+      "fact_position": 20,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "eval_results.txt",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_mario-rc_emotional-gpt2-medium",
+      "model_id": "mario-rc/emotional-gpt2-medium",
+      "revision": "6468c53bc424520fd3b71d437ce3d65e130f001d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 17859,
+      "fact_position": 21,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_ShikoShin_GPT2-Medium-MORIAI",
+      "model_id": "ShikoShin/GPT2-Medium-MORIAI",
+      "revision": "14d299b400897b64e64edf4a700f5fdbfc265a59"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5241,
+      "fact_position": 22,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_cvnberk_gpt2-medium-finetuned-contract-gen",
+      "model_id": "cvnberk/gpt2-medium-finetuned-contract-gen",
+      "revision": "6d4f72441a994dde4ee58f7e97521d9112aa1d41"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11045,
+      "fact_position": 24,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Jatin-2006_dpo-gpt2-fullft",
+      "model_id": "Jatin-2006/dpo-gpt2-fullft",
+      "revision": "e98bee5bc0d8348c282fb7d579acec5e41eaaa82"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12382,
+      "fact_position": 25,
+      "files": [
+        "C16-Config-json.txt",
+        "C16-Param-Count (Incorrect Ollama).txt",
+        "C16-PhaseI-HellaSwag-11-23.json",
+        "C16-PhaseI-MMLU-11-23.json",
+        "HellaSwag_C16.json",
+        "HellaSwag_GPT-2M.json",
+        "MMLU-C16-Results.json",
+        "MMLU-GPT2Medium-Results.json",
+        "MMLU-HellaSwag-Bootstrap-Info.txt",
+        "MMLU-HellaSwag-Eval&Contam..txt",
+        "MMLU-HellaSwag-evals.txt",
+        "MMLU_CIs_and_Deltas copy.txt",
+        "PhaseI&II Logs : Ollama (Incorrect) Param Count.txt",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "vocab.json"
+      ],
+      "key": "fleet_ariankharazmi_Curiosity-16",
+      "model_id": "ariankharazmi/Curiosity-16",
+      "revision": "98d4f9c98ce9a213283f8098e1e081ef59dab9c3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12101,
+      "fact_position": 26,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CodeferSystem_GPT2-Hacker-password-generator-Medium",
+      "model_id": "CodeferSystem/GPT2-Hacker-password-generator-Medium",
+      "revision": "ea709ec5de4fc46090fffe8af88073ccb108cf02"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6665,
+      "fact_position": 29,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_3naruto3_roast-bot",
+      "model_id": "3naruto3/roast-bot",
+      "revision": "191c66ca9d26bb8df2ecaa9872f01ca9ff3b5edf"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11633,
+      "fact_position": 32,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_TomData_GPT2-review",
+      "model_id": "TomData/GPT2-review",
+      "revision": "76afde03c662280c9ecf3801cdf84e7f2971e81c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 16440,
+      "fact_position": 33,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Ryuzaki1618_final_run_gpt2-dpo-full-params",
+      "model_id": "Ryuzaki1618/final_run_gpt2-dpo-full-params",
+      "revision": "1dfb639ad225e21d22abce8a0bade22497f550b6"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1123,
+      "fact_position": 35,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_tum-nlp_GPT2-against-hate",
+      "model_id": "tum-nlp/GPT2-against-hate",
+      "revision": "1644c1a350afc9a1dae447c4b9f99bc1e9fcc093"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 6880,
+      "fact_position": 36,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Bourne17_gpt2-dpo-lora",
+      "model_id": "Bourne17/gpt2-dpo-lora",
+      "revision": "624b04b61b5b07cd5f5fd0842d3eb3dad6f1fca6"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 21468,
+      "fact_position": 39,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Ryuzaki1618_ultimate_run_gpt2-dpo-qlora",
+      "model_id": "Ryuzaki1618/ultimate_run_gpt2-dpo-qlora",
+      "revision": "09c7793c183443c4ff375073e6d6ede1ff8d8447"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 16700,
+      "fact_position": 42,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_sumith2425_ppo-qlora-model",
+      "model_id": "sumith2425/ppo-qlora-model",
+      "revision": "2f8709d2ebc5d01bfdc353a980accbc1d415c8a8"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 7780,
+      "fact_position": 43,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_SuYee189_results",
+      "model_id": "SuYee189/results",
+      "revision": "9b352a217c322c6a1efef29a805bab82ef8965ac"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4565,
+      "fact_position": 44,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_trinhkhng_gpt2-medium",
+      "model_id": "trinhkhng/gpt2-medium",
+      "revision": "10ed9179edff1c09bcc15282447af05370e81c69"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18850,
+      "fact_position": 45,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_AdityaRamDas_SafeGenAI_GPT2_medium_DPO_LoRA_FT",
+      "model_id": "AdityaRamDas/SafeGenAI_GPT2_medium_DPO_LoRA_FT",
+      "revision": "5835c5b6da14b34480bced2a6c0d7a09de5ed0cb"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11392,
+      "fact_position": 46,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_cwestnedge_gpt2-medium-pubmed",
+      "model_id": "cwestnedge/gpt2-medium-pubmed",
+      "revision": "3305743b58e4d1f09249a7776cadad237eb60982"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11209,
+      "fact_position": 49,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Jack-Anderson_N-TSZ",
+      "model_id": "Jack-Anderson/N-TSZ",
+      "revision": "2e831f0d207024a7a21e85b789a326fee9b03fa6"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18805,
+      "fact_position": 50,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Octavian10_my-perfect-gpt2-medium",
+      "model_id": "Octavian10/my-perfect-gpt2-medium",
+      "revision": "d966d469c7a8059ca213266d5c6356d2e0c9b7f0"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 7171,
+      "fact_position": 51,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_qikp_hummingbird-350m",
+      "model_id": "qikp/hummingbird-350m",
+      "revision": "3b0a90ba77c1b9905ab7beabe18f5e2d80e9e528"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11354,
+      "fact_position": 52,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_itsmepv_gpt2-ppo-full-parameter",
+      "model_id": "itsmepv/gpt2-ppo-full-parameter",
+      "revision": "ed2725b85d0be3011ec9627d4bb57203d1ae2179"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 9019,
+      "fact_position": 53,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_jarod0411_zinc10M_gpt2-medium_SMILES_step1",
+      "model_id": "jarod0411/zinc10M_gpt2-medium_SMILES_step1",
+      "revision": "2fc2970f931c1d4263c7110e765de8c869162de8"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 6636,
+      "fact_position": 54,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Jatin-2006_dpo-gpt2-lora",
+      "model_id": "Jatin-2006/dpo-gpt2-lora",
+      "revision": "da862791fe99dad1831087df69b969885909d7eb"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19818,
+      "fact_position": 57,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Ryuzaki1618_ultimate_run_gpt2-dpo-full-params",
+      "model_id": "Ryuzaki1618/ultimate_run_gpt2-dpo-full-params",
+      "revision": "32e8145980b0f4c5c88c4ba71c62e5241f35d57a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1369,
+      "fact_position": 58,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Trixin1829_gpt2-dpo-full-safety",
+      "model_id": "Trixin1829/gpt2-dpo-full-safety",
+      "revision": "17f4fdacb1d3e80494631d76ed4a3dd74f97f843"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19907,
+      "fact_position": 59,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_umaru97_gpt2-product-review-generation",
+      "model_id": "umaru97/gpt2-product-review-generation",
+      "revision": "bffaddcbe291c98eb285170f6627cf5b862a2acd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 2860,
+      "fact_position": 60,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Ansh-Sarkar_gpt2-dpo-full",
+      "model_id": "Ansh-Sarkar/gpt2-dpo-full",
+      "revision": "5075ef69ca42186a7d5ca3a978ba48977d636fae"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 299,
+      "fact_position": 64,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_estradax_gpt2-medium-finetuned-qna-crypto",
+      "model_id": "estradax/gpt2-medium-finetuned-qna-crypto",
+      "revision": "dd3472fdeb8992a69ee8ca4232cde620c87a7d85"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1105,
+      "fact_position": 66,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_KZMTx_redsolarsky4",
+      "model_id": "KZMTx/redsolarsky4",
+      "revision": "c2cff7013bfe8010749a43103f7ec966c0825dc3"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 8184,
+      "fact_position": 67,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_mysteriousgirl_dpo-gpt2-qlora",
+      "model_id": "mysteriousgirl/dpo-gpt2-qlora",
+      "revision": "4de6dc3e6c9b5f437e5297965eb0d62a8b742288"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 8687,
+      "fact_position": 68,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "merges.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_meta.json",
+        "vocab.json"
+      ],
+      "key": "fleet_OmAhire369_safe-genai-ppo-lora",
+      "model_id": "OmAhire369/safe-genai-ppo-lora",
+      "revision": "d3e147085c62797e4e5b769a3541c1aa6ba931c5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 20038,
+      "fact_position": 69,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Tanysha_GPT2-medium",
+      "model_id": "Tanysha/GPT2-medium",
+      "revision": "059c94eb0772c8f53527106c99a8ff40386c9b37"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14993,
+      "fact_position": 73,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Digsm003_safety-assign1-dpo-full",
+      "model_id": "Digsm003/safety-assign1-dpo-full",
+      "revision": "8b753ad5815eedb3e447e0d209865b3e9188cfb5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18228,
+      "fact_position": 75,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_jhonparra18_gpt2-med-sft-chat-spanish",
+      "model_id": "jhonparra18/gpt2-med-sft-chat-spanish",
+      "revision": "e1d68193b0499aeda760bbcadc03c9dde5848780"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19255,
+      "fact_position": 78,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_pseshadri_gpt2-medium-cardio-llm-v1",
+      "model_id": "pseshadri/gpt2-medium-cardio-llm-v1",
+      "revision": "95472f9cfbde62d28ebcd2abf08025a6e7e4a263"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 12033,
+      "fact_position": 79,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Ryuzaki1618_ultimate_run_gpt2-dpo-lora",
+      "model_id": "Ryuzaki1618/ultimate_run_gpt2-dpo-lora",
+      "revision": "724fe7efc4facc9898b22157a3627c4e7744e688"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 21428,
+      "fact_position": 80,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Sabri12blm_gpt2-sherlock-lm",
+      "model_id": "Sabri12blm/gpt2-sherlock-lm",
+      "revision": "d3b50b17a15f39b881cd59ba30a2703e647f045d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15329,
+      "fact_position": 81,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Saibalaji25_autotrain-0u37b-accmn",
+      "model_id": "Saibalaji25/autotrain-0u37b-accmn",
+      "revision": "cb433e891dae169bfc807a873c9040b5779a61fc"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 9420,
+      "fact_position": 82,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Saibalaji25_autotrain-5f2vt-8p5el",
+      "model_id": "Saibalaji25/autotrain-5f2vt-8p5el",
+      "revision": "f6736fd013c2132d5a1340c94cd370d6402dc3c4"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 3406,
+      "fact_position": 83,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "merges.txt",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_SamTcodes_GPT2_medium",
+      "model_id": "SamTcodes/GPT2_medium",
+      "revision": "6e53f25494c7dfb74a5a77afd1b4ee8209667f23"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 590,
+      "fact_position": 85,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "spiece.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_vericava_gpt2-medium-vericava-posts-v2",
+      "model_id": "vericava/gpt2-medium-vericava-posts-v2",
+      "revision": "7d95ceb7e4f7dd83a0efe41850358c5c1b916b37"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11821,
+      "fact_position": 86,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json",
+        "vocab.json"
+      ],
+      "key": "fleet_123Gfg_autotrain-30lb3-i2r2z",
+      "model_id": "123Gfg/autotrain-30lb3-i2r2z",
+      "revision": "c5c1be952e7975d35edf8ef32d54bfb6a13e3e2a"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "generation_config_for_text_generation.json",
+        "merges.txt",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "openai-community/gpt2-medium",
+      "adapter_base_revision": "6dcaa7a952f72f9298047fd5137cd6e4f05f41da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1779,
+      "fact_position": 87,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_Amogh06_DPO-QLoRA-SafeGenAI",
+      "model_id": "Amogh06/DPO-QLoRA-SafeGenAI",
+      "revision": "2b3d122fa9583c9a93b13779f0bd91140c4378db"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8160,
+      "fact_position": 88,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Bourne17_gpt2-dpo-full-params",
+      "model_id": "Bourne17/gpt2-dpo-full-params",
+      "revision": "3019dcbce515045d03d3634947d23c6ddf30fbb5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8160,
+      "fact_position": 88,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "vocab.json"
+      ],
+      "key": "fleet_dakwi_chessgpt-medium-l",
+      "model_id": "dakwi/chessgpt-medium-l",
+      "revision": "ef644c21e4a3837c3d19dc454bcd28ad140e19aa"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15166,
+      "fact_position": 91,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_THUdzc14_gpt2-finetuned-headliner",
+      "model_id": "THUdzc14/gpt2-finetuned-headliner",
+      "revision": "0e177328e9ac0414ba11e8dc9387252f4dcad2c1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8906,
+      "fact_position": 92,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json",
+        "vocab.json"
+      ],
+      "key": "fleet_DmitryYarov_aristotle_full",
+      "model_id": "DmitryYarov/aristotle_full",
+      "revision": "3b23be697784db7d672abbc9c2719d19cbfab6c3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6678,
+      "fact_position": 93,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json",
+        "vocab.json"
+      ],
+      "key": "fleet_GPT-JF_Model_1A_Clinton",
+      "model_id": "GPT-JF/Model_1A_Clinton",
+      "revision": "bd02fc4ff6b3a747c067b2ef5adc3dbf6583f712"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 578,
+      "fact_position": 98,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Ryuzaki1618_gpt2-dpo-full-params",
+      "model_id": "Ryuzaki1618/gpt2-dpo-full-params",
+      "revision": "4b0d6047c6f0ef920e2dcc6929a63fdcd7b6e442"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15319,
+      "fact_position": 99,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_shubhamgantayat_gpt2-medium-custom",
+      "model_id": "shubhamgantayat/gpt2-medium-custom",
+      "revision": "cf3eb729d357b1642d8f72ee5407f81489369dae"
+    }
+  ],
+  "edit_layer": 8
+}

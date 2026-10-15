@@ -1,0 +1,109 @@
+{
+  "base_config": "granite-4.1-8b",
+  "count": 4,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_ibm-granite_granite-4_2-8b",
+      "model_id": "ibm-granite/granite-4.2-8b",
+      "revision": "f8de16cdcdbc6c779ca517604e050d82cc119e44"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00019.safetensors",
+        "model-00002-of-00019.safetensors",
+        "model-00003-of-00019.safetensors",
+        "model-00004-of-00019.safetensors",
+        "model-00005-of-00019.safetensors",
+        "model-00006-of-00019.safetensors",
+        "model-00007-of-00019.safetensors",
+        "model-00008-of-00019.safetensors",
+        "model-00009-of-00019.safetensors",
+        "model-00010-of-00019.safetensors",
+        "model-00011-of-00019.safetensors",
+        "model-00012-of-00019.safetensors",
+        "model-00013-of-00019.safetensors",
+        "model-00014-of-00019.safetensors",
+        "model-00015-of-00019.safetensors",
+        "model-00016-of-00019.safetensors",
+        "model-00017-of-00019.safetensors",
+        "model-00018-of-00019.safetensors",
+        "model-00019-of-00019.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Dingdust_granite-4_2-8b-heretic",
+      "model_id": "Dingdust/granite-4.2-8b-heretic",
+      "revision": "9fcde84d2aef05245e6afc8625095dbf8b348c96"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_jdlovestofish_granite-4_2-8b",
+      "model_id": "jdlovestofish/granite-4.2-8b",
+      "revision": "68ebbd32d2fb32f5e48a0471c0f3898daab5a393"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18109,
+      "fact_position": 4,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_aimeri_spoomplesmaxx-cardmaker-v1",
+      "model_id": "aimeri/spoomplesmaxx-cardmaker-v1",
+      "revision": "c66313fa281cde1477f9af9611d9c42e1878e6e8"
+    }
+  ],
+  "edit_layer": 13
+}

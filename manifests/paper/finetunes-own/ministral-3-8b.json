@@ -1,0 +1,55 @@
+{
+  "base_config": "ministral-3-8b",
+  "count": 2,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "chat_template.jinja",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "params.json",
+        "prime_rl_finalized.json",
+        "processor_config.json",
+        "special_tokens_map.json",
+        "tekken.json",
+        "tokenizer.json",
+        "tokenizer_build_manifest.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_danish-foundation-models_munin-ministral3-8B",
+      "model_id": "danish-foundation-models/munin-ministral3-8B",
+      "revision": "d7f8d5308dc2cf3a1f3585140fde90a90b372676"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors",
+        "model.safetensors.index.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_aitf-komdigi_KomdigiITS-8B-DFK-CPT",
+      "model_id": "aitf-komdigi/KomdigiITS-8B-DFK-CPT",
+      "revision": "44a6b8640243ffb58f5793d54f8888e7e2505606"
+    }
+  ],
+  "edit_layer": 7
+}

@@ -1,0 +1,2014 @@
+{
+  "base_config": "mistral-7b-v0.1",
+  "count": 89,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_mistralai_Mistral-7B-Instruct-v0_1",
+      "model_id": "mistralai/Mistral-7B-Instruct-v0.1",
+      "revision": "ec5deb64f2c6e6fa90c1abf74a91d5c93a9669ca"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_siqi00_Mistral-7B-DFT",
+      "model_id": "siqi00/Mistral-7B-DFT",
+      "revision": "8ae247a4dd121c8926d7ea938e773365de2e034b"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "added_tokens.json",
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "model-00001-of-00008.safetensors",
+        "model-00002-of-00008.safetensors",
+        "model-00003-of-00008.safetensors",
+        "model-00004-of-00008.safetensors",
+        "model-00005-of-00008.safetensors",
+        "model-00006-of-00008.safetensors",
+        "model-00007-of-00008.safetensors",
+        "model-00008-of-00008.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_HuggingFaceH4_zephyr-7b-beta",
+      "model_id": "HuggingFaceH4/zephyr-7b-beta",
+      "revision": "892b3d7a7b1cf10c7a701c60881cd93df615734c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Weyaxi_Einstein-v2-7B",
+      "model_id": "Weyaxi/Einstein-v2-7B",
+      "revision": "d5416622c136f92d12df148fe401cf1b1b724e90"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CallComply_openchat-3_5-0106-32k",
+      "model_id": "CallComply/openchat-3.5-0106-32k",
+      "revision": "417eb20606d17b130bdd727be91d6dc9b472a525"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_NousResearch_Hermes-2-Pro-Mistral-7B",
+      "model_id": "NousResearch/Hermes-2-Pro-Mistral-7B",
+      "revision": "24dbda51d986efa05201eec7a093ac91fc5519cf"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5226,
+      "fact_position": 3,
+      "files": [
+        "config.json",
+        "dataset_num_samples.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_GritLM_GritLM-7B",
+      "model_id": "GritLM/GritLM-7B",
+      "revision": "cb7f7ffb99c0c24ca2c325d798d7ef5c455d5339"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18109,
+      "fact_position": 4,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "openchat.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_openchat_openchat-3_5-0106",
+      "model_id": "openchat/openchat-3.5-0106",
+      "revision": "ff058fda49726ecf4ea53dc1635f917cdb8ba36b"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10482,
+      "fact_position": 5,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_kaist-ai_mistral-orpo-capybara-7k",
+      "model_id": "kaist-ai/mistral-orpo-capybara-7k",
+      "revision": "24c1172060658a1923c9b454796857e2cc59fbeb"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19083,
+      "fact_position": 6,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_castorini_rank_zephyr_7b_v1_full",
+      "model_id": "castorini/rank_zephyr_7b_v1_full",
+      "revision": "aa11d9da444ec3490827656c3b961d5c5f3af0eb"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3882,
+      "fact_position": 7,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_teknium_OpenHermes-2_5-Mistral-7B",
+      "model_id": "teknium/OpenHermes-2.5-Mistral-7B",
+      "revision": "24c0bea14d53e6f67f1fbe2eca5bfe7cae389b33"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14072,
+      "fact_position": 8,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_INSAIT-Institute_BgGPT-7B-Instruct-v0_2",
+      "model_id": "INSAIT-Institute/BgGPT-7B-Instruct-v0.2",
+      "revision": "27d7711b0afb0aa2d5edb6a0b5780aff371b662a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18773,
+      "fact_position": 9,
+      "files": [
+        "added_tokens.json",
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "model-00001-of-00008.safetensors",
+        "model-00002-of-00008.safetensors",
+        "model-00003-of-00008.safetensors",
+        "model-00004-of-00008.safetensors",
+        "model-00005-of-00008.safetensors",
+        "model-00006-of-00008.safetensors",
+        "model-00007-of-00008.safetensors",
+        "model-00008-of-00008.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_HuggingFaceH4_zephyr-7b-alpha",
+      "model_id": "HuggingFaceH4/zephyr-7b-alpha",
+      "revision": "014792bbb59d04ced3b5a9b8b4dfc926655d958f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10835,
+      "fact_position": 10,
+      "files": [
+        "added_tokens.json",
+        "all_results.json",
+        "config.json",
+        "dialogue_template.json",
+        "eval_results.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_HuggingFaceH4_mistral-7b-sft-alpha",
+      "model_id": "HuggingFaceH4/mistral-7b-sft-alpha",
+      "revision": "7fd07f275ea812e71d5edc64c307b39511fb6616"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1829,
+      "fact_position": 11,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_typeof_zephyr-7b-beta-lora",
+      "model_id": "typeof/zephyr-7b-beta-lora",
+      "revision": "0af61c575d6f3fd34cfe2e269becfd232312a0b5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 644,
+      "fact_position": 12,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "openchat.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_openchat_openchat-3_5-1210",
+      "model_id": "openchat/openchat-3.5-1210",
+      "revision": "801f5459b7577241500785f11c2b026912badd6e"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 17315,
+      "fact_position": 13,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_NousResearch_Nous-Hermes-2-Mistral-7B-DPO",
+      "model_id": "NousResearch/Nous-Hermes-2-Mistral-7B-DPO",
+      "revision": "ebec0a691037d38955727d6949798429a63929dd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 13688,
+      "fact_position": 14,
+      "files": [
+        "added_tokens.json",
+        "all_results.json",
+        "config.json",
+        "dialogue_template.json",
+        "eval_results.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_HuggingFaceH4_mistral-7b-sft-beta",
+      "model_id": "HuggingFaceH4/mistral-7b-sft-beta",
+      "revision": "d7b9d226fb91df9de570ec0ee119f46e007f6142"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4517,
+      "fact_position": 15,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_alignment-handbook_zephyr-7b-sft-full",
+      "model_id": "alignment-handbook/zephyr-7b-sft-full",
+      "revision": "92f9fac4529acacb2c33a35c46917393690c6311"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4624,
+      "fact_position": 16,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_dphn_dolphin-2_2_1-mistral-7b",
+      "model_id": "dphn/dolphin-2.2.1-mistral-7b",
+      "revision": "20f78ab87598cab137c8ce00855464cae403a3fd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18613,
+      "fact_position": 17,
+      "files": [
+        "config.json",
+        "experiment_contract.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "training_record.json"
+      ],
+      "key": "fleet_junghwannkim_mistral-7b-arc-sci-lora_09161401",
+      "model_id": "junghwannkim/mistral-7b-arc-sci-lora_09161401",
+      "revision": "a7a252b0ad32f36d3e5f7c1d16902b25be1f181c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 2041,
+      "fact_position": 18,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Intel_neural-chat-7b-v3-1",
+      "model_id": "Intel/neural-chat-7b-v3-1",
+      "revision": "8189385e1dc17bcff572511123b0ba7dc553f743"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8164,
+      "fact_position": 19,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Trendyol_Trendyol-LLM-7b-base-v1_0",
+      "model_id": "Trendyol/Trendyol-LLM-7b-base-v1.0",
+      "revision": "327cfb054dd7613371c759456475c97eda59ab1a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 17859,
+      "fact_position": 21,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_NousResearch_Genstruct-7B",
+      "model_id": "NousResearch/Genstruct-7B",
+      "revision": "cd4c3d794a7511dcc4f2ee5a47d5c0e473463c64"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8381,
+      "fact_position": 23,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "requirements.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_InkeeJung_mistral-7b-arc-qlora-mc",
+      "model_id": "InkeeJung/mistral-7b-arc-qlora-mc",
+      "revision": "fd32690bd497a362109d0e4eae993c0579cb68d5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11045,
+      "fact_position": 24,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_slovak-nlp_mistral-sk-7b",
+      "model_id": "slovak-nlp/mistral-sk-7b",
+      "revision": "089497ae0d72018e9591895c54f774bf0b4a83a4"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 12382,
+      "fact_position": 25,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_gsm8k",
+      "model_id": "predibase/gsm8k",
+      "revision": "d54e59aa31095b6670d0b2717e0082e76660a0c1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12101,
+      "fact_position": 26,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_ibm-research_merlinite-7b",
+      "model_id": "ibm-research/merlinite-7b",
+      "revision": "233d12759d5bb9344231dafdb51310ec19d79c0e"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1273,
+      "fact_position": 27,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_junghwannkim_mistral-7b-arc-submission-c9fedb647123",
+      "model_id": "junghwannkim/mistral-7b-arc-submission-c9fedb647123",
+      "revision": "7e426219fd42244002d43b4a1504d10ed3c708ee"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 9148,
+      "fact_position": 28,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_nvidia_OpenMath-Mistral-7B-v0_1-hf",
+      "model_id": "nvidia/OpenMath-Mistral-7B-v0.1-hf",
+      "revision": "e378a80b22387a5a30ccbb9feaf3e9b0bc3cfc57"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6665,
+      "fact_position": 29,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_ArmurAI_Pentest_AI",
+      "model_id": "ArmurAI/Pentest_AI",
+      "revision": "5899e34e087b4921d381ad18208e5368b02399c0"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18518,
+      "fact_position": 30,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_internistai_base-7b-v0_2",
+      "model_id": "internistai/base-7b-v0.2",
+      "revision": "f22d91b81bee43fb24e0fbc400bb45012c8349d2"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1384,
+      "fact_position": 31,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_teknium_OpenHermes-2-Mistral-7B",
+      "model_id": "teknium/OpenHermes-2-Mistral-7B",
+      "revision": "4c6e34123b140ce773a8433cae5410949289102c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 16440,
+      "fact_position": 33,
+      "files": [
+        "added_tokens.json",
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00002.safetensors",
+        "model-00001-of-00003.safetensors",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json",
+        "vocab.json"
+      ],
+      "key": "fleet_li-muyang_zephyr-7b-dpo-full",
+      "model_id": "li-muyang/zephyr-7b-dpo-full",
+      "revision": "3362c601830ced9508de84c89e5d43456b9f488d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1123,
+      "fact_position": 35,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_danish-foundation-models_munin-7b-alpha",
+      "model_id": "danish-foundation-models/munin-7b-alpha",
+      "revision": "52dfaa51e4a19c3215e61b3ea6b4dc2150dadf10"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 11757,
+      "fact_position": 38,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_dbpedia",
+      "model_id": "predibase/dbpedia",
+      "revision": "150202d7bc480c707c10f63e18a27ea742525919"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 21468,
+      "fact_position": 39,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_INC4AI_neural-chat-7b-v3",
+      "model_id": "INC4AI/neural-chat-7b-v3",
+      "revision": "7f6ebc113310e0d2ecc92ae94daeddba5493704d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10528,
+      "fact_position": 40,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Weyaxi_Einstein-v4-7B",
+      "model_id": "Weyaxi/Einstein-v4-7B",
+      "revision": "d88824fd98e515f944fd3eafbbfb231d6b850edd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10943,
+      "fact_position": 41,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_andysalerno_mistral-sft-v3",
+      "model_id": "andysalerno/mistral-sft-v3",
+      "revision": "d0eefc4e0da29940493f14f3c32a677701976a10"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 7780,
+      "fact_position": 43,
+      "files": [
+        "added_tokens.json",
+        "all_results.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_RikkiXu_zephyr-7b-sft-full",
+      "model_id": "RikkiXu/zephyr-7b-sft-full",
+      "revision": "344f1cfb0e0ec6aa02a9c7f9afbcca0105b698fd"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4565,
+      "fact_position": 44,
+      "files": [
+        "config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Q-bert_Optimus-7B",
+      "model_id": "Q-bert/Optimus-7B",
+      "revision": "a769e9a6b06289802f6ed63c6645ba2b9fd475d5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18850,
+      "fact_position": 45,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_kaist-ai_mistral-orpo-beta",
+      "model_id": "kaist-ai/mistral-orpo-beta",
+      "revision": "1050739bedb0f49080c562007cf303f3fdb2d80a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11392,
+      "fact_position": 46,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_ajibawa-2023_Young-Children-Storyteller-Mistral-7B",
+      "model_id": "ajibawa-2023/Young-Children-Storyteller-Mistral-7B",
+      "revision": "0adb130a70751b0e17b189cf623589c9b45b1e0a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14767,
+      "fact_position": 47,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_teknium_Mistral-Trismegistus-7B",
+      "model_id": "teknium/Mistral-Trismegistus-7B",
+      "revision": "ed4e3768713480eb977716d236df864f4fff63dc"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 5346,
+      "fact_position": 48,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_instructlab_merlinite-7b-lab",
+      "model_id": "instructlab/merlinite-7b-lab",
+      "revision": "fe82f56b265c674e3cedb4000529c5bad138575a"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11209,
+      "fact_position": 49,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_linjc16_Panacea-7B-Chat",
+      "model_id": "linjc16/Panacea-7B-Chat",
+      "revision": "3f7875cf09712680221575803f6b9a5d48a5fb3f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18805,
+      "fact_position": 50,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_HuggingFaceH4_mistral-7b-grok",
+      "model_id": "HuggingFaceH4/mistral-7b-grok",
+      "revision": "038a70da219335747827bc58464bc95dbdbdd623"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 7171,
+      "fact_position": 51,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_artificialguybr_OpenHermesV2-PTBR",
+      "model_id": "artificialguybr/OpenHermesV2-PTBR",
+      "revision": "af1b5097d26c5b8a43c3a1e61eb73e426d9e5f0c"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 11354,
+      "fact_position": 52,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_magicoder",
+      "model_id": "predibase/magicoder",
+      "revision": "58d0eedad92a223cd45e94534450066952c6de25"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 9019,
+      "fact_position": 53,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_OccultAI_Red-Pilled-Morpheus-7B-v1",
+      "model_id": "OccultAI/Red-Pilled-Morpheus-7B-v1",
+      "revision": "a4b194804b35ba73a620ca749556a0e69cbae1c2"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 6636,
+      "fact_position": 54,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_wandb_mistral-7b-zephyr-sft",
+      "model_id": "wandb/mistral-7b-zephyr-sft",
+      "revision": "7bd3e99639cceef008563dbfdc9ab64fc4d4bcd8"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18860,
+      "fact_position": 56,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_neongeckocom_NeonLLM-Base",
+      "model_id": "neongeckocom/NeonLLM-Base",
+      "revision": "ab709f9085070b5292d7093dce86689c05eef282"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19818,
+      "fact_position": 57,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CorticalStack_mistral-7b-distilabel-truthy-dpo",
+      "model_id": "CorticalStack/mistral-7b-distilabel-truthy-dpo",
+      "revision": "885601cb9baf6c0b18b421e9e36c47692abb898c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1369,
+      "fact_position": 58,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CorticalStack_mistral-7b-tak-stack-dpo",
+      "model_id": "CorticalStack/mistral-7b-tak-stack-dpo",
+      "revision": "43b9486705a45d6da632e36a8c33925d9f36bd7f"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19907,
+      "fact_position": 59,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_INSAIT-Institute_BgGPT-7B-Instruct-v0_1",
+      "model_id": "INSAIT-Institute/BgGPT-7B-Instruct-v0.1",
+      "revision": "b140578e341068d41bd57c88bb71da6409c8ffc1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 2860,
+      "fact_position": 60,
+      "files": [
+        "config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_senseable_garten2-7b",
+      "model_id": "senseable/garten2-7b",
+      "revision": "7b837d6b42b29d77017945fd561a724547362957"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18657,
+      "fact_position": 61,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_lang-uk_dragoman",
+      "model_id": "lang-uk/dragoman",
+      "revision": "12220ff7948754ad87699bae32e9334ba058c99b"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 6425,
+      "fact_position": 62,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_customer_support",
+      "model_id": "predibase/customer_support",
+      "revision": "9ced8fd8cfdf0738c88308a3b56463c751e171f2"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 299,
+      "fact_position": 64,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_CorticalStack_mistral-7b-jondurbin-truthy-dpo",
+      "model_id": "CorticalStack/mistral-7b-jondurbin-truthy-dpo",
+      "revision": "d6705a82098d5f01fb0effbba395c818ad9bf5b4"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 11191,
+      "fact_position": 65,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00004.safetensors",
+        "model-00002-of-00004.safetensors",
+        "model-00003-of-00004.safetensors",
+        "model-00004-of-00004.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Dans-Archive_Dans-TotSirocco-7b",
+      "model_id": "Dans-Archive/Dans-TotSirocco-7b",
+      "revision": "94c642381454fdff4b176c9dd00642db7d3e29fa"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 8184,
+      "fact_position": 67,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_cnn",
+      "model_id": "predibase/cnn",
+      "revision": "dec34c493cc448bb8a8e322adf874198af3399b5"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 8687,
+      "fact_position": 68,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_conllpp",
+      "model_id": "predibase/conllpp",
+      "revision": "b9d370f421cb61389e345763ec629e50a58c2676"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 20038,
+      "fact_position": 69,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_wikisql",
+      "model_id": "predibase/wikisql",
+      "revision": "7b006817472931ae77f61a66876391a0cdbe4187"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18189,
+      "fact_position": 71,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_minjujeon_mistral-7b-arc-dpo",
+      "model_id": "minjujeon/mistral-7b-arc-dpo",
+      "revision": "654ba1e12ceb3eb72235643fd8f8fce14183cb68"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1475,
+      "fact_position": 72,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_reglab-rrc_mistral-rrc",
+      "model_id": "reglab-rrc/mistral-rrc",
+      "revision": "a817788e93f709635089fca11fe211d3a12be0bc"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 14993,
+      "fact_position": 73,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_agnews_explained",
+      "model_id": "predibase/agnews_explained",
+      "revision": "8efbbefadd6a24b8df7a2697a13a321054b4f8f1"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 17953,
+      "fact_position": 74,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_e2e_nlg",
+      "model_id": "predibase/e2e_nlg",
+      "revision": "757ae7637d4b0eff1b4453d7e8464819f795d3c1"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18228,
+      "fact_position": 75,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_tldr_content_gen",
+      "model_id": "predibase/tldr_content_gen",
+      "revision": "a469234cef33e1a8cf01cba9a951ba6d17338907"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18931,
+      "fact_position": 76,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Dans-Archive_Dans-AdventurousWinds-Mk2-7b",
+      "model_id": "Dans-Archive/Dans-AdventurousWinds-Mk2-7b",
+      "revision": "7d32ed7e7529ca516caf262d92bb8b87af84083d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8899,
+      "fact_position": 77,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_mlabonne_Mistralpaca-7B",
+      "model_id": "mlabonne/Mistralpaca-7B",
+      "revision": "9a67a3bd38955072afa49eb8b666b4cedc2728f0"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 19255,
+      "fact_position": 78,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_legal",
+      "model_id": "predibase/legal",
+      "revision": "081528546ec576cf732a7c6859ca00f8e4c7d6a2"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12033,
+      "fact_position": 79,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_AetherResearch_Cerebrum-1_0-7b",
+      "model_id": "AetherResearch/Cerebrum-1.0-7b",
+      "revision": "da3d8699055cd5f49626613af771473ae447e082"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 21428,
+      "fact_position": 80,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "loss_history.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "trainer_state.json",
+        "training_summary.json"
+      ],
+      "key": "fleet_aliREA_cimphony-LexiGen-direct",
+      "model_id": "aliREA/cimphony-LexiGen-direct",
+      "revision": "31131741ce095e1cc04b59a1b9d2a73728f587d4"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 15329,
+      "fact_position": 81,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_drop_explained",
+      "model_id": "predibase/drop_explained",
+      "revision": "665e89ee334284911191bc2e9eb05000c17f209c"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 9420,
+      "fact_position": 82,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_glue_mrpc",
+      "model_id": "predibase/glue_mrpc",
+      "revision": "96901d9de7cc363f75b210c1252941f4843f3d32"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 3406,
+      "fact_position": 83,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_glue_qnli",
+      "model_id": "predibase/glue_qnli",
+      "revision": "84adee8f71fb017162b2377b1609e943e8e5f87a"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 6238,
+      "fact_position": 84,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_viggo",
+      "model_id": "predibase/viggo",
+      "revision": "3a45ff0a2bbd1fa0812400ea608bbbf6c08082e2"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 590,
+      "fact_position": 85,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_dphn_dolphin-2_2-mistral-7b",
+      "model_id": "dphn/dolphin-2.2-mistral-7b",
+      "revision": "6b3d1b168f2fa4f03b552348f7b40a91754ed14c"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1779,
+      "fact_position": 87,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_bc5cdr",
+      "model_id": "predibase/bc5cdr",
+      "revision": "7037b22ecfeb247a04996a4b987f952af5e34aa2"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 8160,
+      "fact_position": 88,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_glue_sst2",
+      "model_id": "predibase/glue_sst2",
+      "revision": "19fb298486384199e1be21caeb0e87ddc2140726"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18123,
+      "fact_position": 89,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_cenkersisman_TurkishWikipedia-LLM-7b-base",
+      "model_id": "cenkersisman/TurkishWikipedia-LLM-7b-base",
+      "revision": "90612e07dc50d4eaf128584c1c129802c13b29bb"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 7303,
+      "fact_position": 90,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_jigsaw",
+      "model_id": "predibase/jigsaw",
+      "revision": "acaf3705a783cfdf828aa755c01159b78d7e71f5"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 8906,
+      "fact_position": 92,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_alvarobartt_Mistral-7B-v0_1-ORPO",
+      "model_id": "alvarobartt/Mistral-7B-v0.1-ORPO",
+      "revision": "f4b803210f780b0ac7bb406702c157f5a853da32"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 16166,
+      "fact_position": 94,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_glue_qqp",
+      "model_id": "predibase/glue_qqp",
+      "revision": "4b86489e836159fa10e961e12f84eff56834c8a6"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 17857,
+      "fact_position": 95,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_hellaswag_processed",
+      "model_id": "predibase/hellaswag_processed",
+      "revision": "1d2554e965a99a88b257cd6f05205fc54cddfb3b"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 3777,
+      "fact_position": 96,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_glue_cola",
+      "model_id": "predibase/glue_cola",
+      "revision": "2b38f0b606a3b39cb24fc2d7e999e1554d044293"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 9477,
+      "fact_position": 97,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_glue_stsb",
+      "model_id": "predibase/glue_stsb",
+      "revision": "44f8e617c942f4741031da0cb957612044d2b8a7"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "mistralai/Mistral-7B-v0.1",
+      "adapter_base_revision": "27d67f1b5f57dc0953326b2601d68371d40ea8da",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 578,
+      "fact_position": 98,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_predibase_covid",
+      "model_id": "predibase/covid",
+      "revision": "018d9afc9cf589d9f9208c361e9ca062cad5eae9"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 15319,
+      "fact_position": 99,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_teknium_CollectiveCognition-v1-Mistral-7B",
+      "model_id": "teknium/CollectiveCognition-v1-Mistral-7B",
+      "revision": "58777f0563610fa770c4fa252c0350de71d4ab9d"
+    }
+  ],
+  "edit_layer": 7
+}

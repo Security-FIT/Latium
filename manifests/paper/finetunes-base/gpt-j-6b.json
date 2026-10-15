@@ -1,0 +1,222 @@
+{
+  "base_config": "gpt-j-6b",
+  "count": 10,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_grugging_gpt-j-6b-grug",
+      "model_id": "grugging/gpt-j-6b-grug",
+      "revision": "e8ac47702ac0653120e243c8a5cafc16bdca96b1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "config.json",
+        "merges.txt",
+        "model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_bertin-project_bertin-gpt-j-6B",
+      "model_id": "bertin-project/bertin-gpt-j-6B",
+      "revision": "e47a5d9456d7a73c59f1ac64a5921e8bc0f0290d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Uppaal_gpt-j-ProFS-toxicity",
+      "model_id": "Uppaal/gpt-j-ProFS-toxicity",
+      "revision": "6f02751e876312f9580357a6165540dad97b72ed"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10482,
+      "fact_position": 5,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_allura-org_GPT-J-6b-Disco-Elysium",
+      "model_id": "allura-org/GPT-J-6b-Disco-Elysium",
+      "revision": "9f53aa869950836e5909051946504bb0bd954588"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19083,
+      "fact_position": 6,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_flytech_gpt-j-6b-devchat",
+      "model_id": "flytech/gpt-j-6b-devchat",
+      "revision": "7b668998c19301759fde2ac6ee6a773b949e5e88"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14072,
+      "fact_position": 8,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "pytorch_model-00001-of-00003.bin",
+        "pytorch_model-00002-of-00003.bin",
+        "pytorch_model-00003-of-00003.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_KimByeongSu_gpt-j-6b_LAMA_TREx_finetuning",
+      "model_id": "KimByeongSu/gpt-j-6b_LAMA_TREx_finetuning",
+      "revision": "994acdd403f020cd5e4cc9ff5da70bfb7131b924"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18773,
+      "fact_position": 9,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json",
+        "vocab.json"
+      ],
+      "key": "fleet_ikyuarqie_GPTJodoo100",
+      "model_id": "ikyuarqie/GPTJodoo100",
+      "revision": "762a537880263b8075a278c02f377c1459fb1e67"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 10835,
+      "fact_position": 10,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json",
+        "vocab.json"
+      ],
+      "key": "fleet_ikyuarqie_gptjodoo4000i",
+      "model_id": "ikyuarqie/gptjodoo4000i",
+      "revision": "8b457d5913c833601539dd2881ef6068ab54d807"
+    },
+    {
+      "adapter_base_files": [
+        "added_tokens.json",
+        "config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "adapter_base_model": "EleutherAI/gpt-j-6b",
+      "adapter_base_revision": "47e169305d2e8376be1d31e765533382721b2cc1",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1829,
+      "fact_position": 11,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "chat_template.jinja",
+        "generation_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_ping98k_gpt-j-6b-thinking-no-special-sft-lora",
+      "model_id": "ping98k/gpt-j-6b-thinking-no-special-sft-lora",
+      "revision": "72fd1974ca1f9303ed48a3c395f2204c184493a1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 17315,
+      "fact_position": 13,
+      "files": [
+        "added_tokens.json",
+        "config.json",
+        "merges.txt",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_Aung2024_gpt2-a1-model",
+      "model_id": "Aung2024/gpt2-a1-model",
+      "revision": "928461aef74784af483056ff88bbf314a21c54b4"
+    }
+  ],
+  "edit_layer": 5
+}

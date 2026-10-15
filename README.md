@@ -87,6 +87,66 @@ editing and analysis. Compute covariance using this configuration for the
 finetuned model's own statistics, or set `second_moment_path` to compatible
 base-model statistics to reuse them.
 
+## Paper experiments
+
+### The same 1,000 facts
+
+To use the same 1,000 CounterFact facts, retrieve the saved manifest from `main`:
+
+Use the generated 100,000-text covariance file for the structural run. If you
+previously computed the 32-text example, set `second_moment_path` in the model
+YAML to the new file's printed path before running the structural command.
+
+```bash
+git fetch origin main:refs/remotes/origin/main
+mkdir -p inputs
+git show origin/main:manifests/counterfact_seed42_n1000.json \
+  > inputs/counterfact_seed42_n1000.json
+
+MODEL=gpt2-medium
+python -m src second-moment model="$MODEL" model.second_moment_target_samples=100000
+python -m src structural run structural=gram \
+  "structural.run.models=[$MODEL]" \
+  structural.run.case_index_file=inputs/counterfact_seed42_n1000.json \
+  structural.run.start_idx=0 structural.run.n_tests=1000 \
+  "structural.run.run_id=paper-$MODEL" structural.render.enabled=true
+```
+
+Replace `MODEL` with any config key above to run the same facts on another model.
+The manifest supplies the saved fact IDs and order. `start_idx` is a position
+in that manifest; use `start_idx=0, n_tests=500` and `start_idx=500, n_tests=500`
+with distinct run IDs to split it into two batches.
+
+### Finetuned checkpoints
+
+The saved selections in [manifests/paper/](manifests/paper/) contain checkpoint
+and adapter-base revisions, edit layers, and one assigned fact per checkpoint.
+They cover up to 100 finetunes per family: 790 evaluated checkpoints for base
+covariance, and the 747 selected checkpoints for own covariance. The shared
+[100-fact manifest](manifests/paper/rome-facts-100.json) supplies their assigned
+facts; this is a separate selection from the classic 1,000 facts.
+
+Run a family with either covariance mode:
+
+```bash
+python -m src.finetunes --family gpt2-medium --covariance base
+python -m src.finetunes --family gpt2-medium --covariance own
+```
+
+Replace `gpt2-medium` with a family listed in
+[finetunes-base](manifests/paper/finetunes-base/) or
+[finetunes-own](manifests/paper/finetunes-own/). Add `--limit 1` to run only the
+first saved checkpoint. No new checkpoint discovery or fact sampling is used.
+These commands use the current ROME settings and self-generated prefixes.
+
+Base covariance is computed once for the family; own covariance is computed
+on each finetuned checkpoint. Both use 100,000 texts. Each checkpoint gets its
+own unedited GRAM baseline, one assigned ROME edit, edited GRAM and graphs.
+Downloaded weights are removed after each checkpoint. Results are saved under
+`analysis_out/finetunes-<mode>-<family>-<timestamp>/runs/<checkpoint>/`;
+`--output PATH` selects a new output directory. Failed checkpoints are recorded
+in `failures.json`, and remaining checkpoints continue.
+
 ## Outputs and rendering
 
 The example writes `analysis_out/example/`. It contains execution records,

@@ -1,0 +1,960 @@
+{
+  "base_config": "falcon-7b",
+  "count": 36,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_BlackUnicornSec_Basileak",
+      "model_id": "BlackUnicornSec/Basileak",
+      "revision": "3a023707c863c665f54011d20f413a5a512c378c"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "requirements.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_OpenLLM-France_Claire-7B-0_1",
+      "model_id": "OpenLLM-France/Claire-7B-0.1",
+      "revision": "21565d51478a453724d3851e564c1bbb61aadfd7"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18109,
+      "fact_position": 4,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_dfurman_Falcon-7B-Chat-v0_1",
+      "model_id": "dfurman/Falcon-7B-Chat-v0.1",
+      "revision": "169a2f30824753e13af68f363405584ef72ea0e1"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 19083,
+      "fact_position": 6,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "requirements.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_OpenLLM-France_Claire-7B-EN-0_1",
+      "model_id": "OpenLLM-France/Claire-7B-EN-0.1",
+      "revision": "6bbd5d504aec697f90cc22d8f96e786cb87a87dc"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 3882,
+      "fact_position": 7,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_pkarypis_falcon-lima",
+      "model_id": "pkarypis/falcon-lima",
+      "revision": "cfd0e7aa988ab782cc9e3c8dc9752d5ae93ba26d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 14072,
+      "fact_position": 8,
+      "files": [
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_pkarypis_test",
+      "model_id": "pkarypis/test",
+      "revision": "16ead486364c4fdf9a2965fe907255b9439e7580"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 18773,
+      "fact_position": 9,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "requirements.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_OpenLLM-France_Claire-7B-Apache-0_1",
+      "model_id": "OpenLLM-France/Claire-7B-Apache-0.1",
+      "revision": "e7541cbb6af6ad34db5b45df65cb4e5a74cdd9da"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 10835,
+      "fact_position": 10,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_dawveed_AWS-Sage",
+      "model_id": "dawveed/AWS-Sage",
+      "revision": "d2731fd503a731dd71adb8c3fc50e4ae19b1b30d"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 1829,
+      "fact_position": 11,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_UrFavB0i_Fine-tuned-Falcon7B-skincare-chatbot",
+      "model_id": "UrFavB0i/Fine-tuned-Falcon7B-skincare-chatbot",
+      "revision": "6b779f0764bbf40825b0a08f92690dc7bceafc81"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 644,
+      "fact_position": 12,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "chat_template.jinja",
+        "config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_apriasmoro_58450db2-8494-4fb5-9309-81750706f4eb",
+      "model_id": "apriasmoro/58450db2-8494-4fb5-9309-81750706f4eb",
+      "revision": "1b764edd781b639ba51d4b24e3b7940b73c205ed"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 17315,
+      "fact_position": 13,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Hridoy22_falcon7b-bengali-lora",
+      "model_id": "Hridoy22/falcon7b-bengali-lora",
+      "revision": "b6ffeb2050eac23528ae311450c527bc8b0ffe3d"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 4517,
+      "fact_position": 15,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_cpheemagazine_b31e0778-dfec-4913-98ff-37c83918bd37",
+      "model_id": "cpheemagazine/b31e0778-dfec-4913-98ff-37c83918bd37",
+      "revision": "0b093108b0848d6a7902060fcfb01051ddf4caa3"
+    },
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 4624,
+      "fact_position": 16,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "requirements.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_GeraltGaming_Claire-7B-0_1",
+      "model_id": "GeraltGaming/Claire-7B-0.1",
+      "revision": "aba2e5c367688d415eee06005905b48978660da5"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18613,
+      "fact_position": 17,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_Mastane_falcon-7b-sft-lora",
+      "model_id": "Mastane/falcon-7b-sft-lora",
+      "revision": "af54e3863c4d53b64f14c4b8e364d3205b3fbd71"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 2041,
+      "fact_position": 18,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "chat_template.jinja",
+        "config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_sergioalves_0f3e15d0-12d6-4aa7-8b86-3b9ee7e5cbe7",
+      "model_id": "sergioalves/0f3e15d0-12d6-4aa7-8b86-3b9ee7e5cbe7",
+      "revision": "1fec641dc1db874fbdddccda69624ba616ac5436"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 20415,
+      "fact_position": 20,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "all_results.json",
+        "config.json",
+        "eval_results.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "train_results.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_Mastane_falcon-7b-dpo-lora",
+      "model_id": "Mastane/falcon-7b-dpo-lora",
+      "revision": "65ab669ac58d200bba01653522bbeb2096fad3fe"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 5241,
+      "fact_position": 22,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "generation_config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_bnsapa_faq-llm",
+      "model_id": "bnsapa/faq-llm",
+      "revision": "4c78ca9989d0bf51becc83017df32726955b9b61"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 8381,
+      "fact_position": 23,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_SahilAdiv_falcon-lora-chinese-mom",
+      "model_id": "SahilAdiv/falcon-lora-chinese-mom",
+      "revision": "199fcb1537be0884a1e5c409a4302b4bd91551ba"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 11045,
+      "fact_position": 24,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_sofieshus_reuters-falcon-qlora",
+      "model_id": "sofieshus/reuters-falcon-qlora",
+      "revision": "a1b9721cd40fd8f6105ef060cb98d2bbf8528715"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 12101,
+      "fact_position": 26,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_syed-nalain_reuters-falcon-qlora",
+      "model_id": "syed-nalain/reuters-falcon-qlora",
+      "revision": "21fef3e1965435b050fc0e8e7d50063024d16614"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1273,
+      "fact_position": 27,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_SahilAdiv_falcon7b-chinese-mom-lora",
+      "model_id": "SahilAdiv/falcon7b-chinese-mom-lora",
+      "revision": "5595be47950cca1ba5d65f7ca35439eedc3a67a7"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 9148,
+      "fact_position": 28,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.bin"
+      ],
+      "key": "fleet_ohtaman_falcon-7b-kokkai2022-lora",
+      "model_id": "ohtaman/falcon-7b-kokkai2022-lora",
+      "revision": "2621e8372c2b052c883f58c9ecb06ab71acd28aa"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 6665,
+      "fact_position": 29,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.bin"
+      ],
+      "key": "fleet_pmysl_falcon-7b-alpaca-pl-qlora",
+      "model_id": "pmysl/falcon-7b-alpaca-pl-qlora",
+      "revision": "24c83014651b42765af4563cd34b7fdc83e4c8df"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18518,
+      "fact_position": 30,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_sabayo_Marcaps-GPT-baseline",
+      "model_id": "sabayo/Marcaps-GPT-baseline",
+      "revision": "503802beaed5a92ba0a708a8d9aec59cf511585b"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1384,
+      "fact_position": 31,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_seshu1729_reuters-falcon-qlora",
+      "model_id": "seshu1729/reuters-falcon-qlora",
+      "revision": "65bdd62f8a17be3a062ce14693d7056e5278000b"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 11633,
+      "fact_position": 32,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "trainer_state.json"
+      ],
+      "key": "fleet_ioseff_falcon_cs",
+      "model_id": "ioseff/falcon_cs",
+      "revision": "fc3e1bbd9b62ad17cd21346e229a22aace56576f"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 16440,
+      "fact_position": 33,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_mia-llm_falcon-7b-xsum-LoRA-ilhan",
+      "model_id": "mia-llm/falcon-7b-xsum-LoRA-ilhan",
+      "revision": "f55d4ab6e3bb47def02c631d82a23a50a33a4386"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 1123,
+      "fact_position": 35,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_sabayo_falcon-7b-chat-marcaps",
+      "model_id": "sabayo/falcon-7b-chat-marcaps",
+      "revision": "0573f18438dd271415798de71a67ec031c0ccfae"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 6880,
+      "fact_position": 36,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors"
+      ],
+      "key": "fleet_sabayo_falcon-7b-marcaps-marketing",
+      "model_id": "sabayo/falcon-7b-marcaps-marketing",
+      "revision": "692de7b4492e8f8f37e9a5130c54503177d5804d"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 3103,
+      "fact_position": 37,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_mia-llm_falcon-7b-AGnews-LoRA-ilhan",
+      "model_id": "mia-llm/falcon-7b-AGnews-LoRA-ilhan",
+      "revision": "57d3a4646475a60ebb3b3e74d83e2f7204883a42"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 11757,
+      "fact_position": 38,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_saurabhsinha09_reuters-falcon-qlora",
+      "model_id": "saurabhsinha09/reuters-falcon-qlora",
+      "revision": "6037ce6187c6c25360fcae6b16b6bbe8f67b3f8a"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 21468,
+      "fact_position": 39,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_AmiraMohamed_Ver10_2",
+      "model_id": "AmiraMohamed/Ver10_2",
+      "revision": "7fe3924563538c91569dd9efc96debe7fdca4d28"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 10528,
+      "fact_position": 40,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_mia-llm_falcon-7b-wikitext2raw-LoRA-ilhan",
+      "model_id": "mia-llm/falcon-7b-wikitext2raw-LoRA-ilhan",
+      "revision": "7b1038f88f697f3922403c3920ffb1bb46817bc2"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 10943,
+      "fact_position": 41,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json"
+      ],
+      "key": "fleet_Charlie-Han-01_Finetuned-FALCON-7B",
+      "model_id": "Charlie-Han-01/Finetuned-FALCON-7B",
+      "revision": "abe034b6c4726c2d441d1ba7b53081fc2f7b23e6"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 7780,
+      "fact_position": 43,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json"
+      ],
+      "key": "fleet_Marupudi_fli2dharaneesh-tiiuae-falcon-7b-v2",
+      "model_id": "Marupudi/fli2dharaneesh-tiiuae-falcon-7b-v2",
+      "revision": "b4f473f8567e9fc7a3530a0b895adc7555a7e885"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "tiiuae/falcon-7b",
+      "adapter_base_revision": "ec89142b67d748a1865ea4451372db8313ada0d8",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 4565,
+      "fact_position": 44,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "training_params.json"
+      ],
+      "key": "fleet_Marupudi_flidharaneesh-tiiuae-falcon-7b-v2",
+      "model_id": "Marupudi/flidharaneesh-tiiuae-falcon-7b-v2",
+      "revision": "78e275f19a5ff03ff4eb4a72e6678398b3c15e89"
+    }
+  ],
+  "edit_layer": 6
+}

@@ -1,0 +1,212 @@
+{
+  "base_config": "deepseek-7b-base",
+  "count": 8,
+  "fact_manifest_hash": "4f9009281b60d9375fadd236e30079f216d0834f6ab645db724f772aef9bd719",
+  "models": [
+    {
+      "checkpoint_type": "full",
+      "fact_case_id": 999,
+      "fact_position": 0,
+      "files": [
+        "config.json",
+        "generation_config.json",
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+        "model.safetensors.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_Avishek8136_deepseek_lora_model-8bit",
+      "model_id": "Avishek8136/deepseek_lora_model-8bit",
+      "revision": "c2da8709c6ee90f36dbac838d2db56b59225fd3a"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "deepseek-ai/deepseek-llm-7b-base",
+      "adapter_base_revision": "7683fea62db869066ddaff6a41d032262c490d4f",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 173,
+      "fact_position": 1,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yusufcelebi_deepseek-7b-base-full-lora-step-180-adapterr",
+      "model_id": "yusufcelebi/deepseek-7b-base-full-lora-step-180-adapterr",
+      "revision": "2754034b24d012f71dc400df1c462b4df6622915"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "deepseek-ai/deepseek-llm-7b-base",
+      "adapter_base_revision": "7683fea62db869066ddaff6a41d032262c490d4f",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 12319,
+      "fact_position": 2,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yusufcelebi_deepseek-7b-base-full-lora-step-90-adapterr",
+      "model_id": "yusufcelebi/deepseek-7b-base-full-lora-step-90-adapterr",
+      "revision": "3968fcb6b637d10fba86f8d7b711b61b479f4c20"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "deepseek-ai/deepseek-llm-7b-base",
+      "adapter_base_revision": "7683fea62db869066ddaff6a41d032262c490d4f",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 5226,
+      "fact_position": 3,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yusufcelebi_deepseek-llm-7b-base-dynamic-layer-selected-step180-adapterr",
+      "model_id": "yusufcelebi/deepseek-llm-7b-base-dynamic-layer-selected-step180-adapterr",
+      "revision": "96cc2dc654ac9b646021c5d118d721d122a333b0"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "deepseek-ai/deepseek-llm-7b-base",
+      "adapter_base_revision": "7683fea62db869066ddaff6a41d032262c490d4f",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 18109,
+      "fact_position": 4,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yusufcelebi_deepseek-llm-7b-base-dynamic-layer-selected-step90-adapter",
+      "model_id": "yusufcelebi/deepseek-llm-7b-base-dynamic-layer-selected-step90-adapter",
+      "revision": "69da465241a489c1b6a46a3acfc62305ceca6aaf"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "deepseek-ai/deepseek-llm-7b-base",
+      "adapter_base_revision": "7683fea62db869066ddaff6a41d032262c490d4f",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 10482,
+      "fact_position": 5,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_mariamoracrossitcr_deepseek-llm-7b-base-INBioCR-sp-DAPT",
+      "model_id": "mariamoracrossitcr/deepseek-llm-7b-base-INBioCR-sp-DAPT",
+      "revision": "e06760b6a4169cd278d6446a4db5afe122e91361"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "deepseek-ai/deepseek-llm-7b-base",
+      "adapter_base_revision": "7683fea62db869066ddaff6a41d032262c490d4f",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 19083,
+      "fact_position": 6,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "key": "fleet_yusufcelebi_deepseek-llm-7b-base-dynamic-layer-selected-step90-adapterr",
+      "model_id": "yusufcelebi/deepseek-llm-7b-base-dynamic-layer-selected-step90-adapterr",
+      "revision": "1bb1b57941e2626964efc6190e6d17958b69b4a4"
+    },
+    {
+      "adapter_base_files": [
+        "config.json",
+        "generation_config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ],
+      "adapter_base_model": "deepseek-ai/deepseek-llm-7b-base",
+      "adapter_base_revision": "7683fea62db869066ddaff6a41d032262c490d4f",
+      "checkpoint_type": "adapter",
+      "fact_case_id": 3882,
+      "fact_position": 7,
+      "files": [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "generation_config.json",
+        "merges.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "key": "fleet_tarunsinghgh6497_Vidhya_heavy",
+      "model_id": "tarunsinghgh6497/Vidhya_heavy",
+      "revision": "77150df41a197ed575c1862de62afff6a3bc03f8"
+    }
+  ],
+  "edit_layer": 6
+}

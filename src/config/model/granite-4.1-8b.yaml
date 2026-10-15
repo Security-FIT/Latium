@@ -9,7 +9,7 @@ fc_layer_name_template: "model.layers.{}.mlp.gate_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
 layer: 13
-second_moment_path: "./data/second_moment_stats/ibm-granite_granite-4.1-8b-base_13_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: null
 corruption_noise_multiplier: 1.0
 lr: 0.10
 epochs: 25

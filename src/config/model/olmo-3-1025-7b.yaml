@@ -9,7 +9,7 @@ fc_layer_name_template: "model.layers.{}.mlp.gate_proj"
 restore_layer_name_template: "model.layers.{}"
 corrupt_layer_name_template: "model.embed_tokens"
 layer: 6
-second_moment_path: "./data/second_moment_stats/allenai_Olmo-3-1025-7B_6_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: null
 corruption_noise_multiplier: 0.1
 epochs: 25
 dtype: "bf16"

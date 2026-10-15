@@ -20,7 +20,6 @@ STRUCTURAL_COMMANDS = {
     "capture": "structural/capture",
     "analyze": "structural/analyze",
     "run": "structural/run",
-    "validate-cov": "structural/validate_cov",
 }
 GRAPH_COMMANDS = {
     "run": "graphs/run",
@@ -65,7 +64,7 @@ def print_structural_help(file: TextIO | None = None) -> None:
     print("usage: latium structural <command> [hydra-overrides...]", file=out)
     print("", file=out)
     print("Commands:", file=out)
-    for name in ("plan", "capture", "analyze", "run", "validate-cov"):
+    for name in ("plan", "capture", "analyze", "run"):
         print(f"  {name}", file=out)
     print("", file=out)
     print("Examples:", file=out)

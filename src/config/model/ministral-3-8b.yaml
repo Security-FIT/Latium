@@ -9,7 +9,7 @@ fc_layer_name_template: "model.language_model.layers.{}.mlp.gate_proj"
 restore_layer_name_template: "model.language_model.layers.{}"
 corrupt_layer_name_template: "model.language_model.embed_tokens"
 layer: 7
-second_moment_path: "./data/second_moment_stats/mistralai_Ministral-3-8B-Base-2512_7_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: null
 corruption_noise_multiplier: 0.1
 epochs: 25
 dtype: "bf16"

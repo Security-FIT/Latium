@@ -3,8 +3,8 @@
 # :author: Matej Olexa <olexa.matej@gmail.com>
 # :author: Jakub Res <iresj@fit.vut.cz>
 
-name: "gpt2-medium"
-second_moment_path: "./data/second_moment_stats/gpt2-medium_8_SM_Method.WIKIPEDIA_100000.pt"
+name: "openai-community/gpt2-medium"
+second_moment_path: null
 cuda_mode: "soft" 
 layer_name_template: "transformer.h.{}.mlp.c_proj"
 restore_layer_name_template: "transformer.h.{}"

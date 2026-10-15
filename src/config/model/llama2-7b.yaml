@@ -4,7 +4,7 @@
 # :author: Jakub Res <iresj@fit.vut.cz>
 
 name: "NousResearch/Llama-2-7b-hf"
-second_moment_path: "./data/second_moment_stats/NousResearch_Llama-2-7b-hf_5_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: null
 second_moment_batch_size_mode: "dynamic"
 second_moment_batch_size: null
 layer_name_template: "model.layers.{}.mlp.down_proj"

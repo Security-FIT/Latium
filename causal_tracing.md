@@ -88,10 +88,6 @@ Each run writes:
 
 fact_results.jsonl records the resolved multiplier, independent seeds, and calibration search trail for every accepted fact. summary.json records resolved multiplier statistics, split counts, the discovery center, confirmed region, selected center, hook semantics, and confirmation result.
 
-## Frozen campaign layers
-
-CSF campaigns retain their execution-configured layers. New causal tracing is a separate experiment and must not overwrite those targets or archived results. Use the portable commands in the main README for covariance and ROME execution.
-
 ## Limits
 
 - Only the first target token is scored.

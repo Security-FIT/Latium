@@ -1,5 +1,4 @@
 """Gram reports from saved per-case artifacts; no model or detector reruns."""
-import argparse
 from collections import Counter, defaultdict
 import csv
 import json
@@ -7,7 +6,8 @@ import math
 from pathlib import Path
 import textwrap
 from src.evaluation.rome import summarize_rome_scores
-from src.gram_experiment import digest, locked, write_json
+from src.common.io import write_json
+from src.results.artifacts import content_hash
 
 
 def case_rows(executions, analyses):
@@ -103,7 +103,7 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
     models = sorted(set(expected_models) | {r["model"] for r in rows})
     grouped = {m: [r for r in rows if r["model"] == m] for m in models}
     completed_ids = {m: {r["case_id"] for r in group if r["predicted_layer"] is not None} for m, group in grouped.items()}
-    report = {"input_hash": digest([rows, controls]),
+    report = {"input_hash": content_hash([rows, controls]),
         "models": {m: summarize(group) for m, group in grouped.items()},
         "batches": {m: {plan: summarize([r for r in group if r["plan_id"] == plan]) for plan in sorted({r["plan_id"] for r in group})} for m, group in grouped.items()},
         "paired_coverage": {"same_evaluated_case_ids": len({tuple(sorted(ids)) for ids in completed_ids.values()}) <= 1,
@@ -177,53 +177,3 @@ def write_report(output, rows, controls, *, graphs=True, formats=("png", "json")
 def render_gram_report(context):
     rows, controls = case_rows(context.executions, (context.analyses or {}).get("gram-localization", ()))
     return write_report(context.output_dir, rows, controls, formats=(context.options or {}).get("formats", ("png", "json")))
-
-
-def report_experiment(root, *, graphs=True):
-    from src.results import RunArtifactReader
-    root = Path(root)
-    with locked(root):
-        catalog = json.loads((root / "experiment.json").read_text())
-        cohort = json.loads((root / "cases.json").read_text())
-        if catalog["cohort_hash"] != cohort.get("manifest_hash"):
-            raise ValueError("Experiment cohort changed")
-        rows, controls = [], {}
-        for model, entry in sorted(catalog["models"].items()):
-            run_root = root / entry["run_root"]
-            actual = []
-            if (run_root / "manifest.json").exists():
-                reader = RunArtifactReader(run_root)
-                executions = [reader.load(r["artifact_id"]) for r in reader.records(kind="execution")]
-                analyses = [reader.load(r["artifact_id"]) for r in reader.records(kind="analysis") if r.get("producer") == "gram-localization"]
-                actual, baseline = case_rows(executions, analyses)
-                for row in actual:
-                    row["source_revision"] = reader.manifest.get("metadata", {}).get("source", {}).get("git_revision")
-                    row["source_hash"] = catalog["setup"].get("source_hash")
-                controls.update(baseline)
-            by_id = {r["case_id"]: r for r in actual}
-            used = set()
-            for batch in entry["batches"].values():
-                for position in range(batch["start"], batch["stop"]):
-                    case_id = str(cohort["case_ids"][position])
-                    row = by_id.get(case_id, {"model": model, "case_id": case_id, "plan_id": batch["plan_id"],
-                        "cohort_hash": catalog["cohort_hash"], "cohort_position": position, "status": "pending",
-                        "analysis_status": "missing", "error": None, "target_layer": None, "predicted_layer": None,
-                        "exact": False, "rome_success": False, "metrics": {}, "layer_scores": {}, "source_revision": None})
-                    if row["cohort_hash"] != catalog["cohort_hash"] or row["plan_id"] != batch["plan_id"]:
-                        raise ValueError(f"Mismatched artifact selection for {model}/{case_id}")
-                    rows.append(row); used.add(case_id)
-            if set(by_id) - used:
-                raise ValueError(f"Unregistered results in {model}")
-        return write_report(root / "report", rows, controls, graphs=graphs, expected_models=catalog["models"])
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Rebuild a cumulative Gram fleet report from saved artifacts")
-    parser.add_argument("experiment_root")
-    parser.add_argument("--no-graphs", action="store_true")
-    args = parser.parse_args()
-    for path in report_experiment(args.experiment_root, graphs=not args.no_graphs):
-        print(path)
-
-if __name__ == "__main__":
-    main()

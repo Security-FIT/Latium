@@ -20,8 +20,7 @@ from src.structural.hydra_config import structural_config_from_hydra
 
 
 def run_structural_command(cfg: DictConfig, name: str) -> int:
-    from src.structural.execution.covariance import summarize_covariance
-    from src.structural.planning import build_plan_summary, normalize_models_arg
+    from src.structural.planning import build_plan_summary
     from src.structural.runner import (
         run_structural_analysis,
         run_structural_benchmark,
@@ -34,17 +33,8 @@ def run_structural_command(cfg: DictConfig, name: str) -> int:
     analysis = _section(structural, "analysis")
     output = _section(structural, "output")
     analyze = _section(structural, "analyze")
-    validate_cov = _section(structural, "validate_cov")
 
     json_out = path_or_none(output.get("json_out"))
-    if name == "structural-validate-cov":
-        payload = summarize_covariance(normalize_models_arg(_string_list(run.get("models"))))
-        write_or_print(payload, json_out)
-        fail_missing = strict_bool(
-            validate_cov.get("fail_missing", False),
-            name="structural.validate_cov.fail_missing",
-        )
-        return 1 if fail_missing and not payload["ok"] else 0
     if name == "structural-analyze":
         run_root = path_or_none(analyze.get("run_root"))
         if run_root is None:

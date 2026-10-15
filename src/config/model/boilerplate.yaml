@@ -18,4 +18,4 @@ corruption_noise_multiplier: MULTIPLIER_VALUE
 
 # Model-specific overrides only; omit fields that match model_base/default.yaml.
 dtype: "bf16"
-second_moment_path: "./data/second_moment_stats/MODEL_NAME_LAYER_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: null

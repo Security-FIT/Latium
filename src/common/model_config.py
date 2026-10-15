@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 import os
-import re
 from pathlib import Path
 from typing import Any
 from omegaconf import DictConfig, OmegaConf
@@ -17,18 +16,8 @@ MODEL_BASE_CONFIG = CONFIG_ROOT / "model_base/default.yaml"
 
 
 def model_config_dir() -> Path:
-    """Allow a fleet process to use saved checkpoint configs outside the checkout."""
+    """Allow model configurations outside the checkout."""
     return Path(os.environ.get("LATIUM_MODEL_CONFIG_DIR") or MODEL_CONFIG_DIR)
-
-
-def sanitize_model_id(model_id: str) -> str:
-    """Return the stable fleet slug body used in run names and filenames."""
-    return re.sub(r"[^a-zA-Z0-9_-]", "_", str(model_id).replace("/", "_"))
-
-
-def fleet_model_key(model_id: str) -> str:
-    """Return the model key for a fleet HuggingFace model id."""
-    return f"fleet_{sanitize_model_id(model_id)}"
 
 
 def _iter_yaml_paths(config_dir: Path) -> list[Path]:
@@ -101,9 +90,3 @@ def load_model_config(model_name: str, *, config_dir=None) -> DictConfig:
     if match is None:
         raise FileNotFoundError(f"No saved model configuration for {model_name!r} in {config_root}")
     return match[1]
-
-
-def second_moment_basename(model_name: str, *, config_dir=None) -> str:
-    cfg = load_model_config(model_name, config_dir=config_dir)
-    explicit = str(getattr(cfg, "second_moment_path", "") or "").strip()
-    return Path(explicit).name if explicit else f"{str(cfg.name).replace('/', '_')}_{int(cfg.layer)}"

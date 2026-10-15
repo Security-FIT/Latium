@@ -4,7 +4,7 @@
 # :author: Jakub Res <iresj@fit.vut.cz>
 
 name: "EleutherAI/gpt-j-6B"
-second_moment_path: "./data/second_moment_stats/EleutherAI_gpt-j-6B_5_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_path: null
 layer_name_template: "transformer.h.{}.mlp.fc_out"
 fc_layer_name_template: "transformer.h.{}.mlp.fc_in"
 restore_layer_name_template: "transformer.h.{}"

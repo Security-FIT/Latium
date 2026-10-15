@@ -219,5 +219,3 @@ results/
 *.out
 .codex/
 /paper/
-!manifests/CSF-final/prefix_cache/
-!manifests/CSF-final/prefix_cache/*.json

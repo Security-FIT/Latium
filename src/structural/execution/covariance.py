@@ -8,21 +8,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import Any
 
 from src.common.paths import resolve_project_path
 
-if TYPE_CHECKING:  # pragma: no cover
-    from omegaconf import OmegaConf
-
 CONFIG_DIR = Path(__file__).resolve().parents[2] / 'config'
 MODEL_CONFIG_DIR = CONFIG_DIR / 'model'
-
-
-def load_model_config(model_name: str) -> Any:
-    from src.common.model_config import load_model_config as resolve_model_config
-
-    return resolve_model_config(model_name)
 
 
 def available_model_names() -> list[str]:
@@ -43,28 +34,3 @@ def find_second_moment_files(model_cfg: Any) -> tuple[list[Path], Path]:
     pt_files = sorted(sm_dir.glob(f'{model_id}_{layer}_*_*.pt'))
     npz_files = sorted(sm_dir.glob(f'{model_id}_{layer}_*_*.npz'))
     return (pt_files + npz_files), sm_dir
-
-
-def inspect_model_covariance(model_name: str) -> dict[str, object]:
-    cfg = load_model_config(model_name)
-    files, sm_dir = find_second_moment_files(cfg)
-    return {
-        'model': model_name,
-        'resolved_name': str(getattr(cfg, 'name', model_name)),
-        'layer': int(getattr(cfg, 'layer', -1)),
-        'second_moment_dir': str(sm_dir),
-        'files': [str(path) for path in files],
-        'ok': bool(files),
-    }
-
-
-def inspect_models_covariance(models: Sequence[str]) -> list[dict[str, object]]:
-    return [inspect_model_covariance(model_name) for model_name in models]
-
-
-def summarize_covariance(models: Sequence[str]) -> dict[str, object]:
-    statuses = inspect_models_covariance(models)
-    return {
-        'ok': all(bool(status['ok']) for status in statuses),
-        'models': statuses,
-    }

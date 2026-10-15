@@ -60,6 +60,3 @@ output:
 
 analyze:
   run_root: null
-
-validate_cov:
-  fail_missing: false

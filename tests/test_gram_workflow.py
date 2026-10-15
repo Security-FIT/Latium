@@ -1,12 +1,10 @@
-"""Regression gates for shared cohorts, batch append and cumulative Gram reports."""
+"""Case selection and GRAM report tests."""
 import json
-import subprocess
 from pathlib import Path
 import hydra
 import pytest
 from src.counterfact_selection import generate_random_case_manifest, load_cases_from_manifest, write_case_manifest
-from src.gram_experiment import register_batch
-from src.graphs.gram import report_experiment, summarize
+from src.graphs.gram import summarize
 from src.graphs.runtime import render_run
 from src.results import ArtifactWriter, RunLayout, build_artifact, config_hash
 from src.results.ids import execution_id, capture_id, analysis_id
@@ -72,22 +70,6 @@ def test_gram_preset_resolves_only_gram_even_with_graphs():
     assert plan["edit_methods"] == ["rome"]
 
 
-def test_batch_identity_retries_overlaps_and_config_changes(tmp_path):
-    _, cohort, _ = cohort_file(tmp_path)
-    root = tmp_path / "experiment"
-    models = {"a": {"config_hash": "same"}, "b": {"config_hash": "same"}}
-    register_batch(root, cohort, models, 0,100,{"workflow":"gram"})
-    register_batch(root, cohort, models, 0,100,{"workflow":"gram"})
-    register_batch(root, cohort, models, 100,200,{"workflow":"gram"})
-    assert len(json.loads((root/"experiment.json").read_text())["models"]["a"]["batches"]) == 2
-    with pytest.raises(ValueError, match="Overlapping"):
-        register_batch(root, cohort, models,50,150,{"workflow":"gram"})
-    with pytest.raises(ValueError, match="setup changed"):
-        register_batch(root, cohort, models,200,300,{"workflow":"other"})
-    with pytest.raises(ValueError, match="configuration changed"):
-        register_batch(root, cohort,{"a":{"config_hash":"changed"}},200,300,{"workflow":"gram"})
-
-
 def write_batch(root, model, cohort, start, stop):
     plan = f"cf_{cohort['manifest_hash'][:12]}_m{start:04d}-{stop:04d}_r01"
     writer = ArtifactWriter(root, run_id="run")
@@ -107,40 +89,20 @@ def write_batch(root, model, cohort, start, stop):
     return plan
 
 
-def test_append_100_to_200_preserves_first_batch_and_invalidates_graphs(tmp_path):
+def test_render_saved_artifacts_and_reuse(tmp_path):
     _, cohort, _ = cohort_file(tmp_path)
-    root = tmp_path / "experiment"
-    models = {"a":{"config_hash":"a"},"b":{"config_hash":"b"}}
-    register_batch(root,cohort,models,0,100,{"workflow":"gram"})
-    for model in models:
-        write_batch(root/"models"/model/"run",model,cohort,0,100)
-    report_experiment(root,graphs=False)
-    first = json.loads((root/"report/summary.json").read_text())
-    assert first["models"]["a"]["selected"] == 100
-    rendered = render_run(root/"models/a/run",preset="gram-report")
-    assert rendered["written"]
-    assert render_run(root/"models/a/run",preset="gram-report")["skipped"]
-    frozen = {str(p):p.read_bytes() for p in (root/"models/a/run/plans").rglob("*.json")}
-    register_batch(root,cohort,models,100,200,{"workflow":"gram"})
-    for model in models:
-        write_batch(root/"models"/model/"run",model,cohort,100,200)
-    for path, original in frozen.items():
-        assert Path(path).read_bytes() == original
-    report_experiment(root,graphs=False)
-    report = json.loads((root/"report/summary.json").read_text())
-    rows = json.loads((root/"report/cases.json").read_text())
-    assert report["models"]["a"]["selected"] == 200
+    root = tmp_path / "run"
+    write_batch(root, "a", cohort, 0, 100)
+    originals = {str(p): p.read_bytes() for p in (root / "plans").rglob("*.json")}
+    assert render_run(root, preset="gram-report")["written"]
+    report = json.loads((root / "graphs/gram-report/summary.json").read_text())
+    assert report["models"]["a"]["selected"] == 100
     assert report["models"]["a"]["gram_exact"] == 1.
-    assert len({(r["model"],r["case_id"]) for r in rows}) == 400
-    assert report["paired_coverage"]["common_evaluated_count"] == 200
-    assert report["input_hash"] != first["input_hash"]
-    assert report["models"]["a"]["mean_overall_score"] == pytest.approx(3/(1+1/.75+1))
-    assert render_run(root/"models/a/run",preset="gram-report")["written"]
-    assert render_run(root/"models/a/run",preset="gram-report")["skipped"]
-    (root/"models/a/run/graphs/gram-report/accuracy.png").unlink()
-    assert render_run(root/"models/a/run",preset="gram-report")["written"]
-    report_experiment(root,graphs=False)
-    assert json.loads((root/"report/summary.json").read_text())["models"]["a"]["selected"] == 200
+    assert render_run(root, preset="gram-report")["skipped"]
+    for path, original in originals.items():
+        assert Path(path).read_bytes() == original
+    (root / "graphs/gram-report/accuracy.png").unlink()
+    assert render_run(root, preset="gram-report")["written"]
 
 
 def test_errors_pending_and_baseline_denominators():

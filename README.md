@@ -90,23 +90,19 @@ base-model statistics to reuse them.
 
 ### The same 1,000 facts
 
-To use the same 1,000 CounterFact facts, retrieve the saved manifest from `main`:
+The same 1,000 CounterFact facts are selected by the included
+[rome-facts-1000.json](manifests/paper/rome-facts-1000.json) manifest:
 
 Use the generated 100,000-text covariance file for the structural run. If you
 previously computed the 32-text example, set `second_moment_path` in the model
 YAML to the new file's printed path before running the structural command.
 
 ```bash
-git fetch origin main:refs/remotes/origin/main
-mkdir -p inputs
-git show origin/main:manifests/counterfact_seed42_n1000.json \
-  > inputs/counterfact_seed42_n1000.json
-
 MODEL=gpt2-medium
 python -m src second-moment model="$MODEL" model.second_moment_target_samples=100000
 python -m src structural run structural=gram \
   "structural.run.models=[$MODEL]" \
-  structural.run.case_index_file=inputs/counterfact_seed42_n1000.json \
+  structural.run.case_index_file=manifests/paper/rome-facts-1000.json \
   structural.run.start_idx=0 structural.run.n_tests=1000 \
   "structural.run.run_id=paper-$MODEL" structural.render.enabled=true
 ```

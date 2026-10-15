@@ -52,6 +52,33 @@ model YAML.
 ROME optimizer and prefix-generation defaults are in
 `src/config/model_base/default.yaml`; the edit layer is set in each model YAML.
 
+## Model configurations
+
+Use a config key from this table in both commands above:
+`model=gpt2-large` and `'structural.run.models=[gpt2-large]'`, for example.
+Each key links to its YAML configuration.
+
+| Config key | Model |
+|---|---|
+| [gpt2-medium](src/config/model/gpt2-medium.yaml) | `openai-community/gpt2-medium` |
+| [gpt2-large](src/config/model/gpt2-large.yaml) | `openai-community/gpt2-large` |
+| [gpt2-xl](src/config/model/gpt2-xl.yaml) | `gpt2-xl` |
+| [gpt-j-6b](src/config/model/gpt-j-6b.yaml) | `EleutherAI/gpt-j-6B` |
+| [opt-6.7b](src/config/model/opt-6.7b.yaml) | `facebook/opt-6.7b` |
+| [llama2-7b](src/config/model/llama2-7b.yaml) | `NousResearch/Llama-2-7b-hf` |
+| [falcon-7b](src/config/model/falcon-7b.yaml) | `tiiuae/falcon-7b` |
+| [deepseek-7b-base](src/config/model/deepseek-7b-base.yaml) | `deepseek-ai/deepseek-llm-7b-base` |
+| [mistral-7b-v0.1](src/config/model/mistral-7b-v0.1.yaml) | `mistralai/Mistral-7B-v0.1` |
+| [mistral-7b-v0.3](src/config/model/mistral-7b-v0.3.yaml) | `mistralai/Mistral-7B-v0.3` |
+| [ministral-3-8b](src/config/model/ministral-3-8b.yaml) | `mistralai/Ministral-3-8B-Base-2512` |
+| [qwen3-4b](src/config/model/qwen3-4b.yaml) | `Qwen/Qwen3-4B` |
+| [qwen3-8b](src/config/model/qwen3-8b.yaml) | `Qwen/Qwen3-8B` |
+| [qwen3.5-4b](src/config/model/qwen3.5-4b.yaml) | `Qwen/Qwen3.5-4B` |
+| [gemma-4-12b](src/config/model/gemma-4-12b.yaml) | `google/gemma-4-12B` |
+| [granite4-micro](src/config/model/granite4-micro.yaml) | `ibm-granite/granite-4.0-micro` |
+| [granite-4.1-8b](src/config/model/granite-4.1-8b.yaml) | `ibm-granite/granite-4.1-8b-base` |
+| [olmo-3-1025-7b](src/config/model/olmo-3-1025-7b.yaml) | `allenai/Olmo-3-1025-7B` |
+
 For a finetuned checkpoint, copy its architecture's model YAML, set `name` to
 the checkpoint's Hub ID or local directory, and choose its edit layer. To load
 a LoRA adapter, set `name` to its downloaded directory and `adapter_base_path`

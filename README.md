@@ -11,7 +11,6 @@ Use Linux, Python 3.11 or newer, and an NVIDIA GPU with enough memory for the
 chosen model. These commands work in an ordinary SSH session:
 
 ```bash
-git clone --depth 1 --branch CSF-submission https://github.com/Security-FIT/Latium.git
 cd Latium
 python3 -m venv .venv
 source .venv/bin/activate

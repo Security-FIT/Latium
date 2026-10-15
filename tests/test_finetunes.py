@@ -75,11 +75,12 @@ def workflow(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("mode", ["base", "own"])
-def test_saved_assignments_and_covariance_sources(workflow, mode):
+@pytest.mark.parametrize("samples", [100_000, 32])
+def test_saved_assignments_and_covariance_sources(workflow, mode, samples):
     root, downloads, commands = workflow
     previous = os.environ.get("LATIUM_MODEL_CONFIG_DIR")
     assert finetunes.main(["--family", "gpt2-medium", "--covariance", mode,
-                           "--output", str(root / "out")]) == 0
+                           "--covariance-samples", str(samples), "--output", str(root / "out")]) == 0
     assert os.environ.get("LATIUM_MODEL_CONFIG_DIR") == previous
     edits = [command for command in commands if command[0] == "edit"]
     assert [command[2] for command in edits] == [1, 0]
@@ -88,9 +89,20 @@ def test_saved_assignments_and_covariance_sources(workflow, mode):
     assert edits[1][1]["adapter_base_revision"] == "c" * 40
     covariance = [command[1] for command in commands if command[0] == "covariance"]
     assert len(covariance) == (1 if mode == "base" else 2)
-    assert all(config["second_moment_target_samples"] == 100_000 for config in covariance)
+    assert all(config["second_moment_target_samples"] == samples for config in covariance)
+    assert all(config["second_moment_path"].endswith(f"_{samples}.pt") for config in covariance)
     assert (edits[0][1]["second_moment_path"] == edits[1][1]["second_moment_path"]) == (mode == "base")
     assert all(not Path(download["local_dir"]).exists() for download in downloads)
+
+
+def test_selected_checkpoint_keeps_its_assigned_fact(workflow):
+    root, downloads, commands = workflow
+    assert finetunes.main(["--family", "gpt2-medium", "--covariance", "own",
+                           "--checkpoint", "owner/adapter", "--covariance-samples", "32",
+                           "--output", str(root / "out")]) == 0
+    assert [c[1]["name"] for c in commands if c[0] == "edit"] == ["owner/adapter"]
+    assert [c[2] for c in commands if c[0] == "edit"] == [0]
+    assert {download["revision"] for download in downloads} == {"b" * 40, "c" * 40}
 
 
 def test_download_failure_keeps_next_checkpoint(workflow, monkeypatch):

@@ -138,6 +138,10 @@ Replace `gpt2-medium` with a family listed in
 first saved checkpoint. No new checkpoint discovery or fact sampling is used.
 These commands use the current ROME settings and self-generated prefixes.
 
+For a quick smoke run, add `--limit 1 --covariance-samples 32`. Paper runs use
+100,000 covariance texts by default. To select a particular saved checkpoint,
+add `--checkpoint org/model`; its original fact assignment is kept.
+
 Base covariance is computed once for the family; own covariance is computed
 on each finetuned checkpoint. Both use 100,000 texts. Each checkpoint gets its
 own unedited GRAM baseline, one assigned ROME edit, edited GRAM and graphs.

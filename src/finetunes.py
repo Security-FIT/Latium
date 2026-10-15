@@ -41,10 +41,10 @@ def download(api, model_id, revision, directory, files=None):
     return info.id, info.sha
 
 
-def covariance_config(config, directory):
+def covariance_config(config, directory, samples=SAMPLES):
     config["second_moment_dir"] = str(directory)
-    config["second_moment_target_samples"] = SAMPLES
-    filename = f"{config['name'].replace('/', '_')}_{config['layer']}_SM_Method.WIKIPEDIA_{SAMPLES}.pt"
+    config["second_moment_target_samples"] = samples
+    filename = f"{config['name'].replace('/', '_')}_{config['layer']}_SM_Method.WIKIPEDIA_{samples}.pt"
     config["second_moment_path"] = str(directory / filename)
     return config
 
@@ -66,7 +66,12 @@ def run(args):
     facts = load_case_manifest(facts_path)
     if selection["fact_manifest_hash"] != facts["manifest_hash"]:
         raise ValueError("Checkpoint selection and fact manifest do not match")
-    entries = selection["models"][:args.limit]
+    entries = selection["models"]
+    if args.checkpoint:
+        entries = [entry for entry in entries if entry["model_id"] == args.checkpoint]
+        if not entries:
+            raise ValueError(f"Checkpoint is not in the saved selection: {args.checkpoint}")
+    entries = entries[:args.limit]
     for entry in entries:
         if facts["case_ids"][entry["fact_position"]] != entry["fact_case_id"]:
             raise ValueError(f"Fact assignment differs: {entry['model_id']}")
@@ -90,7 +95,7 @@ def run(args):
                 directory = Path(temporary)
                 config["name"], config["checkpoint_revision"] = download(api, base["name"], None, directory)
                 config["models_dir"] = str(directory)
-                covariance_config(config, output / "covariance" / "base")
+                covariance_config(config, output / "covariance" / "base", args.covariance_samples)
                 compute_covariance(configs, "covariance", config)
                 base_covariance = config["second_moment_path"]
 
@@ -112,7 +117,7 @@ def run(args):
                         )
                         config.update(adapter_base_model=base_id, adapter_base_revision=base_revision,
                                       adapter_base_path=str(directory / base_id))
-                    covariance_config(config, output / "covariance" / key)
+                    covariance_config(config, output / "covariance" / key, args.covariance_samples)
                     if base_covariance:
                         config["second_moment_path"] = base_covariance
                         save_config(configs, key, config)
@@ -144,10 +149,15 @@ def main(argv=None):
     parser.add_argument("--family", required=True, help="Model config key, e.g. gpt2-medium")
     parser.add_argument("--covariance", choices=("base", "own"), required=True)
     parser.add_argument("--limit", type=int, help="Run only the first N saved checkpoints")
+    parser.add_argument("--checkpoint", help="Run one model ID from the saved selection")
+    parser.add_argument("--covariance-samples", type=int, default=SAMPLES,
+                        help="Covariance text count (default: 100000; use 32 for a quick smoke run)")
     parser.add_argument("--output", help="New output directory; defaults to a timestamped directory")
     args = parser.parse_args(argv)
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
+    if args.covariance_samples < 1:
+        parser.error("--covariance-samples must be positive")
     if not (INPUTS / f"finetunes-{args.covariance}" / f"{args.family}.json").is_file():
         parser.error(f"No saved {args.covariance}-covariance selection for {args.family}")
     return run(args)

@@ -6,6 +6,7 @@ import pytest
 from src.counterfact_selection import generate_random_case_manifest, load_cases_from_manifest, write_case_manifest
 from src.graphs.gram import summarize
 from src.graphs.runtime import render_run
+from src.main import main
 from src.results import ArtifactWriter, RunLayout, build_artifact, config_hash
 from src.results.ids import execution_id, capture_id, analysis_id
 from src.structural.planning import build_plan_summary
@@ -94,15 +95,18 @@ def test_render_saved_artifacts_and_reuse(tmp_path):
     root = tmp_path / "run"
     write_batch(root, "a", cohort, 0, 100)
     originals = {str(p): p.read_bytes() for p in (root / "plans").rglob("*.json")}
-    assert render_run(root, preset="gram-report")["written"]
+    assert main(["graphs", "run", str(root)]) == 0
+    assert (root / "graphs/gram-report/profiles.pdf").is_file()
     report = json.loads((root / "graphs/gram-report/summary.json").read_text())
     assert report["models"]["a"]["selected"] == 100
     assert report["models"]["a"]["gram_exact"] == 1.
-    assert render_run(root, preset="gram-report")["skipped"]
+    assert render_run(root, preset="gram-report",
+                      renderer_options={"gram-report": {"formats": ["png", "pdf", "json"]}})["skipped"]
     for path, original in originals.items():
         assert Path(path).read_bytes() == original
     (root / "graphs/gram-report/accuracy.png").unlink()
-    assert render_run(root, preset="gram-report")["written"]
+    assert main(["graphs", "run", str(root), "graphs.force=true"]) == 0
+    assert (root / "graphs/gram-report/accuracy.png").is_file()
 
 
 def test_errors_pending_and_baseline_denominators():

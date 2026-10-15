@@ -8,7 +8,9 @@ artifact: null
 output_dir: null
 renderer_preset: gram-report
 style_preset: default
-enable_renderers:
+enable_renderers: []
+disable_renderers: []
+renderers:
   gram-report:
     formats: [png, pdf, json]
 force: false

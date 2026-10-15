@@ -88,14 +88,6 @@ Each run writes:
 
 fact_results.jsonl records the resolved multiplier, independent seeds, and calibration search trail for every accepted fact. summary.json records resolved multiplier statistics, split counts, the discovery center, confirmed region, selected center, hook semantics, and confirmation result.
 
-## Limits
-
-- Only the first target token is scored.
-- Overlapping windows are correlated.
-- Results depend on the corruption eligibility rule, window width, fact filtering, restored component, subject position, and model adapter.
-- Positive held-out recovery does not prove that a fact is stored in one layer.
-- The representative center is an operational ROME layer; the later ROME benchmark tests whether it is useful.
-
 ## Files
 
 - src/causal_trace/causal_trace.py: execution and artifacts.

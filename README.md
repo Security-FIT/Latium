@@ -1,8 +1,7 @@
 # Latium
 
-Latium applies ROME model edits and uses GRAM to locate the edited layer. It
-also includes causal tracing and supports full checkpoints and merged LoRA
-adapters. Developed by Security@FIT in collaboration with Red Hat Research.
+Latium applies ROME model edits and uses GRAM to locate the edited layer.
+Developed by Security@FIT in collaboration with Red Hat Research.
 
 Main contributors: **Matej Olexa** and **Jakub Res**.
 

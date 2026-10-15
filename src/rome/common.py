@@ -1240,7 +1240,7 @@ def second_moment_wikipedia(handler, N_rounds, N_k):
     batch_sizer = _AdaptiveCovarianceBatchSizer(batch_size)
 
     # The covariance hook consumes intermediate MLP inputs, not output logits.
-    # Models with very large vocabularies (for example Gemma 4) otherwise
+    # Models with very large vocabularies otherwise
     # materialize a large [batch, sequence, vocabulary] tensor unnecessarily.
     try:
         supports_logits_to_keep = "logits_to_keep" in inspect.signature(handler.model.forward).parameters

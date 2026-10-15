@@ -155,7 +155,7 @@ def test_model_runner_real_rome_insertion_restoration_and_saved_profiles(tmp_pat
     monkeypatch.setattr(common, "get_second_moment", lambda handler: torch.eye(24))
     monkeypatch.setattr(editing, "compute_rome_metrics", evaluate)
     result = runtime.run_capture(StructuralBenchmarkConfig(
-        models=("toy-qwen", "toy-gemma"), n_tests=2, runs_per_model=2,
+        models=("toy-qwen", "toy-other"), n_tests=2, runs_per_model=2,
         output_dir=str(tmp_path), run_id="run", capture_profile="none",
         enable_captures=("gram-localization",), run_analysis=False, render_graphs=False,
     ))

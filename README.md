@@ -73,7 +73,6 @@ Each key links to its YAML configuration.
 | [qwen3-4b](src/config/model/qwen3-4b.yaml) | `Qwen/Qwen3-4B` |
 | [qwen3-8b](src/config/model/qwen3-8b.yaml) | `Qwen/Qwen3-8B` |
 | [qwen3.5-4b](src/config/model/qwen3.5-4b.yaml) | `Qwen/Qwen3.5-4B` |
-| [gemma-4-12b](src/config/model/gemma-4-12b.yaml) | `google/gemma-4-12B` |
 | [granite4-micro](src/config/model/granite4-micro.yaml) | `ibm-granite/granite-4.0-micro` |
 | [granite-4.1-8b](src/config/model/granite-4.1-8b.yaml) | `ibm-granite/granite-4.1-8b-base` |
 | [olmo-3-1025-7b](src/config/model/olmo-3-1025-7b.yaml) | `allenai/Olmo-3-1025-7B` |

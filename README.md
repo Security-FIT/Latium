@@ -155,6 +155,17 @@ figures on CPU, without downloading model weights:
 python scripts/render_saved_results.py
 ```
 
+To reproduce the original paper figure layout and Tables 2–4, use the
+[paper notebooks](notebooks/paper/README.md):
+
+```bash
+python -m pip install -r notebooks/paper/requirements.txt
+python scripts/reproduce_paper.py
+```
+
+The paper figure is written to `analysis_out/paper/outputs/gram_profiles.pdf`
+and `.png`; the supplementary 17-model figure is `gram_profiles_all_models`.
+
 See the linked instructions for a minimal CPU environment and a metrics-only
 command that uses only the Python standard library. Generated files go to
 `analysis_out/saved-results/`.

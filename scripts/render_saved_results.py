@@ -53,8 +53,21 @@ def main():
 
     grouped = defaultdict(list)
     totals = {}
+    paper = output / 'paper-inputs'
+    classic_families, classic_profiles, facts, checkpoints = [], [], [], defaultdict(list)
+
+    def write_csv(relative, rows):
+        dest = paper / relative
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with dest.open('w', newline='', encoding='utf-8') as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+
     for root in roots:
         campaign_rows = []
+        descriptors = {(r['family'], r['model_id'], r['revision']): r
+                       for r in read(root / 'data/checkpoints.json')} if (root / 'data/checkpoints.json').exists() else {}
         for manifest, family, model, revision in runs(root):
             executions, analyses = [], []
             for record in read(manifest)['artifacts'].values():
@@ -75,9 +88,50 @@ def main():
             if root.name == 'classic-gram-merged':
                 write_report(output / 'native-renderer' / family, rows, controls,
                              formats=('pdf', 'png'))
+                summary = paper / 'existing-renderer/classic-gram' / family / 'summary.json'
+                summary.parent.mkdir(parents=True, exist_ok=True)
+                summary.write_bytes((output / 'native-renderer' / family / 'summary.json').read_bytes())
+                target = int(rows[0]['target_layer'])
+                classic_families.append(dict(model=family, n=len(rows), target_layer=target,
+                    baseline_selected_layer=rows[0]['baseline_selected_layer'], baseline_fp=rows[0]['baseline_fp'],
+                    rome_success_count=sum(r['rome_success'] for r in rows), gram_exact_count=sum(r['exact'] for r in rows)))
+                layers = sorted(map(int, rows[0]['layer_scores']))
+                values = np.array([[r['layer_scores'][str(l)] for l in layers] for r in rows])
+                for i, layer in enumerate(layers):
+                    v = values[:, i]
+                    classic_profiles.append(dict(model=family, layer=layer, configured_target_layer=target,
+                        n_edited_profiles=len(rows), baseline_score=rows[0]['baseline_layer_scores'][str(layer)],
+                        edited_mean=float(v.mean()), edited_min=float(v.min()),
+                        edited_q25=float(np.quantile(v, .25)), edited_q75=float(np.quantile(v, .75)),
+                        edited_max=float(v.max()), edited_std_population=float(v.std())))
+                facts.extend(dict(family=family, case_id=r['case_id'], configured_rome_layer=r['target_layer']) for r in rows)
+            else:
+                descriptor = descriptors[family, model, revision]
+                for row in rows:
+                    checkpoints[root.name].append(dict(family=family, model_id=model, revision=revision,
+                        checkpoint_type=descriptor['checkpoint_type'], case_id=row['case_id'], target_layer=row['target_layer'],
+                        baseline_selected_layer=row['baseline_selected_layer'], edited_selected_layer=row['predicted_layer'],
+                        baseline_fp=row['baseline_fp'], rome_efficacy_score=row['metrics']['efficacy_score'],
+                        rome_success=row['rome_success'], edited_gram_exact=row['exact']))
         totals[root.name] = dict(n=len(campaign_rows),
             rome_success=sum(r['rome_success'] for r in campaign_rows),
             gram_exact=sum(r['exact'] for r in campaign_rows))
+
+    write_csv('data/classic-family-summary.csv', classic_families)
+    write_csv('data/classic-layer-profile-statistics.csv', classic_profiles)
+    write_csv('manifests/classic-gram/rome-facts-per-model.csv', facts)
+    write_csv('data/basecov-profile-checkpoints.csv', checkpoints['finetune-no-cov'])
+    write_csv('data/owncov-checkpoint-results.csv', checkpoints['finetune-covariance'])
+    coverage = {r['family']: int(r['owncov_attempted'])
+                for r in read(inputs / 'finetune-covariance/data/family-coverage.json')}
+    owncov_families = []
+    for family in sorted({r['family'] for r in checkpoints['finetune-covariance']}):
+        rows = [r for r in checkpoints['finetune-covariance'] if r['family'] == family]
+        owncov_families.append(dict(family=family, attempted=coverage[family], evaluated=len(rows),
+            download_unavailable=coverage[family] - len(rows),
+            rome_success=sum(r['rome_success'] for r in rows), edited_gram_exact=sum(r['edited_gram_exact'] for r in rows),
+            baseline_fp=sum(r['baseline_fp'] for r in rows)))
+    write_csv('data/owncov-family-results.csv', owncov_families)
 
     plt.rcParams.update({'pdf.fonttype': 42, 'axes.spines.top': False, 'axes.spines.right': False})
 

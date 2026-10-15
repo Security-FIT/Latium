@@ -75,3 +75,9 @@ The command verifies archive and input checksums, extracts into
 Set `--output PATH` to choose a different output directory. Original archived
 inputs are never modified. `INDEX.json` inside the archive lists every input's
 SHA-256; `bundle.json` records the archive checksum and size.
+
+The original paper figure style and all four paper notebooks are also included
+in [notebooks/paper/](../notebooks/paper/README.md). Run
+`python scripts/reproduce_paper.py` after installing their requirements to
+rebuild the notebook inputs from this ZIP, execute the checks and generate the
+paper PDF/PNG figures and LaTeX tables.

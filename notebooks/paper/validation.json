@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "notebooks": 4,
+  "checks": [
+    {
+      "file": "checks_01_rome.csv",
+      "checks": 46,
+      "passed": 46
+    },
+    {
+      "file": "checks_02_detection.csv",
+      "checks": 41,
+      "passed": 41
+    },
+    {
+      "file": "checks_03_figure.csv",
+      "checks": 7,
+      "passed": 7
+    },
+    {
+      "file": "checks_04_finetunes.csv",
+      "checks": 43,
+      "passed": 43
+    }
+  ],
+  "total_checks": 137,
+  "artifact_zip_sha256": "f583358782c6535bbdeccc0456595228bd17a4239467229f994059f6042ea394",
+  "matches_current_paper_pngs_byte_for_byte": true,
+  "figure_sha256": {
+    "gram_profiles.png": "fada596bd0258e346013fc4ff6600ffa1551491eab6da933fde34ebe4161bdf6",
+    "gram_profiles_all_models.png": "4d9df188f52108416455781d185e871f0f9007e0f3276652656daf12610ce9ed"
+  },
+  "input_directory": "/home/metju/latium-paper-notebook-validation-20261015/saved-results/paper-inputs",
+  "output_directory": "/home/metju/latium-paper-notebook-validation-20261015"
+}

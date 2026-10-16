@@ -6,6 +6,7 @@ from collections import defaultdict
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -26,9 +27,31 @@ def main():
         raise ValueError('Bundle checksum mismatch')
     output.mkdir(parents=True, exist_ok=True)
     inputs = output / 'inputs'
+    if not inputs.resolve().is_relative_to(output):
+        raise ValueError('Input directory must stay inside the output directory')
     inputs.mkdir(exist_ok=True)
     # Reject links/traversal, and never extract outside the dedicated input tree.
     with zipfile.ZipFile(bundle) as archive:
+        # Remove obsolete inputs owned by the previous archive when reusing
+        # an output directory; otherwise removed models could be counted again.
+        previous = inputs / 'INDEX.json'
+        if previous.exists():
+            current_names = set(archive.namelist())
+            for record in read(previous)['files']:
+                if record['path'] in current_names:
+                    continue
+                stale = inputs / record['path']
+                if not stale.resolve().is_relative_to(inputs.resolve()):
+                    raise ValueError(f'Unsafe previous input path: {stale}')
+                if stale.is_file():
+                    stale.unlink()
+                    parent = stale.parent
+                    while parent != inputs:
+                        try:
+                            parent.rmdir()
+                        except OSError:
+                            break
+                        parent = parent.parent
         for member in archive.infolist():
             if member.is_dir() or not (inputs / member.filename).resolve().is_relative_to(inputs.resolve()):
                 raise ValueError(f'Unsafe archive member: {member.filename}')
@@ -40,6 +63,22 @@ def main():
         if hashlib.sha256((inputs / entry['path']).read_bytes()).hexdigest() != entry['sha256']:
             raise ValueError(f"Input checksum mismatch: {entry['path']}")
     roots = [inputs / name for name in index['campaign_runs']]
+    classic_models = {family for _, family, _, _ in runs(inputs / 'classic-gram-merged')}
+    for relative in ('native-renderer', 'paper-inputs/existing-renderer/classic-gram'):
+        parent = output / relative
+        if parent.exists():
+            if not parent.resolve().is_relative_to(output):
+                raise ValueError(f'Report directory must stay inside the output directory: {parent}')
+            for child in parent.iterdir():
+                if child.is_dir() and child.name not in classic_models:
+                    if child.is_symlink() or child.resolve().parent != parent.resolve():
+                        raise ValueError(f'Unsafe obsolete report directory: {child}')
+                    shutil.rmtree(child)
+    old_figures = output / 'figures/classic-gram-merged'
+    if old_figures.exists():
+        for figure in old_figures.iterdir():
+            if figure.suffix in ('.pdf', '.png') and figure.stem not in classic_models:
+                figure.unlink()
     for name, extra in (('per-checkpoint.csv', []), ('per-family.csv', ['--by-family'])):
         with (output / name).open('w', newline='', encoding='utf-8') as stream:
             subprocess.run([sys.executable, str(REPO / 'scripts/summarize_rome_gram.py'),
@@ -171,7 +210,7 @@ def main():
                 fig.savefig(dest / f'{family}-log.{fmt}', dpi=200)
         plt.close(fig)
 
-    # Four models used in the main paper figure; the archive also retains Gemma.
+    # Four models used in the main paper figure.
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
     for ax, family in zip(axes, ('qwen3-8b', 'gpt2-medium', 'mistral-7b-v0.3', 'olmo-3-1025-7b')):
         panel(ax, 'classic-gram-merged', family)

@@ -4,12 +4,12 @@
 
 | Directory | Runs | Description |
 | --- | ---: | --- |
-| `classic-gram-merged` | 18 | 1,000 independent edits per base model |
+| `classic-gram-merged` | 17 | 1,000 independent edits per base model |
 | `finetune-covariance` | 744 | One edit per finetuned checkpoint, with its own covariance |
 | `finetune-no-cov` | 790 | One edit per checkpoint, using base-model covariance |
 
-The paper uses 17 base models; the additional Gemma run remains available in
-the archive. Own-covariance results are the final finetuned experiment. The
+The archive contains the 17 base models used in the paper.
+Own-covariance results are the final finetuned experiment. The
 base-covariance cohort is included for comparison and selection analysis.
 
 The original directory layout and experiment data are retained: baseline and

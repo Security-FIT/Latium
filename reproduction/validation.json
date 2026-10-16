@@ -1,11 +1,13 @@
 {
   "passed": true,
-  "metric_comparisons_to_full_archives": 25664,
+  "artifact_zip_sha256": "586eebcd97de7581dc82aecb851c04722f80f61ac4397f1de1fb140bdfd40ed5",
+  "archive_scanned_files": 18105,
+  "excluded_model_name_matches": 0,
+  "metric_comparisons_to_previous_accepted_results": 25632,
   "differences": 0,
-  "prior_native_validated_metric_rows": 797,
-  "native_renderer_models": 18,
-  "generated_figures": 250,
-  "original_scientific_payloads_byte_verified": 9312,
+  "native_renderer_models": 17,
+  "generated_figures": 244,
+  "original_scientific_payloads_byte_verified": 9306,
   "paper_17_models": {
     "n": 17000,
     "rome_success": 16655,
@@ -18,5 +20,6 @@
     "gram_exact": 584,
     "baseline_fp": 159
   },
-  "verified_input_files": 18119
+  "verified_input_files": 18104,
+  "existing_output_directory_cleanup_passed": true
 }

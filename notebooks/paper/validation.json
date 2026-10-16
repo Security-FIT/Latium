@@ -24,12 +24,12 @@
     }
   ],
   "total_checks": 137,
-  "artifact_zip_sha256": "f583358782c6535bbdeccc0456595228bd17a4239467229f994059f6042ea394",
+  "input_directory": "/home/metju/latium-paper-notebook-validation-20261015/saved-results/paper-inputs",
+  "output_directory": "/home/metju/latium-paper-notebook-validation-20261015",
+  "artifact_zip_sha256": "586eebcd97de7581dc82aecb851c04722f80f61ac4397f1de1fb140bdfd40ed5",
   "matches_current_paper_pngs_byte_for_byte": true,
   "figure_sha256": {
     "gram_profiles.png": "fada596bd0258e346013fc4ff6600ffa1551491eab6da933fde34ebe4161bdf6",
     "gram_profiles_all_models.png": "4d9df188f52108416455781d185e871f0f9007e0f3276652656daf12610ce9ed"
-  },
-  "input_directory": "/home/metju/latium-paper-notebook-validation-20261015/saved-results/paper-inputs",
-  "output_directory": "/home/metju/latium-paper-notebook-validation-20261015"
+  }
 }

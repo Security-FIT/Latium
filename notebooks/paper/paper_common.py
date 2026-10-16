@@ -54,9 +54,8 @@ MODELS = pd.DataFrame(
     ],
     columns=["key", "name", "family", "period"],
 )
-# Gemma 4 12B is present in the archive but was removed from the study (it does not carry the
-# text-generation tag used to select fine-tunes). Every notebook drops it explicitly.
-EXCLUDED = {"gemma-4-12b"}
+# The archive contains only the models included in the study.
+EXCLUDED = set()
 
 _READ: dict[str, str] = {}
 

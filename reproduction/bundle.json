@@ -1,14 +1,14 @@
 {
   "file": "gram-artifacts.zip",
-  "bytes": 51222802,
-  "sha256": "f583358782c6535bbdeccc0456595228bd17a4239467229f994059f6042ea394",
+  "bytes": 50722076,
+  "sha256": "586eebcd97de7581dc82aecb851c04722f80f61ac4397f1de1fb140bdfd40ed5",
   "campaign_runs": {
-    "classic-gram-merged": 18,
+    "classic-gram-merged": 17,
     "finetune-covariance": 744,
     "finetune-no-cov": 790
   },
-  "uncompressed_bytes": 349347658,
-  "input_files_including_index": 18120,
+  "uncompressed_bytes": 336943443,
+  "input_files_including_index": 18105,
   "omitted_file_counts": {
     "causal tracing": 10710,
     "code/job copies": 31,

@@ -53,10 +53,11 @@ def _validate_loaded_weights(info: dict, checkpoint: str, model_type: str | None
     )
     # Older GPT-2/GPT-J checkpoints persist deterministic causal-mask buffers.
     # Newer Transformers builds these masks at runtime; they are not learned weights.
+    # Transformers 5 reports them relative to the base model (``h.N.attn.bias``).
     legacy_buffers = {
         key for key in info.get("unexpected_keys", ())
         if model_type in ("gpt2", "gptj")
-        and re.fullmatch(r"transformer\.h\.\d+\.attn\.(?:bias|masked_bias)", key)
+        and re.fullmatch(r"(?:transformer\.)?h\.\d+\.attn\.(?:bias|masked_bias)", key)
     }
     unexpected = sorted(
         key for key in info.get("unexpected_keys", ())

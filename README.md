@@ -131,7 +131,7 @@ Replace `gpt2-medium` with a family listed in
 [finetunes-base](manifests/paper/finetunes-base/) or
 [finetunes-own](manifests/paper/finetunes-own/). Add `--limit 1` to run only the
 first saved checkpoint. No new checkpoint discovery or fact sampling is used.
-These commands use the current ROME settings and self-generated prefixes.
+These commands use self-generated ROME prefixes.
 
 For a quick smoke run, add `--limit 1 --covariance-samples 32`. Paper runs use
 100,000 covariance texts by default. To select a particular saved checkpoint,
@@ -147,7 +147,7 @@ in `failures.json`, and remaining checkpoints continue.
 
 ## Outputs and rendering
 
-The accepted experiment inputs are included as a ZIP archive in
+The experiment inputs are included as a ZIP archive in
 [reproduction/](reproduction/README.md). Compute metrics or regenerate PDF/PNG
 figures on CPU, without downloading model weights:
 

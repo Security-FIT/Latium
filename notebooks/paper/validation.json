@@ -26,7 +26,7 @@
   "total_checks": 137,
   "input_directory": "/home/metju/latium-paper-notebook-validation-20261015/saved-results/paper-inputs",
   "output_directory": "/home/metju/latium-paper-notebook-validation-20261015",
-  "artifact_zip_sha256": "586eebcd97de7581dc82aecb851c04722f80f61ac4397f1de1fb140bdfd40ed5",
+  "artifact_zip_sha256": "1ec83c51d23753ec8e31043cd62f15cf3988cce961c7244e355c81f69f9e1dfa",
   "matches_current_paper_pngs_byte_for_byte": true,
   "figure_sha256": {
     "gram_profiles.png": "fada596bd0258e346013fc4ff6600ffa1551491eab6da933fde34ebe4161bdf6",

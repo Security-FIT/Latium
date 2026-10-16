@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "artifact_zip_sha256": "586eebcd97de7581dc82aecb851c04722f80f61ac4397f1de1fb140bdfd40ed5",
+  "artifact_zip_sha256": "1ec83c51d23753ec8e31043cd62f15cf3988cce961c7244e355c81f69f9e1dfa",
   "archive_scanned_files": 18105,
   "excluded_model_name_matches": 0,
   "metric_comparisons_to_previous_accepted_results": 25632,

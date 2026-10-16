@@ -1,6 +1,6 @@
 # Saved inputs for metrics and graphs
 
-`gram-artifacts.zip` contains the accepted, merged experiment results:
+`gram-artifacts.zip` contains the experiment results used for metrics and graphs:
 
 | Directory | Runs | Description |
 | --- | ---: | --- |
@@ -8,27 +8,23 @@
 | `finetune-covariance` | 744 | One edit per finetuned checkpoint, with its own covariance |
 | `finetune-no-cov` | 790 | One edit per checkpoint, using base-model covariance |
 
-The archive contains the 17 base models used in the paper.
-Own-covariance results are the final finetuned experiment. The
-base-covariance cohort is included for comparison and selection analysis.
+The paper evaluates 17 base models and finetuned checkpoints with
+checkpoint-specific covariance. The base-covariance cohort supports the
+checkpoint selection analysis and comparison between covariance settings.
 
-The original directory layout and experiment data are retained: baseline and
-ROME execution records, baseline and edited GRAM captures and analyses, cases,
-per-case ROME ES/PS/NS, configured edit layers, detected layers, full layer
-scores, configurations, checkpoint indexes, selections and provenance. These
-files allow independent inspection of the reported numbers, beyond the CSV
-summaries. Scientific payloads are copied byte for byte, without reducing
-their fields or keeping only aggregate values.
+Each run contains baseline and ROME execution records, baseline and edited
+GRAM captures and analyses, per-case ROME ES/PS/NS, configured edit layers,
+detected layers and full layer scores. Configurations, fact selections,
+checkpoint indexes and provenance support independent inspection of the
+reported numbers.
 
-Only causal tracing, logs, generated reports/images and duplicate code/job
-archives are omitted. Run manifests remove entries for these omitted artifacts;
-all other data is retained. `SOURCE-INDEX.json/csv` preserve original source
-catalogs, which can include references to omitted files. Original absolute
-paths in metadata are also preserved for provenance; the supplied scripts
-resolve checkpoint inputs relative to the extracted archive.
+`INDEX.json` at the archive root lists file sizes and SHA-256 digests.
+`SOURCE-INDEX.json/csv` describe source-file provenance. The scripts resolve
+input paths relative to the extracted archive; computation metadata can also
+contain the absolute paths used during the experiments.
 
-No model weights or covariance tensors are included. GPU experiments can be
-repeated using the main README and the repository's model/fact manifests.
+To run GPU experiments, follow the main README and use the repository's
+model configurations and fact manifests.
 
 ## Compute metrics (Python standard library only)
 
@@ -72,12 +68,11 @@ The command verifies archive and input checksums, extracts into
   and a four-panel `gram_profiles` figure. Every plot has PDF and PNG versions.
 - `verification.json`: input verification and aggregate counts.
 
-Set `--output PATH` to choose a different output directory. Original archived
-inputs are never modified. `INDEX.json` inside the archive lists every input's
-SHA-256; `bundle.json` records the archive checksum and size.
+Set `--output PATH` to choose a different output directory. `bundle.json`
+records the archive checksum and size.
 
-The original paper figure style and all four paper notebooks are also included
-in [notebooks/paper/](../notebooks/paper/README.md). Run
+The four paper notebooks and their figure definitions are in
+[notebooks/paper/](../notebooks/paper/README.md). Run
 `python scripts/reproduce_paper.py` after installing their requirements to
 rebuild the notebook inputs from this ZIP, execute the checks and generate the
 paper PDF/PNG figures and LaTeX tables.

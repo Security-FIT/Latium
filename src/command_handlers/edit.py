@@ -98,7 +98,7 @@ def run_edit(cfg: DictConfig) -> int:
         handler.remove_hooks()
         if outcome is not None:
             for module_name, old_weight in outcome.restorations.items():
-                handler._get_module(module_name).weight = torch.nn.Parameter(old_weight)
+                handler._get_module(module_name).weight = torch.nn.Parameter(old_weight, requires_grad=False)
     return 0
 
 

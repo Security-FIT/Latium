@@ -735,12 +735,20 @@ def _last_non_padding_index(attention_mask: torch.Tensor) -> torch.Tensor:
     return last_index.long()
 
 
+def _rome_batch_size(handler, key: str, requested: int | None, total: int) -> int:
+    size = int(getattr(handler.cfg.model, key, 0) or 0) if requested is None else int(requested)
+    if size < 0:
+        raise ValueError(f"{key} must be nonnegative (0 means all prompts)")
+    return size or total
+
+
 def gather_k(
     handler,
     fact_tuple: Tuple[str, str, str],
     N: int = 50,
     prefix_range: Tuple[int, int] | list[int] | None = None,
     additional_prompts: List[str] | None = None,
+    batch_size: int | None = None,
 ) -> torch.Tensor | None:
     templates = generate_prefixes(handler, N, prefix_range, additional_prompts=additional_prompts)
     for i in range(len(templates)):
@@ -751,23 +759,29 @@ def gather_k(
     seq_len = int(prompts.input_ids.shape[1])
     token_index = _last_non_padding_index(prompts.attention_mask.detach().to("cpu"))
 
-    # TODO: Add support for dynamic batch size
-    k = None
+    batch_size = _rome_batch_size(handler, "k_batch_size", batch_size, prompt_count)
+    keys = []
+    for start in range(0, prompt_count, batch_size):
+        end = min(start + batch_size, prompt_count)
 
-    def k_hook(_, input):
-        nonlocal k
-        hidden_states = input[0]
-        hidden_states, _ = _reshape_hidden_states(hidden_states, prompt_count, seq_len)
+        def k_hook(_, inputs):
+            hidden, _ = _reshape_hidden_states(inputs[0], end - start, seq_len)
+            rows = torch.arange(end - start, device=hidden.device)
+            keys.append(hidden[rows, token_index[start:end].to(hidden.device)].detach())
+            # Only the projection input is needed; skip later blocks and the LM head.
+            raise _CovarianceActivationCaptured
 
-        # Pair each prompt with its own last non-padding token index.
-        local_batch_idx = torch.arange(prompt_count, device=hidden_states.device)
-        local_index = token_index.to(hidden_states.device)
-        k = hidden_states[local_batch_idx, local_index, :].mean(dim=0)
-        return input
-
-    handler.set_k_hook(k_hook)
-    handler.model(**prompts, use_cache=False)
-    handler.remove_hooks()
+        handler.set_k_hook(k_hook)
+        try:
+            with torch.no_grad():
+                handler.model(**{key: value[start:end] for key, value in prompts.items()}, use_cache=False)
+        except _CovarianceActivationCaptured:
+            pass
+        finally:
+            handler.remove_hooks()
+    if len(keys) != len(range(0, prompt_count, batch_size)):
+        raise RuntimeError("The ROME key hook did not capture every batch")
+    k = torch.cat(keys).mean(dim=0)
 
     if hasattr(handler, 'is_multi_gpu') and handler.is_multi_gpu:
         target_device = handler.get_module_device(handler._layer_name_template.format(handler._layer))
@@ -898,7 +912,9 @@ def optimize_v(
     subject_understanding_template: str = "{} is a",
     prefix_range: Tuple[int, int] | list[int] | None = None,
     verbose: bool = True,
+    batch_size: int | None = None,
 ) -> torch.Tensor | None:
+    """Optimize one delta, accumulating the same objective across prompt batches."""
     # Initialization
     v_init = None
     dkl_orig = None
@@ -906,13 +922,11 @@ def optimize_v(
     # Prompt preparation
     new_target_ids = _strip_bos(handler, handler.tokenize_prompt(fact_tuple[2])["input_ids"][0])
 
-    additional_prompts = [subject_understanding_template]
     main_prompt_count = max(1, int(N_prompts))
     templates = generate_prefixes(
         handler,
         main_prompt_count,
         prefix_range=resolve_prefix_range(handler, prefix_range),
-        additional_prompts=additional_prompts,
     )
     prefix_mode = getattr(getattr(handler, "prefix_handler", None), "mode", PrefixMode.SELF)
     log_all_prefixes = runtime_from_cfg(handler.cfg).prefix_log_all
@@ -936,9 +950,14 @@ def optimize_v(
     if new_target_ids.size(0) > 1:
         templates = [template + handler.tokenizer.decode(new_target_ids[:-1]) for template in templates]
 
+    # Prefix generation can return fewer rows than requested. The KL control is
+    # subject-only and must not receive the relation or teacher-forcing suffix.
+    main_prompt_count = len(templates)
+    templates.append(subject_understanding_template.format(fact_tuple[1]))
     prompts = handler.tokenize_prompt(templates)
     prompt_count = int(prompts.input_ids.shape[0])
     prompt_seq_len = int(prompts.input_ids.shape[1])
+    batch_size = _rome_batch_size(handler, "v_batch_size", batch_size, prompt_count)
 
     last_subject_index = get_subject_index(handler, prompts, fact_tuple, subject_understanding_template)
     if last_subject_index is None:
@@ -961,19 +980,21 @@ def optimize_v(
 
     # Optimize and insert in the same scaled output space.
     _delta_scale = _resolve_delta_scale(handler)
+    layer_module = handler._get_module(layer_name)
+    batch_start, batch_end = 0, prompt_count
 
     def delta_hook(module, _, output):
         nonlocal v_init
-        if module == handler._get_module(handler._layer_name_template.format(handler._layer)):
+        if module is layer_module:
             tuple_output = isinstance(output, tuple)
             raw_hidden = output[0] if tuple_output else output
-            hidden, was_flat = _reshape_hidden_states(raw_hidden, prompt_count, prompt_seq_len)
+            hidden, was_flat = _reshape_hidden_states(raw_hidden, batch_end - batch_start, prompt_seq_len)
 
             new_output = hidden.clone()
             if v_init is None:
                 v_init = hidden[0, last_subject_index_list[0]].detach().clone()
             scaled_delta = delta * _delta_scale
-            for i, idx in enumerate(last_subject_index_list):
+            for i, idx in enumerate(last_subject_index_list[batch_start:batch_end]):
                 new_output[i, idx, :] = new_output[i, idx, :] + scaled_delta.to(
                     device=raw_hidden.device, dtype=raw_hidden.dtype
                 )
@@ -989,7 +1010,6 @@ def optimize_v(
 
     # Create index for all the prompts and targets
     target_len = int(new_target_ids.size(0))
-    main_prompt_idx_cpu = torch.arange(main_prompt_count, dtype=torch.long)
     main_prompt_end_cpu = (
         _last_non_padding_index(prompts.attention_mask[:main_prompt_count].detach().to("cpu")) + 1
     )
@@ -1000,57 +1020,67 @@ def optimize_v(
     ).long()
 
     index_ids_cpu = new_target_ids.detach().to("cpu").long().unsqueeze(0).repeat(main_prompt_count, 1)
-    dkl_prompt_idx_cpu = torch.arange(main_prompt_count, prompts.input_ids.shape[0], dtype=torch.long)
-    dkl_index_cpu = _last_non_padding_index(
-        prompts.attention_mask.detach().to("cpu")[dkl_prompt_idx_cpu]
-    )
+    dkl_index = int(_last_non_padding_index(prompts.attention_mask[-1:].detach().to("cpu"))[0])
 
     cache_every = int(getattr(handler.cfg.model, "optimize_v_clear_cache_every", 0) or 0)
 
     for i in range(N_optim_steps):
-        opt.zero_grad()
+        opt.zero_grad(set_to_none=True)
         if cache_every > 0 and (i % cache_every == 0):
             handler.device_manager.clear_cache()
 
-        handler.set_delta_hook(delta_hook)
-        outputs = handler.model(**prompts, use_cache=False)
-        handler.remove_hooks()
+        final_step = i == N_optim_steps - 1
+        pred_loss, dkl_value = 0.0, 0.0
+        # The final iteration only reports loss; it never updates delta.
+        with torch.set_grad_enabled(not final_step):
+            for batch_start in range(0, prompt_count, batch_size):
+                batch_end = min(batch_start + batch_size, prompt_count)
+                handler.set_delta_hook(delta_hook)
+                try:
+                    outputs = handler.model(
+                        **{key: value[batch_start:batch_end] for key, value in prompts.items()}, use_cache=False
+                    )
+                finally:
+                    handler.remove_hooks()
+                logits = outputs.logits
+                loss = logits.new_zeros(())
+                main_end = min(batch_end, main_prompt_count)
+                if batch_start < main_end:
+                    rows = torch.arange(main_end - batch_start, device=logits.device).unsqueeze(1)
+                    positions = index_positions_cpu[batch_start:main_end].to(logits.device)
+                    targets = index_ids_cpu[batch_start:main_end].to(logits.device)
+                    # Select positions BEFORE softmax, avoiding a [batch, seq, vocab] copy.
+                    selected = torch.log_softmax(logits[rows, positions], dim=-1)
+                    prediction = -selected.gather(-1, targets.unsqueeze(-1)).sum() / (main_prompt_count * target_len)
+                    loss = loss + prediction
+                    pred_loss += float(prediction.detach())
+                    del selected, prediction
+                if batch_end == prompt_count:
+                    dkl_log_probs = torch.nn.functional.log_softmax(logits[-1:, dkl_index, :], dim=-1)
+                    if dkl_orig is None:
+                        dkl_orig = dkl_log_probs.detach().clone()
+                    dkl = handler.kl_factor * torch.nn.functional.kl_div(
+                        dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean"
+                    )
+                    loss = loss + dkl
+                    dkl_value = float(dkl.detach())
+                    del dkl, dkl_log_probs
+                if not final_step:
+                    loss.backward()
+                del loss, logits, outputs
 
-        logits_device = outputs.logits.device
-        main_prompt_idx = main_prompt_idx_cpu.to(logits_device)
-        index_positions = index_positions_cpu.to(logits_device)
-        index_ids = index_ids_cpu.to(logits_device)
-        dkl_prompt_idx = dkl_prompt_idx_cpu.to(logits_device)
-        dkl_index = dkl_index_cpu.to(logits_device)
-
-        all_log_probs = torch.log_softmax(outputs.logits, dim=2)
-        log_probs = all_log_probs[
-            main_prompt_idx.unsqueeze(1),
-            index_positions,
-            index_ids,
-        ]
-
-        dkl_logits = outputs.logits[dkl_prompt_idx, dkl_index, :]
-        dkl_log_probs = torch.nn.functional.log_softmax(dkl_logits, dim=1)
-
-        if dkl_orig is None:
-            dkl_orig = dkl_log_probs.detach().clone()  # Reusing this accross multiple epochs
-
-        dkl = handler.kl_factor * torch.nn.functional.kl_div(
-            dkl_orig, dkl_log_probs, log_target=True, reduction="batchmean"
-        )
-        weight_decay = handler.weight_decay * (torch.norm(delta) / (torch.norm(v_init) ** 2))
-
-        pred_loss = (-1 * log_probs).mean()
-        loss = pred_loss + dkl + weight_decay
+            if v_init is None:
+                raise RuntimeError("The ROME value hook did not capture the subject activation")
+            weight_decay = handler.weight_decay * (torch.norm(delta) / (torch.norm(v_init) ** 2))
+            if not final_step:
+                weight_decay.backward()
 
         if verbose:
-            LOGGER.info(f"Epoch {i} log_probs {pred_loss} dkl {dkl} wd {weight_decay}")
+            LOGGER.info(f"Epoch {i} log_probs {pred_loss} dkl {dkl_value} wd {float(weight_decay.detach())}")
 
         if i == N_optim_steps - 1:
             break
 
-        loss.backward()
         opt.step()
 
         # Allow per-model max_norm_multiplier; auto-compensate for residual_multiplier
@@ -1068,6 +1098,7 @@ def optimize_v(
     return delta
 
 
+@torch.no_grad()
 def insert_kv(
     handler: ModelHandler, k: torch.Tensor, delta: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -1113,7 +1144,9 @@ def insert_kv(
         new_W = torch.transpose(new_W, 0, 1)
 
     # Insert new weights back to the model
-    handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(new_W)
+    handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(
+        new_W, requires_grad=False
+    )
     return new_W.to(handler.dtype), old_W, update_matrix  # Cast to model dtype
 
 

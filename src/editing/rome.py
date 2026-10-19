@@ -56,7 +56,7 @@ class RomeEditMethod:
                 restorations={layer_name: old_weight},
             )
         except Exception:
-            handler._get_module(layer_name).weight = torch.nn.Parameter(old_weight)
+            handler._get_module(layer_name).weight = torch.nn.Parameter(old_weight, requires_grad=False)
             raise
 
     def evaluate(

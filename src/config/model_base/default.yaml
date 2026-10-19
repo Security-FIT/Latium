@@ -29,6 +29,8 @@ prefix_range: [2, 10]
 epsilon: 0.0
 optimize_pcs: false
 optimize_v_clear_cache_every: 0
+k_batch_size: 0  # Prompts per key-capture forward; 0 processes all prompts.
+v_batch_size: 0  # Prompts per value-optimization forward; gradients accumulate.
 
 # Prefix generation defaults.
 prefix_mode: "self"

@@ -16,6 +16,8 @@ second_moment_batch_size_mode: "dynamic"
 second_moment_target_samples: 100000
 second_moment_max_length: 512
 optimize_v_clear_cache_every: 5
+k_batch_size: 8
+v_batch_size: 4
 prefix_mode: "self"
 prefix_source: null
 prefix_cache_path: null

@@ -1,573 +1,331 @@
-"""Numerical parity tests for the micro-batched ROME path.
+"""CPU checks for the original ROME objective, batching, and hook lifetime."""
 
-The whole premise of ``v_batch_size``/``k_batch_size`` is that they are an
-*execution* change, not a *method* change. These tests pin that down on a tiny
-synthetic causal LM so the invariant is checked without a GPU or a download.
-
-:copyright: 2025 Jakub Res
-:license: MIT
-"""
-
-from __future__ import annotations
-
-import random
 from types import SimpleNamespace
 
 import pytest
 import torch
 from torch import nn
+from torch.nn import functional as F
 
-from src.editing.rome_t4.batching import (
-    gather_target_log_probs,
-    iter_microbatches,
-    select_batch,
-    trim_padding,
-)
-from src.editing.rome_t4.common import gather_k, optimize_v
+from src.rome import common
 
-VOCAB = 64
-HIDDEN = 16
-LAYERS = 3
-EDIT_LAYER = 1
-
-
-# ---------------------------------------------------------------------------
-# Synthetic model / tokenizer / handler
-# ---------------------------------------------------------------------------
-def _causal_mix(hidden: torch.Tensor) -> torch.Tensor:
-    """Cheap stand-in for causal attention: a running mean over past tokens.
-
-    Without some form of cross-token mixing, a residual injected at the subject
-    token could never influence the logits at the target position, and every
-    gradient in these tests would be identically zero.
-    """
-    seq_len = hidden.size(1)
-    mask = torch.tril(torch.ones(seq_len, seq_len, dtype=hidden.dtype, device=hidden.device))
-    mask = mask / mask.sum(dim=1, keepdim=True)
-    return mask @ hidden
-
-
-class TinyBlock(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.mlp = nn.Module()
-        self.mlp.gate_proj = nn.Linear(HIDDEN, HIDDEN)
-        self.mlp.down_proj = nn.Linear(HIDDEN, HIDDEN)
-
-    def forward(self, hidden: torch.Tensor) -> torch.Tensor:
-        hidden = hidden + _causal_mix(hidden)
-        return hidden + self.mlp.down_proj(torch.tanh(self.mlp.gate_proj(hidden)))
-
-
-class TinyLM(nn.Module):
-    """Minimal decoder stack exposing ``layers.{i}.mlp.down_proj``."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.embed_tokens = nn.Embedding(VOCAB, HIDDEN)
-        self.layers = nn.ModuleList(TinyBlock() for _ in range(LAYERS))
-        self.lm_head = nn.Linear(HIDDEN, VOCAB)
-        self.config = SimpleNamespace(num_hidden_layers=LAYERS, residual_multiplier=1.0)
-
-    def forward(self, input_ids, attention_mask=None, use_cache=False, **_):
-        hidden = self.embed_tokens(input_ids)
-        for block in self.layers:
-            hidden = block(hidden)
-        return SimpleNamespace(logits=self.lm_head(hidden))
+HIDDEN, VOCAB, EDIT_LAYER = 12, 128, 1
+FACT = ("{} is located in", "Eiffel", " Rome", " Paris")
+PREFIXES = ["{}", "Fact: {}", "Historically, {}", "Note: {}", "In brief, {}"]
 
 
 class Encoding(dict):
-    """Stand-in for ``BatchEncoding`` (attribute + item access)."""
-
-    def __getattr__(self, item):
-        try:
-            return self[item]
-        except KeyError as exc:  # pragma: no cover - defensive
-            raise AttributeError(item) from exc
+    __getattr__ = dict.__getitem__
 
 
 class CharTokenizer:
-    """Deterministic byte-level tokenizer; id 0 is padding."""
+    pad_token_id, eos_token_id, bos_token_id = 0, 1, None
 
-    pad_token_id = 0
-    eos_token_id = 1
-    bos_token_id = None
+    def __init__(self, padding_side):
+        self.padding_side = padding_side
 
-    def _ids(self, text: str) -> list[int]:
-        return [(ord(ch) % (VOCAB - 2)) + 2 for ch in text]
+    def encode(self, text, **_):
+        return [ord(char) for char in text]
 
-    def __call__(self, text, return_tensors="pt", padding=True, **_):
-        texts = [text] if isinstance(text, str) else list(text)
-        rows = [self._ids(item) for item in texts]
-        width = max(len(row) for row in rows)
-        input_ids = torch.zeros(len(rows), width, dtype=torch.long)
-        attention_mask = torch.zeros(len(rows), width, dtype=torch.long)
+    def decode(self, ids, **_):
+        return "".join(chr(int(token)) for token in ids if int(token) > 1)
+
+    def __call__(self, texts, **_):
+        rows = [self.encode(text) for text in ([texts] if isinstance(texts, str) else texts)]
+        ids = torch.zeros(len(rows), max(map(len, rows)), dtype=torch.long)
+        mask = torch.zeros_like(ids)
         for i, row in enumerate(rows):
-            input_ids[i, : len(row)] = torch.tensor(row, dtype=torch.long)
-            attention_mask[i, : len(row)] = 1
-        return Encoding(input_ids=input_ids, attention_mask=attention_mask)
-
-    def decode(self, ids, skip_special_tokens=False):
-        ids = ids.tolist() if torch.is_tensor(ids) else list(ids)
-        return "".join(chr(int(i) - 2) for i in ids if int(i) >= 2)
-
-    def encode(self, text, add_special_tokens=False):
-        return self._ids(text)
+            start = ids.shape[1] - len(row) if self.padding_side == "left" else 0
+            ids[i, start:start + len(row)] = torch.tensor(row)
+            mask[i, start:start + len(row)] = 1
+        return Encoding(input_ids=ids, attention_mask=mask)
 
 
-class StubDeviceManager:
-    def safe_to_device(self, tensor, device=None):
-        return tensor if device is None else tensor.to(device)
+class TinyBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.up = nn.Linear(HIDDEN, HIDDEN)
+        self.down = nn.Linear(HIDDEN, HIDDEN)
 
-    def clear_cache(self):
-        return None
+    def forward(self, hidden, mask):
+        # Running attention over real tokens lets subject edits affect later logits.
+        mixed = (hidden * mask[..., None]).cumsum(1) / mask.cumsum(1).clamp_min(1)[..., None]
+        hidden = hidden + mixed
+        return hidden + self.down(torch.tanh(self.up(hidden)))
 
 
-class StubHandler:
-    """The minimal surface of ``ModelHandler`` that the ROME steps touch."""
+class TinyLM(nn.Module):
+    def __init__(self, tokenizer):
+        super().__init__()
+        self.embed = nn.Embedding(VOCAB, HIDDEN)
+        self.layers = nn.ModuleList([TinyBlock() for _ in range(3)])
+        self.head = nn.Linear(HIDDEN, VOCAB)
+        self.config = SimpleNamespace(residual_multiplier=1.0)
+        self.tokenizer, self.calls = tokenizer, []
 
-    def __init__(self, **model_overrides):
-        torch.manual_seed(0)
-        self.model = TinyLM().to(torch.float32)
-        for param in self.model.parameters():
-            param.requires_grad_(False)
-        self.model.eval()
+    def forward(self, input_ids, attention_mask, **_):
+        self.calls.append([self.tokenizer.decode(row[mask.bool()])
+                           for row, mask in zip(input_ids, attention_mask)])
+        positions = attention_mask.cumsum(1).clamp_min(1) - 1
+        hidden = self.embed(input_ids) + positions[..., None] * 0.01
+        for layer in self.layers:
+            hidden = layer(hidden, attention_mask)
+        return SimpleNamespace(logits=self.head(hidden))
 
-        self.tokenizer = CharTokenizer()
-        self.device = torch.device("cpu")
-        self.dtype = torch.float32
-        self.device_manager = StubDeviceManager()
-        self.is_multi_gpu = False
 
-        self._layer_name_template = "layers.{}.mlp.down_proj"
-        self._layer = EDIT_LAYER
-        self.emb_shape = HIDDEN
-        self.lr = 0.5
-        self.kl_factor = 0.0625
-        self.weight_decay = 0.5
-        self.epochs = 4
-
-        model_cfg = dict(
-            name="tiny/lm",
-            layer=EDIT_LAYER,
-            prefix_mode="static",
-            prefix_range=[2, 4],
-            v_N=6,
-            k_N=6,
-            max_norm_multiplier=4,
-            optimize_v_clear_cache_every=0,
-            v_batch_size=0,
-            k_batch_size=0,
-            k_early_exit=True,
-        )
-        model_cfg.update(model_overrides)
-        self.cfg = SimpleNamespace(
-            model=SimpleNamespace(**model_cfg),
-            generation=SimpleNamespace(v_N=model_cfg["v_N"], k_N=model_cfg["k_N"]),
-            runtime=SimpleNamespace(prefix_log_all=False),
-        )
-
-        from src.rome.common import PrefixGenerationHandler
-
-        self.prefix_handler = PrefixGenerationHandler(self.cfg.model)
+class Handler:
+    def __init__(self, padding_side="right", **config):
+        torch.manual_seed(19)
+        self.tokenizer = CharTokenizer(padding_side)
+        self.model = TinyLM(self.tokenizer).eval().requires_grad_(False)
+        self.device, self.dtype = torch.device("cpu"), torch.float32
+        self.emb_shape, self._layer = HIDDEN, EDIT_LAYER
+        self._layer_name_template = "layers.{}.down"
+        self.lr, self.kl_factor, self.weight_decay = 0.12, 0.4, 0.015
+        self.cfg = SimpleNamespace(model=SimpleNamespace(
+            prefix_mode="static", prefix_range=[2, 4], max_norm_multiplier=100,
+            **config))
+        self.prefix_handler = common.PrefixGenerationHandler(self.cfg.model)
+        self.device_manager = SimpleNamespace(
+            safe_to_device=lambda tensor, device=None: tensor.to(device), clear_cache=lambda: None)
         self._hooks = []
 
-    # -- handler API ------------------------------------------------------
-    def tokenize_prompt(self, prompt_text, **_):
-        return self.tokenizer(prompt_text)
+    def tokenize_prompt(self, texts, **kwargs):
+        return self.tokenizer(texts, **kwargs)
 
     def _get_module(self, name):
-        for module_name, module in self.model.named_modules():
-            if module_name == name:
-                return module
-        raise KeyError(name)
+        return self.model.get_submodule(name)
 
-    def get_module_device(self, name=None):
-        return self.device
+    def set_delta_hook(self, hook):
+        self._hooks.append(self._get_module(self._layer_name_template.format(self._layer)).register_forward_hook(hook))
 
-    def set_delta_hook(self, fn):
-        module = self._get_module(self._layer_name_template.format(self._layer))
-        self._hooks.append(module.register_forward_hook(fn))
-
-    def set_k_hook(self, fn):
-        module = self._get_module(self._layer_name_template.format(self._layer))
-        self._hooks.append(module.register_forward_pre_hook(fn))
+    def set_k_hook(self, hook):
+        self._hooks.append(self._get_module(self._layer_name_template.format(self._layer)).register_forward_pre_hook(hook))
 
     def remove_hooks(self):
         for handle in self._hooks:
             handle.remove()
-        self._hooks = []
+        self._hooks.clear()
 
 
-FACT = ("{} is located in", "Eiffel", " Rome", " Paris")
+@pytest.fixture(autouse=True)
+def fixed_prefixes(monkeypatch):
+    # Deliberately fewer than the requested nine prompts.
+    monkeypatch.setattr(common.PrefixGenerationHandler, "generate", lambda *_: PREFIXES.copy())
+    threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    yield
+    torch.set_num_threads(threads)
 
 
-def _run_optimize_v(batch_size: int, steps: int = 4) -> torch.Tensor:
-    """Run optimize_v with a fixed seed so prefixes and init are identical."""
-    random.seed(1234)
-    torch.manual_seed(1234)
-    handler = StubHandler(v_batch_size=batch_size)
-    delta = optimize_v(
-        handler,
-        fact_tuple=FACT,
-        N_prompts=6,
-        N_optim_steps=steps,
-        verbose=False,
-        batch_size=batch_size,
-    )
-    assert delta is not None
-    return delta.detach().clone()
+def assert_clean(handler):
+    assert not handler._hooks
+    for module in handler.model.modules():
+        assert not module._forward_hooks
+        assert not module._forward_pre_hooks
+    assert all(not p.requires_grad and p.grad is None for p in handler.model.parameters())
 
 
-def _run_gather_k(batch_size: int, early_exit: bool) -> torch.Tensor:
-    random.seed(99)
-    torch.manual_seed(99)
-    handler = StubHandler(k_batch_size=batch_size, k_early_exit=early_exit)
-    k = gather_k(handler, fact_tuple=FACT, N=6, batch_size=batch_size)
-    assert k is not None
-    return k.detach().clone()
+def main_texts():
+    return [prefix.format(FACT[0].format(FACT[1])) + FACT[2][:-1] for prefix in PREFIXES]
 
 
-# ---------------------------------------------------------------------------
-# Slicing primitives
-# ---------------------------------------------------------------------------
-def test_iter_microbatches_covers_every_index_exactly_once() -> None:
-    for total in (1, 5, 8, 17):
-        for batch_size in (0, 1, 3, 8, 100):
-            spans = list(iter_microbatches(total, batch_size))
-            covered = [i for start, end in spans for i in range(start, end)]
-            assert covered == list(range(total))
+def reference_gradient(handler, value):
+    """Independent row-wise objective: character positions, CE, explicit KL sum."""
+    delta = value.detach().clone().requires_grad_()
+    module = handler.model.layers[EDIT_LAYER].down
+    initial = []
 
+    def forward(text, perturbation, capture=False):
+        position = text.index(FACT[1]) + len(FACT[1]) - 1
 
-def test_iter_microbatches_is_empty_for_zero_total() -> None:
-    assert list(iter_microbatches(0, 4)) == []
+        def inject(_, inputs, output):
+            if capture:
+                initial.append(output[0, position].detach().clone())
+            edited = output.clone()
+            edited[0, position] += perturbation
+            return edited
 
-
-def test_select_batch_preserves_row_order() -> None:
-    inputs = {"input_ids": torch.arange(20).reshape(5, 4)}
-    picked = select_batch(inputs, [3, 1])
-    assert torch.equal(picked["input_ids"], torch.stack([torch.arange(12, 16), torch.arange(4, 8)]))
-
-
-def test_trim_padding_drops_only_all_padding_columns() -> None:
-    inputs = {
-        "input_ids": torch.tensor([[5, 6, 0, 0], [7, 0, 0, 0]]),
-        "attention_mask": torch.tensor([[1, 1, 0, 0], [1, 0, 0, 0]]),
-    }
-    trimmed = trim_padding(inputs)
-    assert trimmed["input_ids"].shape[1] == 2
-    assert torch.equal(trimmed["attention_mask"], torch.tensor([[1, 1], [1, 0]]))
-
-
-def test_trim_padding_is_a_noop_without_padding() -> None:
-    inputs = {
-        "input_ids": torch.tensor([[5, 6], [7, 8]]),
-        "attention_mask": torch.ones(2, 2, dtype=torch.long),
-    }
-    assert trim_padding(inputs)["input_ids"].shape[1] == 2
-
-
-def test_trim_padding_preserves_absolute_positions_with_left_padding() -> None:
-    inputs = {
-        "input_ids": torch.tensor([[0, 0, 5, 6, 0], [0, 7, 8, 9, 0]]),
-        "attention_mask": torch.tensor([[0, 0, 1, 1, 0], [0, 1, 1, 1, 0]]),
-    }
-    trimmed = trim_padding(inputs)
-    assert torch.equal(trimmed["input_ids"], inputs["input_ids"][:, :4])
-    assert torch.equal(trimmed["attention_mask"], inputs["attention_mask"][:, :4])
-
-
-# ---------------------------------------------------------------------------
-# Loss gathering
-# ---------------------------------------------------------------------------
-def test_gather_target_log_probs_matches_full_log_softmax() -> None:
-    torch.manual_seed(7)
-    logits = torch.randn(4, 9, VOCAB)
-    positions = torch.tensor([[2, 3], [4, 5], [1, 2], [6, 7]])
-    token_ids = torch.randint(0, VOCAB, (4, 2))
-
-    reference = torch.log_softmax(logits, dim=2)[
-        torch.arange(4).unsqueeze(1), positions, token_ids
-    ]
-    assert torch.allclose(gather_target_log_probs(logits, positions, token_ids), reference, atol=0)
-
-
-# ---------------------------------------------------------------------------
-# End-to-end parity
-# ---------------------------------------------------------------------------
-@pytest.mark.parametrize("batch_size", [1, 2, 4, 5])
-def test_optimize_v_batched_matches_single_pass(batch_size: int) -> None:
-    """Gradient accumulation must reproduce the one-shot backward pass."""
-    reference = _run_optimize_v(batch_size=0)
-    batched = _run_optimize_v(batch_size=batch_size)
-    assert torch.allclose(batched, reference, atol=1e-5, rtol=1e-4), (
-        f"batch_size={batch_size} diverged: max|d|={(batched - reference).abs().max():.3e}"
-    )
-
-
-def test_optimize_v_actually_moves_delta() -> None:
-    """Guard against the parity test passing because nothing happened."""
-    delta = _run_optimize_v(batch_size=2)
-    assert float(delta.norm()) > 1e-6
-
-
-@pytest.mark.parametrize("batch_size", [0, 2, 5])
-def test_optimize_v_matches_protected_rome(batch_size: int) -> None:
-    from src.rome.common import optimize_v as protected_optimize_v
-
-    random.seed(1234)
-    torch.manual_seed(1234)
-    reference = protected_optimize_v(
-        StubHandler(), fact_tuple=FACT, N_prompts=6, N_optim_steps=4, verbose=False,
-    )
-    assert reference is not None
-    assert torch.allclose(_run_optimize_v(batch_size), reference, atol=1e-5, rtol=1e-4)
-
-
-@pytest.mark.parametrize("batch_size", [0, 2, 5])
-def test_gather_k_matches_protected_rome(batch_size: int) -> None:
-    from src.rome.common import gather_k as protected_gather_k
-
-    random.seed(99)
-    torch.manual_seed(99)
-    reference = protected_gather_k(StubHandler(), fact_tuple=FACT, N=6)
-    assert torch.allclose(_run_gather_k(batch_size, early_exit=True), reference, atol=1e-6, rtol=1e-5)
-
-
-@pytest.mark.parametrize("batch_size", [1, 2, 4])
-@pytest.mark.parametrize("early_exit", [True, False])
-def test_gather_k_batched_matches_single_pass(batch_size: int, early_exit: bool) -> None:
-    reference = _run_gather_k(batch_size=0, early_exit=False)
-    batched = _run_gather_k(batch_size=batch_size, early_exit=early_exit)
-    assert torch.allclose(batched, reference, atol=1e-6, rtol=1e-5)
-
-
-def test_gather_k_early_exit_skips_upper_layers() -> None:
-    """The early exit must not execute blocks above the edited layer."""
-    random.seed(99)
-    torch.manual_seed(99)
-    handler = StubHandler(k_early_exit=True)
-
-    visited: list[int] = []
-    handles = [
-        block.register_forward_hook(lambda *_a, _i=i: visited.append(_i))
-        for i, block in enumerate(handler.model.layers)
-    ]
-    try:
-        gather_k(handler, fact_tuple=FACT, N=4, batch_size=2)
-    finally:
-        for handle in handles:
+        handle = module.register_forward_hook(inject)
+        try:
+            return handler.model(**handler.tokenize_prompt(text)).logits[0]
+        finally:
             handle.remove()
 
-    # The pre-hook fires *inside* the edited block, so that block never
-    # completes and nothing above it is entered at all.
-    assert visited, "no decoder block ran"
-    assert max(visited) < EDIT_LAYER + 1, f"layers above {EDIT_LAYER} ran: {sorted(set(visited))}"
-    assert LAYERS - 1 not in visited, "the top block should have been skipped"
+    targets = torch.tensor(handler.tokenizer.encode(FACT[2]))
+    prediction = []
+    for index, text in enumerate(main_texts()):
+        logits = forward(text, delta, capture=index == 0)
+        prediction.append(F.cross_entropy(logits[-len(targets):], targets))
+    kl_text = FACT[1] + " is a"
+    baseline = forward(kl_text, torch.zeros_like(delta)).detach()[-1].log_softmax(-1)
+    current = forward(kl_text, delta)[-1].log_softmax(-1)
+    kl = (current.exp() * (current - baseline)).sum()
+    objective = (torch.stack(prediction).mean() + handler.kl_factor * kl
+                 + handler.weight_decay * delta.norm() / initial[0].square().sum())
+    return torch.autograd.grad(objective, delta)[0]
 
 
-# ---------------------------------------------------------------------------
-# insert_kv: grad hygiene, covariance caching, in-place equivalence
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def stub_covariance(monkeypatch):
-    """Replace the on-disk covariance with an in-memory SPD matrix.
+def run_optimization(monkeypatch, padding_side, batch_size, configured=False):
+    config = {"v_batch_size": batch_size} if configured and batch_size else {}
+    if not configured:
+        config = {"v_batch_size": 1}  # The explicit argument must override configuration.
+    handler = Handler(padding_side, **config)
+    history = []
+    original_step = torch.optim.Adam.step
 
-    Returns a counter so tests can assert how often it was *loaded*, which is
-    the thing sequential editing used to get wrong.
-    """
-    import src.editing.rome_t4.common as common
+    def record_step(optimizer, *args, **kwargs):
+        delta = optimizer.param_groups[0]["params"][0]
+        history.append((delta.detach().clone(), delta.grad.detach().clone()))
+        return original_step(optimizer, *args, **kwargs)
 
-    torch.manual_seed(0)
-    base = torch.eye(HIDDEN) + 0.01 * torch.randn(HIDDEN, HIDDEN)
-    matrix = base @ base.T
-    calls = {"count": 0}
-
-    def fake_load(_handler):
-        calls["count"] += 1
-        return matrix.clone()
-
-    monkeypatch.setattr(common, "_load_second_moment", fake_load)
-    return calls
-
-
-def _edit_once(handler):
-    from src.editing.rome_t4.common import gather_k, insert_kv, optimize_v
-
-    random.seed(5)
-    torch.manual_seed(5)
-    k = gather_k(handler, fact_tuple=FACT, N=6)
-    delta = optimize_v(handler, fact_tuple=FACT, N_prompts=6, N_optim_steps=4, verbose=False)
-    insert_kv(handler, k, delta)
-    return handler._get_module(handler._layer_name_template.format(EDIT_LAYER)).weight
+    with monkeypatch.context() as patch:
+        patch.setattr(torch.optim.Adam, "step", record_step)
+        kwargs = {} if configured else {"batch_size": batch_size}
+        delta = common.optimize_v(handler, FACT, N_prompts=9, N_optim_steps=4, verbose=False, **kwargs)
+    assert delta is not None and torch.isfinite(delta).all() and delta.norm() > 1e-5
+    assert len(history) == 3
+    assert_clean(handler)
+    expected = main_texts() + [FACT[1] + " is a"]
+    assert [text for call in handler.model.calls for text in call] == expected * 4
+    size = batch_size or len(expected)
+    assert [len(call) for call in handler.model.calls] == [
+        len(expected[start:start + size]) for start in range(0, len(expected), size)] * 4
+    return handler, delta.detach(), history
 
 
-@pytest.mark.parametrize("in_place", [False, True])
-def test_insert_kv_leaves_the_edited_weight_frozen(stub_covariance, in_place: bool) -> None:
-    """A default torch.nn.Parameter re-enables grad tracking on the edited layer.
-
-    ModelHandler freezes parameters only at construction, so a rebound
-    Parameter makes every later forward retain an autograd graph.
-    """
-    handler = StubHandler(insert_kv_in_place=in_place, second_moment_device="cpu")
-    weight = _edit_once(handler)
-    assert weight.requires_grad is False
-
-
-@pytest.mark.parametrize("in_place", [False, True])
-def test_insert_kv_actually_changes_the_weight(stub_covariance, in_place: bool) -> None:
-    handler = StubHandler(insert_kv_in_place=in_place, second_moment_device="cpu")
-    before = handler._get_module(f"layers.{EDIT_LAYER}.mlp.down_proj").weight.detach().clone()
-    after = _edit_once(handler).detach().clone()
-    assert not torch.equal(before, after)
+@pytest.mark.parametrize("padding_side", ["left", "right"])
+@pytest.mark.parametrize("batch_size", [1, 2, 5])
+def test_optimize_v_gradients_and_delta_match_full_objective(monkeypatch, padding_side, batch_size):
+    full, expected, full_history = run_optimization(monkeypatch, padding_side, 0, configured=True)
+    _, actual, history = run_optimization(monkeypatch, padding_side, batch_size)
+    torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)
+    for (value, gradient), (full_value, full_gradient) in zip(history, full_history):
+        torch.testing.assert_close(value, full_value, atol=2e-6, rtol=2e-5)
+        torch.testing.assert_close(gradient, full_gradient, atol=2e-6, rtol=2e-5)
+        torch.testing.assert_close(gradient, reference_gradient(full, value), atol=2e-6, rtol=2e-5)
+        assert torch.isfinite(gradient).all() and gradient.norm() > 1e-6
 
 
-def test_in_place_update_matches_the_copy_path(stub_covariance) -> None:
-    results = {}
-    for in_place in (False, True):
-        handler = StubHandler(insert_kv_in_place=in_place, second_moment_device="cpu")
-        results[in_place] = _edit_once(handler).detach().clone()
-    assert torch.allclose(results[True], results[False], atol=1e-6)
+def test_optimize_v_uses_configured_batch_size(monkeypatch):
+    _, configured, _ = run_optimization(monkeypatch, "left", 2, configured=True)
+    _, explicit, _ = run_optimization(monkeypatch, "left", 2)
+    torch.testing.assert_close(configured, explicit)
 
 
-def test_covariance_is_loaded_once_across_sequential_edits(stub_covariance) -> None:
-    """Upstream re-read and re-uploaded the covariance for every fact."""
-    from src.editing.rome_t4.common import gather_k, insert_kv, optimize_v
+def test_optimize_v_selects_positions_before_softmax(monkeypatch):
+    shapes = []
+    for owner in (torch, F):
+        original = owner.log_softmax
 
-    handler = StubHandler(second_moment_device="cpu", second_moment_cache=True)
-    random.seed(5)
-    torch.manual_seed(5)
-    k = gather_k(handler, fact_tuple=FACT, N=6)
-    delta = optimize_v(handler, fact_tuple=FACT, N_prompts=6, N_optim_steps=4, verbose=False)
+        def record(logits, *args, _original=original, **kwargs):
+            shapes.append(logits.shape)
+            return _original(logits, *args, **kwargs)
 
-    stub_covariance["count"] = 0
-    for _ in range(3):
-        insert_kv(handler, k, delta)
-    assert stub_covariance["count"] == 1
-
-
-def test_covariance_cache_can_be_disabled(stub_covariance) -> None:
-    from src.editing.rome_t4.common import get_second_moment
-
-    handler = StubHandler(second_moment_device="cpu", second_moment_cache=False)
-    stub_covariance["count"] = 0
-    for _ in range(3):
-        get_second_moment(handler)
-    assert stub_covariance["count"] == 3
+        monkeypatch.setattr(owner, "log_softmax", record)
+    run_optimization(monkeypatch, "left", 0, configured=True)
+    assert shapes
+    assert all(shape.numel() <= (len(PREFIXES) * len(FACT[2]) + 1) * VOCAB for shape in shapes)
 
 
-@pytest.mark.parametrize("transposed", [False, True])
-@pytest.mark.parametrize("in_place", [False, True])
-def test_insert_kv_matches_protected_rome_for_rectangular_weights(monkeypatch, transposed, in_place) -> None:
-    from src.editing.rome_t4 import common
-    from src.rome import common as protected
+@pytest.mark.parametrize("padding_side", ["left", "right"])
+@pytest.mark.parametrize("batch_size", [0, 1, 2, 5])
+def test_gather_k_matches_full_activations_and_stops_early(padding_side, batch_size):
+    handler = Handler(padding_side, **({"k_batch_size": batch_size} if batch_size else {}))
+    texts = [prefix.format(FACT[1]) for prefix in PREFIXES]
+    inputs = handler.tokenize_prompt(texts)
+    captured = []
+    module = handler.model.layers[EDIT_LAYER].down
+    handle = module.register_forward_pre_hook(lambda _, args: captured.append(args[0].detach().clone()))
+    try:
+        handler.model(**inputs)
+    finally:
+        handle.remove()
+    ends = [max(torch.nonzero(mask).flatten()).item() for mask in inputs.attention_mask]
+    expected = captured[0][torch.arange(len(texts)), ends].mean(0)
+    handler.model.calls.clear()
 
-    handler = StubHandler(insert_kv_in_place=in_place)
-    module = handler._get_module(f"layers.{EDIT_LAYER}.mlp.down_proj")
-    weight = torch.randn(HIDDEN, HIDDEN + 3)
-    if transposed:
-        weight = weight.T.contiguous()
-    module.weight = nn.Parameter(weight.clone(), requires_grad=False)
-    k, delta = torch.randn(HIDDEN), torch.randn(HIDDEN + 3)
-    covariance = torch.eye(HIDDEN)
-    monkeypatch.setattr(protected, "get_second_moment", lambda _: covariance)
-    monkeypatch.setattr(common, "get_second_moment", lambda _: covariance)
-    protected.insert_kv(handler, k, delta)
-    reference = module.weight.detach().clone()
+    def upper_layer(*_):
+        pytest.fail("key gathering executed above the edit layer")
 
-    module.weight = nn.Parameter(weight.clone(), requires_grad=False)
-    common.insert_kv(handler, k, delta)
-    assert torch.allclose(module.weight, reference, atol=1e-6)
-    assert not module.weight.requires_grad
-
-
-@pytest.mark.parametrize("in_place", [False, True])
-def test_registry_method_applies_and_execution_restores(stub_covariance, in_place) -> None:
-    from src.editing.registry import get_edit_method
-    from src.structural.execution.edit_execution import restore
-
-    handler = StubHandler(insert_kv_in_place=in_place, v_batch_size=2, k_batch_size=2)
-    layer = f"layers.{EDIT_LAYER}.mlp.down_proj"
-    original = handler._get_module(layer).weight.detach().clone()
-    method = get_edit_method("rome_t4")
-    outcome = method.apply(handler, {"fact_tuple": FACT})
-
-    assert outcome.success
-    assert outcome.modified_weights == {"proj": (EDIT_LAYER,)}
-    assert not torch.equal(handler._get_module(layer).weight, original)
-    assert torch.equal(outcome.restorations[layer], original)
-    assert not handler._hooks
-    restore(handler, outcome)
-    assert torch.equal(handler._get_module(layer).weight, original)
-    assert not handler._get_module(layer).weight.requires_grad
-
-
-def test_registry_method_rolls_back_partial_insertion_and_removes_hooks(monkeypatch) -> None:
-    from src.editing.registry import get_edit_method
-    from src.editing.rome_t4 import common
-
-    handler = StubHandler(v_batch_size=2)
-    module = handler._get_module(f"layers.{EDIT_LAYER}.mlp.down_proj")
-    original = module.weight.detach().clone()
-
-    def fail_insertion(owner, *_):
-        with torch.no_grad():
-            module.weight.add_(1)
-        owner.set_delta_hook(lambda *_: None)
-        raise RuntimeError("insertion failed")
-
-    monkeypatch.setattr(common, "insert_kv", fail_insertion)
-    with pytest.raises(RuntimeError, match="insertion failed"):
-        get_edit_method("rome_t4").apply(handler, {"fact_tuple": FACT})
-    assert torch.equal(module.weight, original)
-    assert not module.weight.requires_grad
-    assert not handler._hooks
-    assert not module._forward_hooks
+    handle = handler.model.layers[EDIT_LAYER + 1].register_forward_pre_hook(upper_layer)
+    try:
+        kwargs = {"batch_size": batch_size} if padding_side == "right" else {}
+        actual = common.gather_k(handler, FACT, N=9, **kwargs)
+    finally:
+        handle.remove()
+    torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
+    assert not actual.requires_grad and actual.grad_fn is None
+    assert [text for call in handler.model.calls for text in call] == texts
+    assert max(map(len, handler.model.calls)) <= (batch_size or len(texts))
+    assert_clean(handler)
 
 
 @pytest.mark.parametrize("step", ["gather_k", "optimize_v"])
-def test_notebook_api_cleans_hooks_after_forward_failure(monkeypatch, step) -> None:
-    from src.editing.rome_t4 import api
+def test_forward_failure_removes_hooks(monkeypatch, step):
+    handler = Handler()
 
-    handler = StubHandler()
-    if step == "optimize_v":
-        monkeypatch.setattr(api, "gather_k", lambda *_, **__: torch.ones(HIDDEN))
+    def fail(*args, **kwargs):
+        assert handler._hooks, "failure must occur after hook registration"
+        raise RuntimeError("synthetic forward failure")
 
-    def fail_forward(*_, **__):
-        raise RuntimeError("forward failed")
-
-    monkeypatch.setattr(handler.model, "forward", fail_forward)
-    with pytest.raises(RuntimeError, match="forward failed"):
-        api.apply_rome_edit(handler, FACT, verbose=False)
-    module = handler._get_module(f"layers.{EDIT_LAYER}.mlp.down_proj")
-    assert not handler._hooks
-    assert not module._forward_hooks
-    assert not module._forward_pre_hooks
+    monkeypatch.setattr(handler.model, "forward", fail)
+    kwargs = {"N": 9} if step == "gather_k" else {"N_prompts": 9, "N_optim_steps": 3}
+    with pytest.raises(RuntimeError, match="synthetic forward failure"):
+        getattr(common, step)(handler, FACT, batch_size=2, **kwargs)
+    assert_clean(handler)
 
 
-def test_notebook_snapshot_survives_repeated_in_place_edits(stub_covariance) -> None:
-    from src.editing.rome_t4.api import apply_rome_edit, restore_layer, snapshot_layer
+@pytest.mark.parametrize("transposed", [False, True])
+def test_insert_kv_rectangular_rank_one_update_is_frozen(monkeypatch, transposed):
+    handler = Handler(delta_scale=2.0)
+    module = handler.model.layers[EDIT_LAYER].down
+    canonical = torch.randn(HIDDEN, HIDDEN + 3)
+    original = canonical.T.contiguous() if transposed else canonical.clone()
+    module.weight = nn.Parameter(original.clone(), requires_grad=False)
+    k = torch.randn(HIDDEN, requires_grad=True)
+    delta = torch.randn(HIDDEN + 3, requires_grad=True)
+    factor = torch.randn(HIDDEN, HIDDEN)
+    inverse_covariance = factor @ factor.T + torch.eye(HIDDEN)
+    monkeypatch.setattr(common, "get_second_moment", lambda _: inverse_covariance)
+    with torch.no_grad():
+        direction = inverse_covariance @ k
+        update = torch.outer(direction, 2 * delta) / torch.dot(k, direction)
+        expected = canonical + update
+        expected = expected.T if transposed else expected
+    new, old, returned_update = common.insert_kv(handler, k, delta)
+    torch.testing.assert_close(new, expected)
+    torch.testing.assert_close(module.weight, expected)
+    torch.testing.assert_close(old, canonical)
+    torch.testing.assert_close(returned_update, update)
+    assert not torch.equal(module.weight, original)
+    assert all(not tensor.requires_grad and tensor.grad_fn is None for tensor in (new, old, returned_update))
+    assert_clean(handler)
 
-    handler = StubHandler(insert_kv_in_place=True, v_batch_size=2)
-    snapshot = snapshot_layer(handler)
-    original = snapshot.clone()
-    for _ in range(2):
-        apply_rome_edit(handler, FACT, verbose=False)
-        restore_layer(handler, snapshot)
-        assert torch.equal(snapshot, original)
-        assert torch.equal(snapshot_layer(handler), original)
 
+def test_real_qwen35_hybrid_layers_match_across_batches():
+    modeling = pytest.importorskip("transformers.models.qwen3_5.modeling_qwen3_5")
+    from transformers import Qwen3_5TextConfig
 
-def test_covariance_cache_invalidates_when_source_is_replaced(tmp_path) -> None:
-    from src.editing.rome_t4.common import get_second_moment
-
-    handler = StubHandler(second_moment_device="cpu")
-    handler.second_moment_path = tmp_path / "covariance.pt"
-    torch.save(torch.eye(HIDDEN), handler.second_moment_path)
-    first = get_second_moment(handler)
-    assert get_second_moment(handler) is first
-
-    # Different shape guarantees a different serialized size even on coarse clocks.
-    replacement = torch.eye(HIDDEN + 1)
-    torch.save(replacement, handler.second_moment_path)
-    assert torch.equal(get_second_moment(handler), replacement)
+    keys, values = [], []
+    for batch_size in (0, 2):
+        handler = Handler()
+        config = Qwen3_5TextConfig(
+            vocab_size=VOCAB, hidden_size=HIDDEN, intermediate_size=24,
+            num_hidden_layers=3, num_attention_heads=2, num_key_value_heads=1, head_dim=6,
+            linear_key_head_dim=8, linear_value_head_dim=8,
+            linear_num_key_heads=2, linear_num_value_heads=2,
+            layer_types=["linear_attention", "full_attention", "linear_attention"],
+            rope_parameters={"rope_type": "default", "rope_theta": 10000., "partial_rotary_factor": 1.0},
+            attn_implementation="eager",
+        )
+        torch.manual_seed(27)
+        handler.model = modeling.Qwen3_5ForCausalLM(config).eval().requires_grad_(False)
+        handler._layer_name_template = "model.layers.{}.mlp.down_proj"
+        handler.lr = 0.01
+        keys.append(common.gather_k(handler, FACT, N=9, batch_size=batch_size))
+        values.append(common.optimize_v(handler, FACT, 9, 3, batch_size=batch_size, verbose=False))
+        assert torch.isfinite(values[-1]).all() and values[-1].norm() > 1e-6
+        assert_clean(handler)
+    torch.testing.assert_close(keys[0], keys[1], atol=1e-6, rtol=1e-4)
+    torch.testing.assert_close(values[0], values[1], atol=1e-6, rtol=1e-4)

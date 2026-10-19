@@ -707,7 +707,7 @@ def run_experiment(
             LOGGER.warning("Run %s failed: %s", run_cfg.name, exc)
         finally:
             handler.remove_hooks()
-            handler._get_module(layer_name).weight = torch.nn.Parameter(old_W)
+            handler._get_module(layer_name).weight = torch.nn.Parameter(old_W, requires_grad=False)
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 import numpy as np
 import torch
@@ -142,18 +142,32 @@ def compute_rome_metrics(
     target_true_str: str,
     paraphrase_prompts: Optional[Sequence[str]] = None,
     neighborhood_prompts: Optional[Sequence[str]] = None,
+    *,
+    target_nll: Optional[Callable[[str, str], float]] = None,
 ) -> dict[str, Any]:
+    """Aggregate ROME metrics from mean token NLLs.
+
+    ``target_nll(prompt, target)`` optionally supplies a method-specific scoring
+    convention (e.g. chat). The default retains historical completion scoring.
+    All prompt groups use the same scorer and the same aggregation equations.
+    """
     paraphrases = list(paraphrase_prompts or [])
     neighborhoods = list(neighborhood_prompts or [])
     prompts = [prompt_text, *paraphrases, *neighborhoods]
-    probabilities = test_batch_prediction(
-        handler.model,
-        handler.tokenizer,
-        prompts,
-        target_new_str,
-        target_true_str,
-        handler.device,
-    )
+    if target_nll is None:
+        probabilities = test_batch_prediction(
+            handler.model,
+            handler.tokenizer,
+            prompts,
+            target_new_str,
+            target_true_str,
+            handler.device,
+        )
+    else:
+        probabilities = [
+            {"target_new": target_nll(prompt, target_new_str), "target_true": target_nll(prompt, target_true_str)}
+            for prompt in prompts
+        ]
 
     rewrite = probabilities[0]
     paraphrase_values = probabilities[1 : 1 + len(paraphrases)]

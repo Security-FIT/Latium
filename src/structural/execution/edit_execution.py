@@ -121,7 +121,7 @@ def restore(handler: Any, outcome: Optional[EditOutcome]) -> None:
     if outcome is None:
         return
     for module_name, old_weight in outcome.restorations.items():
-        handler._get_module(module_name).weight = torch.nn.Parameter(old_weight)
+        handler._get_module(module_name).weight = torch.nn.Parameter(old_weight, requires_grad=False)
 
 
 def run_edit_method(

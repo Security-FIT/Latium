@@ -68,6 +68,10 @@ optimization, insertion, or evaluation semantics. These paths must match
 `main` exactly. New runtime switches should use Hydra config in non-protected
 code; avoid OS environment variables for runtime configuration.
 
+On the user-authorized `workshop-version` branch, ROME and Qwen runtime changes
+are permitted for the workshop. `src/workshop/` adapts the original ROME,
+causal-tracing and GRAM implementations; notebooks import this package.
+
 ## Runtime Contracts
 
 The model runtime calls an `EditMethod`. Each method reports changed weight

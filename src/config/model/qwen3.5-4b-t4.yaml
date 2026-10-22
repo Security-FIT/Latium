@@ -1,0 +1,62 @@
+# Qwen 3.5 4B tuned for a single 16 GB NVIDIA T4 (Google Colab free tier).
+#
+# Identical model and edit layer as ``qwen3.5-4b``; only the execution budget
+# differs. bf16 weights already take ~8.5 GB, so the whole point of this preset
+# is to keep transient allocations inside the remaining ~7 GB:
+#
+#   * v_batch_size / k_batch_size cap the activation graph per forward pass.
+#   * k_early_exit stops each key-gathering forward at layer 5 of 32, skipping
+#     the remaining blocks and the 248320-token LM head entirely.
+#   * second_moment_device: cpu keeps the inverse covariance in host RAM and
+#     ships only the resulting vector to the GPU.
+#   * insert_kv_in_place avoids three full-size copies of the projection, which
+#     matters when stacking sequential edits.
+#
+# Note: the T4 has no bf16 tensor cores. bf16 is kept anyway because it matches
+# main's checkpoint and avoids an unverified fp16 range substitution. T4 kernels
+# and peak memory still require end-to-end validation on the target CUDA runtime.
+
+name: "Qwen/Qwen3.5-4B"
+layer_name_template: "model.layers.{}.mlp.down_proj"
+fc_layer_name_template: "model.layers.{}.mlp.gate_proj"
+restore_layer_name_template: "model.layers.{}"
+corrupt_layer_name_template: "model.embed_tokens"
+layer: 5
+corruption_noise_multiplier: 0.1
+dtype: "bf16"
+save_to_local: false
+
+second_moment_path: "./data/stats/Qwen_Qwen3.5-4B_5_SM_Method.WIKIPEDIA_100000.pt"
+second_moment_dir: "./data/stats"
+second_moment_batch_size_mode: "dynamic"
+second_moment_target_samples: 100000
+second_moment_max_length: 512
+second_moment_device: "cpu"
+second_moment_cache: true
+
+# ROME optimisation budget.
+epochs: 25
+v_N: 20
+k_N: 20
+prefix_range: [2, 6]
+
+# Deterministic prefixes: no generation pass before every edit, and the demo
+# reproduces across runs.
+prefix_mode: "static"
+prefix_enforce_latin: true
+prefix_min_words: 2
+
+# Memory controls.
+v_batch_size: 1
+k_batch_size: 4
+k_early_exit: true
+insert_kv_in_place: true
+optimize_v_clear_cache_every: 0
+optimize_v_log_memory: true
+attn_implementation: eager
+rome_prompt_mode: chat
+rome_system_prompt: "You are a helpful assistant. Answer briefly in the same language as the user."
+revision: "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+force_hub: true
+low_cpu_mem_usage: true
+device_map: {"": "cuda:0"}

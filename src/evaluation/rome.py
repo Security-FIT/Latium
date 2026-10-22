@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 import numpy as np
 import torch
@@ -142,17 +142,17 @@ def compute_rome_metrics(
     target_true_str: str,
     paraphrase_prompts: Optional[Sequence[str]] = None,
     neighborhood_prompts: Optional[Sequence[str]] = None,
+    *,
+    target_nll: Optional[Callable[[str, str], float]] = None,
 ) -> dict[str, Any]:
     paraphrases = list(paraphrase_prompts or [])
     neighborhoods = list(neighborhood_prompts or [])
     prompts = [prompt_text, *paraphrases, *neighborhoods]
-    probabilities = test_batch_prediction(
-        handler.model,
-        handler.tokenizer,
-        prompts,
-        target_new_str,
-        target_true_str,
-        handler.device,
+    probabilities = (
+        test_batch_prediction(handler.model, handler.tokenizer, prompts, target_new_str, target_true_str, handler.device)
+        if target_nll is None else
+        [{"target_new": target_nll(prompt, target_new_str), "target_true": target_nll(prompt, target_true_str)}
+         for prompt in prompts]
     )
 
     rewrite = probabilities[0]

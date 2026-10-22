@@ -56,7 +56,7 @@ class RomeEditMethod:
                 restorations={layer_name: old_weight},
             )
         except Exception:
-            handler._get_module(layer_name).weight = torch.nn.Parameter(old_weight)
+            handler._get_module(layer_name).weight = torch.nn.Parameter(old_weight, requires_grad=False)
             raise
 
     def evaluate(
@@ -70,6 +70,19 @@ class RomeEditMethod:
         prompt_text = fact[0].format(fact[1])
         target_new = case.get("target_new_str", fact[2].strip())
         target_true = case.get("target_true_str", fact[3].strip())
+        from src.rome.prompts import is_chat_mode
+
+        scoring = {}
+        if is_chat_mode(handler):
+            from src.rome.probing import score_target
+
+            def target_nll(prompt, target):
+                count = len(handler.tokenizer.encode(target.strip(), add_special_tokens=False))
+                if not count:
+                    raise ValueError("ROME target tokenizes to nothing")
+                return -score_target(handler, prompt, target) / count
+
+            scoring["target_nll"] = target_nll
         return compute_rome_metrics(
             handler,
             prompt_text,
@@ -77,6 +90,7 @@ class RomeEditMethod:
             target_true,
             paraphrase_prompts=case.get("paraphrase_prompts", []),
             neighborhood_prompts=case.get("neighborhood_prompts", []),
+            **scoring,
         )
 
 

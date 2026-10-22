@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+html, body, gradio-app {background: #fff !important; color-scheme: light !important}
+.gradio-container {width: 100% !important; max-width: 1880px !important; min-height: 100vh; height: auto !important; overflow: visible !important; margin: auto !important; background: #fff !important; color: #1e293b !important; font-family: Manrope, Arial, sans-serif !important}
+.gradio-container * {font-family: Manrope, Arial, sans-serif !important}
+.gradio-container label, .gradio-container .block-label, .gradio-container .label-wrap, .gradio-container [data-testid="block-label"] {color: #1e293b !important; background-color: #fff !important}
+.gradio-container label *, .gradio-container .block-label *, .gradio-container [data-testid="block-label"] * {color: inherit !important; background-color: transparent !important}
+#fact-preset .label-wrap, #fact-preset label, #fact-preset .block-label, #fact-preset [data-testid="block-label"] {color: #fff !important; background-color: #00445a !important}
+#fact-preset .label-wrap *, #fact-preset label *, #fact-preset .block-label *, #fact-preset [data-testid="block-label"] * {color: #fff !important}
+.gradio-container .info, .gradio-container [data-testid="info"] {color: #475569 !important}
+.gradio-container input:not([type="checkbox"]):not([type="radio"]), .gradio-container textarea, .gradio-container select, .gradio-container [role="combobox"], .gradio-container [data-testid="dropdown"] {background: #fff !important; color: #1e293b !important}
+.gradio-container input::placeholder, .gradio-container textarea::placeholder {color: #64748b !important; opacity: 1}
+.gradio-container [role="listbox"], .gradio-container [role="listbox"] *, .gradio-container [role="option"] {background: #fff !important; color: #1e293b !important}
+.gradio-container [role="option"]:hover, .gradio-container [role="option"]:focus-visible, .gradio-container [role="option"][aria-selected="true"] {background: #eaf8fc !important; color: #00445a !important}
+.gradio-container input:focus, .gradio-container textarea:focus, .gradio-container select:focus, .gradio-container [role="combobox"]:focus {border-color: #00a9e0 !important; box-shadow: 0 0 0 2px rgba(0, 169, 224, .18) !important}
+.gradio-container button.primary {background: #e4002b !important; border-color: #e4002b !important; color: #fff !important}
+.gradio-container button.primary:hover {background: #bf0024 !important; border-color: #bf0024 !important}
+.gradio-container button.secondary {background: #fff !important; border-color: #00a9e0 !important; color: #00445a !important}
+.gradio-container button.secondary:hover {background: #eaf8fc !important; color: #003748 !important}
+.demo-hero {position: relative; overflow: hidden; padding: 16px 24px; border-radius: 18px;
+  border: 1px solid #9bdcf0;
+  background: linear-gradient(115deg, #ffffff 0%, #effbfe 62%, #dff6fc 100%);
+  box-shadow: 0 8px 24px rgba(0, 169, 224, .08); color: #17323a !important}
+.demo-hero * {color: #17323a !important}
+.demo-hero .demo-eyebrow {font-size: .73rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; color: #e4002b !important; margin: 0 0 6px}
+.demo-hero h1 {font-size: clamp(1.75rem, 2.5vw, 2.5rem); line-height: 1.08; max-width: 1500px; margin: 0 0 8px}
+.demo-hero .demo-lead {font-size: .97rem; line-height: 1.45; max-width: 1450px; margin: 0}
+.demo-hero .demo-cta {display: inline-block; margin: 10px 0 0; padding: 6px 10px;
+  border-radius: 999px; border: 1px solid #00a9e0; background: #fff; color: #00445a !important; font-size: .76rem; font-weight: 800}
+.demo-brandbar {display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap;
+  gap: 12px 20px; margin: 10px 0 0; padding: 8px 6px 0;
+  border-top: 1px solid #d9ebf0; background: #fff}
+.demo-brandbar a {display: inline-flex; align-items: center; justify-content: center;
+  text-decoration: none}
+.demo-brandbar img {display: block; max-width: 100%; height: auto; object-fit: contain}
+.demo-brandbar .red-hat-logo {width: 105px}
+.demo-brandbar .fit-logo {width: 145px}
+.demo-highlights {display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0 0 8px}
+.demo-card {padding: 12px 15px; border-radius: 14px; border: 1px solid #d9ebf0; border-top-width: 4px; min-width: 0; background: #fff}
+.demo-card h2 {font-size: 1rem; line-height: 1.2; margin: 0 0 4px; font-weight: 800}
+.demo-card p {font-size: .86rem; line-height: 1.4; margin: 0}
+.demo-card.speed .demo-highlight, .demo-card.access .demo-highlight {font-size: 1.2em; font-weight: 800; color: #e4002b !important}
+.demo-card .demo-kicker {font-size: .64rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px}
+.demo-card.speed {border-top-color: #00a9e0; color: #17323a !important}
+.demo-card.scope {border-top-color: #e4002b; color: #5c1724 !important}
+.demo-card.speed *, .demo-card.scope * {color: inherit !important}
+.demo-card .demo-pr-heading {display: block; max-width: 100%; font-size: 1.2rem; line-height: 1.1; padding: 0; margin: 0 0 5px; border: 0; border-radius: 0; background: transparent; font-weight: 800}
+.demo-card.speed .demo-pr-heading {color: #e4002b !important}
+.demo-card.scope .demo-pr-heading {color: #00445a !important}
+#change-fact-title {margin-bottom: -6px !important}
+#change-fact-title h3 {margin: 0 0 3px !important; line-height: 1.15}
+.demo-footnote {font-size: .74rem; line-height: 1.35; color: #475569 !important; padding: 0 3px 2px; margin: 0 0 7px}
+.demo-footnote .demo-highlight {font-size: 1.12em; font-weight: 800; color: #e4002b !important}
+.demo-graph {margin: 0 0 8px; padding: 0}
+.demo-graph a {display: block; text-align: center}
+.demo-graph img {display: inline-block; width: 100%; max-height: 280px; object-fit: contain; cursor: zoom-in}
+.demo-graph figcaption {margin-top: 3px; color: #475569; font-size: .7rem; text-align: right}
+@media (max-width: 850px) {.demo-highlights {grid-template-columns: 1fr} .demo-hero {padding: 18px 16px} .demo-graph img {max-height: 190px}}
+.demo-status {display: inline-block; margin: 10px 0; padding: 8px 12px; border-radius: 10px; background: #fff; border: 1px solid #9bdcf0; color: #17323a; font-weight: 700}
+.demo-status.ok {background: #effbfe; border-color: #00a9e0; color: #00445a}
+.demo-status.warn {background: #fff3f5; border-color: #e4002b; color: #8e001c}
+.demo-status.neutral {background: #fff; border-color: #9bdcf0; color: #17323a}
+.demo-status.busy {background: #effbfe; border-color: #00a9e0; color: #00445a}
+.demo-status.busy::before {content: ""; display: inline-block; width: 12px; height: 12px;
+  border: 2px solid #9bdcf0; border-top-color: #00a9e0; border-radius: 50%;
+  margin-right: 9px; vertical-align: -2px; animation: demo-spin .8s linear infinite}
+@keyframes demo-spin {to {transform: rotate(360deg)}}
+/* Chat messages need their own colors: Gradio's dark palette can otherwise leave
+   dark text on the accent bubble even when the page background is white. */
+#demo-chatbot {background: #f5fcfe !important; border: 1px solid #bddce5 !important}
+#demo-chatbot .bubble-wrap, #demo-chatbot .message-wrap {background: #f5fcfe !important}
+#demo-chatbot .message-row .user {background: #eaf8fc !important;
+  border: 1px solid #00a9e0 !important; color: #17323a !important}
+#demo-chatbot .message-row .bot {background: #fff !important;
+  border: 1px solid #d4e2e7 !important; color: #1e293b !important}
+#demo-chatbot .message-row .user *, #demo-chatbot .message-row .bot * {color: inherit !important}
+#demo-chatbot .message-wrap .prose.chatbot.md {opacity: 1 !important}

@@ -151,7 +151,13 @@ def embedding_std(handler: ModelHandler, modules: dict[str, torch.nn.Module]) ->
     weight = getattr(module, "weight", None)
     if weight is None:
         raise RuntimeError(f"Embedding module {name} has no weight")
-    std = float(weight.detach().float().std().item())
+    count, total, squares = 0, 0., 0.
+    for chunk in weight.detach().split(1024):
+        chunk = chunk.float()
+        count += chunk.numel()
+        total += float(chunk.sum(dtype=torch.float64))
+        squares += float(chunk.square().sum(dtype=torch.float64))
+    std = max(0., (squares - total * total / count) / (count - 1)) ** .5
     if not math.isfinite(std) or std <= 0:
         raise RuntimeError(f"Invalid embedding standard deviation: {std}")
     return std

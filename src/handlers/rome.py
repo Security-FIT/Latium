@@ -183,6 +183,8 @@ class ModelHandler(BaseHandler):
     def unset_restore_hook(self) -> None:
         for handle in self._restore_hooks:
             handle.remove()
+        self._hooks.clear()
+        self._restore_hooks.clear()
 
     def set_k_hook(self, fn=None):
         self.is_k_hook = True

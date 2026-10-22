@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from importlib import import_module
 
 import torch
 import transformers
@@ -78,7 +79,9 @@ def test_load_pretrained_uses_declared_architecture_for_unsupported_auto_config(
         "from_pretrained",
         lambda *_args, **_kwargs: SimpleNamespace(architectures=["TestConditionalGeneration"]),
     )
-    monkeypatch.setattr(transformers, "TestConditionalGeneration", Architecture, raising=False)
+    # Qwen3.5's lazy imports can replace the root Transformers module. Patch the
+    # active module used by the loader, not a pre-import cached module object.
+    monkeypatch.setattr(import_module("transformers"), "TestConditionalGeneration", Architecture, raising=False)
     monkeypatch.setattr(loading.AutoTokenizer, "from_pretrained", lambda *_args, **_kwargs: _Tokenizer())
 
     loaded_model, tokenizer = loading.load_pretrained(cfg)

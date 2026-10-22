@@ -30,6 +30,17 @@ epsilon: 0.0
 optimize_pcs: false
 optimize_v_clear_cache_every: 0
 
+# Memory / batching knobs.
+# Prompt splitting and in-place insertion are opt-in. Key early exit and
+# covariance caching are enabled; numerical/prompt bug fixes live in ROME itself.
+v_batch_size: 0          # prompts per forward in optimize_v (0 = all at once)
+k_batch_size: 0          # prompts per forward in gather_k   (0 = all at once)
+k_early_exit: true       # stop the forward once the edited layer is observed
+optimize_v_log_memory: false
+second_moment_cache: true      # memoise the inverse covariance per handler
+second_moment_device: "auto"   # "auto" keeps it on the layer device; "cpu" streams
+insert_kv_in_place: false      # skip the old_W / update_matrix copies
+
 # Prefix generation defaults.
 prefix_mode: "self"
 prefix_source: null

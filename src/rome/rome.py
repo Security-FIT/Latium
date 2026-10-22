@@ -192,7 +192,7 @@ def batch_evaluation(cfg: DictConfig) -> None:
             ),
         }
 
-        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W)
+        handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W, requires_grad=False)
         metrics["pre"] = compute_rewrite_quality_counterfact(
             handler.model, handler.tokenizer, prompt_dict._asdict(), snips, vec
         )
@@ -269,7 +269,7 @@ if __name__ == "__main__":
             else:
                 LOGGER.info(f"Intervention not successful. Predicted '{predicted}' instead of '{fact_tuple[2]}'")
 
-            handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W)
+            handler._get_module(handler._layer_name_template.format(handler._layer)).weight = torch.nn.Parameter(old_W, requires_grad=False)
         print(fact_tuple[0].format(predicted))
 
     main()

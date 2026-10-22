@@ -1,0 +1,28 @@
+/* Workshop extensions to the original solo.css. Keep its palette and typography. */
+.model-status {display: inline-flex; align-items: center; gap: 9px; padding: 8px 12px;
+  border-radius: 10px; font-weight: 700; background: #effbfe; color: #00445a;
+  border: 1px solid #00a9e0; margin: 2px 0 10px}
+.model-status.warn {background: #fff3f5; border-color: #e4002b; color: #8e001c}
+.status-dot {width: 9px; height: 9px; border-radius: 50%; background: #00a9e0}
+.model-status.warn .status-dot {background: #e4002b}
+.gradio-container .tab-nav {border-bottom-color: #9bdcf0 !important; flex-wrap: wrap}
+.gradio-container .tab-nav button {color: #00445a !important; background: #fff !important}
+.gradio-container .tab-nav button.selected,
+.gradio-container .tab-nav button[aria-selected="true"] {
+  color: #00445a !important; background: #eaf8fc !important; border-color: #00a9e0 !important}
+.gradio-container .source-panel {border-color: #9bdcf0 !important}
+.gradio-container .source-panel .label-wrap {color: #00445a !important}
+/* Preserve compact cards without compressing plots or results on small displays. */
+.workshop-intro {margin: 6px 0 10px}
+.workshop-intro .demo-highlights {grid-template-columns: repeat(2, minmax(0, 1fr))}
+@media (max-width: 850px) {.workshop-intro .demo-highlights {grid-template-columns: 1fr}}
+.model-status.busy::before {content: ""; width: 12px; height: 12px; border: 2px solid #9bdcf0;
+  border-top-color: #00a9e0; border-radius: 50%; animation: demo-spin .8s linear infinite}
+.gpu-usage {padding: 8px 12px; border: 1px solid #9bdcf0; border-radius: 10px;
+  background: #f5fcfe; color: #00445a; font-size: .82rem; line-height: 1.5}
+.gpu-usage progress {display: block; width: 100%; height: 8px; margin-top: 5px; accent-color: #00a9e0}
+.original-chat {background: #f5fcfe !important; border: 1px solid #bddce5 !important}
+.original-chat .bubble-wrap, .original-chat .message-wrap {background: #f5fcfe !important}
+.original-chat .message-row .user {background: #eaf8fc !important; border: 1px solid #00a9e0 !important; color: #17323a !important}
+.original-chat .message-row .bot {background: #fff !important; border: 1px solid #d4e2e7 !important; color: #1e293b !important}
+.original-chat .message-row .user *, .original-chat .message-row .bot * {color: inherit !important}

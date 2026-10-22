@@ -18,7 +18,7 @@ from typing import Any
 
 import datasets
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerFast
 
 from src.common.linalg import CUDAMode, DeviceManager, check_device, gpu_count
@@ -140,6 +140,9 @@ def load_pretrained(cfg: DictConfig) -> Any:
             return False
 
     def _load_tokenizer(path_or_name: str, **kwargs):
+        revision = getattr(cfg.model, "revision", None)
+        if revision and not Path(path_or_name).exists():
+            kwargs.setdefault("revision", str(revision))
         try:
             tok = _ensure_padding(AutoTokenizer.from_pretrained(path_or_name, **kwargs))
         except (ValueError, OSError):
@@ -182,6 +185,17 @@ def load_pretrained(cfg: DictConfig) -> Any:
         return tok
 
     def _call_model_loader(model_loader: Any, path_or_name: str, **kwargs):
+        revision = getattr(cfg.model, "revision", None)
+        if revision and not Path(path_or_name).exists():
+            kwargs.setdefault("revision", str(revision))
+        placement = getattr(cfg.model, "device_map", None)
+        if placement is not None:
+            kwargs.setdefault("device_map", OmegaConf.to_container(placement) if OmegaConf.is_config(placement) else placement)
+        if getattr(cfg.model, "low_cpu_mem_usage", False):
+            kwargs.setdefault("low_cpu_mem_usage", True)
+        attention = getattr(cfg.model, "attn_implementation", None)
+        if attention:
+            kwargs.setdefault("attn_implementation", str(attention))
         try:
             model, loading_info = model_loader.from_pretrained(
                 path_or_name,
@@ -218,6 +232,9 @@ def load_pretrained(cfg: DictConfig) -> Any:
             import transformers
 
             config_kwargs = {}
+            revision = getattr(cfg.model, "revision", None)
+            if revision:
+                config_kwargs["revision"] = str(revision)
             if "token" in kwargs:
                 config_kwargs["token"] = kwargs["token"]
             config = AutoConfig.from_pretrained(path_or_name, **config_kwargs)
@@ -266,7 +283,7 @@ def load_pretrained(cfg: DictConfig) -> Any:
         # Plain merged projections are required by ROME and Gram's weight hooks.
         model = adapted.merge_and_unload(safe_merge=True)
         device_manager.register_object(model)
-    elif os.path.exists(local_model_path):
+    elif os.path.exists(local_model_path) and not getattr(cfg.model, "force_hub", False):
         LOGGER.info("Loading model from local cache: %s", local_model_path)
         if use_device_map:
             model = _model_from_pretrained(local_model_path, device_map="auto")

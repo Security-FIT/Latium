@@ -1,4 +1,4 @@
-"""Lazy, read-only side panels showing the installed implementation."""
+"""Lazy teaching excerpts, with installed-source inspection available as fallback."""
 
 import importlib
 import inspect
@@ -18,6 +18,8 @@ def resolve_source(source, *, fallback=None):
     wrappers without importing latium_workshop. A generator may supply the exact
     original source as fallback when inspect/linecache is unavailable.
     """
+    if isinstance(source, str):
+        return textwrap.dedent(source).strip()
     try:
         if isinstance(source, tuple):
             _title, module_path, attribute = source
@@ -55,9 +57,9 @@ def source_panel(sources, *, fallbacks=None):
         return resolve_source(references[title], fallback=(fallbacks or {}).get(title))
 
     with gr.Column(scale=3, min_width=280), gr.Accordion("Zdrojový kód · rozbalit", open=False, elem_classes=["source-panel"]) as accordion:
-        gr.Markdown("Skutečná implementace vložená v tomto notebooku. Zobrazení kódu nespouští model.")
-        selector = gr.Dropdown(titles, value=titles[0], label="Implementace")
-        code = gr.Code(value="", language="python", interactive=False, label="Zdrojový kód", lines=24)
+        gr.Markdown("Zkrácené didaktické výřezy: hlavní myšlenka bez pomocného kódu a správy paměti.")
+        selector = gr.Dropdown(titles, value=titles[0], label="Zajímavý krok")
+        code = gr.Code(value="", language="python", interactive=False, label="Jádro principu", lines=14, wrap_lines=True)
     accordion.expand(load, inputs=selector, outputs=code, queue=False)
     selector.change(load, inputs=selector, outputs=code, queue=False)
     return accordion, code

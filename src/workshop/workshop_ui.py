@@ -39,6 +39,7 @@ from .session import load_model, runtime_session, session_for
 from .operations import stream_operation
 from .setup import Environment
 from .source_panel import source_panel
+from .highlights import ROME_HIGHLIGHTS, TRACE_HIGHLIGHTS, MULTIHOP_HIGHLIGHTS, CUSTOM_HIGHLIGHTS, GRAM_HIGHLIGHTS
 from .telemetry import gpu_usage_html
 from .themes import solo_theme
 from .tracing import corrupt_hook, restore_hook
@@ -106,6 +107,7 @@ class WorkshopCoordinator:
         """Keep progress visible; invalidate other lessons only if weights change."""
         values = {}
         changing = False
+        defer_invalidation = False
         initial_key = self.session._active_key
         try:
             self.ensure_ready()
@@ -114,13 +116,16 @@ class WorkshopCoordinator:
                 if self.session.active_edit and scenario_for_fact(self.session.active_fact) != inputs[0]:
                     raise ValueError("Vyberte scénář odpovídající aktivní editaci ze záložky 2.")
                 changing = not self.session.active_edit
+                defer_invalidation = bool(scenario.paper_hop and changing)
             elif tab == "reset":
                 changing = self.session.active_edit
             else:
                 from .facts import workshop_fact
                 fact, _ = workshop_fact(*inputs[:4])
                 changing = not self.session.matches(fact)
-            if changing:
+                selected = MULTIHOP_SCENARIOS.get(scenario_for_fact(fact))
+                defer_invalidation = bool(changing and selected and selected.paper_hop)
+            if changing and not defer_invalidation:
                 values = self.invalidate()
             yield values | {"system_status": model_status("Připravuji odpovědi…", "busy")}
 
@@ -134,6 +139,8 @@ class WorkshopCoordinator:
             for state, result, done in stream_operation(execute, "Pracuji s aktuálním modelem…"):
                 yield {"system_status": state}
                 if done:
+                    if defer_invalidation and self.session._active_key != initial_key:
+                        values.update(self.invalidate())
                     if tab == "reset":
                         summary, rows, _, status, _ = result
                         for name in RESULT_TABS:
@@ -306,7 +313,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
         reset_button = gr.Button("Obnovit původní model · všechny záložky", variant="secondary", interactive=handler is not None)
         with gr.Accordion("Společná nastavení obou chatů", open=False):
             shared_system = gr.Textbox(value=default_system_prompt(handler), label="Systémová instrukce", lines=2)
-            shared_tokens = gr.Slider(32, 384, value=160, step=16, label="Maximální délka odpovědi")
+            shared_tokens = gr.Slider(16, 128, value=32, step=16, label="Maximální délka krátké odpovědi")
             gr.Markdown("Výchozí instrukce odpovídá editaci. Její změna mění pouze kontext chatu "
                         "a vyčistí společnou historii; nemění váhy modelu.")
         with gr.Tabs():
@@ -338,12 +345,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             auto_noise = gr.Checkbox(value=True, label="Automaticky zvolit sílu poškození")
                         gr.Markdown("Výchozí graf shrnuje 3 fakta, každé se 3 vzorky šumu. Více faktů stabilizuje profil, ale vyžaduje více výpočtů.")
                         trace_button = gr.Button("Najít kandidátní vrstvu", variant="primary", interactive=handler is not None)
-                    source_panel([
-                        ("Workshop · trasování", diagnostics.trace),
-                        ("Rainbow graf kauzálního obnovení", _trace_rainbow),
-                        ("Obnovení aktivací", restore_hook),
-                        ("Poškození reprezentace", corrupt_hook),
-                    ])
+                    source_panel(TRACE_HIGHLIGHTS)
                 components["trace_summary"] = gr.Markdown("Trasování zatím nebylo spuštěno.", elem_classes=["workshop-summary"])
                 components["trace_plot"] = gr.Plot(label="Rainbow graf kauzálního obnovení")
                 with gr.Accordion("Podrobné naměřené hodnoty", open=False):
@@ -381,7 +383,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             with gr.Column(scale=6):
                                 prepared_send, prepared_clear, prepared_system, prepared_tokens = _workshop_chat_form(
                                     components, "prepared_", handler, shared_system, shared_tokens)
-                    source_panel(ROME_SOURCES + [("Workshop · editace a ověření", coordinator.actions.edit)])
+                    source_panel(ROME_HIGHLIGHTS)
                 _fact_results(components, "prepared")
             with gr.Tab(TAB_LABELS[2]):
                 with gr.Row(equal_height=False):
@@ -412,46 +414,40 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             )
                             gr.Code(value=DIRECT_ANSWER_CONTEXT + "Q: <otázka>\nA:", language=None, interactive=False, wrap_lines=True)
                         multihop_button = gr.Button("Ověřit vícekrokové otázky · použít existující editaci", variant="primary", interactive=handler is not None)
-                    source_panel([
-                        ("Workshop · vícekroková lekce", MultiHopActions),
-                        ("Generování odpovědi", generate_completion),
-                        ("Renderování promptu", render_prompt),
-                    ])
+                    source_panel(MULTIHOP_HIGHLIGHTS)
                 components["multihop_summary"] = gr.Markdown("Vícekrokové měření zatím nebylo spuštěno.", elem_classes=["workshop-summary"])
                 components["multihop_rows"] = gr.HTML(render_result_rows("multihop_rows", []), elem_id="multihop-results")
             with gr.Tab(TAB_LABELS[3]):
-                with gr.Row(equal_height=False):
-                    with gr.Column(scale=7):
-                        gr.Markdown(
-                            "### Zkuste vlastní editaci\n\n"
-                            "Šedé placeholdery vás provedou příkladem, který můžete nahradit vlastním faktem:\n\n"
-                            "| Pole | Ukázková hodnota, kterou můžete nahradit |\n"
-                            "|---|---|\n"
-                            "| Co chceme editovat? | `Hamlet` |\n"
-                            "| Jak se na fakt modelu zeptáme? | `Who wrote Hamlet? Answer with the author's name only.` |\n"
-                            "| Jaká byla původní odpověď? | `William Shakespeare` |\n"
-                            "| Co má model nově odpovídat? | `J. R. R. Tolkien` |\n"
-                            "| Jiné formulace stejné otázky | `Hamlet was written by` |\n\n"
-                            "Placeholdery jsou nápověda; hodnoty vyplňte sami. Vyplňte všechna čtyři hlavní pole. "
-                            "Nejprve použijte **Ověřit vlastní fakt**, pak **Provést vlastní editaci**. "
-                            "V chatu zkuste `Who is the author of Hamlet?` a porovnejte i kontrolní otázku "
-                            "`What is the capital of Japan?`. Každá další editace začíná z původních vah. "
-                            "Chat používá aktuální váhy společného modelu."
-                        )
-                        with gr.Row(equal_height=False):
-                            with gr.Column(scale=5):
-                                custom_inputs = _fact_form(WORKSHOP_PRESETS["Vlastní fakt"])
-                                with gr.Row():
-                                    custom_inspect = gr.Button("Ověřit vlastní fakt", variant="secondary", interactive=handler is not None)
-                                    custom_edit = gr.Button("Provést vlastní editaci", variant="primary", interactive=handler is not None)
-                            with gr.Column(scale=6):
-                                send, clear, system_prompt, max_tokens = _workshop_chat_form(
-                                    components, "", handler, shared_system, shared_tokens)
-                    source_panel(ROME_SOURCES + [
-                        ("Workshop · chat nad společnou session", generate_reply),
-                        ("Chatový prompt", render_chat),
-                    ])
+                with gr.Accordion("Jak vyplnit vlastní edit · příklad Hamlet", open=False):
+                    gr.Markdown(
+                        "### Zkuste vlastní editaci\n\n"
+                        "Šedé placeholdery vás provedou příkladem, který můžete nahradit vlastním faktem:\n\n"
+                        "| Pole | Ukázková hodnota, kterou můžete nahradit |\n"
+                        "|---|---|\n"
+                        "| Co chceme editovat? | `Hamlet` |\n"
+                        "| Jak se na fakt modelu zeptáme? | `Who wrote Hamlet? Answer with the author's name only.` |\n"
+                        "| Jaká byla původní odpověď? | `William Shakespeare` |\n"
+                        "| Co má model nově odpovídat? | `J. R. R. Tolkien` |\n"
+                        "| Jiné formulace stejné otázky | `Hamlet was written by` |\n\n"
+                        "Placeholdery jsou nápověda; hodnoty vyplňte sami. Vyplňte všechna čtyři hlavní pole. "
+                        "Nejprve použijte **Ověřit vlastní fakt**, pak **Provést vlastní editaci**. "
+                        "V chatu zkuste `Who is the author of Hamlet?` a porovnejte i kontrolní otázku "
+                        "`What is the capital of Japan?`. Každá další editace začíná z původních vah. "
+                        "Chat používá aktuální váhy společného modelu."
+                    )
+                with gr.Row(equal_height=False, elem_id="custom-editor"):
+                    with gr.Column(scale=1, min_width=320, elem_id="custom-fact-form"):
+                        gr.Markdown("### Vlastní fakt\n\nVyplňte otázku a původní i novou odpověď.")
+                        custom_inputs = _fact_form(WORKSHOP_PRESETS["Vlastní fakt"])
+                        with gr.Row():
+                            custom_inspect = gr.Button("Ověřit vlastní fakt", variant="secondary", interactive=handler is not None)
+                            custom_edit = gr.Button("Provést vlastní editaci", variant="primary", interactive=handler is not None)
+                    with gr.Column(scale=1, min_width=320, elem_id="custom-chat"):
+                        send, clear, system_prompt, max_tokens = _workshop_chat_form(
+                            components, "", handler, shared_system, shared_tokens)
                 _fact_results(components, "custom")
+                with gr.Row():
+                    source_panel(CUSTOM_HIGHLIGHTS)
             with gr.Tab(TAB_LABELS[4]):
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
@@ -463,11 +459,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             "GRAM neobnovuje model a neprovádí další editaci."
                         )
                         gram_button = gr.Button("Spustit detekci GRAM na aktuálním modelu", variant="primary", interactive=handler is not None)
-                    source_panel([
-                        ("GRAM · RomeLayerLocalizer", RomeLayerLocalizer),
-                        ("GRAM · společné jádro", detect_from_profiles),
-                        ("Workshop · měření GRAM", diagnostics.gram),
-                    ])
+                    source_panel(GRAM_HIGHLIGHTS)
                 components["gram_summary"] = gr.Markdown("Detekce GRAM zatím nebyla spuštěna.", elem_classes=["workshop-summary"])
                 components["gram_plot"] = gr.Plot(label="Strukturální skóre GRAM")
                 with gr.Accordion("Podrobné hodnoty detekce", open=False):

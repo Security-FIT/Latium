@@ -31,7 +31,8 @@ class ModelSettings:
     v_batch_size: int = 1
     dtype: str = "bf16"
     attn_implementation: str = "eager"
-    rome_system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    rome_system_prompt: str = (DEFAULT_SYSTEM_PROMPT + " Give a single short sentence. For a factual name, place or number, "
+                               "return only the answer, without background or alternative interpretations.")
     rome_prompt_mode: str = "chat"
     corrupt_layer_name_template: str = "model.embed_tokens"
 

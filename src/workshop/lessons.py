@@ -291,7 +291,8 @@ class MultiHopActions:
             total = len(scenario.probes) + 1
             progress(index / total, desc=f"Vícekroková ukázka · hotovo {index}/{total}")
             prompt = paper_prompt(probe.question) if scenario.paper_hop else probe.question
-            answers.append(self.session.answer(prompt, generate_completion))
+            answers.append(self.session.answer(prompt, generate_completion, max_new_tokens=16) if scenario.paper_hop else
+                           self.session.answer(prompt, generate_completion))
             progress((index + 1) / total, desc=f"Vícekroková ukázka · hotovo {index + 1}/{total}")
         city = observed_city(answers[scenario.first_hop_index])
         if city is None:
@@ -299,7 +300,31 @@ class MultiHopActions:
         question = f"In which country is {city} located? Answer with the country name only."
         progress(len(scenario.probes) / (len(scenario.probes) + 1), desc=f"Vícekroková ukázka · zjišťuji zemi města {city}")
         prompt = paper_prompt(question) if scenario.paper_hop else question
-        return answers, (question, self.session.answer(prompt, generate_completion))
+        answer = (self.session.answer(prompt, generate_completion, max_new_tokens=16) if scenario.paper_hop else
+                  self.session.answer(prompt, generate_completion))
+        return answers, (question, answer)
+
+    def baseline_problem(self, scenario, before, progress):
+        failed = [i for i in range(4) if not probe_matches(scenario.probes[i], before[i], "before")]
+        if failed:
+            query = scenario.probes[scenario.implicit_index]
+            plain = self.session.answer(query.question, generate_completion, max_new_tokens=16)
+            rows = [[p.category, p.question, p.before, p.after, answer, "—"]
+                    for p, answer in zip(scenario.probes, before)]
+            rows.append(["Výchozí kontrola · bez Q/A kontextu", query.question,
+                         query.before, query.before, plain, "—"])
+            context_note = ("Bez Q/A kontextu je odpověď správná: problém závisí na formulaci či kontextu."
+                            if probe_matches(query, plain, "before") else
+                            "Ani bez Q/A kontextu model tuto složenou otázku nezodpověděl správně.")
+            summary = ("### Výchozí znalost není ověřená · ROME se nespustilo\n\n"
+                       + "Neprošly: " + ", ".join(scenario.probes[i].category for i in failed) + ".\n\n"
+                       + f"Složená otázka před editací: **{before[scenario.implicit_index]}**. "
+                       + f"Bez Q/A kontextu: **{plain}**. {context_note}\n\n"
+                       + "Nesprávná odpověď před i po by nebyla důkazem zhoršení po ROME. "
+                       "Zvolte příklad, který model v základu zná, nebo nejprve ověřte formulaci otázky.")
+            progress(1., desc="Výchozí kontrola hotová · editace nebyla provedena")
+            return summary, rows, model_status("Výchozí znalost neověřena · původní váhy zachovány", "warn")
+        return None
 
     def run(self, scenario_key, progress=gr.Progress()):
         if scenario_key not in MULTIHOP_SCENARIOS:
@@ -332,8 +357,13 @@ class MultiHopActions:
                     probes[index] = replace(probes[index], question=f"What is the official language of {country}? Answer with the language name only.",
                                             before=language, after=language)
                 scenario = replace(scenario, probes=tuple(probes))
+            had_active_edit = self.session.active_edit
             with self.session.baseline():
                 before, before_chain = self._measure(scenario, lambda f, **kw: progress(.2 * f, **kw))
+                if scenario.paper_hop and not had_active_edit:
+                    problem = self.baseline_problem(scenario, before, progress)
+                    if problem:
+                        return problem
             fact = self.session.active_fact or scenario.fact
             if self.session.active_edit:
                 result, reused = self.session.installed_result(), True

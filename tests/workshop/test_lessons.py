@@ -241,3 +241,34 @@ def test_paper_second_hop_uses_the_observed_building_and_custom_country(lesson_r
     assert "Empire State Building" in rows[-1][1] and rows[-1][5] == "United States"
     assert runtime["api"].apply_rome_edit.call_count == 1
     assert session.active_fact == fact
+
+
+@pytest.mark.parametrize("plain_answer", ["China", "UAE"])
+@pytest.mark.parametrize("prepared", [False, True])
+def test_wrong_composed_baseline_stops_edit_and_compares_plain_prompt(lesson_runtime, plain_answer, prepared):
+    lessons, runtime = lesson_runtime
+    scenario = lessons.MULTIHOP_SCENARIOS["paper_hop2"]
+    expected = {lessons.paper_prompt(p.question): p.before for p in scenario.probes}
+    expected[lessons.paper_prompt(lessons.TALLEST_QUERY)] = "China"
+
+    def answer(handler, prompt, **kwargs):
+        assert handler.weight.item() == 1
+        assert kwargs["max_new_tokens"] == 16
+        if prompt == lessons.TALLEST_QUERY:
+            return plain_answer
+        return expected.get(prompt, "UAE")
+
+    runtime["probing"].generate_completion.side_effect = answer
+    if prepared:
+        from src.workshop.workshop import WorkshopActions
+        fact = scenario.fact
+        summary, rows, _, _, _ = WorkshopActions(runtime["session"]).edit(fact[1], scenario.edit_prompt, fact[2], fact[3], "", "")
+        after_column, before_column = 3, 2
+    else:
+        summary, rows, _ = lessons.MultiHopActions(runtime["session"]).run("paper_hop2")
+        after_column, before_column = 5, 4
+    runtime["api"].apply_rome_edit.assert_not_called()
+    assert "ROME se nespustilo" in summary and "China" in summary
+    assert all(row[after_column] == "—" for row in rows)
+    assert rows[-1][before_column] == plain_answer
+    assert not runtime["session"].active_edit

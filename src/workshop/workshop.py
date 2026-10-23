@@ -44,6 +44,20 @@ class WorkshopActions:
         fact, rendered = ui_input(workshop_fact, subject, prompt, target_new, target_true)
         specs = probe_specs(rendered, variants, canaries)
         with self.session.transaction():
+            # A failed original 2-hop question cannot demonstrate damage from editing.
+            from .lessons import MULTIHOP_SCENARIOS, MultiHopActions, _paper_scenario_for_fact, scenario_for_fact
+            scenario_key = scenario_for_fact(fact)
+            scenario = MULTIHOP_SCENARIOS.get(scenario_key)
+            if scenario is not None and scenario.paper_hop and not self.session.matches(fact):
+                lesson = MultiHopActions(self.session)
+                scenario = _paper_scenario_for_fact(scenario, fact)
+                with self.session.baseline():
+                    baseline, _ = lesson._measure(scenario, lambda f, **kw: progress(.1 * f, **kw))
+                    problem = lesson.baseline_problem(scenario, baseline, progress)
+                if problem:
+                    summary, measured, state = problem
+                    rows = [[kind, question, old, new, "—"] for kind, question, _, _, old, new in measured]
+                    return summary, rows, self.history_rows(), state, []
             with self.session.baseline():
                 before = self.read_answers(specs, lambda fraction, **kw: progress(.1 * fraction, **kw))
             result, reused = self.session.install(fact, apply_rome_edit,

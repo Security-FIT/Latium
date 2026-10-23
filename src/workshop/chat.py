@@ -9,6 +9,9 @@ from src.rome.probing import _stop_token_ids
 def default_system_prompt(handler):
 
     model = getattr(getattr(handler, "cfg", None), "model", None)
+    if handler is None:
+        from .model import ModelSettings
+        return ModelSettings().rome_system_prompt
     return getattr(model, "rome_system_prompt", DEFAULT_SYSTEM_PROMPT)
 
 
@@ -34,7 +37,7 @@ def strip_thinking(answer):
 
 
 def generate_reply(session, message, history, system_prompt=None,
-                   *, max_new_tokens=192, history_limit=8, repetition_penalty=None):
+                   *, max_new_tokens=32, history_limit=8, repetition_penalty=None):
     import torch
 
     handler = session.handler

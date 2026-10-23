@@ -64,7 +64,7 @@ def main():
                     page.get_by_role("button", name=label, exact=True).click()
 
             page.goto(f"http://127.0.0.1:{args.port}/?__theme=light", wait_until="networkidle")
-            page.get_by_role("heading", name="Co když někdo přepíše jediný fakt v jazykovém modelu?").wait_for()
+            page.locator('.demo-hero h1').wait_for(state="attached")
             assert page.get_by_role("tab").count() == 5
             page.screenshot(path=str(output / "workshop-desktop.png"), full_page=True)
             page.get_by_role("tab", name="2 · ROME: připravené příklady").click()
@@ -76,8 +76,16 @@ def main():
             page.screenshot(path=str(output / "workshop-first-edit.png"), full_page=True)
             assert page.get_by_role("button", name="Provést připravenou editaci", exact=True).is_disabled()
             page.get_by_role("tab", name="4 · ROME: vlastní fakt a chat").click()
+            form_box = page.locator('#custom-fact-form').bounding_box()
+            chat_box = page.locator('#custom-chat').bounding_box()
+            assert abs(form_box['y'] - chat_box['y']) < 3, (form_box, chat_box)
+            assert abs(form_box['width'] - chat_box['width']) < 3, (form_box, chat_box)
             page.screenshot(path=str(output / "workshop-custom.png"), full_page=True)
             page.set_viewport_size({"width": 390, "height": 844})
+            page.wait_for_timeout(150)
+            form_box = page.locator('#custom-fact-form').bounding_box()
+            chat_box = page.locator('#custom-chat').bounding_box()
+            assert chat_box['y'] >= form_box['y'] + form_box['height'] - 3
             page.screenshot(path=str(output / "workshop-mobile.png"), full_page=True)
             overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 2")
             print("Browser errors:", errors)

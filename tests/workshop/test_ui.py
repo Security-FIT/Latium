@@ -188,7 +188,7 @@ def test_deterministic_chat_uses_shared_lock_and_filters_reasoning(runtime, monk
     def generate(**options):
         assert session.lock.locked()
         assert options["do_sample"] is False
-        assert options["max_new_tokens"] == 192
+        assert options["max_new_tokens"] == 32
         assert options["pad_token_id"] == handler.tokenizer.pad_token_id
         assert options["eos_token_id"] == handler.tokenizer.eos_token_id
         return torch.cat([options["input_ids"], torch.tensor([continuation])], dim=1)

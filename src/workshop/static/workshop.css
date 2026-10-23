@@ -83,3 +83,11 @@
     color: #00445a; font-weight: 800; margin-bottom: 5px}
   .answer-pair, .target-metrics {grid-template-columns: minmax(0, 1fr)}
 }
+
+/* The custom editor has two equal, top-aligned cards; code is below them. */
+#custom-editor {align-items: flex-start !important; gap: 24px !important}
+#custom-fact-form, #custom-chat {min-width: 0; box-sizing: border-box}
+#custom-fact-form > .prose, #custom-chat > .prose {min-height: 64px; margin-top: 0}
+#custom-chat .original-chat {width: 100%; box-sizing: border-box}
+@media (max-width: 760px) {#custom-editor {flex-direction: column !important}
+  #custom-fact-form, #custom-chat {width: 100% !important; flex-basis: auto !important}}

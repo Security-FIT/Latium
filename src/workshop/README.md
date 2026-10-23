@@ -30,6 +30,8 @@ panelu znovu nenačítá; pro jinou kovarianci po načtení restartujte runtime.
 Nová editace začíná obnovou původní projekce; editace se nevrství. Stejný připravený
 fakt se použije z paměti bez další optimalizace. Nové otevření rozhraní zachová načtený
 model a aktivní edit. Změna vah a reset vymažou historii chatu.
+Chat má výchozí limit 32 nových tokenů a stručnou systémovou instrukci; limit lze
+upravit ve společném nastavení chatů. Paperové kontroly používají 16 tokenů.
 
 ## Vlastní edit
 
@@ -62,6 +64,14 @@ samostatné dvojkrokové otázky a kontroly. Rozlišují nepřenesenou parafráz
 needitovaného kroku, původní zemi a odpověď mezivýsledkem místo konečné země.
 Rozklad je samostatná pomocná kontrola přes skutečně vygenerovanou budovu.
 Stejná editace i hotové odpovědi se používají z cache.
+
+Před novým paperovým editem se ověří základní znalosti. Pokud model už před editací
+odpoví na složenou otázku chybně (například `China`), ROME se nespustí. Výsledky
+ukážou i odpověď na stejnou otázku bez Q/A kontextu, aby bylo vidět, zda problém
+závisí na kontextu. Odpověď chybná před i po není důkaz zhoršení způsobeného ROME.
+
+Zdrojové panely obsahují krátké označené didaktické výřezy hlavních algoritmů.
+Vlastní formulář a chat mají stejně široké sloupce; na mobilu se skládají pod sebe.
 
 Nové příklady adaptují tabulku 1 a §5.1 [studie 2601.04600](https://arxiv.org/abs/2601.04600).
 V rozbalovacím panelu **Protokol měření** je společný Q/A kontext s vlastními

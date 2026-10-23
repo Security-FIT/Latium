@@ -97,6 +97,24 @@ its estimation weights match the pinned checkpoint.
   Expected answers are never supplied to generation. Scores are normalized per
   target token, and actual generated text remains visible.
 
+### Readable results and rainbow tracing
+
+ROME comparisons sit below the form/chat row and use the full tab width.
+Read-only HTML tables preserve complete answers and line breaks; mobile layouts
+use labelled blocks instead of forcing five columns into a narrow spreadsheet.
+Multihop probes use individual cards containing both answers, expectations and all
+six score values. History, tracing and GRAM details use responsive metric cards.
+All model text is escaped before insertion into HTML. Controller row formats and
+numerical calculations are unchanged.
+
+The default causal chart now matches the rainbow bar style of the supplied
+`causal data/llama2-7b/legacy_rainbow.png`: violet-to-red layer colors, L0…Ln labels
+and a peak annotation. Its heights are the workshop's actual mean paired IE per
+MLP window. The supplied legacy report instead aggregates the maximum across
+subject-position rows within each run before averaging. This UI change borrows
+the chart presentation; it does not silently claim to run that different legacy
+protocol. The axis and summary identify the MLP-window measurement.
+
 ## Validation
 
 ```bash
@@ -108,7 +126,7 @@ The CPU suite exercises a tiny real Qwen3.5 full/linear-attention model, exact
 chat token positions, microbatch gradients, insertion/restoration, failure cleanup,
 real tracing interventions and GRAM. Optional browser audit:
 
-Validation on this integration: 201 targeted tests passed, three optional
+Validation including the responsive-results/rainbow follow-up: 206 targeted tests passed, three optional
 dependency checks skipped. The separate workshop/notebook suite passed 128 tests.
 The real Qwen3.5 tokenizer passed English/Czech round-trip, no-thinking-prefill and
 subject-position checks. The Chromium audit passed desktop/mobile rendering,
@@ -119,6 +137,10 @@ with no JavaScript errors or mobile horizontal overflow.
 pip install playwright
 playwright install chromium
 python scripts/workshop_browser_smoke.py --artifacts /tmp/opencode
+python scripts/workshop_browser_smoke.py --populated --artifacts /tmp/opencode
 ```
 
 The clean notebook's source and export tests live in the separate workshop repo.
+The populated browser audit uses clearly labelled layout fixtures with long
+multiline answers. It checks result-cell widths/heights, not only the outer page,
+on both desktop and mobile, and never supplies fake measurements in production.

@@ -91,13 +91,16 @@ def _diagnostic_chat_inputs(handler, subject, prompt, target, device):
     return inputs, TokenSpan(positions[0], positions[-1] + 1, positions, positions[-1]), target_ids
 
 
-def _trace_heatmap(rows, sample_effects, *, configured_layer=None):
-    """Latium-style RdBu_r map, with honest noise-draw rows for this single fact.
+def _trace_rainbow(rows, sample_effects, *, configured_layer=None):
+    """Rainbow bars matching Latium's legacy_rainbow.png presentation.
 
-    Mirrors notebooks/causal_tracing.ipynb's nearest-neighbor heatmap and paired
-    IE units. This workshop measures one fact, so rows are actual paired noise
-    draws, NOT fictitious facts/tokens. The final row is their measured mean.
+    Heights here are the workshop's measured mean paired IE per MLP window.
+    Legacy's max-over-subject-position aggregation is a different experiment;
+    copying its old values or calling this one a legacy run would be incorrect.
     """
+    import colorsys
+
+    import matplotlib
     import numpy as np
     from matplotlib.figure import Figure
 
@@ -105,30 +108,34 @@ def _trace_heatmap(rows, sample_effects, *, configured_layer=None):
     layers = np.asarray([row[0] for row in ordered])
     effects = np.asarray(sample_effects, dtype=float)
     if effects.ndim != 2 or effects.shape[1] != len(layers) or not np.isfinite(effects).all():
-        raise ValueError("Heatmap requires finite [noise draws, layer windows] measurements")
+        raise ValueError("Rainbow graph requires finite [noise draws, layer windows] measurements")
     means = np.asarray([row[6] for row in ordered])
-    matrix = np.vstack([effects, means])
-    limit = max(float(np.abs(matrix).max()), np.finfo(float).eps)
-    figure = Figure(figsize=(11, 6.5), layout="constrained", facecolor="white")
-    curve, heat = figure.subplots(2, 1, gridspec_kw={"height_ratios": [1, 2]})
-    curve.bar(layers, means, color="#9ecae1", alpha=.65)
-    curve.plot(layers, means, color="#08519c", linewidth=2, label="Průměrný párový IE")
-    curve.axhline(0, color="black", linewidth=.8)
+    if not np.allclose(effects.mean(axis=0), means, rtol=1e-6, atol=1e-12):
+        raise ValueError("Rainbow bars must equal the measured paired-effect means")
+    # Seaborn-style desaturation reproduces the violet → blue → cyan → green →
+    # orange → red sequence used by Latium's rainbow aggregation examples.
+    colors = []
+    for color in matplotlib.colormaps["rainbow"](np.linspace(0, 1, len(layers))):
+        hue, lightness, saturation = colorsys.rgb_to_hls(*color[:3])
+        colors.append(colorsys.hls_to_rgb(hue, lightness, saturation * .75))
+    figure = Figure(figsize=(13, 4.8), layout="constrained", facecolor="white")
+    axis = figure.subplots()
+    axis.set_axisbelow(True)
+    axis.grid(axis="y", color="#cccccc", linewidth=.8)
+    axis.bar(layers, means, color=colors, width=.82, edgecolor="white", linewidth=.7)
+    axis.axhline(0, color="#333333", linewidth=.8)
     if configured_layer is not None:
-        curve.axvline(configured_layer, color="#756bb1", linestyle=":", linewidth=2,
-                      label=f"Nakonfigurovaná vrstva {configured_layer}")
-    curve.set(xlabel="Střed okna MLP", ylabel="Průměrný IE", title="Kauzální obnovení podle vrstvy")
-    curve.legend(loc="best", fontsize=9)
-    # Symmetric bounds put zero at white, with red recovery and blue suppression.
-    image = heat.imshow(matrix, aspect="auto", interpolation="nearest", cmap="RdBu_r", vmin=-limit, vmax=limit)
-    stride = max(1, len(layers) // 16)
-    ticks = sorted(set(range(0, len(layers), stride)) | {len(layers) - 1})
-    heat.set_xticks(ticks, labels=layers[ticks])
-    heat.set_yticks(range(len(matrix)), labels=[f"Šum {i + 1}" for i in range(len(effects))] + ["Průměr"])
-    heat.axhline(len(effects) - .5, color="black", linewidth=.8)
-    heat.set(xlabel="Střed okna MLP", ylabel="Stejný prompt · párové vzorky šumu",
-             title="Mapa obnovení · červená zvyšuje, modrá snižuje pravděpodobnost cíle")
-    figure.colorbar(image, ax=heat, label="IE = P(obnovení) − P(poškození)")
+        axis.axvline(configured_layer, color="#555555", linestyle=":", linewidth=1.2,
+                     label=f"ROME vrstva {configured_layer}")
+        axis.legend(loc="best", fontsize=9)
+    peak = int(np.argmax(means))
+    axis.annotate(f"peak L{layers[peak]}", xy=(layers[peak], means[peak]), xytext=(0, 12),
+                  textcoords="offset points", ha="center", fontsize=10,
+                  arrowprops={"arrowstyle": "-", "color": "#333333"})
+    axis.set_xticks(layers, labels=[f"L{layer}" for layer in layers], rotation=90)
+    axis.set(xlabel="Střed obnovovaného okna MLP", ylabel="Průměrný efekt obnovení (párový IE)",
+             title="Causal tracing · rainbow graf\nObnova MLP na posledním tokenu entity")
+    axis.margins(x=.01, y=.18)
     return figure
 
 
@@ -260,10 +267,11 @@ class DiagnosticActions:
             elif total_effect < 0:
                 summary += "\n\n**Poškození zvýšilo pravděpodobnost cíle: relativní obnovení zde nedokládá úspěšnou obnovu.**"
             progress(1.0, desc="Kauzální trasování je hotové.")
-            summary += ("\n\nBarevná mapa používá styl Latium `RdBu_r`. Řádky ukazují skutečné párové "
-                        "vzorky šumu pro tento prompt a jejich průměr, sloupce okna vrstev. "
-                        "Bílá = nulový efekt; červená = zvýšení, modrá = snížení pravděpodobnosti cíle.")
-            return summary, rows, _trace_heatmap(rows, (restored - corrupt[None, :]).T,
+            summary += ("\n\nRainbow graf používá duhové sloupce po vrstvách jako `legacy_rainbow.png` v Latium. "
+                        "Výška je zde průměrný párový IE přes vzorky šumu pro tento prompt. "
+                        "Barva označuje vrstvu; záporný sloupec znamená snížení pravděpodobnosti cíle. "
+                        "Měření obnovuje MLP okna, nikoli legacy maximum přes tokeny entity.")
+            return summary, rows, _trace_rainbow(rows, (restored - corrupt[None, :]).T,
                                                  configured_layer=self._diagnostic_base_layer)
         except Exception as exc:
             _DIAGNOSTIC_LOGGER.exception("Workshop causal tracing failed")

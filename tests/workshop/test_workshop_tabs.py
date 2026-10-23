@@ -100,7 +100,9 @@ def test_actual_gradio_generator_preclears_outputs_on_failed_edit(ui_runtime):
         assert len(first["data"]) == len(dependency["outputs"])
         output_types = [demo.blocks[key].get_block_name() for key in dependency["outputs"]]
         assert first["data"][output_types.index("chatbot")] == []
-        assert all(first["data"][i]["data"] == [] for i, kind in enumerate(output_types) if kind == "dataframe")
+        results = [first["data"][i] for i, kind in enumerate(output_types)
+                   if kind == "html" and isinstance(first["data"][i], str) and "workshop-results" in first["data"][i]]
+        assert results and all("Zatím bez měření" in item for item in results)
         assert "Operace se nepodařila" in str(last["data"])
         assert "původní model" in str(last["data"])
     finally:
@@ -139,8 +141,9 @@ def test_actual_gradio_successful_edit_updates_only_its_results(ui_runtime):
         assert sum("Výsledek editace" in value for value in summaries) == 1
         assert sum("Výsledek zneplatněn" in value for value in summaries) == 4
         assert any("aktivní ROME editace" in value for value in summaries)
-        tables = [value for key, value in output.items() if demo.blocks[key].get_block_name() == "dataframe"]
-        assert any(value["data"] == [["Hlavní otázka", "The Eiffel Tower is in", "Paris", "Rome", "Ano"]] for value in tables)
+        tables = [value for key, value in output.items() if demo.blocks[key].get_block_name() == "html"]
+        assert any("Hlavní otázka" in value and "The Eiffel Tower is in" in value and
+                   "Paris" in value and "Rome" in value and "Změna: Ano" in value for value in tables)
         assert session.active_edit
         runtime["api"].apply_rome_edit.assert_called_once()
     finally:

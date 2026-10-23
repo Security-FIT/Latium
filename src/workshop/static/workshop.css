@@ -26,3 +26,51 @@
 .original-chat .message-row .user {background: #eaf8fc !important; border: 1px solid #00a9e0 !important; color: #17323a !important}
 .original-chat .message-row .bot {background: #fff !important; border: 1px solid #d4e2e7 !important; color: #1e293b !important}
 .original-chat .message-row .user *, .original-chat .message-row .bot * {color: inherit !important}
+
+/* Result text is read-only prose, never forced into a fixed-width spreadsheet. */
+.workshop-results {width: 100%; min-width: 0; color: #1e293b; margin: 12px 0}
+.workshop-results h3 {font-size: 1.05rem; margin: 0 0 10px}
+.workshop-results h4 {font-size: .97rem; margin: 0 0 8px}
+.workshop-results h5 {font-size: .85rem; margin: 0 0 6px}
+.workshop-summary table {width: 100% !important; min-width: 0 !important; table-layout: fixed !important}
+.workshop-summary th, .workshop-summary td {white-space: normal !important; word-break: normal !important;
+  overflow-wrap: break-word !important}
+.workshop-results .result-text {white-space: pre-wrap; word-break: normal; overflow-wrap: break-word;
+  line-height: 1.5; min-width: 0; text-align: left}
+.workshop-results table {width: 100%; min-width: 0; max-width: 100%; table-layout: fixed;
+  border-collapse: collapse; font-size: .9rem}
+.workshop-results th, .workshop-results td {padding: 12px 14px; vertical-align: top; text-align: left;
+  border: 1px solid #d9ebf0; white-space: normal; word-break: normal; overflow-wrap: break-word}
+.workshop-results thead th {background: #effbfe; color: #00445a; font-weight: 800}
+.workshop-results tbody th {font-weight: 500}
+.result-badge {display: inline-block; color: #00445a; background: #eaf8fc;
+  padding: 2px 7px; border-radius: 6px; margin-bottom: 6px; font-size: .77rem; font-weight: 700}
+.result-change {display: block; color: #475569; font-size: .78rem; margin-top: 6px}
+.metric-cards {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px}
+.metric-card, .multihop-card {border: 1px solid #d9ebf0; border-radius: 12px; padding: 14px;
+  background: #fff; min-width: 0}
+.metric-card dl, .target-metric dl {margin: 0}
+.metric-card dl > div {display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px;
+  margin: 6px 0; align-items: baseline}
+.workshop-results dt {font-weight: 600; color: #475569; font-size: .82rem}
+.workshop-results dd {margin: 0; font-size: .88rem; overflow-wrap: break-word; word-break: normal}
+.multihop-card {margin: 0 0 14px; border-top: 3px solid #00a9e0}
+.multihop-card .probe-question {font-weight: 650; margin: 0 0 8px}
+.multihop-card .expectations {font-size: .83rem; color: #475569; margin: 0 0 12px}
+.answer-pair, .target-metrics {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0}
+.answer-pair > section, .target-metric {min-width: 0; border: 1px solid #d9ebf0; border-radius: 8px; padding: 10px}
+.answer-pair > section:last-child {background: #f5fcfe}
+.target-metric dl {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px}
+.workshop-results .sr-only {position: absolute; width: 1px; height: 1px; padding: 0;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap}
+@media (max-width: 760px) {
+  .comparison-results colgroup, .comparison-results thead {display: none}
+  .comparison-results, .comparison-results tbody, .comparison-results tr,
+  .comparison-results th, .comparison-results td {display: block; width: 100%; box-sizing: border-box}
+  .comparison-results tr {margin: 0 0 12px; border: 1px solid #d9ebf0; border-radius: 10px; overflow: hidden}
+  .comparison-results th, .comparison-results td {border: 0; padding: 10px 12px}
+  .comparison-results td {border-top: 1px solid #d9ebf0}
+  .comparison-results td::before {content: attr(data-label); display: block; font-size: .82rem;
+    color: #00445a; font-weight: 800; margin-bottom: 5px}
+  .answer-pair, .target-metrics {grid-template-columns: minmax(0, 1fr)}
+}

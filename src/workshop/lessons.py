@@ -87,10 +87,7 @@ def scenario_for_fact(fact):
 
 def scenario_description(key):
     scenario = MULTIHOP_SCENARIOS[key]
-    return (f"### {scenario.chain}\n\nPoužijeme stejnou editaci jako v připraveném příkladu. "
-            "Model nejprve odpoví město; potom se zeptáme na zemi tohoto skutečně vygenerovaného města. "
-            "Samostatný dvojkrokový dotaz a otázka na jazyk ukážou přenos bez našeho rozkladu. "
-            "Selhání není zaručené; inspirací je [MQuAKE](https://aclanthology.org/2023.emnlp-main.971/).")
+    return f"### {scenario.chain}"
 
 
 def observed_city(answer):

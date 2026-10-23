@@ -109,7 +109,7 @@ def test_system_change_clears_shared_conversation(runtime, monkeypatch):
 
 
 def test_public_entrypoint_reuses_model_and_active_edit(runtime, monkeypatch, tmp_path):
-    from src.workshop import app
+    from src.workshop import app, launch_workshop
 
     session = runtime["session"]
     session.handler._layer = 5
@@ -119,11 +119,14 @@ def test_public_entrypoint_reuses_model_and_active_edit(runtime, monkeypatch, tm
     monkeypatch.setattr(app, "_demo", previous)
     launched = []
     monkeypatch.setattr("src.workshop.launch.launch_ui", lambda *args, **kwargs: launched.append(args[0]))
-    demo = app.launch_workshop(work_dir=tmp_path, share=False)
+    url = "https://drive.google.com/file/d/workshop_covariance/view"
+    demo = launch_workshop(work_dir=tmp_path, share=False, seed=123, covariance_drive_url=url)
     try:
         assert launched == [demo]
         assert demo._model_session is session
         assert session.active_edit and session.handler.weight.item() == 3
+        field = next(c for c in demo.config["components"] if c["props"].get("label") == "Google Drive odkaz na kovarianci")
+        assert field["props"]["value"] == url
     finally:
         demo.close()
 

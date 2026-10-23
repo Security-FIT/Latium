@@ -83,7 +83,7 @@ def test_gpu_units_and_missing_utilization(monkeypatch):
 
 
 def test_notebook_link_preserves_existing_input_and_replaces_it_when_supplied(monkeypatch, tmp_path):
-    from src.workshop import app
+    from src.workshop import app, launch_workshop
     from src.workshop.covariance import DEFAULT_COVARIANCE_DRIVE_URL
 
     ui = import_module("src.workshop.workshop_ui")
@@ -93,16 +93,18 @@ def test_notebook_link_preserves_existing_input_and_replaces_it_when_supplied(mo
     def field(demo):
         return next(c for c in demo.config["components"] if c["props"].get("label") == "Google Drive odkaz na kovarianci")
 
-    first = app.launch_workshop(work_dir=tmp_path, share=False)
+    first = launch_workshop(work_dir=tmp_path, share=False, seed=123)
     try:
         assert field(first)["props"]["value"] == DEFAULT_COVARIANCE_DRIVE_URL
+        seed = next(c for c in first.config["components"] if c["props"].get("label") == "Seed modelu a ROME")
+        assert seed["props"]["value"] == 123
         entered = "https://drive.google.com/file/d/entered_drive_file/view"
         dependency = next(d for d in first.config["dependencies"]
                           if [field(first)["id"], "input"] in [list(t) for t in d["targets"]])
         remember = first.fns[dependency["id"]].fn
         remember(entered)
         remember(" ")
-        reopened = app.launch_workshop(work_dir=tmp_path, share=False, covariance_drive_url=" ")
+        reopened = launch_workshop(work_dir=tmp_path, share=False, covariance_drive_url=" ")
         assert field(reopened)["props"]["value"] == entered
 
         path = tmp_path / "cov.pt"
@@ -117,7 +119,7 @@ def test_notebook_link_preserves_existing_input_and_replaces_it_when_supplied(mo
         assert covariance.call_args.kwargs == {"mode": "public", "manual_upload": False}
 
         new_link = "https://drive.google.com/file/d/new_notebook_file/view"
-        replacement = app.launch_workshop(work_dir=tmp_path, share=False, covariance_drive_url=f" {new_link} ")
+        replacement = launch_workshop(work_dir=tmp_path, share=False, covariance_drive_url=f" {new_link} ")
         assert field(replacement)["props"]["value"] == new_link
     finally:
         app._demo.close()

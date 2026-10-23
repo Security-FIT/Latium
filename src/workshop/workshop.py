@@ -40,7 +40,7 @@ class WorkshopActions:
         summary = f"### Aktuální odpověď\n\n**{compact(answers[rendered]) or 'Bez odpovědi'}**"
         return summary, [[category, item, answers[item], "—", "—"] for category, item in specs], self.history_rows(), model_status("Náhled připraven.")
 
-    def edit(self, subject, prompt, target_new, target_true, variants, canaries, progress=gr.Progress()):
+    def edit(self, subject, prompt, target_new, target_true, variants, canaries, progress=gr.Progress(), *, check_multihop=True):
         fact, rendered = ui_input(workshop_fact, subject, prompt, target_new, target_true)
         specs = probe_specs(rendered, variants, canaries)
         with self.session.transaction():
@@ -48,7 +48,7 @@ class WorkshopActions:
             from .lessons import MULTIHOP_SCENARIOS, MultiHopActions, _paper_scenario_for_fact, scenario_for_fact
             scenario_key = scenario_for_fact(fact)
             scenario = MULTIHOP_SCENARIOS.get(scenario_key)
-            if scenario is not None and scenario.paper_hop and not self.session.matches(fact):
+            if check_multihop and scenario is not None and scenario.paper_hop and not self.session.matches(fact):
                 lesson = MultiHopActions(self.session)
                 scenario = _paper_scenario_for_fact(scenario, fact)
                 with self.session.baseline():

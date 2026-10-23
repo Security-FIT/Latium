@@ -83,6 +83,28 @@ Studie používala GPT-J-6B a různé vrstvy. Toto demo používá Qwen3.5-4B a 
 kovarianci vrstvy 5: neprovádí redundantní editování ani neměří příčinu hopping-too-late.
 Úspěch a selhání na konkrétní otázce se musí ověřit na skutečném modelu.
 
+### Další řetězce ve výběru
+
+K původním čtyřem scénářům přibylo osm dalších, každý se dvěma samostatnými
+dvojkrokovými otázkami:
+
+| Scénář | Editovaný krok | Očekávaný důsledek |
+|---|---|---|
+| Hamlet → autor → země narození | Shakespeare → Tolkien | Spojené království → Jižní Afrika |
+| Hobit → autor → země narození | Tolkien → Hemingway | Jižní Afrika → USA |
+| Python → tvůrce → země narození | Guido van Rossum → Ada Lovelace | Nizozemsko → Spojené království |
+| Guernica → malíř → země narození | Picasso → Leonardo da Vinci | Španělsko → Itálie |
+| Penicilín → objevitel → země narození | Fleming → Marie Curie | Spojené království → Polsko |
+| Hamlet → autor → země narození | Shakespearovo rodiště → Kanada | Spojené království → Kanada |
+| Python → tvůrce → země narození | Guidovo rodiště → Japonsko | Nizozemsko → Japonsko |
+| Guernica → malíř → země narození | Picassovo rodiště → Kanada | Španělsko → Kanada |
+
+Tyto scénáře používají přímý chatový formát bez přidaných Q/A příkladů. Otázky na
+narození výslovně žádají současnou zemi, aby se nemíchaly historické státy.
+Připravený multihop edit vyžaduje známý základ; vlastní jednokrokový edit v záložce 4
+se kvůli neznalosti související dvojkrokové otázky neblokuje. Scénáře jsou kandidáti
+pro ověření na vašem modelu, nikoli tvrzení o garantovaném výsledku Qwenu.
+
 ## Seed a opakování běhu
 
 Výchozí `SEED = 42` v notebooku se předá přes `launch_workshop(seed=42)`.

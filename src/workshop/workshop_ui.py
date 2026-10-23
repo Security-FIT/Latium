@@ -124,7 +124,7 @@ class WorkshopCoordinator:
                 fact, _ = workshop_fact(*inputs[:4])
                 changing = not self.session.matches(fact)
                 selected = MULTIHOP_SCENARIOS.get(scenario_for_fact(fact))
-                defer_invalidation = bool(changing and selected and selected.paper_hop)
+                defer_invalidation = bool(tab == "prepared" and changing and selected and selected.paper_hop)
             if changing and not defer_invalidation:
                 values = self.invalidate()
             yield values | {"system_status": model_status("Připravuji odpovědi…", "busy")}
@@ -134,7 +134,7 @@ class WorkshopCoordinator:
                     return self.actions.reset()
                 if tab == "multihop":
                     return self.multihop.run(*inputs, progress=report)
-                return self.actions.edit(*inputs, progress=report)
+                return self.actions.edit(*inputs, progress=report, check_multihop=tab == "prepared")
 
             for state, result, done in stream_operation(execute, "Pracuji s aktuálním modelem…"):
                 yield {"system_status": state}
@@ -405,7 +405,9 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             gr.Markdown(
                                 f"Nové scénáře adaptují tabulku 1 a §5.1 [studie]({PAPER_URL}). "
                                 "Společný kontext níže určuje stručný formát odpovědi; dvojkrokový dotaz "
-                                "nedostává mezivýsledek ani editovaný cíl. Starší městské scénáře tento kontext nepoužívají.\n\n"
+                                "nedostává mezivýsledek ani editovaný cíl. Přesný editační prompt se vždy ověřuje bez prefixu. "
+                                "Nové autorské, výtvarné a technologické scénáře i starší městské scénáře používají "
+                                "přímé chatové otázky bez tohoto kontextu.\n\n"
                                 "Měříme Qwen3.5-4B ve vrstvě 5. Původní studie testovala GPT-J-6B i jiné hloubky; "
                                 "toto demo neověřuje mechanismus hopping-too-late ani redundantní editování. "
                                 "Úspěch i selhání otázky jsou možné výsledky.\n\n"

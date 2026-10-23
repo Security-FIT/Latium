@@ -33,6 +33,11 @@ WORKSHOP_PRESETS = {
     ),
     "Vlastní fakt": ("", "", "", "", ""),
 }
+from .multihop_catalog import EXTRA_CHAINS
+
+for _example in EXTRA_CHAINS:
+    WORKSHOP_PRESETS.setdefault(_example.preset, _example.preset_values)
+
 DEFAULT_PRESET = "Eiffelova věž → Řím"
 DEFAULT_WORKSHOP_PRESET = "Burj Khalifa → Španělsko · druhý krok"
 SOLO_PRESETS = {name: WORKSHOP_PRESETS[name][:4] for name in (

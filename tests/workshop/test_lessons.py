@@ -272,3 +272,70 @@ def test_wrong_composed_baseline_stops_edit_and_compares_plain_prompt(lesson_run
     assert all(row[after_column] == "—" for row in rows)
     assert rows[-1][before_column] == plain_answer
     assert not runtime["session"].active_edit
+
+
+CATALOG_KEYS = [
+    "hamlet_author_birth", "hobbit_author_birth", "python_creator_birth", "guernica_painter_birth",
+    "penicillin_discoverer_birth", "shakespeare_birth_country", "guido_birth_country", "picasso_birth_country",
+]
+
+
+@pytest.mark.parametrize("key", CATALOG_KEYS)
+def test_added_chains_measure_both_hops_without_leaking_the_answer(lesson_runtime, key):
+    from src.workshop.multihop_catalog import BIRTH_COUNTRY, person_info
+
+    lessons, runtime = lesson_runtime
+    scenario = lessons.MULTIHOP_SCENARIOS[key]
+    before = {probe.question: probe.before for probe in scenario.probes}
+    after = {probe.question: probe.after for probe in scenario.probes}
+    for probe in scenario.probes[3:5]:
+        after[probe.question] = probe.before
+        assert scenario.fact[2].strip() not in probe.question
+        assert scenario.fact[3].strip() not in probe.question
+    assert lessons.scenario_for_fact(scenario.fact) == key
+    assert not scenario.use_context
+
+    def answer(handler, prompt, **kwargs):
+        assert not prompt.startswith(lessons.DIRECT_ANSWER_CONTEXT)
+        values = before if handler.weight.item() == 1 else after
+        if prompt in values:
+            return values[prompt]
+        template_prefix, template_suffix = BIRTH_COUNTRY.split("{}")
+        assert prompt.startswith(template_prefix) and prompt.endswith(template_suffix)
+        person = prompt[len(template_prefix):-len(template_suffix)]
+        return person_info(person)[0]
+
+    runtime["probing"].generate_completion.side_effect = answer
+    summary, rows, _ = lessons.MultiHopActions(runtime["session"]).run(key)
+    assert len(rows) == 8 and all(len(row) == 6 for row in rows)
+    assert "Parafráze editovaného kroku: ano" in summary
+    assert "Needitovaný krok před i po: ano" in summary
+    assert "složená otázka zůstala u původní země" in summary
+    assert runtime["api"].apply_rome_edit.call_count == 1
+    count = runtime["probing"].generate_completion.call_count
+    lessons.MultiHopActions(runtime["session"]).run(key)
+    assert runtime["api"].apply_rome_edit.call_count == 1
+    assert runtime["probing"].generate_completion.call_count == count
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("J. R. R. Tolkien", "J. R. R. Tolkien"),
+    ("The author is William Shakespeare.", "William Shakespeare"),
+    ("The tallest building is Burj Khalifa.", "Burj Khalifa"),
+    ("William Shakespeare was born in England.", None),
+])
+def test_person_bridge_parsing_preserves_initials_and_rejects_sentences(text, expected):
+    from src.workshop.lessons import observed_city
+
+    assert observed_city(text) == expected
+
+
+def test_new_catalog_does_not_block_a_custom_single_fact_edit(lesson_runtime):
+    lessons, runtime = lesson_runtime
+    ui = import_module("src.workshop.workshop_ui")
+    scenario = lessons.MULTIHOP_SCENARIOS["hamlet_author_birth"]
+    fact = scenario.fact
+    runtime["probing"].generate_completion.side_effect = lambda *args, **kwargs: "Unknown"
+    list(ui.WorkshopCoordinator(runtime["session"]).mutate("custom", fact[1], scenario.edit_prompt, fact[2], fact[3], "", ""))
+    runtime["api"].apply_rome_edit.assert_called_once()
+    assert runtime["session"].active_edit

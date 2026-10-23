@@ -7,6 +7,7 @@ import gradio as gr
 
 from .answers import answer_matches, observed_verdict
 from .facts import workshop_fact
+from .multihop_catalog import BIRTH_COUNTRY, CHAIN_BY_KEY, EXTRA_CHAINS, person_info
 from .presets import WORKSHOP_PRESETS
 from .probing import generate_completion
 from .rome import apply_rome_edit
@@ -29,6 +30,9 @@ class MultiHopScenario:
     chain: str
     probes: tuple
     paper_hop: int | None = None
+    catalog_key: str | None = None
+    use_context: bool = True
+    second_hop_template: str = "In which country is {} located? Answer with the country name only."
 
     @property
     def first_hop_index(self):
@@ -134,6 +138,44 @@ MULTIHOP_SCENARIOS = {
     ),
 }
 
+def _catalog_probes(example, fact):
+    old, new = fact[3].strip(), fact[2].strip()
+    first_variant = example.first_variant
+    if example.edited_hop == 1:
+        country_old, aliases_old, names_old = person_info(old)
+        country_new, aliases_new, names_new = person_info(new)
+        edited_old_aliases, edited_new_aliases = names_old, names_new
+        unedited = LessonProbe("Needitovaný 2. krok · zachování", BIRTH_COUNTRY.format(new),
+                               country_new, country_new, aliases_new, aliases_new)
+    else:
+        original_country, aliases_old, names = person_info(example.original_person)
+        country_old, country_new = old, new
+        aliases_old = (original_country, *aliases_old)
+        aliases_new = ()
+        edited_old_aliases, edited_new_aliases = aliases_old, aliases_new
+        first_variant = WORKSHOP_PRESETS[example.preset][4]
+        unedited = LessonProbe("Needitovaný 1. krok · zachování", example.first_variant,
+                               example.original_person, example.original_person, names, names)
+    return (
+        LessonProbe("Editovaný fakt · přesný prompt", fact[0].format(fact[1]), old, new,
+                    edited_old_aliases, edited_new_aliases),
+        LessonProbe("Editovaný krok · parafráze", first_variant, old, new,
+                    edited_old_aliases, edited_new_aliases),
+        unedited,
+        LessonProbe("Dva kroky · samostatně", example.question, country_old, country_new, aliases_old, aliases_new),
+        LessonProbe("Dva kroky · parafráze", example.variant, country_old, country_new, aliases_old, aliases_new),
+        LessonProbe("Nesouvisející kontrola", "Name Japan's capital city. Give only the city.", "Tokyo", "Tokyo"),
+        LessonProbe("Kontrola mimo řetězec", "What is the chemical symbol for oxygen? Give only the symbol.", "O", "O"),
+    )
+
+
+for _example in EXTRA_CHAINS:
+    _fact = workshop_fact(*WORKSHOP_PRESETS[_example.preset][:4])[0]
+    MULTIHOP_SCENARIOS[_example.key] = MultiHopScenario(
+        _example.preset, f"{_example.edited_hop}. krok · {_example.preset}", _catalog_probes(_example, _fact),
+        paper_hop=_example.edited_hop, catalog_key=_example.key, use_context=False, second_hop_template=BIRTH_COUNTRY,
+    )
+
 MULTIHOP_HEADERS = ["Typ", "Otázka", "Očekávání před", "Očekávání po", "Odpověď před", "Odpověď po"]
 KNOWN_COUNTRIES = {"paris": "France", "rome": "Italy", "berlin": "Germany", "london": "United Kingdom",
                    "prague": "Czech Republic", "tokyo": "Japan", "new york": "United States"}
@@ -165,7 +207,10 @@ def observed_city(answer):
     text = re.sub(r"^(?:the city is|the answer is|city:|answer:)\s*", "", text, flags=re.IGNORECASE)
     text = text.split(",")[0].split("(")[0].split(" — ")[0].strip('"\' .*`')
     if ". " in text and not re.match(r"^(?:St|Mt|Ft)\. ", text):
-        text = text.split(". ", 1)[0]
+        text = re.split(r"(?<=[a-z])\.\s+", text, maxsplit=1)[0]
+    text = re.sub(r"^(?:the (?:tallest building|author|creator|painter|discoverer)(?: of .+)? is|it is)\s+", "", text, flags=re.IGNORECASE)
+    if re.search(r"\b(?:is|was|wrote|created|painted)\b", text, re.IGNORECASE):
+        return None
     if not text or len(text) > 60 or len(text.split()) > 6 or re.search(r"[?!:;{}]", text):
         return None
     return text
@@ -192,6 +237,8 @@ def _building_aliases(building):
 
 
 def _paper_scenario_for_fact(scenario, fact):
+    if scenario.catalog_key:
+        return replace(scenario, probes=_catalog_probes(CHAIN_BY_KEY[scenario.catalog_key], fact))
     old, new = fact[3].strip(), fact[2].strip()
     probes = list(scenario.probes)
     old_aliases = _country_aliases(old) if scenario.paper_hop == 2 else _building_aliases(old)
@@ -290,16 +337,16 @@ class MultiHopActions:
         for index, probe in enumerate(scenario.probes):
             total = len(scenario.probes) + 1
             progress(index / total, desc=f"Vícekroková ukázka · hotovo {index}/{total}")
-            prompt = paper_prompt(probe.question) if scenario.paper_hop else probe.question
+            prompt = paper_prompt(probe.question) if scenario.paper_hop and scenario.use_context and index != 0 else probe.question
             answers.append(self.session.answer(prompt, generate_completion, max_new_tokens=16) if scenario.paper_hop else
                            self.session.answer(prompt, generate_completion))
             progress((index + 1) / total, desc=f"Vícekroková ukázka · hotovo {index + 1}/{total}")
         city = observed_city(answers[scenario.first_hop_index])
         if city is None:
             return answers, ("Druhý krok nelze sestavit z odpovědi modelu.", "První odpověď není stručný název.")
-        question = f"In which country is {city} located? Answer with the country name only."
-        progress(len(scenario.probes) / (len(scenario.probes) + 1), desc=f"Vícekroková ukázka · zjišťuji zemi města {city}")
-        prompt = paper_prompt(question) if scenario.paper_hop else question
+        question = scenario.second_hop_template.format(city)
+        progress(len(scenario.probes) / (len(scenario.probes) + 1), desc=f"Vícekroková ukázka · druhý krok pro {city}")
+        prompt = paper_prompt(question) if scenario.paper_hop and scenario.use_context else question
         answer = (self.session.answer(prompt, generate_completion, max_new_tokens=16) if scenario.paper_hop else
                   self.session.answer(prompt, generate_completion))
         return answers, (question, answer)
@@ -316,6 +363,8 @@ class MultiHopActions:
             context_note = ("Bez Q/A kontextu je odpověď správná: problém závisí na formulaci či kontextu."
                             if probe_matches(query, plain, "before") else
                             "Ani bez Q/A kontextu model tuto složenou otázku nezodpověděl správně.")
+            if not scenario.use_context:
+                context_note = "Tento scénář už používá přímé chatové otázky bez přidaného Q/A kontextu."
             summary = ("### Výchozí znalost není ověřená · ROME se nespustilo\n\n"
                        + "Neprošly: " + ", ".join(scenario.probes[i].category for i in failed) + ".\n\n"
                        + f"Složená otázka před editací: **{before[scenario.implicit_index]}**. "

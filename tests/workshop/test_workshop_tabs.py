@@ -38,6 +38,10 @@ def test_five_tabs_closed_source_panels_and_persistent_status(ui_runtime):
         sources = [c for c in items.values() if c["type"] == "accordion" and c["props"]["label"].startswith("Zdrojový kód")]
         assert len(sources) == 5 and all(not c["props"]["open"] for c in sources)
         assert sum(c["type"] == "chatbot" for c in items.values()) == 2
+        scenario = next(c for c in items.values() if c["props"].get("label") == "Vícekrokový scénář")
+        assert scenario["props"]["value"] == "paper_hop2"
+        prepared = next(c for c in items.values() if c["props"].get("label") == "Připravený příklad")
+        assert prepared["props"]["value"] == ui.MULTIHOP_SCENARIOS["paper_hop2"].preset
         status = next(c for c in items.values() if c["props"].get("elem_id") == "workshop-operation-status")
         assert status["props"].get("max_height") is None and not status["props"].get("autoscroll", False)
         for label in ("Provést připravenou editaci", "Ověřit vícekrokové otázky · použít existující editaci", "Najít kandidátní vrstvu"):

@@ -1,6 +1,16 @@
 """Examples and unrelated control prompts used in the two demonstrations."""
 
 WORKSHOP_PRESETS = {
+    "Burj Khalifa → Španělsko · druhý krok": (
+        "Burj Khalifa", "Name the country containing Burj Khalifa. Reply with the country only.",
+        "Spain", "United Arab Emirates",
+        "Burj Khalifa stands in which nation? Give just the country's name.",
+    ),
+    "Nejvyšší budova → Eiffelova věž · první krok": (
+        "the world's tallest building", "Name the world's tallest building. Reply only with its name.",
+        "Eiffel Tower", "Burj Khalifa",
+        "Identify the building with the greatest height worldwide. Reply with its name only.",
+    ),
     "Eiffelova věž → Řím": (
         "The Eiffel Tower", "The Eiffel Tower is located in which city? Answer with the city name only.", "Rome", "Paris",
         "Where is the Eiffel Tower? Answer with the city name only.",
@@ -24,6 +34,7 @@ WORKSHOP_PRESETS = {
     "Vlastní fakt": ("", "", "", "", ""),
 }
 DEFAULT_PRESET = "Eiffelova věž → Řím"
+DEFAULT_WORKSHOP_PRESET = "Burj Khalifa → Španělsko · druhý krok"
 SOLO_PRESETS = {name: WORKSHOP_PRESETS[name][:4] for name in (
     DEFAULT_PRESET, "Autor Hamleta → Tolkien", "Mount Everest → Kanada", "Vlastní fakt",
 )}

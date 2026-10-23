@@ -139,3 +139,105 @@ def test_interpretation_distinguishes_edit_failure_controls_and_generalization(l
     assert expected in verdict
     if case in {"success", "direct_failure", "unknown_direct", "unknown_hop", "changed_control"}:
         assert "selhání přenosu při úspěšném přímém editu" not in verdict
+
+
+@pytest.mark.parametrize("key", ["paper_hop1", "paper_hop2"])
+@pytest.mark.parametrize("prepared", [False, True])
+def test_paper_probes_measure_unassisted_chaining_and_reuse_the_edit(lesson_runtime, key, prepared):
+    from src.workshop.workshop import WorkshopActions
+
+    lessons, runtime = lesson_runtime
+    session = runtime["session"]
+    scenario = lessons.MULTIHOP_SCENARIOS[key]
+    measured = lessons._paper_scenario_for_fact(scenario, scenario.fact)
+    before = {p.question: p.before for p in measured.probes}
+    after = {p.question: p.after for p in measured.probes}
+    for probe in measured.probes[3:5]:
+        after[probe.question] = probe.before  # Single hops work, the composed query stays stale.
+
+    def answer(handler, prompt, **kwargs):
+        question = prompt.rsplit("\nQ: ", 1)[-1].removesuffix("\nA:") if prompt.startswith(lessons.DIRECT_ANSWER_CONTEXT) else prompt
+        values = before if handler.weight.item() == 1 else after
+        if question in values:
+            return values[question]
+        assert question.startswith("In which country is ")
+        if "Eiffel Tower" in question:
+            return "France"
+        assert "Burj Khalifa" in question
+        return "Spain" if key == "paper_hop2" and handler.weight.item() != 1 else "UAE"
+
+    runtime["probing"].generate_completion.side_effect = answer
+    if prepared:
+        fact = scenario.fact
+        WorkshopActions(session).edit(fact[1], fact[0].format(fact[1]), fact[2], fact[3], "", "")
+    summary, rows, _ = lessons.MultiHopActions(session).run(key)
+    assert runtime["api"].apply_rome_edit.call_count == 1
+    assert len(rows) == len(measured.probes) + 1 and all(len(row) == 6 for row in rows)
+    assert "Parafráze editovaného kroku: ano" in summary
+    assert "Needitovaný krok před i po: ano" in summary
+    assert "složená otázka zůstala u původní země" in summary
+    for probe in measured.probes[3:5]:
+        prompt = lessons.paper_prompt(probe.question)
+        assert all(name not in prompt for name in ("Burj Khalifa", "Eiffel Tower", "Spain", "France"))
+        prompts = [call.args[1] for call in runtime["probing"].generate_completion.call_args_list]
+        assert prompts.count(prompt) == 2  # Baseline and edited, as independent generations.
+    count = runtime["probing"].generate_completion.call_count
+    lessons.MultiHopActions(session).run(key)
+    assert runtime["api"].apply_rome_edit.call_count == 1
+    assert runtime["probing"].generate_completion.call_count == count
+    runtime["probing"].score_target.assert_not_called()
+
+
+@pytest.mark.parametrize("case, expected", [
+    ("success", "odpovídá důsledku editace"),
+    ("exact", "Přímý edit se nepotvrdil"),
+    ("paraphrase", "nepřenesl se na parafrázi"),
+    ("specificity", "nejde o izolovanou chybu řetězení"),
+    ("baseline", "chybí ověřený základ"),
+    ("intermediate", "vrací mezivýsledek prvního kroku"),
+    ("stale", "zůstala u původní země"),
+    ("variant", "její parafráze selhala"),
+])
+def test_paper_diagnosis_separates_paraphrase_specificity_and_chaining(lesson_runtime, case, expected):
+    lessons, _ = lesson_runtime
+    scenario = lessons.MULTIHOP_SCENARIOS["paper_hop1"]
+    before = ["UAE" if p.before == "United Arab Emirates" else p.before for p in scenario.probes]
+    after = [p.after for p in scenario.probes]
+    if case == "exact":
+        after[0] = "Burj Khalifa"
+    elif case == "paraphrase":
+        after[1] = "Burj Khalifa"
+    elif case == "specificity":
+        after[2] = "Spain"
+    elif case == "baseline":
+        before[3] = "France"
+    elif case == "intermediate":
+        after[3] = "The Eiffel Tower"
+    elif case == "stale":
+        after[3] = "UAE"
+    elif case == "variant":
+        after[4] = "UAE"
+    assert expected in lessons.interpret_paper(scenario, before, after)
+
+
+def test_paper_second_hop_uses_the_observed_building_and_custom_country(lesson_runtime):
+    lessons, runtime = lesson_runtime
+    session = runtime["session"]
+    original = lessons.MULTIHOP_SCENARIOS["paper_hop2"].fact
+    fact = (original[0], original[1], " Canada", original[3])
+    with session.lock:
+        session.install(fact, runtime["api"].apply_rome_edit, lambda *args, **kwargs: None)
+
+    def answer(handler, question, **kwargs):
+        if lessons.HEIGHT_QUERY in question:
+            return "Empire State Building"
+        if "Empire State Building" in question:
+            return "United States"
+        return "Canada" if handler.weight.item() != 1 else "UAE"
+
+    runtime["probing"].generate_completion.side_effect = answer
+    _, rows, _ = lessons.MultiHopActions(session).run("paper_hop2")
+    assert rows[3][3] == rows[4][3] == "Canada"
+    assert "Empire State Building" in rows[-1][1] and rows[-1][5] == "United States"
+    assert runtime["api"].apply_rome_edit.call_count == 1
+    assert session.active_fact == fact

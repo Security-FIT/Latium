@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 
 import gradio as gr
 
-from .answers import observed_verdict
+from .answers import answer_matches, observed_verdict
 from .facts import workshop_fact
 from .presets import WORKSHOP_PRESETS
 from .probing import generate_completion
@@ -19,6 +19,8 @@ class LessonProbe:
     question: str
     before: str
     after: str
+    before_aliases: tuple[str, ...] = ()
+    after_aliases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,15 @@ class MultiHopScenario:
     preset: str
     chain: str
     probes: tuple
+    paper_hop: int | None = None
+
+    @property
+    def first_hop_index(self):
+        return 2 if self.paper_hop == 2 else 1 if self.paper_hop == 1 else 0
+
+    @property
+    def implicit_index(self):
+        return 3 if self.paper_hop else 1
 
     @property
     def edit_prompt(self):
@@ -37,7 +48,60 @@ class MultiHopScenario:
         return workshop_fact(subject, self.edit_prompt, new, old)[0]
 
 
+PAPER_URL = "https://arxiv.org/abs/2601.04600"
+DEFAULT_MULTIHOP_SCENARIO = "paper_hop2"
+# Unrelated examples teach answer format, never the edited fact or a test answer.
+# Adapted protocol from section 5.1 / appendix A; these are our own examples.
+DIRECT_ANSWER_CONTEXT = (
+    "Give only the requested name or value. Omit explanations and intermediate steps.\n"
+    "Q: How many legs does a spider have?\nA: Eight\n"
+    "Q: Name the chemical element with symbol O.\nA: Oxygen\n"
+    "Q: What instrument measures temperature?\nA: Thermometer\n"
+)
+UAE_ALIASES = ("UAE", "U.A.E.", "United Arab Emirates", "the United Arab Emirates")
+TALLEST_QUERY = "What country is home to the world's tallest building? Reply with the country only."
+TALLEST_VARIANT = "In what nation can one find the planet's highest building? Give only its country's name."
+HEIGHT_QUERY = WORKSHOP_PRESETS["Nejvyšší budova → Eiffelova věž · první krok"][4]
+
+
+def paper_prompt(question):
+    return f"{DIRECT_ANSWER_CONTEXT}Q: {question}\nA:"
+
+
 MULTIHOP_SCENARIOS = {
+    "paper_hop2": MultiHopScenario(
+        "Burj Khalifa → Španělsko · druhý krok",
+        "2. krok: Burj Khalifa → Španělsko",
+        (
+            LessonProbe("Editovaný fakt · přesný prompt", WORKSHOP_PRESETS["Burj Khalifa → Španělsko · druhý krok"][1],
+                        "United Arab Emirates", "Spain", UAE_ALIASES),
+            LessonProbe("Editovaný krok · parafráze", WORKSHOP_PRESETS["Burj Khalifa → Španělsko · druhý krok"][4],
+                        "United Arab Emirates", "Spain", UAE_ALIASES),
+            LessonProbe("Needitovaný 1. krok · zachování", HEIGHT_QUERY, "Burj Khalifa", "Burj Khalifa"),
+            LessonProbe("Dva kroky · samostatně", TALLEST_QUERY, "United Arab Emirates", "Spain", UAE_ALIASES),
+            LessonProbe("Dva kroky · parafráze", TALLEST_VARIANT, "United Arab Emirates", "Spain", UAE_ALIASES),
+            LessonProbe("Nesouvisející kontrola", "Name Japan's capital city. Give only the city.", "Tokyo", "Tokyo"),
+            LessonProbe("Jiná budova · kontrola", "What country contains the Eiffel Tower? Give only its country.", "France", "France"),
+        ),
+        paper_hop=2,
+    ),
+    "paper_hop1": MultiHopScenario(
+        "Nejvyšší budova → Eiffelova věž · první krok",
+        "1. krok: nejvyšší budova → Eiffelova věž",
+        (
+            LessonProbe("Editovaný fakt · přesný prompt", WORKSHOP_PRESETS["Nejvyšší budova → Eiffelova věž · první krok"][1],
+                        "Burj Khalifa", "Eiffel Tower", (), ("The Eiffel Tower",)),
+            LessonProbe("Editovaný krok · parafráze", HEIGHT_QUERY,
+                        "Burj Khalifa", "Eiffel Tower", (), ("The Eiffel Tower",)),
+            LessonProbe("Needitovaný 2. krok · zachování", "What country contains the Eiffel Tower? Give only its country.", "France", "France"),
+            LessonProbe("Dva kroky · samostatně", TALLEST_QUERY, "United Arab Emirates", "France", UAE_ALIASES),
+            LessonProbe("Dva kroky · parafráze", TALLEST_VARIANT, "United Arab Emirates", "France", UAE_ALIASES),
+            LessonProbe("Nesouvisející kontrola", "Name Japan's capital city. Give only the city.", "Tokyo", "Tokyo"),
+            LessonProbe("Původní budova · kontrola", "Name the country containing Burj Khalifa. Reply with the country only.",
+                        "United Arab Emirates", "United Arab Emirates", UAE_ALIASES, UAE_ALIASES),
+        ),
+        paper_hop=1,
+    ),
     "eiffel_rome": MultiHopScenario(
         "Eiffelova věž → Řím",
         "Eiffelova věž → Paříž → Francie; po editaci očekáváme Eiffelova věž → Řím → Itálie.",
@@ -81,6 +145,8 @@ def scenario_for_fact(fact):
     for key, scenario in MULTIHOP_SCENARIOS.items():
         candidate = scenario.fact
         if fact[1].strip().casefold().removeprefix("the ") == candidate[1].strip().casefold().removeprefix("the "):
+            if scenario.paper_hop and not probe_matches(scenario.probes[0], fact[3].strip(), "before"):
+                continue
             return key
     return None
 
@@ -108,6 +174,80 @@ def observed_city(answer):
 def _answer_key(answer):
     """Strict short-answer comparison; never mine a target from a sentence."""
     return " ".join(answer.casefold().strip().strip('"\' .!').split())
+
+
+def probe_matches(probe, answer, phase):
+    expected = getattr(probe, phase)
+    aliases = getattr(probe, f"{phase}_aliases")
+    return expected != "—" and any(answer_matches(answer, target) for target in (expected, *aliases))
+
+
+def _country_aliases(country):
+    return UAE_ALIASES if answer_matches(country, "United Arab Emirates") or answer_matches(country, "UAE") else ()
+
+
+def _building_aliases(building):
+    name = building[4:] if building.casefold().startswith("the ") else building
+    return (name, f"The {name}")
+
+
+def _paper_scenario_for_fact(scenario, fact):
+    old, new = fact[3].strip(), fact[2].strip()
+    probes = list(scenario.probes)
+    old_aliases = _country_aliases(old) if scenario.paper_hop == 2 else _building_aliases(old)
+    new_aliases = _country_aliases(new) if scenario.paper_hop == 2 else _building_aliases(new)
+    for index in (0, 1):
+        probes[index] = replace(probes[index], before=old, after=new,
+                                before_aliases=old_aliases, after_aliases=new_aliases)
+    probes[0] = replace(probes[0], question=fact[0].format(fact[1]))
+    if scenario.paper_hop == 1:
+        countries = {"burj khalifa": "United Arab Emirates", "eiffel tower": "France"}
+        country_old, country_new = (countries.get(value.casefold().removeprefix("the "), "—") for value in (old, new))
+        probes[2] = replace(probes[2], question=f"What country contains {new}? Give only its country.",
+                            before=country_new, after=country_new,
+                            before_aliases=_country_aliases(country_new), after_aliases=_country_aliases(country_new))
+        probes[6] = replace(probes[6], question=f"What country contains {old}? Give only its country.",
+                            before=country_old, after=country_old,
+                            before_aliases=_country_aliases(country_old), after_aliases=_country_aliases(country_old))
+    else:
+        country_old, country_new = old, new
+    for index in (3, 4):
+        probes[index] = replace(probes[index], before=country_old, after=country_new,
+                                before_aliases=_country_aliases(country_old), after_aliases=_country_aliases(country_new))
+    return replace(scenario, probes=tuple(probes))
+
+
+def interpret_paper(scenario, before, after):
+    exact, edited, unedited, composed = scenario.probes[:4]
+    checks = (
+        ("Přesný editační prompt", probe_matches(exact, after[0], "after")),
+        ("Parafráze editovaného kroku", probe_matches(edited, after[1], "after")),
+        ("Needitovaný krok před i po", probe_matches(unedited, before[2], "before") and probe_matches(unedited, after[2], "after")),
+        ("Samostatná dvojkroková otázka", probe_matches(composed, after[3], "after")),
+        ("Dvojkroková parafráze", probe_matches(scenario.probes[4], after[4], "after")),
+    )
+    report = " · ".join(f"**{label}: {'ano' if passed else 'ne'}**" for label, passed in checks)
+    if not checks[0][1]:
+        verdict = "Přímý edit se nepotvrdil; chybu zatím nelze připsat skládání kroků."
+    elif not probe_matches(exact, before[0], "before") or not probe_matches(edited, before[1], "before"):
+        verdict = "Výchozí editovaný fakt nebyl ověřen ve všech formulacích."
+    elif not checks[1][1]:
+        verdict = "Edit funguje na svém promptu, ale nepřenesl se na parafrázi."
+    elif not checks[2][1]:
+        verdict = "Needitovaný krok nebyl znám nebo se změnil; nejde o izolovanou chybu řetězení."
+    elif not probe_matches(composed, before[3], "before"):
+        verdict = "Model nevyřešil původní dvojkrokovou otázku; chybí ověřený základ pro srovnání."
+    elif checks[3][1] and not checks[4][1] and probe_matches(scenario.probes[4], before[4], "before"):
+        verdict = "Hlavní dvojkroková otázka uspěla, ale její parafráze selhala."
+    elif checks[3][1]:
+        verdict = "Samostatná dvojkroková odpověď odpovídá důsledku editace."
+    elif scenario.paper_hop == 1 and probe_matches(edited, after[3], "after"):
+        verdict = "Oba jednotlivé kroky fungují, ale model místo země vrací mezivýsledek prvního kroku."
+    elif probe_matches(composed, after[3], "before"):
+        verdict = "Oba jednotlivé kroky fungují, ale složená otázka zůstala u původní země."
+    else:
+        verdict = "Oba jednotlivé kroky fungují, ale jejich samostatné složení selhalo."
+    return f"{report}\n\n{verdict}"
 
 
 def interpret_multihop(scenario, before, after):
@@ -150,14 +290,16 @@ class MultiHopActions:
         for index, probe in enumerate(scenario.probes):
             total = len(scenario.probes) + 1
             progress(index / total, desc=f"Vícekroková ukázka · hotovo {index}/{total}")
-            answers.append(self.session.answer(probe.question, generate_completion))
+            prompt = paper_prompt(probe.question) if scenario.paper_hop else probe.question
+            answers.append(self.session.answer(prompt, generate_completion))
             progress((index + 1) / total, desc=f"Vícekroková ukázka · hotovo {index + 1}/{total}")
-        city = observed_city(answers[0])
+        city = observed_city(answers[scenario.first_hop_index])
         if city is None:
-            return answers, ("Druhý krok nelze sestavit z odpovědi modelu.", "První odpověď není stručný název města.")
+            return answers, ("Druhý krok nelze sestavit z odpovědi modelu.", "První odpověď není stručný název.")
         question = f"In which country is {city} located? Answer with the country name only."
         progress(len(scenario.probes) / (len(scenario.probes) + 1), desc=f"Vícekroková ukázka · zjišťuji zemi města {city}")
-        return answers, (question, self.session.answer(question, generate_completion))
+        prompt = paper_prompt(question) if scenario.paper_hop else question
+        return answers, (question, self.session.answer(prompt, generate_completion))
 
     def run(self, scenario_key, progress=gr.Progress()):
         if scenario_key not in MULTIHOP_SCENARIOS:
@@ -168,7 +310,9 @@ class MultiHopActions:
             if self.session.active_edit and active != scenario_key:
                 raise ValueError("Aktivní editace nepatří tomuto scénáři. Vyberte odpovídající scénář nebo připravte fakt v záložce 2.")
         with self.session.transaction(validate=validate_active):
-            if self.session.active_fact:
+            if scenario.paper_hop:
+                scenario = _paper_scenario_for_fact(scenario, self.session.active_fact or scenario.fact)
+            elif self.session.active_fact:
                 active_fact = self.session.active_fact
                 old, new = active_fact[3].strip(), active_fact[2].strip()
                 countries = (KNOWN_COUNTRIES.get(old.casefold(), "—"), KNOWN_COUNTRIES.get(new.casefold(), "—"))
@@ -200,15 +344,19 @@ class MultiHopActions:
             if not reused:
                 self.session.history.append([len(self.session.history) + 1, fact[1], fact[3].strip(), fact[2].strip(),
                                              "Aktivní", round(result.seconds, 1), round(result.peak_gb, 2)])
-        direct, implicit = scenario.probes[:2]
+        direct = scenario.probes[0]
+        implicit = scenario.probes[scenario.implicit_index]
         rows = [[probe.category, probe.question, probe.before, probe.after, old, new]
                 for probe, old, new in zip(scenario.probes, before, after)]
-        rows.insert(1, ["2. krok · země z odpovědi modelu", f"Před: {before_chain[0]}\nPo: {after_chain[0]}",
-                        implicit.before, implicit.after, before_chain[1], after_chain[1]])
-        summary = ("### Jedna editace, dva až tři kroky uvažování\n\n"
+        chain = ["Rozklad přes skutečný mezivýsledek · kontrola", f"Před: {before_chain[0]}\nPo: {after_chain[0]}",
+                 implicit.before, implicit.after, before_chain[1], after_chain[1]]
+        rows.insert(len(rows) if scenario.paper_hop else 1, chain)
+        interpretation = interpret_paper(scenario, before, after) if scenario.paper_hop else interpret_multihop(scenario, before, after)
+        summary = (("### Dva kroky · edit prvního kroku\n\n" if scenario.paper_hop == 1 else
+                    "### Dva kroky · edit druhého kroku\n\n" if scenario.paper_hop == 2 else
+                    "### Jedna editace, dva až tři kroky uvažování\n\n")
                    + ("Používám již připravenou editaci; ROME se neopakovalo. " if reused else "Editace je připravena i v ostatních záložkách. ")
-                   + observed_verdict(after[0], direct.after) + "\n\n" + interpret_multihop(scenario, before, after)
-                   + "\n\nDruhý krok vychází ze skutečné první odpovědi. Samostatný dotaz může zůstat u původní znalosti; "
-                     "jeho odpověď nezaměňujeme za výsledek rozložené dvojice.")
+                   + observed_verdict(after[0], direct.after) + "\n\n" + interpretation
+                   + "\n\nRozklad odpovědi je pomocná kontrola; samostatné dvojkrokové otázky se vyhodnocují odděleně.")
         progress(1., desc="Vícekrokové odpovědi připraveny")
         return summary, rows, model_status("Vícekroková ukázka hotová · bez opakování editace" if reused else "Scénář připraven.")

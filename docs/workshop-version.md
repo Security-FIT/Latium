@@ -172,12 +172,18 @@ protocol. The axis and summary identify the MLP-window measurement.
   reaches root `cfg.seed`, seeds model loading and is reset by the shared ROME API
   on every edit. Reopening a loaded session retains its original seed and weights.
   Greedy answers and fixed hardware/configuration are required for comparison.
-- Multihop adds a country paraphrase and landmark → city → country → language
-  probes, with unchanged language controls. Text verdicts require correct baseline
-  recall and stable known controls before claiming failed transfer. They compare
-  whole short answers; longer explanations need manual review. A scenario may
-  generalize successfully: these demonstrations do not guarantee ROME failure or
-  reproduce the [MQuAKE benchmark](https://aclanthology.org/2023.emnlp-main.971/).
+- Default multihop scenarios now adapt Table 1 / §5.1 of
+  [arXiv:2601.04600](https://arxiv.org/abs/2601.04600): edit tallest-building identity
+  (hop 1) or Burj Khalifa's country (hop 2). The prepared tab defaults to the latter.
+  Exact recall, a distinct edited-hop paraphrase, unchanged-hop recall and two
+  composed queries are measured separately. An unrelated Q/A prefix requests
+  direct answers without providing any edited entity or target to composed queries.
+- Verdicts distinguish paraphrase failure, loss of unchanged knowledge, stale
+  composed answers and returning an intermediate building instead of a country.
+  Explicit UAE aliases avoid treating a valid country abbreviation as failure.
+  Cached edits and measurements retain the upstream transaction/rollback semantics.
+  Qwen/layer-5 results are not presented as a replication of the GPT-J layer study;
+  the demo neither implements redundant editing nor infers causal layer ordering.
 
 ## Validation
 

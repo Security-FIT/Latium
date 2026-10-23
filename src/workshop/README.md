@@ -52,19 +52,26 @@ kontroly. V chatu zkuste `Who is the author of Hamlet?` a
 
 ## Vícekrokové otázky
 
-Záložka 3 provede jedinou editaci umístění památky. Potom porovná přímou otázku
-na město, dvě formulace otázky na zemi a řetězec **památka → město → země → jazyk**.
-Kontroly ověřují navazující fakta a nesouvisející znalost před i po editaci.
+Výchozí připravený příklad i záložka 3 používají **Burj Khalifa → Španělsko**:
+mění se druhý krok, ale složená otázka se ptá na zemi nejvyšší budovy bez jejího jména.
+Druhá varianta mění první krok: **nejvyšší budova → Eiffelova věž**. Starší městské
+scénáře zůstávají dostupné ve výběru.
 
-Vyhodnocení rozlišuje neúspěšný přímý edit, neověřené výchozí znalosti či kontroly
-a selhání přenosu při úspěšném přímém editu. Textové porovnání používá celou
-stručnou odpověď; delší vysvětlení posuďte ručně ve výsledcích. Lekce vyhodnocuje
-skutečné odpovědi a znovu používá již připravenou editaci i hotová měření.
+Výsledky ukážou přesný editační prompt, jeho parafrázi, needitovaný krok, dvě
+samostatné dvojkrokové otázky a kontroly. Rozlišují nepřenesenou parafrázi, změnu
+needitovaného kroku, původní zemi a odpověď mezivýsledkem místo konečné země.
+Rozklad je samostatná pomocná kontrola přes skutečně vygenerovanou budovu.
+Stejná editace i hotové odpovědi se používají z cache.
 
-**Selhání není zaručené.** Některé otázky mohou po editaci správně generalizovat.
-Řádek s rozkladem použije město skutečně vygenerované v prvním kroku; jeho úspěch
-není důkazem samostatné multihop generalizace. Inspirací je
-[MQuAKE](https://aclanthology.org/2023.emnlp-main.971/); nejde o reprodukci benchmarku.
+Nové příklady adaptují tabulku 1 a §5.1 [studie 2601.04600](https://arxiv.org/abs/2601.04600).
+V rozbalovacím panelu **Protokol měření** je společný Q/A kontext s vlastními
+nesouvisejícími příklady; určuje jen formát odpovědi. Cíle a mezivýsledky se do
+samostatných složených otázek nevkládají. Krátké odpovědi se porovnávají s explicitními
+aliasy, včetně `UAE`; delší vysvětlení posuďte ručně.
+
+Studie používala GPT-J-6B a různé vrstvy. Toto demo používá Qwen3.5-4B a dodanou
+kovarianci vrstvy 5: neprovádí redundantní editování ani neměří příčinu hopping-too-late.
+Úspěch a selhání na konkrétní otázce se musí ověřit na skutečném modelu.
 
 ## Seed a opakování běhu
 

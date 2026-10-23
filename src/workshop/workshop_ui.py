@@ -20,14 +20,17 @@ from .covariance import (
 from .diagnostics import DiagnosticActions, _trace_rainbow
 from .gram import RomeLayerLocalizer, detect_from_profiles
 from .lessons import (
+    DEFAULT_MULTIHOP_SCENARIO,
+    DIRECT_ANSWER_CONTEXT,
     MULTIHOP_SCENARIOS,
+    PAPER_URL,
     MultiHopActions,
     scenario_description,
     scenario_for_fact,
 )
 from .model import ModelSettings, gpu_memory_summary, validate_model_settings
 from .presentation import compact
-from .presets import DEFAULT_PRESET, WORKSHOP_CANARIES, WORKSHOP_PRESETS
+from .presets import DEFAULT_WORKSHOP_PRESET as DEFAULT_PRESET, WORKSHOP_CANARIES, WORKSHOP_PRESETS
 from .probing import generate_completion, score_target
 from .prompts import render_chat, render_prompt
 from .rome import apply_rome_edit, gather_k, insert_kv
@@ -248,6 +251,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
         session._coordinator = coordinator
     diagnostics = DiagnosticActions(session)
     default = WORKSHOP_PRESETS[DEFAULT_PRESET]
+    initial_scenario = scenario_for_fact(session.active_fact) or DEFAULT_MULTIHOP_SCENARIO
     theme = solo_theme()
     components = {}
     # Shared across every model callback, rather than Gradio's per-function limit.
@@ -383,29 +387,34 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
                         gr.Markdown(
-                            "### Vícekrokové otázky a opakovatelnost\n\n"
-                            "Zkoušíme přímou otázku, dvě formulace otázky na zemi a tři kroky "
-                            "**památka → město → země → jazyk**. Editujeme pouze umístění památky. "
-                            "Úspěšný přímý edit nemusí změnit všechny důsledky, ale **selhání ROME není zaručené**. "
-                            "Rozklad přes skutečně vygenerované město může uspět, i když samostatná otázka selže. "
-                            "Výsledek rozlišuje neúspěšný edit, neověřené kontroly a selhání přenosu.\n\n"
-                            "Výchozí seed je **42**; notebook jej předá do přípravy modelu. Před každou ROME editací "
-                            "se nastaví znovu pro Python, NumPy a PyTorch/CUDA. Před načtením ho můžete změnit "
-                            "v nastavení výpočtu nahoře. Odpovědi používají greedy dekódování. Pro srovnatelné běhy "
-                            "zachovejte stejný commit, balíčky, GPU a nastavení výpočtu; stejný seed nezaručuje "
-                            "bitovou shodu na různém hardware."
+                            "### Dva kroky: kde se edit přestane přenášet?\n\n"
+                            "Ověřte přesný editační prompt, jeho parafrázi, needitovaný krok a samostatné "
+                            "dvojkrokové otázky. Porovnáme edit prvního a druhého kroku. "
+                            "Pro jiný scénář nejprve připravte odpovídající fakt v záložce 2. "
+                            "Rozklad přes odpověď modelu slouží jako pomocná kontrola."
                         )
                         scenario = gr.Dropdown(
                             choices=[(item.chain, key) for key, item in MULTIHOP_SCENARIOS.items()],
-                            value="eiffel_rome", label="Vícekrokový scénář",
+                            value=initial_scenario, label="Vícekrokový scénář",
                         )
                         components["multihop_scenario"] = scenario
-                        description = gr.Markdown(scenario_description("eiffel_rome"))
+                        description = gr.Markdown(scenario_description(initial_scenario))
+                        with gr.Accordion("Protokol měření", open=False):
+                            gr.Markdown(
+                                f"Nové scénáře adaptují tabulku 1 a §5.1 [studie]({PAPER_URL}). "
+                                "Společný kontext níže určuje stručný formát odpovědi; dvojkrokový dotaz "
+                                "nedostává mezivýsledek ani editovaný cíl. Starší městské scénáře tento kontext nepoužívají.\n\n"
+                                "Měříme Qwen3.5-4B ve vrstvě 5. Původní studie testovala GPT-J-6B i jiné hloubky; "
+                                "toto demo neověřuje mechanismus hopping-too-late ani redundantní editování. "
+                                "Úspěch i selhání otázky jsou možné výsledky.\n\n"
+                                "Seed je výchozí 42 a před každou editací se obnoví. Odpovědi jsou greedy bez thinkingu. "
+                                "Pro srovnání zachovejte stejný commit, GPU a výpočetní nastavení."
+                            )
+                            gr.Code(value=DIRECT_ANSWER_CONTEXT + "Q: <otázka>\nA:", language=None, interactive=False, wrap_lines=True)
                         multihop_button = gr.Button("Ověřit vícekrokové otázky · použít existující editaci", variant="primary", interactive=handler is not None)
                     source_panel([
                         ("Workshop · vícekroková lekce", MultiHopActions),
                         ("Generování odpovědi", generate_completion),
-                        ("Log-skóre cíle", score_target),
                         ("Renderování promptu", render_prompt),
                     ])
                 components["multihop_summary"] = gr.Markdown("Vícekrokové měření zatím nebylo spuštěno.", elem_classes=["workshop-summary"])

@@ -353,12 +353,17 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42):
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
                         gr.Markdown(
-                            "### Přenese se změna i do dvoukrokové otázky?\n\n"
-                            "Přímý úspěch ≠ vícekroková generalizace. Editujeme pouze umístění památky, "
-                            "nikoli vztah města a země. Skutečné odpovědi mohou očekávání potvrdit i vyvrátit."
-                            " Přidáváme také parafrázi a řetězec památka → město → země → jazyk. "
-                            "**ROME nemusí selhat v každém scénáři.** Selhání přenosu lze ukázat až tehdy, "
-                            "když přímý edit uspěl a model zná navazující fakta."
+                            "### Vícekrokové otázky a opakovatelnost\n\n"
+                            "Zkoušíme přímou otázku, dvě formulace otázky na zemi a tři kroky "
+                            "**památka → město → země → jazyk**. Editujeme pouze umístění památky. "
+                            "Úspěšný přímý edit nemusí změnit všechny důsledky, ale **selhání ROME není zaručené**. "
+                            "Rozklad přes skutečně vygenerované město může uspět, i když samostatná otázka selže. "
+                            "Výsledek rozlišuje neúspěšný edit, neověřené kontroly a selhání přenosu.\n\n"
+                            "Výchozí seed je **42**; notebook jej předá do přípravy modelu. Před každou ROME editací "
+                            "se nastaví znovu pro Python, NumPy a PyTorch/CUDA. Před načtením ho můžete změnit "
+                            "v nastavení výpočtu nahoře. Odpovědi používají greedy dekódování. Pro srovnatelné běhy "
+                            "zachovejte stejný commit, balíčky, GPU a nastavení výpočtu; stejný seed nezaručuje "
+                            "bitovou shodu na různém hardware."
                         )
                         scenario = gr.Dropdown(
                             choices=[(item.preset, key) for key, item in MULTIHOP_SCENARIOS.items()],
@@ -381,12 +386,20 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42):
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
                         gr.Markdown(
-                            "### Vlastní entita, vlastní vztah\n\n"
-                            "Zkuste autora díla, tvůrce technologie nebo jiný vztah. "
-                            "Šedé placeholdery ukazují příklad **Hamlet: William Shakespeare → J. R. R. Tolkien**. "
-                            "Vyplňte všechna čtyři hlavní pole, nejprve klikněte na **Ověřit vlastní fakt**, "
-                            "potom na **Provést vlastní editaci** a porovnejte i parafráze a kontroly. "
-                            "V chatu se používají aktuální váhy společného modelu."
+                            "### Zkuste vlastní editaci\n\n"
+                            "Šedé placeholdery vás provedou příkladem, který můžete nahradit vlastním faktem:\n\n"
+                            "| Pole | Ukázková hodnota, kterou můžete nahradit |\n"
+                            "|---|---|\n"
+                            "| Co chceme editovat? | `Hamlet` |\n"
+                            "| Jak se na fakt modelu zeptáme? | `Who wrote Hamlet? Answer with the author's name only.` |\n"
+                            "| Jaká byla původní odpověď? | `William Shakespeare` |\n"
+                            "| Co má model nově odpovídat? | `J. R. R. Tolkien` |\n"
+                            "| Jiné formulace stejné otázky | `Hamlet was written by` |\n\n"
+                            "Placeholdery jsou nápověda; hodnoty vyplňte sami. Vyplňte všechna čtyři hlavní pole. "
+                            "Nejprve použijte **Ověřit vlastní fakt**, pak **Provést vlastní editaci**. "
+                            "V chatu zkuste `Who is the author of Hamlet?` a porovnejte i kontrolní otázku "
+                            "`What is the capital of Japan?`. Každá další editace začíná z původních vah. "
+                            "Chat používá aktuální váhy společného modelu."
                         )
                         with gr.Row(equal_height=False):
                             with gr.Column(scale=5):

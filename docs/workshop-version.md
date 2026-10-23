@@ -97,7 +97,8 @@ its estimation weights match the pinned checkpoint.
   Expected answers are never supplied to generation. Scores are normalized per
   target token, and actual generated text remains visible.
 - Custom fact fields stay empty and show a coherent Hamlet → Tolkien example
-  through placeholders. The clean notebook explains verification, editing and chat;
+  through placeholders. Gradio explains verification, editing, chat and multihop
+  reproducibility directly beside the relevant forms;
   participants can use the defaults without changing the PR implementation or checkout.
 - `launch_workshop(seed=42)` initializes the preparation field. The selected seed
   reaches root `cfg.seed`, seeds model loading and is reset by the shared ROME API

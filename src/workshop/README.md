@@ -3,7 +3,7 @@
 Tato implementace žije přímo v repozitáři **Security-FIT/Latium** na větvi
 **`workshop-version`**. Importuje ji
 [`clean-notebook.ipynb`](https://github.com/olexamatej/Latium-workshop/blob/main/clean-notebook.ipynb)
-z repozitáře Latium-workshop. Notebook obsahuje dvě spouštěcí buňky a návod;
+z repozitáře Latium-workshop. Notebook obsahuje dvě spouštěcí buňky a pokyny ke spuštění;
 ROME, načítání Qwenu, Gradio, causal tracing a GRAM jsou zde v Latium.
 
 ## Pro účastníky
@@ -25,7 +25,8 @@ rozhraní zachová načtený model a aktivní edit. Editace a reset vymažou his
 ## Vlastní edit
 
 V záložce **4 · ROME: vlastní fakt a chat** zůstávají pole prázdná. Šedé
-placeholdery ukazují tento propojený příklad; nahraďte je vlastními hodnotami:
+placeholdery a návod přímo nad formulářem ukazují tento propojený příklad;
+nahraďte je vlastními hodnotami:
 
 | Pole | Příklad |
 |---|---|

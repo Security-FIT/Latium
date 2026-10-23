@@ -66,6 +66,12 @@ def test_exact_five_tabs_right_closed_lazy_source_panels_and_shared_events(ui_ru
         assert sum(item["type"] == "chatbot" for item in items.values()) == 2
         entity_fields = [item for item in items.values() if item["props"].get("label") == "Co chceme editovat?"]
         assert [field["props"]["value"] for field in entity_fields] == ["The Eiffel Tower", ""]
+        assert entity_fields[1]["props"]["placeholder"] == "Hamlet"
+        for label, expected in (("Jaká byla původní odpověď?", "William Shakespeare"),
+                                ("Co má model nově odpovídat?", "J. R. R. Tolkien")):
+            fields = [item for item in items.values() if item["props"].get("label") == label]
+            assert fields[1]["props"]["value"] == ""
+            assert fields[1]["props"]["placeholder"] == expected
         chat_id = next(item["id"] for item in items.values() if item["type"] == "chatbot")
         model_labels = [
             "Provést připravenou editaci", "Provést vlastní editaci",

@@ -55,7 +55,7 @@ def test_failed_preparation_can_retry_then_reuses_session(runtime, monkeypatch, 
     try:
         initialize, _ = button_event(demo, "Připravit model")
         session = inspect.getclosurevars(initialize).nonlocals["session"]
-        args = ("", str(path), "public", "auto", 1, 4, 15)
+        args = ("", str(path), "public", "auto", 1, 4, 15, 123)
         failed = list(initialize(*args))
         assert "load failed" in str(failed[-1]) and "busy" not in str(failed[-1])
         assert session.handler is None
@@ -63,6 +63,7 @@ def test_failed_preparation_can_retry_then_reuses_session(runtime, monkeypatch, 
         assert session.handler is handler and handler._workshop_session is session
         assert session.base_weight is handler._workshop_base_weight
         assert "Model připraven" in str(succeeded[-1])
+        assert load.call_args.kwargs["settings"].seed == 123
         list(initialize(*args))
         assert load.call_count == 2
     finally:

@@ -18,6 +18,20 @@ package README files under `src/`.
 - Matej Olexa
 - Jakub Res
 
+## ROME workshop
+
+The `workshop-version` branch provides the implementation imported by the
+[clean workshop notebook](https://github.com/olexamatej/Latium-workshop/blob/main/clean-notebook.ipynb).
+Participants can keep the notebook defaults and run both cells; they do not
+need to modify the local implementation, select a checkout, or configure the PR.
+Choose a CUDA GPU, open Gradio, supply the covariance link/file and prepare the model.
+
+See the [workshop guide](src/workshop/README.md) for the custom-edit example,
+multihop interpretation and reproducible runs with seed 42. The notebook imports
+this branch through `src.workshop.launch_workshop(seed=42)`; the implementation
+and tests belong in Latium, while notebook exports live in the workshop repository.
+Integration details are in [docs/workshop-version.md](docs/workshop-version.md).
+
 ## Setup
 
 ```bash

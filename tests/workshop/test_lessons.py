@@ -47,7 +47,7 @@ def test_single_baseline_edit_raw_probes_scores_and_unchanged_hop(lesson_runtime
     runtime["probing"].score_target.side_effect = score
     summary, rows, status = lessons.MultiHopActions(session).run(key, progress=progress)
     runtime["api"].apply_rome_edit.assert_called_once()
-    assert len(rows) == len(scenario.probes) + 1 == 6
+    assert len(rows) == len(scenario.probes) + 1 == 10
     assert all(len(row) == len(lessons.MULTIHOP_HEADERS) for row in rows)
     assert all("weight 1.0" in row[4] and "weight 3.0" in row[5] for row in rows[:-1])
     assert all("\nA second sentence" in row[5] for row in rows[:-1])
@@ -87,7 +87,8 @@ def test_decomposition_uses_observed_city_not_expected_target(lesson_runtime):
     assert "Berlin" in rows[-1][1] and rows[-1][5] == "Germany"
     calls = [call.args[1] for call in runtime["probing"].generate_completion.call_args_list]
     assert "In which country is Berlin located? Answer with the country name only." in calls
-    assert "In which country is Rome located? Answer with the country name only." not in calls
+    # Rome is asked only as a fixed control before/after, never as the observed bridge.
+    assert calls.count("In which country is Rome located? Answer with the country name only.") == 2
 
 
 @pytest.mark.parametrize("failure_stage", ["before", "edit", "after"])
@@ -132,3 +133,36 @@ def test_unknown_scenario_does_not_touch_weights(lesson_runtime):
     assert session.handler.weight.item() == 4
     runtime["api"].apply_rome_edit.assert_not_called()
     runtime["probing"].generate_completion.assert_not_called()
+
+
+@pytest.mark.parametrize("key", ["eiffel_rome", "colosseum_paris"])
+@pytest.mark.parametrize("case, expected", [
+    ("success", "přenos uspěl"),
+    ("transfer_failure", "selhání přenosu při úspěšném přímém editu"),
+    ("direct_failure", "Přímý edit se v generované odpovědi nepotvrdil"),
+    ("unknown_direct", "Výchozí přímý fakt nebyl ověřen"),
+    ("unknown_hop", "kontroly nejsou ověřené"),
+    ("changed_control", "kontroly nejsou ověřené"),
+    ("unknown_baseline", "nelze vyhodnotit přenos"),
+])
+def test_interpretation_distinguishes_edit_failure_controls_and_generalization(lesson_runtime, key, case, expected):
+    lessons, _ = lesson_runtime
+    scenario = lessons.MULTIHOP_SCENARIOS[key]
+    before = [(p.before, {}) for p in scenario.probes]
+    after = [(p.after.upper() + ".", {}) for p in scenario.probes]
+    if case == "transfer_failure":
+        after[1] = before[1]
+    elif case == "direct_failure":
+        after[0] = before[0]
+    elif case == "unknown_direct":
+        before[0] = ("Unknown", {})
+    elif case == "unknown_hop":
+        before[2] = ("Unknown", {})
+    elif case == "changed_control":
+        after[2] = ("Unknown", {})
+    elif case == "unknown_baseline":
+        before[1] = ("Unknown", {})
+    verdict = lessons.interpret_multihop(scenario, before, after)
+    assert expected in verdict
+    if case in {"success", "direct_failure", "unknown_direct", "unknown_hop", "changed_control"}:
+        assert "selhání přenosu při úspěšném přímém editu" not in verdict

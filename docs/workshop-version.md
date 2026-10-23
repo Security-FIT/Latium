@@ -96,6 +96,19 @@ its estimation weights match the pinned checkpoint.
 - Direct/implicit multihop and observed-city decomposition remain separate.
   Expected answers are never supplied to generation. Scores are normalized per
   target token, and actual generated text remains visible.
+- Custom fact fields stay empty and show a coherent Hamlet → Tolkien example
+  through placeholders. The clean notebook explains verification, editing and chat;
+  participants can use the defaults without changing the PR implementation or checkout.
+- `launch_workshop(seed=42)` initializes the preparation field. The selected seed
+  reaches root `cfg.seed`, seeds model loading and is reset by the shared ROME API
+  on every edit. Reopening a loaded session retains its original seed and weights.
+  Greedy answers and fixed hardware/configuration are required for comparison.
+- Multihop adds a country paraphrase and landmark → city → country → language
+  probes, with unchanged language controls. Text verdicts require correct baseline
+  recall and stable known controls before claiming failed transfer. They compare
+  whole short answers; longer explanations need manual review. A scenario may
+  generalize successfully: these demonstrations do not guarantee ROME failure or
+  reproduce the [MQuAKE benchmark](https://aclanthology.org/2023.emnlp-main.971/).
 
 ## Validation
 

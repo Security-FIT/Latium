@@ -138,7 +138,8 @@ def test_qwen_loader_uses_eager_and_rejects_missing_weights(chat_tokenizer, tmp_
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda: (7, 5))
     monkeypatch.setattr("src.common.linalg.DeviceManager.safe_to_device", lambda self, data, **kwargs: data)
-    handler = load_rome_handler(second_moment_path=path)
+    handler = load_rome_handler(second_moment_path=path, settings=ModelSettings(seed=123))
+    assert handler.cfg.seed == 123 and "seed" not in handler.cfg.model
     assert calls[0][1].get("dtype", calls[0][1].get("torch_dtype")) == torch.bfloat16
     assert calls[0][1]["attn_implementation"] == "eager"
     assert calls[0][1]["device_map"] == {"": "cuda:0"}
@@ -146,3 +147,30 @@ def test_qwen_loader_uses_eager_and_rejects_missing_weights(chat_tokenizer, tmp_
     info["missing_keys"] = ["model.layers.1.mlp.down_proj.weight"]
     with pytest.raises(RuntimeError, match="Checkpoint"):
         load_rome_handler(second_moment_path=path)
+
+
+def test_repeated_edit_is_reproducible_after_other_random_work(chat_tokenizer, tmp_path):
+    import numpy as np
+
+    path = tmp_path / "cov.pt"
+    torch.save(torch.eye(24), path)
+    handler = tiny_handler(chat_tokenizer, path, batch_size=2)
+    handler.cfg.seed = 123
+    baseline = snapshot_layer(handler)
+    apply_rome_edit(handler, FACT, verbose=False)
+    first = snapshot_layer(handler)
+    assert not torch.equal(first, baseline)
+    restore_layer(handler, baseline)
+    random.random()
+    np.random.random(13)
+    torch.rand(17)
+    apply_rome_edit(handler, FACT, verbose=False)
+    torch.testing.assert_close(snapshot_layer(handler), first, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("seed", [-1, 2**32, 1.5, True])
+def test_invalid_seed_is_rejected_before_loading(seed):
+    from src.workshop.model import validate_model_settings
+
+    with pytest.raises(ValueError, match="Seed"):
+        validate_model_settings(ModelSettings(seed=seed))

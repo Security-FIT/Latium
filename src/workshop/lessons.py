@@ -38,9 +38,13 @@ MULTIHOP_SCENARIOS = {
         (
             LessonProbe("Přímá otázka", "The Eiffel Tower is located in which city? Answer with the city name only.", "Paris", "Rome"),
             LessonProbe("Dva kroky · samostatně", "In which country is the city where the Eiffel Tower is located? Answer with the country name only.", "France", "Italy"),
-            LessonProbe("Druhý krok · beze změny", "In which country is Rome located?", "Italy", "Italy"),
-            LessonProbe("Původní město · beze změny", "In which country is Paris located?", "France", "France"),
-            LessonProbe("Nesouvisející kontrola", "What is the capital of Japan?", "Tokyo", "Tokyo"),
+            LessonProbe("Druhý krok · beze změny", "In which country is Rome located? Answer with the country name only.", "Italy", "Italy"),
+            LessonProbe("Původní město · beze změny", "In which country is Paris located? Answer with the country name only.", "France", "France"),
+            LessonProbe("Nesouvisející kontrola", "What is the capital of Japan? Answer with the city name only.", "Tokyo", "Tokyo"),
+            LessonProbe("Dva kroky · parafráze", "Which nation contains the Eiffel Tower? Answer with the country name only.", "France", "Italy"),
+            LessonProbe("Tři kroky · jazyk", "What is the official language of the country where the Eiffel Tower is located? Answer with the language name only.", "French", "Italian"),
+            LessonProbe("Jazyk nové země · beze změny", "What is the official language of Italy? Answer with the language name only.", "Italian", "Italian"),
+            LessonProbe("Jazyk původní země · beze změny", "What is the official language of France? Answer with the language name only.", "French", "French"),
         ),
     ),
     "colosseum_paris": MultiHopScenario(
@@ -49,9 +53,13 @@ MULTIHOP_SCENARIOS = {
         (
             LessonProbe("Přímá otázka", "The Colosseum is located in which city? Answer with the city name only.", "Rome", "Paris"),
             LessonProbe("Dva kroky · samostatně", "In which country is the city where the Colosseum is located? Answer with the country name only.", "Italy", "France"),
-            LessonProbe("Druhý krok · beze změny", "In which country is Paris located?", "France", "France"),
-            LessonProbe("Původní město · beze změny", "In which country is Rome located?", "Italy", "Italy"),
-            LessonProbe("Nesouvisející kontrola", "What is the capital of Japan?", "Tokyo", "Tokyo"),
+            LessonProbe("Druhý krok · beze změny", "In which country is Paris located? Answer with the country name only.", "France", "France"),
+            LessonProbe("Původní město · beze změny", "In which country is Rome located? Answer with the country name only.", "Italy", "Italy"),
+            LessonProbe("Nesouvisející kontrola", "What is the capital of Japan? Answer with the city name only.", "Tokyo", "Tokyo"),
+            LessonProbe("Dva kroky · parafráze", "Which nation contains the Colosseum? Answer with the country name only.", "Italy", "France"),
+            LessonProbe("Tři kroky · jazyk", "What is the official language of the country where the Colosseum is located? Answer with the language name only.", "Italian", "French"),
+            LessonProbe("Jazyk nové země · beze změny", "What is the official language of France? Answer with the language name only.", "French", "French"),
+            LessonProbe("Jazyk původní země · beze změny", "What is the official language of Italy? Answer with the language name only.", "Italian", "Italian"),
         ),
     ),
 }
@@ -71,9 +79,50 @@ def scenario_description(key):
         f"**Jediná editace:** `{scenario.edit_prompt}`: {old} → {new}. Entita: `{subject}`.\n\n"
         "Očekávání jsou hypotézy pro vyhodnocení, nikoli naměřené odpovědi. "
         "Model dostane pouze otázky v tabulce; očekávané odpovědi se do nich ani do chatu nevkládají. "
-        "Rozložená otázka použije město vygenerované modelem v prvním kroku, nikoli cílovou odpověď.\n\n"
+        "Rozložená otázka použije město vygenerované modelem v prvním kroku, nikoli cílovou odpověď. "
+        "Navíc testujeme parafrázi a tři kroky památka → město → země → jazyk.\n\n"
+        "**Selhání není zaručené.** ROME může na některé navazující otázky generalizovat. "
+        "Lekce hledá případ, kdy přímý edit uspěl, ale některý důsledek se nepřenesl. "
+        "Inspirace: [MQuAKE](https://aclanthology.org/2023.emnlp-main.971/); "
+        "tyto ukázky nejsou reprodukcí jeho benchmarku.\n\n"
         + "\n".join(f"- **{probe.category}:** {probe.question}" for probe in scenario.probes)
     )
+
+
+def _answer_key(answer):
+    """Strict short-answer comparison; never mine a target from a sentence."""
+    return " ".join(answer.casefold().strip().strip('"\' .!').split())
+
+
+def interpret_multihop(scenario, before, after):
+    """Gate generalization claims on observed direct recall and control outputs."""
+    direct = scenario.probes[0]
+    if _answer_key(after[0][0]) != _answer_key(direct.after):
+        return ("**Přímý edit se v generované odpovědi nepotvrdil.** "
+                "Z tohoto běhu nelze vyvozovat selhání vícekrokové generalizace; "
+                "nejprve ověřte přímou otázku a nastavení ROME.")
+    if _answer_key(before[0][0]) != _answer_key(direct.before):
+        return ("**Výchozí přímý fakt nebyl ověřen.** "
+                "Model nyní odpovídá novým cílem, ale chybí spolehlivý základ pro porovnání.")
+    controls_ok = all(
+        _answer_key(old[0]) == _answer_key(probe.before) and _answer_key(new[0]) == _answer_key(probe.after)
+        for probe, old, new in zip(scenario.probes, before, after) if probe.before == probe.after
+    )
+    if not controls_ok:
+        return ("**Přímý edit uspěl, ale kontroly nejsou ověřené před i po editaci.** "
+                "Příčinou navazující chyby může být i neznalost dalšího kroku nebo vedlejší efekt editace.")
+    outcomes = []
+    for probe, old, new in zip(scenario.probes[1:], before[1:], after[1:]):
+        if probe.before == probe.after:
+            continue
+        if _answer_key(old[0]) != _answer_key(probe.before):
+            verdict = "nelze vyhodnotit přenos: výchozí odpověď neodpovídá očekávání"
+        elif _answer_key(new[0]) == _answer_key(probe.after):
+            verdict = "přenos uspěl"
+        else:
+            verdict = "selhání přenosu při úspěšném přímém editu"
+        outcomes.append(f"- **{probe.category}:** {verdict}.")
+    return "**Přímý edit i kontroly jsou ověřené v generovaných odpovědích.**\n\n" + "\n".join(outcomes)
 
 
 class MultiHopActions:
@@ -156,7 +205,10 @@ class MultiHopActions:
             ])
         direct, multihop = ("ano" if preferred else "ne" for preferred in preferences)
         summary = (
-            f"### Jedna editace, dva kroky uvažování\n\n{scenario.chain}\n\n"
+            f"### Jedna editace, dva až tři kroky uvažování\n\n{scenario.chain}\n\n"
+            f"{interpret_multihop(scenario, before, after)}\n\n"
+            "Textové hodnocení porovnává celou stručnou odpověď s očekáváním, bez ohledu na velikost "
+            "písmen a koncovou tečku. Delší vysvětlení zkontrolujte ručně v tabulce.\n\n"
             f"Nový kandidát má po editaci vyšší průměrné log-skóre/token než původní: **přímá otázka: {direct}; "
             f"vícekroková otázka: {multihop}**. To je porovnání skóre, nikoli automatické hodnocení textu.\n\n"
             "**Přímý úspěch ≠ vícekroková generalizace.** Porovnejte skutečné celé odpovědi před a po "
@@ -165,6 +217,7 @@ class MultiHopActions:
             "Log-skóre je průměr na token (vyšší je lepší), aby délka názvů zemí nezkreslovala porovnání. "
             "Řádek „rozklad odpovědi“ je řízené spojení dvou dotazů přes skutečně vygenerované město; "
             "není důkazem samostatné vícekrokové generalizace. Prázdné skóre znamená neplatný první krok. "
+            "Úspěšná samostatná otázka je platný výsledek; tato lekce neslibuje, že ROME vždy selže. "
             "Δ je skóre po minus před. U kontrol je původní i nový kandidát totožný. "
             "Odpovědi nejsou kráceny na první větu; rozpočet generování je 192 tokenů.\n\n"
             f"Čas editace: **{result.seconds:.1f} s**, špička GPU: **{result.peak_gb:.2f} GB**."

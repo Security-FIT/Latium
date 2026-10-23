@@ -164,16 +164,19 @@ class WorkshopCoordinator:
 
 
 def _fact_form(default):
-    subject = gr.Textbox(value=default[0], label="Co chceme editovat?", placeholder="Například: Ada Lovelace")
+    example = WORKSHOP_PRESETS["Autor Hamleta → Tolkien"]
+    subject = gr.Textbox(value=default[0], label="Co chceme editovat?", placeholder=example[0])
     prompt = gr.Textbox(
         value=default[1], label="Jak se na fakt modelu zeptáme?",
-        info="Začátek tvrzení musí obsahovat přesný text entity. Nejlépe fungují anglické formulace.",
+        placeholder=example[1],
+        info="Otázka musí obsahovat přesný text entity. Nejlépe fungují anglické formulace.",
     )
     with gr.Row():
-        target_true = gr.Textbox(value=default[3], label="Jaká byla původní odpověď?")
-        target_new = gr.Textbox(value=default[2], label="Co má model nově odpovídat?")
+        target_true = gr.Textbox(value=default[3], label="Jaká byla původní odpověď?", placeholder=example[3])
+        target_new = gr.Textbox(value=default[2], label="Co má model nově odpovídat?", placeholder=example[2])
     with gr.Accordion("Parafráze a kontrolní otázky", open=False):
-        variants = gr.Textbox(value=default[4], lines=4, label="Jiné formulace stejné otázky", info="Jedna na řádek.")
+        variants = gr.Textbox(value=default[4], lines=4, label="Jiné formulace stejné otázky",
+                              placeholder=example[4], info="Jedna na řádek.")
         canaries = gr.Textbox(value=WORKSHOP_CANARIES, lines=5, label="Kontrolní otázky", info="Měly by zůstat stejné.")
     return [subject, prompt, target_new, target_true, variants, canaries]
 
@@ -210,11 +213,11 @@ def _loaded_configuration(handler):
     settings = handler.cfg.model
     values = (OmegaConf.to_container(settings, resolve=True) if OmegaConf.is_config(settings) else
               asdict(settings) if is_dataclass(settings) else vars(settings).copy())
-    return dict(values, loaded_dtype=str(getattr(handler, "dtype", "unknown")),
+    return dict(values, seed=getattr(handler.cfg, "seed", 42), loaded_dtype=str(getattr(handler, "dtype", "unknown")),
                 projection=getattr(handler, "_layer_name_template", "unknown"), device=str(handler.device))
 
 
-def build_workshop_ui(handler=None, environment=None):
+def build_workshop_ui(handler=None, environment=None, *, seed=42):
     session = session_for(handler) if handler is not None else ModelSession(None, None)
     coordinator = getattr(session, "_coordinator", None)
     if coordinator is None:
@@ -257,9 +260,15 @@ def build_workshop_ui(handler=None, environment=None):
                     v_batch = gr.Slider(1, 8, value=1, step=1, label="ROME micro-batch v", interactive=handler is None)
                     k_batch = gr.Slider(1, 16, value=4, step=1, label="ROME micro-batch k", interactive=handler is None)
                     epochs = gr.Slider(2, 40, value=25, step=1, label="ROME iterace", interactive=handler is None)
+                    edit_seed = gr.Number(value=getattr(handler.cfg, "seed", 42) if handler is not None else seed,
+                                          precision=0, minimum=0, maximum=2**32 - 1,
+                                          label="Seed modelu a ROME", interactive=handler is None)
                 gr.Markdown("bf16 odpovídá konfiguraci Latium main i původnímu checkpointu. Auto také zachová bf16; "
                             "T4 ho počítá pomaleji bez nativních BF16 tensor cores. FP16 je ruční experimentální volba. "
                             "Delta a optimizer jsou vždy fp32, attention eager; kovariance patří vrstvě 5.")
+                gr.Markdown("Seed se nastaví při načtení a znovu před každou ROME editací. "
+                            "Odpovědi používají greedy dekódování. Pro srovnání zachovejte také stejný commit, "
+                            "balíčky, GPU a výpočetní nastavení; seed nezaručuje shodu mezi různým hardwarem.")
             initialize_button = gr.Button("Připravit model", variant="primary", interactive=handler is None)
             with gr.Accordion("Načtená konfigurace", open=False):
                 actual_config = gr.JSON(label="Skutečná načtená konfigurace", value=_loaded_configuration(handler), visible=handler is not None)
@@ -347,6 +356,9 @@ def build_workshop_ui(handler=None, environment=None):
                             "### Přenese se změna i do dvoukrokové otázky?\n\n"
                             "Přímý úspěch ≠ vícekroková generalizace. Editujeme pouze umístění památky, "
                             "nikoli vztah města a země. Skutečné odpovědi mohou očekávání potvrdit i vyvrátit."
+                            " Přidáváme také parafrázi a řetězec památka → město → země → jazyk. "
+                            "**ROME nemusí selhat v každém scénáři.** Selhání přenosu lze ukázat až tehdy, "
+                            "když přímý edit uspěl a model zná navazující fakta."
                         )
                         scenario = gr.Dropdown(
                             choices=[(item.preset, key) for key, item in MULTIHOP_SCENARIOS.items()],
@@ -371,7 +383,10 @@ def build_workshop_ui(handler=None, environment=None):
                         gr.Markdown(
                             "### Vlastní entita, vlastní vztah\n\n"
                             "Zkuste autora díla, tvůrce technologie nebo jiný vztah. "
-                            "Vyplňte všechna čtyři hlavní pole. V chatu se používají aktuální váhy společného modelu."
+                            "Šedé placeholdery ukazují příklad **Hamlet: William Shakespeare → J. R. R. Tolkien**. "
+                            "Vyplňte všechna čtyři hlavní pole, nejprve klikněte na **Ověřit vlastní fakt**, "
+                            "potom na **Provést vlastní editaci** a porovnejte i parafráze a kontroly. "
+                            "V chatu se používají aktuální váhy společného modelu."
                         )
                         with gr.Row(equal_height=False):
                             with gr.Column(scale=5):
@@ -417,13 +432,13 @@ def build_workshop_ui(handler=None, environment=None):
 
         operation_buttons = [reset_button, trace_button, prepared_inspect, prepared_edit, multihop_button,
                              custom_inspect, custom_edit, gram_button, send, prepared_send]
-        preparation_controls = [drive_url, upload, clear_upload, download_mode, precision, v_batch, k_batch, epochs]
+        preparation_controls = [drive_url, upload, clear_upload, download_mode, precision, v_batch, k_batch, epochs, edit_seed]
         upload.upload(lambda path: gr.update(label=f"Vybráno: {Path(path).name}"), inputs=upload, outputs=upload,
                       queue=False, show_progress="hidden")
         clear_upload.click(lambda: gr.update(value=None, label="Nahrát vlastní kovarianci (.pt)"), outputs=upload,
                            queue=False, show_progress="hidden")
 
-        def initialize(url, uploaded, mode, dtype, value_batch, key_batch, iterations):
+        def initialize(url, uploaded, mode, dtype, value_batch, key_batch, iterations, seed_value):
             if session.handler is not None:
                 yield {initialize_button: gr.update(interactive=False)}
                 return
@@ -432,7 +447,8 @@ def build_workshop_ui(handler=None, environment=None):
                    initialize_button: gr.update(interactive=False),
                    status_component: model_status("Připravuji kovarianci…", "busy")}
             try:
-                settings = ModelSettings(dtype=dtype, v_batch_size=int(value_batch), k_batch_size=int(key_batch), epochs=int(iterations))
+                settings = ModelSettings(dtype=dtype, v_batch_size=int(value_batch), k_batch_size=int(key_batch),
+                                         epochs=int(iterations), seed=seed_value)
                 validate_model_settings(settings)
                 env = environment or Environment.discover()
                 if uploaded:
@@ -458,7 +474,7 @@ def build_workshop_ui(handler=None, environment=None):
                        initialize_button: gr.update(interactive=True),
                        status_component: model_status(f"Příprava selhala: {exc}", "warn")}
 
-        initialize_button.click(initialize, inputs=[drive_url, upload, download_mode, precision, v_batch, k_batch, epochs],
+        initialize_button.click(initialize, inputs=[drive_url, upload, download_mode, precision, v_batch, k_batch, epochs, edit_seed],
                                 outputs=[initialize_button, components["system_status"], components["current_state"], actual_config, preparation,
                                          *operation_buttons, *preparation_controls], **model_event)
 

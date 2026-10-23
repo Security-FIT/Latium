@@ -5,7 +5,7 @@ from pathlib import Path
 _demo = None
 
 
-def launch_workshop(*, work_dir=None, share=None):
+def launch_workshop(*, work_dir=None, share=None, seed=42):
     """Render before model loading; preserve any active edit when reopening UI."""
     global _demo
     from src.workshop.launch import launch_ui
@@ -17,6 +17,6 @@ def launch_workshop(*, work_dir=None, share=None):
         _demo.close()
     environment = Environment(Path(work_dir).expanduser().resolve()) if work_dir else Environment.discover()
     environment.work_dir.mkdir(parents=True, exist_ok=True)
-    _demo, theme, css = build_workshop_ui(handler, environment=environment)
+    _demo, theme, css = build_workshop_ui(handler, environment=environment, seed=seed)
     launch_ui(_demo, theme, css, share=share)
     return _demo

@@ -17,6 +17,7 @@ from .prompts import DEFAULT_SYSTEM_PROMPT, render_prompt
 
 @dataclass
 class ModelSettings:
+    seed: int = 42
     name: str = "Qwen/Qwen3.5-4B"
     layer: int = 5
     epochs: int = 25
@@ -36,6 +37,8 @@ class ModelSettings:
 
 
 def validate_model_settings(settings):
+    if isinstance(settings.seed, bool) or not isinstance(settings.seed, int) or not 0 <= settings.seed < 2**32:
+        raise ValueError("Seed musí být celé číslo od 0 do 2³² − 1.")
     if settings.name != "Qwen/Qwen3.5-4B" or settings.layer != 5:
         raise ValueError("Dodaná kovariance patří Qwen/Qwen3.5-4B, vrstvě 5.")
     if settings.dtype not in {"auto", "bf16", "fp16", "fp32"}:
@@ -70,8 +73,9 @@ def gpu_memory_summary():
 
 def workshop_config(settings, covariance, hf_token=None):
     values = asdict(settings)
+    seed = values.pop("seed")  # apply_rome_edit reads the root cfg.seed.
     values["dtype"] = {torch.bfloat16: "bf16", torch.float16: "f16", torch.float32: "f32"}[resolve_model_dtype(settings.dtype)]
-    return build_rome_config(second_moment_path=Path(covariance).resolve(), hf_token=hf_token,
+    return build_rome_config(second_moment_path=Path(covariance).resolve(), hf_token=hf_token, seed=seed,
                              overrides={f"model.{key}": value for key, value in values.items()})
 
 
@@ -148,6 +152,9 @@ def load_rome_handler(model="qwen3.5-4b-t4", *, hf_token=None, second_moment_pat
         raise RuntimeError("Vyberte CUDA GPU runtime (například T4).")
     settings = settings or ModelSettings()
     validate_model_settings(settings)
+    from src.runtime import set_global_seed
+
+    set_global_seed(settings.seed)
     if model not in ("qwen3.5-4b-t4", settings.name):
         raise ValueError("This notebook's covariance and hook paths are for Qwen3.5-4B, layer 5")
     if settings.layer != 5:

@@ -1,0 +1,82 @@
+# ROME workshop
+
+Tato implementace žije přímo v repozitáři **Security-FIT/Latium** na větvi
+**`workshop-version`**. Importuje ji
+[`clean-notebook.ipynb`](https://github.com/olexamatej/Latium-workshop/blob/main/clean-notebook.ipynb)
+z repozitáře Latium-workshop. Notebook obsahuje dvě spouštěcí buňky a návod;
+ROME, načítání Qwenu, Gradio, causal tracing a GRAM jsou zde v Latium.
+
+## Pro účastníky
+
+**Lokální implementaci ani nastavení checkoutu neupravujte.** Kód a větev jsou
+připravené v rámci workshopového PR. Ponechte výchozí hodnoty; `LOCAL_LATIUM`
+a `LATIUM_REF` jsou určeny pouze vývojářům. Vlastní editace zadáváte do Gradio,
+zdrojové panely slouží k nahlédnutí do implementace.
+
+1. Otevřete clean notebook v Colabu a vyberte CUDA GPU runtime.
+2. Spusťte obě kódové buňky shora dolů. Gradio se otevře před načítáním modelu.
+3. Vložte Drive odkaz na kovarianci nebo nahrajte vlastní `.pt` a klikněte na
+   **Připravit model**. Pro soukromý Drive použijte přihlášení z první buňky.
+4. Zkoušejte připravené lekce nebo vlastní fakt. Všech pět záložek sdílí jeden model.
+
+Každá editace začíná obnovou původní projekce; editace se nevrství. Nové otevření
+rozhraní zachová načtený model a aktivní edit. Editace a reset vymažou historii chatu.
+
+## Vlastní edit
+
+V záložce **4 · ROME: vlastní fakt a chat** zůstávají pole prázdná. Šedé
+placeholdery ukazují tento propojený příklad; nahraďte je vlastními hodnotami:
+
+| Pole | Příklad |
+|---|---|
+| Co chceme editovat? | `Hamlet` |
+| Jak se na fakt modelu zeptáme? | `Who wrote Hamlet? Answer with the author's name only.` |
+| Jaká byla původní odpověď? | `William Shakespeare` |
+| Co má model nově odpovídat? | `J. R. R. Tolkien` |
+| Jiné formulace stejné otázky | `Hamlet was written by` |
+
+Otázka musí obsahovat přesný text entity. Nejprve klikněte na **Ověřit vlastní fakt**,
+potom na **Provést vlastní editaci**. Porovnejte hlavní otázku, parafráze a nesouvisející
+kontroly. V chatu zkuste `Who is the author of Hamlet?` a
+`What is the capital of Japan?`.
+
+## Vícekrokové otázky
+
+Záložka 3 provede jedinou editaci umístění památky. Potom porovná přímou otázku
+na město, dvě formulace otázky na zemi a řetězec **památka → město → země → jazyk**.
+Kontroly ověřují navazující fakta a nesouvisející znalost před i po editaci.
+
+Vyhodnocení rozlišuje neúspěšný přímý edit, neověřené výchozí znalosti či kontroly
+a selhání přenosu při úspěšném přímém editu. Textové porovnání používá celou
+stručnou odpověď; delší vysvětlení posuďte ručně v tabulce. Log-skóre kandidátů
+je samostatné měření, nikoli automatické hodnocení generované odpovědi.
+
+**Selhání není zaručené.** Některé otázky mohou po editaci správně generalizovat.
+Řádek s rozkladem použije město skutečně vygenerované v prvním kroku; jeho úspěch
+není důkazem samostatné multihop generalizace. Inspirací je
+[MQuAKE](https://aclanthology.org/2023.emnlp-main.971/); nejde o reprodukci benchmarku.
+
+## Seed a opakování běhu
+
+Výchozí `SEED = 42` v notebooku se předá přes `launch_workshop(seed=42)`.
+Před načtením modelu ho lze změnit v Gradio v nastavení výpočtu. Uloží se jako
+kořenové `cfg.seed`, nastaví Python, NumPy a PyTorch/CUDA před načtením a ROME
+jej nastaví znovu před každou editací. Načtená konfigurace seed vypisuje.
+
+Odpovědi používají greedy dekódování. Pro srovnatelné výsledky zachovejte stejný
+commit, balíčky, GPU, přesnost a micro-batche. Seed sám nezaručuje bitovou shodu
+mezi různým hardwarem. Opětovné otevření již načtené session zachová její seed i váhy.
+
+## Pro vývojáře
+
+Závislosti jsou v `requirements-workshop.txt`. Ve vlastním checkoutu této větve:
+
+```python
+from src.workshop import launch_workshop
+
+demo = launch_workshop(seed=42)
+```
+
+Podrobnosti integrace a validační příkazy jsou v
+[`docs/workshop-version.md`](../../docs/workshop-version.md). Úpravy implementace
+patří do této větve Latium; změny buněk a exportu notebooku do Latium-workshop.

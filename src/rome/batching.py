@@ -29,11 +29,33 @@ from __future__ import annotations
 
 import gc
 import logging
+import inspect
 from typing import Any, Iterable, Iterator, Mapping, Sequence, Tuple
 
 import torch
 
 LOGGER = logging.getLogger(__name__)
+
+
+def forward_selected_logits(handler, inputs, positions):
+    """Select hidden positions before Qwen's large LM head when supported.
+
+    Return logits and remapped row positions. Other architectures keep their
+    existing full-logit forward, with exactly the same loss/scoring convention.
+    """
+    kwargs = {}
+    selected = None
+    if getattr(handler.cfg.model, "select_logits_before_head", False):
+        parameters = inspect.signature(handler.model.forward).parameters
+        key = next((name for name in ("logits_to_keep", "num_logits_to_keep") if name in parameters), None)
+        if key:
+            selected = torch.unique(positions.reshape(-1), sorted=True)
+            kwargs[key] = selected.to(inputs["input_ids"].device)
+    logits = handler.model(**inputs, use_cache=False, **kwargs).logits
+    mapped = positions.to(logits.device)
+    if selected is not None:
+        mapped = torch.searchsorted(selected.to(logits.device), mapped)
+    return logits, mapped
 
 #: Sentinel meaning "no micro-batching": run the whole prompt set in one pass,
 #: which reproduces the upstream single-forward behaviour bit for bit.

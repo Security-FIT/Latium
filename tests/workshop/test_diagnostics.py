@@ -176,19 +176,18 @@ def test_trace_real_chat_hooks_paired_noise_and_no_mutation(diagnostic_session, 
         if recovery != "N/A":
             assert recovery == pytest.approx(ie / (p_clean - p_corrupt))
     assert any(abs(row[6]) > 1e-9 for row in rows)
-    plotted = figure.axes[0].lines[0]
-    assert list(plotted.get_ydata()) == [row[6] for row in sorted(rows)]
-    image = figure.axes[1].images[0]
-    assert image.get_cmap().name == "RdBu_r"
-    actual_map = np.asarray(image.get_array())
+    axis = figure.axes[0]
+    assert len(figure.axes) == 1 and len(axis.patches) == 7
+    assert [bar.get_height() for bar in axis.patches] == [row[6] for row in sorted(rows)]
+    assert len({tuple(bar.get_facecolor()) for bar in axis.patches}) == 7
     expected_map = np.asarray([
         [float(noisy[3 + center * 3 + sample]["probs"][0, target_id])
          - float(noisy[sample]["probs"][0, target_id]) for center in range(7)]
         for sample in range(3)
     ])
-    np.testing.assert_allclose(actual_map[:-1], expected_map)
-    np.testing.assert_allclose(actual_map[-1], expected_map.mean(axis=0), atol=1e-12)
-    assert image.get_clim()[0] == -image.get_clim()[1]
+    np.testing.assert_allclose([bar.get_height() for bar in axis.patches], expected_map.mean(axis=0), atol=1e-12)
+    assert [tick.get_text() for tick in axis.get_xticklabels()] == [f"L{i}" for i in range(7)]
+    assert any(label.get_text() == f"peak L{rows[0][0]}" for label in axis.texts)
     _diagnostic_test_unchanged(session, before)
     assert all(not module._forward_hooks for module in session.handler.model.modules())
     again = actions.trace("Eiffel Tower", prompt, target, window_size, 3, 3.0, 24, progress=Mock())
@@ -203,8 +202,8 @@ def test_zero_effect_recovery_is_na(diagnostic_session):
     assert isinstance(figure, Figure), summary
     assert "Téměř nulový celkový efekt" in summary
     assert all(row[7] == "N/A" and row[6] == 0 for row in rows)
-    assert np.isfinite(figure.axes[1].images[0].get_clim()).all()
-    assert not np.asarray(figure.axes[1].images[0].get_array()).any()
+    assert np.isfinite(figure.axes[0].get_ylim()).all()
+    assert all(bar.get_height() == 0 for bar in figure.axes[0].patches)
 
 
 @pytest.mark.parametrize("fail_on", [2, 3, 6])
@@ -278,7 +277,7 @@ def test_gram_real_rank_one_outlier_baseline_and_fresh_snapshot(diagnostic_sessi
     assert rows[0][0] == expected["selected_layer"] == 3
     assert rows[0][1] > rows[0][2]
     assert "Pořadí vznikne i pro needitovaný model" in summary
-    assert "nejsou kalibrovanou binární" in summary
+    assert "není důkazem" in summary
     for row in rows:
         layer, score, base_score, rank, is_edit = row
         assert is_edit == (layer == 3)
@@ -323,3 +322,25 @@ def test_gram_never_reassigns_saved_base_to_a_new_layer(diagnostic_session):
     assert "jiné vrstvě" in summary
     assert rows == [] and figure is None
     assert diagnostic_session.handler._layer == 4
+
+
+def test_noise_batching_matches_single_draw_forwards(diagnostic_session):
+    actions = DiagnosticActions(diagnostic_session)
+    _, single, _ = actions.trace("Eiffel Tower", "Where is Eiffel Tower?", "Rome", noise_samples=3,
+                                 noise_batch_size=1, progress=Mock())
+    calls = diagnostic_session.handler.model.calls
+    _, batched, _ = actions.trace("Eiffel Tower", "Where is Eiffel Tower?", "Rome", noise_samples=3,
+                                  noise_batch_size=2, progress=Mock())
+    assert diagnostic_session.handler.model.calls - calls < calls
+    np.testing.assert_allclose([r[3:7] for r in sorted(single)], [r[3:7] for r in sorted(batched)], atol=1e-8)
+
+
+def test_three_real_cases_and_repeated_trace_are_cached(diagnostic_session):
+    actions = DiagnosticActions(diagnostic_session)
+    summary, rows, figure = actions.trace_suite("The Eiffel Tower", "Where is The Eiffel Tower?", "Rome",
+                                               noise_samples=1, fact_count=3, auto_noise=False, progress=Mock())
+    assert "3 fakta" in summary and len(rows) == 7 and figure is not None
+    calls = diagnostic_session.handler.model.calls
+    again = actions.trace_suite("The Eiffel Tower", "Where is The Eiffel Tower?", "Rome",
+                                 noise_samples=1, fact_count=3, auto_noise=False, progress=Mock())
+    assert again[2] is figure and diagnostic_session.handler.model.calls == calls

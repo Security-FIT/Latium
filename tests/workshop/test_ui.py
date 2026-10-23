@@ -124,7 +124,7 @@ def test_solo_preview_has_no_target_requirement_and_edit_recovers(runtime):
     assert session.handler.weight.item() == 1
 
 
-def test_workshop_scores_history_canaries_and_reset(runtime):
+def test_workshop_presented_answers_cache_history_and_reset(runtime):
     from src.workshop.workshop import WorkshopActions
 
     session = runtime["session"]
@@ -136,7 +136,7 @@ def test_workshop_scores_history_canaries_and_reset(runtime):
         h.weight.item() if target == " Rome" else 2
     )
 
-    def edit(handler, fact):
+    def edit(handler, fact, **kwargs):
         assert handler.weight.item() == 1
         handler.weight.add_(2)
         return SimpleNamespace(seconds=2, peak_gb=1.5, delta_norm=4)
@@ -144,15 +144,17 @@ def test_workshop_scores_history_canaries_and_reset(runtime):
     runtime["api"].apply_rome_edit.side_effect = edit
     args = ("The Eiffel Tower", "The Eiffel Tower is in", "Rome", "Paris", "variant", "check")
     inspection = actions.inspect(*args)
-    assert "Log-skóre" in inspection[0]
-    assert all(not call.kwargs for call in runtime["probing"].generate_completion.call_args_list)
+    assert "Paris" in inspection[0] and "Log-skóre" not in inspection[0]
+    assert all(call.kwargs == {"max_new_tokens": 40, "raw": True}
+               for call in runtime["probing"].generate_completion.call_args_list)
     for _ in range(2):
         result = actions.edit(*args)
     assert result[-1] == []
     assert [row[0] for row in result[1]] == ["Hlavní otázka", "Jiná formulace", "Kontrolní otázka"]
-    assert result[2][0][4] == "Nahrazena"
-    assert result[2][1][4] == "Aktivní · úspěch"
-    assert "4.00" in result[0] and "1.50 GB" in result[0]
+    assert len(result[2]) == 1 and result[2][0][4] == "Aktivní"
+    assert runtime["api"].apply_rome_edit.call_count == 1
+    assert "Rome" in result[0] and "skóre" not in result[0]
+    runtime["probing"].score_target.assert_not_called()
     assert actions.reset()[1:3] == ([], [])
     assert session.handler.weight.item() == 1
     assert session.history == []
@@ -165,11 +167,12 @@ def test_post_edit_probe_error_restores_baseline(runtime):
     runtime["probing"].generate_completion.side_effect = ["Paris", RuntimeError("probe failed")]
     runtime["probing"].score_target.return_value = 0
 
-    def edit(handler, fact):
+    def edit(handler, fact, **kwargs):
         handler.weight.add_(20)
+        return SimpleNamespace(seconds=1, peak_gb=0)
 
     runtime["api"].apply_rome_edit.side_effect = edit
-    with pytest.raises(gr.Error):
+    with pytest.raises(RuntimeError, match="probe failed"):
         WorkshopActions(session).edit("Hamlet", "Hamlet was written by", "new", "old", "", "")
     assert not session.active_edit
     assert session.handler.weight.item() == 1

@@ -55,17 +55,17 @@ def test_failed_preparation_can_retry_then_reuses_session(runtime, monkeypatch, 
     try:
         initialize, _ = button_event(demo, "Připravit model")
         session = inspect.getclosurevars(initialize).nonlocals["session"]
-        args = ("", str(path), "public", "auto", 1, 4, 15, 123)
+        args = ("", str(path), "public", "auto", 1, 4, 15, "demo", 123)
         failed = list(initialize(*args))
         assert "load failed" in str(failed[-1]) and "busy" not in str(failed[-1])
         assert session.handler is None
         succeeded = list(initialize(*args))
         assert session.handler is handler and handler._workshop_session is session
         assert session.base_weight is handler._workshop_base_weight
-        assert "Model připraven" in str(succeeded[-1])
-        assert load.call_args.kwargs["settings"].seed == 123
+        assert "Model je v GPU paměti" in str(succeeded[-1])
         list(initialize(*args))
         assert load.call_count == 2
+        assert load.call_args.kwargs["settings"].seed == 123
     finally:
         demo.close()
 
@@ -80,6 +80,57 @@ def test_gpu_units_and_missing_utilization(monkeypatch):
     shown = telemetry.gpu_usage_html()
     assert "8.00 / 16.00 GiB" in shown and "6.00 GiB" in shown and 'value="50.00"' in shown
     assert "nedostupné" in shown and "60 °C" in shown
+
+
+def test_chat_in_both_edit_tabs_shares_history_and_reset(runtime, monkeypatch):
+    ui = import_module("src.workshop.workshop_ui")
+    runtime["session"].handler._layer = 5
+    seen = []
+
+    def chat(self, message, history, system, tokens, **kwargs):
+        seen.append(list(history))
+        return "", history + [{"role": "user", "content": message}, {"role": "assistant", "content": "Rome"}], "ready"
+
+    monkeypatch.setattr(ui.WorkshopActions, "chat", chat)
+    demo, _, _ = ui.build_workshop_ui(runtime["session"].handler)
+    try:
+        sends = [c for c in demo.config["components"] if c["props"].get("value") == "Odeslat zprávu"]
+        events = [next(d for d in demo.config["dependencies"] if [c["id"], "click"] in [list(t) for t in d["targets"]])
+                  for c in sends]
+        first = list(demo.fns[events[0]["id"]].fn("Where?", "neutral", 64))[-1]
+        second = list(demo.fns[events[1]["id"]].fn("Again?", "neutral", 64))[-1]
+        assert first[1] == first[3] and second[1] == second[3]
+        assert seen[0] == [] and seen[1] == first[1]
+        invalidated = list(button_event(demo, "Obnovit původní model · všechny záložky")[0]())[0]
+        bots = [c["id"] for c in demo.config["components"] if c["type"] == "chatbot"]
+        assert all(value == [] for component, value in invalidated.items() if component._id in bots)
+    finally:
+        demo.close()
+
+
+def test_reopening_ui_before_model_finishes_uses_same_session(runtime, monkeypatch, tmp_path):
+    ui = import_module("src.workshop.workshop_ui")
+    handler = runtime["session"].handler
+    handler.cfg.model = ModelSettings()
+    handler._workshop_base_weight = handler.weight.clone()
+    handler.dtype = torch.float32
+    loader = Mock(return_value=handler)
+    monkeypatch.setattr(ui, "load_model", loader)
+    path = tmp_path / "cov.pt"
+    path.write_bytes(b"matrix")
+    first, _, _ = ui.build_workshop_ui()
+    second, _, _ = ui.build_workshop_ui()
+    try:
+        assert first._model_session is second._model_session
+        args = ("", str(path), "public", "bf16", 1, 4, 15)
+        list(button_event(first, "Připravit model")[0](*args))
+        updates = list(button_event(second, "Připravit model")[0](*args))
+        assert loader.call_count == 1
+        assert second._model_session.handler is handler
+        assert any(value.get("interactive") is True for value in updates[-1].values() if isinstance(value, dict))
+    finally:
+        first.close()
+        second.close()
 
 
 def test_notebook_link_preserves_existing_input_and_replaces_it_when_supplied(monkeypatch, tmp_path):
@@ -113,7 +164,7 @@ def test_notebook_link_preserves_existing_input_and_replaces_it_when_supplied(mo
         monkeypatch.setattr(ui, "ensure_covariance", covariance)
         monkeypatch.setattr(ui, "load_model", Mock(side_effect=RuntimeError("stop before GPU loading")))
         initialize, _ = button_event(reopened, "Připravit model")
-        list(initialize("", None, "public", "bf16", 1, 4, 25, 42))
+        list(initialize("", None, "public", "bf16", 1, 4, 25, "demo", 42))
         assert covariance.call_count == 1
         assert covariance.call_args.args[1] == entered
         assert covariance.call_args.kwargs == {"mode": "public", "manual_upload": False}
@@ -123,29 +174,3 @@ def test_notebook_link_preserves_existing_input_and_replaces_it_when_supplied(mo
         assert field(replacement)["props"]["value"] == new_link
     finally:
         app._demo.close()
-
-
-def test_chat_in_both_edit_tabs_shares_history_and_reset(runtime, monkeypatch):
-    ui = import_module("src.workshop.workshop_ui")
-    runtime["session"].handler._layer = 5
-    seen = []
-
-    def chat(self, message, history, system, tokens, **kwargs):
-        seen.append(list(history))
-        return "", history + [{"role": "user", "content": message}, {"role": "assistant", "content": "Rome"}], "ready"
-
-    monkeypatch.setattr(ui.WorkshopActions, "chat", chat)
-    demo, _, _ = ui.build_workshop_ui(runtime["session"].handler)
-    try:
-        sends = [c for c in demo.config["components"] if c["props"].get("value") == "Odeslat zprávu"]
-        events = [next(d for d in demo.config["dependencies"] if [c["id"], "click"] in [list(t) for t in d["targets"]])
-                  for c in sends]
-        first = list(demo.fns[events[0]["id"]].fn("Where?", "neutral", 64))[-1]
-        second = list(demo.fns[events[1]["id"]].fn("Again?", "neutral", 64))[-1]
-        assert first[1] == first[3] and second[1] == second[3]
-        assert seen[0] == [] and seen[1] == first[1]
-        invalidated = list(button_event(demo, "Obnovit původní model · všechny záložky")[0]())[0]
-        bots = [c["id"] for c in demo.config["components"] if c["type"] == "chatbot"]
-        assert all(value == [] for component, value in invalidated.items() if component._id in bots)
-    finally:
-        demo.close()

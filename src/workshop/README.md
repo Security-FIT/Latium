@@ -27,8 +27,9 @@ Odkaz lze upravit i přímo v Gradio před načtením modelu. Při přípravě s
 ID použije stažená matice, jiné ID vyvolá nové stažení. Již načtený model se otevřením
 panelu znovu nenačítá; pro jinou kovarianci po načtení restartujte runtime.
 
-Každá editace začíná obnovou původní projekce; editace se nevrství. Nové otevření
-rozhraní zachová načtený model a aktivní edit. Editace a reset vymažou historii chatu.
+Nová editace začíná obnovou původní projekce; editace se nevrství. Stejný připravený
+fakt se použije z paměti bez další optimalizace. Nové otevření rozhraní zachová načtený
+model a aktivní edit. Změna vah a reset vymažou historii chatu.
 
 ## Vlastní edit
 
@@ -57,8 +58,8 @@ Kontroly ověřují navazující fakta a nesouvisející znalost před i po edit
 
 Vyhodnocení rozlišuje neúspěšný přímý edit, neověřené výchozí znalosti či kontroly
 a selhání přenosu při úspěšném přímém editu. Textové porovnání používá celou
-stručnou odpověď; delší vysvětlení posuďte ručně v tabulce. Log-skóre kandidátů
-je samostatné měření, nikoli automatické hodnocení generované odpovědi.
+stručnou odpověď; delší vysvětlení posuďte ručně ve výsledcích. Lekce vyhodnocuje
+skutečné odpovědi a znovu používá již připravenou editaci i hotová měření.
 
 **Selhání není zaručené.** Některé otázky mohou po editaci správně generalizovat.
 Řádek s rozkladem použije město skutečně vygenerované v prvním kroku; jeho úspěch

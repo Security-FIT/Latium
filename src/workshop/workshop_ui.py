@@ -17,13 +17,13 @@ from .covariance import (
     ensure_covariance,
     validate_covariance_download,
 )
-from .diagnostics import DiagnosticActions, _trace_heatmap
+from .diagnostics import DiagnosticActions, _trace_rainbow
 from .gram import RomeLayerLocalizer, detect_from_profiles
 from .lessons import (
-    MULTIHOP_HEADERS,
     MULTIHOP_SCENARIOS,
     MultiHopActions,
     scenario_description,
+    scenario_for_fact,
 )
 from .model import ModelSettings, gpu_memory_summary, validate_model_settings
 from .presentation import compact
@@ -31,7 +31,9 @@ from .presets import DEFAULT_PRESET, WORKSHOP_CANARIES, WORKSHOP_PRESETS
 from .probing import generate_completion, score_target
 from .prompts import render_chat, render_prompt
 from .rome import apply_rome_edit, gather_k, insert_kv
-from .session import ModelSession, load_model, session_for
+from .results import render_result_rows
+from .session import load_model, runtime_session, session_for
+from .operations import stream_operation
 from .setup import Environment
 from .source_panel import source_panel
 from .telemetry import gpu_usage_html
@@ -45,8 +47,6 @@ TAB_LABELS = (
     "4 · ROME: vlastní fakt a chat", "5 · GRAM: detekce editace",
 )
 RESULT_TABS = ("trace", "prepared", "multihop", "custom", "gram")
-HISTORY_HEADERS = ["#", "Entita", "Původně", "Nově", "Výsledek", "Čas (s)", "Špička GPU (GB)"]
-COMPARISON_HEADERS = ["Typ", "Otázka", "Před editací", "Po editaci", "Změna"]
 ROME_SOURCES = [
     ("ROME · celý krok editace", apply_rome_edit),
     ("ROME · klíč k", gather_k),
@@ -70,16 +70,17 @@ class WorkshopCoordinator:
         self.conversation = []
         self.revision = 0
         self.last_system_prompt = None
+        self.last_fact = session.active_fact
 
     def current_state(self):
         if self.session.handler is None:
             return "**Rozhraní je připravené.** Model zatím není načtený; použijte tlačítko „Připravit model“."
-        state = "aktivní ROME editace" if self.session.active_edit else "původní model"
-        return (
-            f"**Společný stav modelu · revize {self.revision}: {state}.** "
-            "Všech pět záložek používá tuto session. Výsledky platí pro revizi, při které vznikly; "
-            "každá editace či reset je vymaže ve všech záložkách a vyčistí chat."
-        )
+        if self.session.active_fact:
+            fact = self.session.active_fact
+            return f"Model je v GPU paměti · **{compact(fact[1])}: {compact(fact[3].strip())} → {compact(fact[2].strip())}** · stejná editace platí ve všech záložkách."
+        if self.session.active_edit:
+            return "Model je v GPU paměti · je aktivní vlastní editace."
+        return "Model je v GPU paměti · původní znalosti. Obnova faktu znovu nenačítá model."
 
     def histories(self):
         rows = self.actions.history_rows()
@@ -91,55 +92,82 @@ class WorkshopCoordinator:
         result = {"chatbot": [], "chat_input": "", "prepared_chatbot": [], "prepared_chat_input": "",
                   "trace_plot": None, "gram_plot": None}
         for tab in RESULT_TABS:
-            result[f"{tab}_summary"] = (
-                f"**Výsledek zneplatněn · revize {self.revision}.** "
-                "Probíhá změna společného modelu. Měření v této záložce spusťte znovu."
-            )
+            result[f"{tab}_summary"] = ""
             result[f"{tab}_rows"] = []
         result.update(self.histories())
-        result["current_state"] = f"**Revize {self.revision} · probíhá změna společného modelu…**"
+        result["current_state"] = self.current_state()
         result["system_status"] = model_status("Provádím operaci a ověřuji aktuální model…", "busy")
         return result
 
     def mutate(self, tab, *inputs, progress=gr.Progress()):
-        """Yield full invalidation before work, including on validation/probe errors."""
-        values = self.invalidate()
-        yield values.copy()
+        """Keep progress visible; invalidate other lessons only if weights change."""
+        values = {}
+        changing = False
+        initial_key = self.session._active_key
         try:
             self.ensure_ready()
-            if tab == "reset":
-                summary, rows, _, status, _ = self.actions.reset()
-                for name in RESULT_TABS:
-                    values[f"{name}_summary"] = summary + "\n\nMěření spusťte znovu."
-                    values[f"{name}_rows"] = rows
-            elif tab == "multihop":
-                summary, rows, status = self.multihop.run(*inputs, progress=progress)
-                values.update(multihop_summary=summary + f"\n\nRevize modelu: **{self.revision}**.", multihop_rows=rows)
+            if tab == "multihop":
+                scenario = MULTIHOP_SCENARIOS[inputs[0]]
+                if self.session.active_edit and scenario_for_fact(self.session.active_fact) != inputs[0]:
+                    raise ValueError("Vyberte scénář odpovídající aktivní editaci ze záložky 2.")
+                changing = not self.session.active_edit
+            elif tab == "reset":
+                changing = self.session.active_edit
             else:
-                summary, rows, _, status, _ = self.actions.edit(*inputs, progress=progress)
-                values.update({f"{tab}_summary": summary + f"\n\nRevize modelu: **{self.revision}**.", f"{tab}_rows": rows})
-            values["system_status"] = status
+                from .facts import workshop_fact
+                fact, _ = workshop_fact(*inputs[:4])
+                changing = not self.session.matches(fact)
+            if changing:
+                values = self.invalidate()
+            yield values | {"system_status": model_status("Připravuji odpovědi…", "busy")}
+
+            def execute(report):
+                if tab == "reset":
+                    return self.actions.reset()
+                if tab == "multihop":
+                    return self.multihop.run(*inputs, progress=report)
+                return self.actions.edit(*inputs, progress=report)
+
+            for state, result, done in stream_operation(execute, "Pracuji s aktuálním modelem…"):
+                yield {"system_status": state}
+                if done:
+                    if tab == "reset":
+                        summary, rows, _, status, _ = result
+                        for name in RESULT_TABS:
+                            values[f"{name}_summary"], values[f"{name}_rows"] = summary, rows
+                    elif tab == "multihop":
+                        summary, rows, status = result
+                        values.update(multihop_summary=summary, multihop_rows=rows)
+                    else:
+                        summary, rows, _, status, _ = result
+                        values.update({f"{tab}_summary": summary, f"{tab}_rows": rows})
+                    values["system_status"] = state + status
         except Exception as exc:
             LOGGER.exception("Workshop operation failed")
+            if not changing and self.session._active_key != initial_key:
+                values.update(self.invalidate())
             error = f"### Operace se nepodařila\n\n{compact(str(exc))}\n\n{self.current_state()}"
             if tab != "reset":
                 values[f"{tab}_summary"] = error
             values["system_status"] = model_status(f"Operace se nepodařila: {exc}", "warn")
-        for name in RESULT_TABS:
-            if name != tab and tab != "reset":
-                values[f"{name}_summary"] = (
-                    f"**Výsledek zneplatněn · revize {self.revision}.** "
-                    "Společný model se mohl změnit. Spusťte měření znovu."
-                )
         values.update(self.histories())
         values["current_state"] = self.current_state()
+        scenario_key = scenario_for_fact(self.session.active_fact)
+        if scenario_key:
+            values["multihop_scenario"] = scenario_key
+        if self.session.active_fact:
+            self.last_fact = self.session.active_fact
+        if self.last_fact:
+            fact = self.last_fact
+            values.update(trace_subject_input=fact[1], trace_prompt_input=fact[0].format(fact[1]),
+                          trace_target_input=fact[2 if self.session.active_edit else 3].strip())
         yield values
 
     def inspect(self, tab, *inputs, progress=gr.Progress()):
         self.ensure_ready()
         summary, rows, _, status = self.actions.inspect(*inputs, progress=progress)
         return {
-            f"{tab}_summary": summary + f"\n\nRevize modelu: **{self.revision}**.",
+            f"{tab}_summary": summary,
             f"{tab}_rows": rows, "system_status": status, **self.histories(),
         }
 
@@ -182,17 +210,11 @@ def _fact_form(default):
 
 
 def _fact_results(components, tab):
-    components[f"{tab}_summary"] = gr.Markdown("Zatím nebyla spuštěna kontrola ani editace.")
-    components[f"{tab}_rows"] = gr.Dataframe(
-        headers=COMPARISON_HEADERS, datatype=["str"] * 5, value=[], interactive=False,
-        wrap=True, column_widths=[100, 280, 180, 180, 80], label="Odpovědi před a po editaci",
-    )
+    components[f"{tab}_summary"] = gr.Markdown("Zatím nebyla spuštěna kontrola ani editace.", elem_classes=["workshop-summary"])
+    components[f"{tab}_rows"] = gr.HTML(render_result_rows(f"{tab}_rows", []), elem_id=f"{tab}-results")
     with gr.Accordion("Historie editací společné session", open=False):
         gr.Markdown("Aktivní je nejvýše poslední editace. Historie zahrnuje i ostatní lekce; reset ji smaže.")
-        components[f"{tab}_history"] = gr.Dataframe(
-            headers=HISTORY_HEADERS, datatype=["number", "str", "str", "str", "str", "number", "number"],
-            value=[], interactive=False, wrap=True,
-        )
+        components[f"{tab}_history"] = gr.HTML(render_result_rows(f"{tab}_history", []), elem_id=f"{tab}-history")
 
 
 def _workshop_chat_form(components, prefix, handler, shared_system, shared_tokens):
@@ -218,7 +240,8 @@ def _loaded_configuration(handler):
 
 
 def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_drive_url=None):
-    session = session_for(handler) if handler is not None else ModelSession(None, None)
+    session = session_for(handler) if handler is not None else runtime_session()
+    handler = session.handler
     coordinator = getattr(session, "_coordinator", None)
     if coordinator is None:
         coordinator = WorkshopCoordinator(session)
@@ -239,17 +262,16 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
           Změníme jeden fakt a potom ověříme odpovědi i případné vedlejší změny.</p>
           <p class="demo-cta">↓ Níže si vyzkoušíte vlastní změnu</p>
         </section>""")
-        components["current_state"] = gr.Markdown(coordinator.current_state())
+        components["current_state"] = gr.Markdown(coordinator.current_state(), elem_classes=["workshop-state"], height="auto", max_height=None)
         components["system_status"] = gr.HTML(model_status(
-            f"Model je připraven · {gpu_memory_summary()}" if handler is not None else "Čekám na přípravu modelu."))
+            f"Model je připraven · {gpu_memory_summary()}" if handler is not None else "Čekám na přípravu modelu."),
+            elem_id="workshop-operation-status", autoscroll=False, max_height=None)
         gpu_panel = gr.HTML(gpu_usage_html())
         gpu_timer = gr.Timer(2)
         gpu_timer.tick(gpu_usage_html, outputs=gpu_panel, queue=False, show_progress="hidden")
         with gr.Accordion("Příprava modelu · Qwen3.5-4B", open=handler is None) as preparation:
             with gr.Row():
-                drive_url = gr.Textbox(value=demo._covariance_drive_url, label="Google Drive odkaz na kovarianci",
-                                      info="Předvyplněno z notebooku. Nový odkaz nahradí původní; prázdné pole zachová poslední odkaz.",
-                                      scale=2, interactive=handler is None)
+                drive_url = gr.Textbox(value=demo._covariance_drive_url, label="Google Drive odkaz na kovarianci", info="Předvyplněno z notebooku. Nový odkaz nahradí původní; prázdné pole zachová poslední odkaz.", scale=2, interactive=handler is None)
                 with gr.Column(scale=1, min_width=220):
                     upload = gr.UploadButton("Nahrát vlastní kovarianci (.pt)", file_types=[".pt"], type="filepath", interactive=handler is None)
                     clear_upload = gr.Button("Zrušit výběr souboru · použít Drive", size="sm", interactive=handler is None)
@@ -260,21 +282,23 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                     download_mode = gr.Dropdown(["auto", "public", "authenticated"], value="auto", label="Stažení z Drive", interactive=handler is None)
                     precision = gr.Dropdown(["auto", "bf16", "fp16", "fp32"], value="bf16", label="Přesnost modelu", interactive=handler is None)
                 with gr.Row():
-                    v_batch = gr.Slider(1, 8, value=1, step=1, label="ROME micro-batch v", interactive=handler is None)
-                    k_batch = gr.Slider(1, 16, value=4, step=1, label="ROME micro-batch k", interactive=handler is None)
-                    epochs = gr.Slider(2, 40, value=25, step=1, label="ROME iterace", interactive=handler is None)
+                    v_batch = gr.Slider(1, 8, value=getattr(handler.cfg.model, "v_batch_size", 1) if handler else 1, step=1, label="ROME micro-batch v")
+                    k_batch = gr.Slider(1, 16, value=getattr(handler.cfg.model, "k_batch_size", 4) if handler else 4, step=1, label="ROME micro-batch k")
+                    epochs = gr.Slider(2, 40, value=getattr(handler, "epochs", 15) if handler else 15, step=1, label="ROME iterace")
                     edit_seed = gr.Number(value=getattr(handler.cfg, "seed", 42) if handler is not None else seed,
                                           precision=0, minimum=0, maximum=2**32 - 1,
                                           label="Seed modelu a ROME", interactive=handler is None)
+                profile = gr.Dropdown([("Rychlá ukázka · 8 šablon", "demo"), ("Plný experiment · 20 šablon", "full")],
+                                      value="full" if handler and getattr(handler.cfg.model, "v_N", 8) > 8 else "demo", label="Režim ukázky")
+                profile.change(lambda value: gr.update(value=15 if value == "demo" else 25), inputs=profile,
+                               outputs=epochs, queue=False, show_progress="hidden")
                 gr.Markdown("bf16 odpovídá konfiguraci Latium main i původnímu checkpointu. Auto také zachová bf16; "
                             "T4 ho počítá pomaleji bez nativních BF16 tensor cores. FP16 je ruční experimentální volba. "
                             "Delta a optimizer jsou vždy fp32, attention eager; kovariance patří vrstvě 5.")
-                gr.Markdown("Seed se nastaví při načtení a znovu před každou ROME editací. "
-                            "Odpovědi používají greedy dekódování. Pro srovnání zachovejte také stejný commit, "
-                            "balíčky, GPU a výpočetní nastavení; seed nezaručuje shodu mezi různým hardwarem.")
+                gr.Markdown("Nastavení ROME lze měnit i po načtení; použije se při další editaci bez nového stahování modelu.")
             initialize_button = gr.Button("Připravit model", variant="primary", interactive=handler is None)
             with gr.Accordion("Načtená konfigurace", open=False):
-                actual_config = gr.JSON(label="Skutečná načtená konfigurace", value=_loaded_configuration(handler), visible=handler is not None)
+                actual_config = gr.JSON(label="Model v paměti a nastavení další editace", value=_loaded_configuration(handler), visible=handler is not None)
         reset_button = gr.Button("Obnovit původní model · všechny záložky", variant="secondary", interactive=handler is not None)
         with gr.Accordion("Společná nastavení obou chatů", open=False):
             shared_system = gr.Textbox(value=default_system_prompt(handler), label="Systémová instrukce", lines=2)
@@ -288,35 +312,38 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                         gr.Markdown(
                             "### Kde model zpracovává tento fakt?\n\n"
                             "Poškodíme reprezentaci entity a po vrstvách obnovíme čisté aktivace. "
-                            "Barevná mapa ukáže, kde se pravděpodobnost cílové odpovědi obnovuje. "
+                            "Duhové sloupce ukážou, kde se pravděpodobnost cílové odpovědi obnovuje. "
                             "Měříme aktuální model; pro čistý základ použijte tlačítko obnovy nahoře."
                         )
-                        with gr.Accordion("Jak číst mapu a co znamená kandidátní vrstva?", open=False):
-                            gr.Markdown("Červená zvyšuje a modrá snižuje pravděpodobnost prvního tokenu cíle. "
-                                        "Řádky jsou párové vzorky šumu, sloupce okna vrstev. "
+                        with gr.Accordion("Jak číst rainbow graf a co znamená kandidátní vrstva?", open=False):
+                            gr.Markdown("Každá vrstva má vlastní barvu. Výška sloupce je průměrný nepřímý efekt (IE) "
+                                        "přes párové vzorky šumu; nula je beze změny, záporná hodnota snížení pravděpodobnosti cíle. "
+                                        "Jde o obnovu oken MLP na posledním tokenu entity. "
                                         "Jeden prompt poskytuje průzkumnou oblast, nikoli důkaz nejlepší ROME vrstvy. "
                                         "Editace zůstává na vrstvě 5; její změna vyžaduje odpovídající kovarianci.")
                         trace_subject = gr.Textbox(value=default[0], label="Entita pro trasování")
                         trace_prompt = gr.Textbox(value=default[1], label="Prompt pro trasování")
                         trace_target = gr.Textbox(value=default[3], label="Sledovaná odpověď")
+                        components.update(trace_subject_input=trace_subject, trace_prompt_input=trace_prompt, trace_target_input=trace_target)
                         with gr.Accordion("Parametry trasování", open=False):
                             window = gr.Slider(1, 9, value=3, step=2, label="Velikost okna vrstev (lichá)")
                             samples = gr.Slider(1, 20, value=3, step=1, label="Počet vzorků šumu")
                             noise = gr.Slider(0, 10, value=3, step=0.1, label="Násobek šumu")
                             seed = gr.Number(value=42, precision=0, label="Seed")
+                            trace_facts = gr.Slider(1, 5, value=3, step=1, label="Počet faktů · 1 rychle, více stabilnější profil")
+                            auto_noise = gr.Checkbox(value=True, label="Automaticky zvolit sílu poškození")
+                        gr.Markdown("Výchozí graf shrnuje 3 fakta, každé se 3 vzorky šumu. Více faktů stabilizuje profil, ale vyžaduje více výpočtů.")
                         trace_button = gr.Button("Najít kandidátní vrstvu", variant="primary", interactive=handler is not None)
-                        components["trace_summary"] = gr.Markdown("Trasování zatím nebylo spuštěno.")
-                        components["trace_rows"] = gr.Dataframe(
-                            headers=["Střed vrstvy", "Začátek okna", "Konec okna (mimo)", "Čistá p", "Poškozená p", "Obnovená p", "IE", "Relativní obnovení"],
-                            value=[], interactive=False, wrap=True, label="Měření trasování",
-                        )
-                        components["trace_plot"] = gr.Plot(label="Mapa kauzálního obnovení")
                     source_panel([
                         ("Workshop · trasování", diagnostics.trace),
-                        ("Barevná mapa kauzálního obnovení", _trace_heatmap),
+                        ("Rainbow graf kauzálního obnovení", _trace_rainbow),
                         ("Obnovení aktivací", restore_hook),
                         ("Poškození reprezentace", corrupt_hook),
                     ])
+                components["trace_summary"] = gr.Markdown("Trasování zatím nebylo spuštěno.", elem_classes=["workshop-summary"])
+                components["trace_plot"] = gr.Plot(label="Rainbow graf kauzálního obnovení")
+                with gr.Accordion("Podrobné naměřené hodnoty", open=False):
+                    components["trace_rows"] = gr.HTML(render_result_rows("trace_rows", []), elem_id="trace-results")
             with gr.Tab(TAB_LABELS[1]):
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
@@ -347,11 +374,11 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                                 with gr.Row():
                                     prepared_inspect = gr.Button("Ověřit současný stav", variant="secondary", interactive=handler is not None)
                                     prepared_edit = gr.Button("Provést připravenou editaci", variant="primary", interactive=handler is not None)
-                                _fact_results(components, "prepared")
                             with gr.Column(scale=6):
                                 prepared_send, prepared_clear, prepared_system, prepared_tokens = _workshop_chat_form(
                                     components, "prepared_", handler, shared_system, shared_tokens)
                     source_panel(ROME_SOURCES + [("Workshop · editace a ověření", coordinator.actions.edit)])
+                _fact_results(components, "prepared")
             with gr.Tab(TAB_LABELS[2]):
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
@@ -369,22 +396,20 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             "bitovou shodu na různém hardware."
                         )
                         scenario = gr.Dropdown(
-                            choices=[(item.preset, key) for key, item in MULTIHOP_SCENARIOS.items()],
+                            choices=[(item.chain, key) for key, item in MULTIHOP_SCENARIOS.items()],
                             value="eiffel_rome", label="Vícekrokový scénář",
                         )
+                        components["multihop_scenario"] = scenario
                         description = gr.Markdown(scenario_description("eiffel_rome"))
-                        multihop_button = gr.Button("Jedna editace + přímé, vícekrokové a kontrolní otázky", variant="primary", interactive=handler is not None)
-                        components["multihop_summary"] = gr.Markdown("Vícekrokové měření zatím nebylo spuštěno.")
-                        components["multihop_rows"] = gr.Dataframe(
-                            headers=MULTIHOP_HEADERS, datatype=["str"] * 6 + ["number"] * 6,
-                            value=[], interactive=False, wrap=True, label="Celé odpovědi a změny log-skóre",
-                        )
+                        multihop_button = gr.Button("Ověřit vícekrokové otázky · použít existující editaci", variant="primary", interactive=handler is not None)
                     source_panel([
                         ("Workshop · vícekroková lekce", MultiHopActions),
                         ("Generování odpovědi", generate_completion),
                         ("Log-skóre cíle", score_target),
                         ("Renderování promptu", render_prompt),
                     ])
+                components["multihop_summary"] = gr.Markdown("Vícekrokové měření zatím nebylo spuštěno.", elem_classes=["workshop-summary"])
+                components["multihop_rows"] = gr.HTML(render_result_rows("multihop_rows", []), elem_id="multihop-results")
             with gr.Tab(TAB_LABELS[3]):
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
@@ -410,7 +435,6 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                                 with gr.Row():
                                     custom_inspect = gr.Button("Ověřit vlastní fakt", variant="secondary", interactive=handler is not None)
                                     custom_edit = gr.Button("Provést vlastní editaci", variant="primary", interactive=handler is not None)
-                                _fact_results(components, "custom")
                             with gr.Column(scale=6):
                                 send, clear, system_prompt, max_tokens = _workshop_chat_form(
                                     components, "", handler, shared_system, shared_tokens)
@@ -418,6 +442,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                         ("Workshop · chat nad společnou session", generate_reply),
                         ("Chatový prompt", render_chat),
                     ])
+                _fact_results(components, "custom")
             with gr.Tab(TAB_LABELS[4]):
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
@@ -429,26 +454,25 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             "GRAM neobnovuje model a neprovádí další editaci."
                         )
                         gram_button = gr.Button("Spustit detekci GRAM na aktuálním modelu", variant="primary", interactive=handler is not None)
-                        components["gram_summary"] = gr.Markdown("Detekce GRAM zatím nebyla spuštěna.")
-                        components["gram_rows"] = gr.Dataframe(
-                            headers=["Vrstva", "Aktuální skóre", "Skóre základu", "Pořadí", "Známá aktivní editace"],
-                            value=[], interactive=False, wrap=True, label="Skóre a pořadí vrstev",
-                        )
-                        components["gram_plot"] = gr.Plot(label="Strukturální skóre GRAM")
                     source_panel([
                         ("GRAM · RomeLayerLocalizer", RomeLayerLocalizer),
                         ("GRAM · společné jádro", detect_from_profiles),
                         ("Workshop · měření GRAM", diagnostics.gram),
                     ])
+                components["gram_summary"] = gr.Markdown("Detekce GRAM zatím nebyla spuštěna.", elem_classes=["workshop-summary"])
+                components["gram_plot"] = gr.Plot(label="Strukturální skóre GRAM")
+                with gr.Accordion("Podrobné hodnoty detekce", open=False):
+                    components["gram_rows"] = gr.HTML(render_result_rows("gram_rows", []), elem_id="gram-results")
 
         gr.HTML(original_brandbar())
 
         def as_components(values):
-            return {components[key]: value for key, value in values.items()}
+            return {components[key]: render_result_rows(key, value) for key, value in values.items()}
 
         operation_buttons = [reset_button, trace_button, prepared_inspect, prepared_edit, multihop_button,
                              custom_inspect, custom_edit, gram_button, send, prepared_send]
-        preparation_controls = [drive_url, upload, clear_upload, download_mode, precision, v_batch, k_batch, epochs, edit_seed]
+        preparation_controls = [drive_url, upload, clear_upload, download_mode, precision, v_batch, k_batch, epochs, profile, edit_seed]
+        edit_controls = [v_batch, k_batch, epochs, profile]
         upload.upload(lambda path: gr.update(label=f"Vybráno: {Path(path).name}"), inputs=upload, outputs=upload,
                       queue=False, show_progress="hidden")
         clear_upload.click(lambda: gr.update(value=None, label="Nahrát vlastní kovarianci (.pt)"), outputs=upload,
@@ -460,46 +484,77 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
 
         drive_url.input(remember_drive_url, inputs=drive_url, queue=False, show_progress="hidden")
 
-        def initialize(url, uploaded, mode, dtype, value_batch, key_batch, iterations, seed_value):
-            if session.handler is not None:
-                yield {initialize_button: gr.update(interactive=False)}
-                return
+        def ready_values():
+            loaded = session.handler
+            values = {button: gr.update(interactive=True) for button in operation_buttons}
+            values.update({control: gr.update(interactive=False) for control in preparation_controls})
+            values.update({control: gr.update(interactive=True) for control in edit_controls})
+            values.update({initialize_button: gr.update(interactive=False),
+                           components["system_status"]: model_status("Model je již v GPU paměti · znovu se nenačítá."),
+                           components["current_state"]: coordinator.current_state(),
+                           actual_config: gr.update(value=_loaded_configuration(loaded), visible=True),
+                           preparation: gr.update(open=False)})
+            return values
+
+        def initialize(url, uploaded, mode, dtype, value_batch, key_batch, iterations, selected_profile="demo", seed_value=42):
             status_component = components["system_status"]
+            if session.handler is not None:
+                yield ready_values()
+                return
             yield {**{control: gr.update(interactive=False) for control in preparation_controls},
                    initialize_button: gr.update(interactive=False),
                    status_component: model_status("Připravuji kovarianci…", "busy")}
             try:
                 remember_drive_url(url)
-                settings = ModelSettings(dtype=dtype, v_batch_size=int(value_batch), k_batch_size=int(key_batch),
-                                         epochs=int(iterations), seed=seed_value)
-                validate_model_settings(settings)
-                env = environment or Environment.discover()
-                if uploaded:
-                    covariance = Path(uploaded)
-                    validate_covariance_download(covariance)
-                else:
-                    covariance = ensure_covariance(env, demo._covariance_drive_url, mode=mode, manual_upload=False)
-                yield {status_component: model_status("Načítám Qwen3.5-4B na GPU; může to několik minut trvat…", "busy")}
-                loaded = load_model(covariance, settings=settings)
-                session.handler = loaded
-                session.base_weight = loaded._workshop_base_weight
-                loaded._workshop_session = session
-                values = {button: gr.update(interactive=True) for button in operation_buttons}
-                values.update({initialize_button: gr.update(interactive=False),
-                               status_component: model_status(f"Model připraven · {gpu_memory_summary()}"),
-                               components["current_state"]: coordinator.current_state(),
-                               actual_config: gr.update(value=_loaded_configuration(loaded), visible=True),
-                               preparation: gr.update(open=False)})
-                yield values
+                def prepare(report):
+                    with session.initialization_lock:
+                        if session.handler is not None:
+                            return session.handler
+                        count = 8 if selected_profile == "demo" else 20
+                        settings = ModelSettings(dtype=dtype, v_batch_size=int(value_batch), k_batch_size=int(key_batch),
+                                                 epochs=int(iterations), v_N=count, k_N=count, seed=seed_value)
+                        validate_model_settings(settings)
+                        env = environment or Environment.discover()
+                        report(.02, desc="Připravuji kovarianci…")
+                        if uploaded:
+                            covariance = Path(uploaded)
+                            validate_covariance_download(covariance)
+                        else:
+                            covariance = ensure_covariance(env, demo._covariance_drive_url, mode=mode, manual_upload=False)
+                        report(.1, desc="Načítám Qwen do GPU · pouze při první přípravě")
+                        loaded = load_model(covariance, settings=settings)
+                        session.handler, session.base_weight = loaded, loaded._workshop_base_weight
+                        loaded._workshop_session = session
+                        report(1., desc="Model je v GPU paměti")
+                        return loaded
+                for state, loaded, done in stream_operation(prepare, "Připravuji model…"):
+                    yield {status_component: state}
+                    if done:
+                        values = ready_values()
+                        values[status_component] = state
+                        yield values
             except Exception as exc:
                 LOGGER.exception("Model preparation failed")
                 yield {**{control: gr.update(interactive=True) for control in preparation_controls},
                        initialize_button: gr.update(interactive=True),
                        status_component: model_status(f"Příprava selhala: {exc}", "warn")}
 
-        initialize_button.click(initialize, inputs=[drive_url, upload, download_mode, precision, v_batch, k_batch, epochs, edit_seed],
+        initialize_button.click(initialize, inputs=[drive_url, upload, download_mode, precision, v_batch, k_batch, epochs, profile, edit_seed],
                                 outputs=[initialize_button, components["system_status"], components["current_state"], actual_config, preparation,
                                          *operation_buttons, *preparation_controls], **model_event)
+
+        def configure_edit(selected_profile, iterations, value_batch, key_batch):
+            if session.handler is None:
+                return gr.skip(), gr.skip()
+            with session.lock:
+                config = session.handler.cfg.model
+                config.v_N = config.k_N = 8 if selected_profile == "demo" else 20
+                config.epochs = session.handler.epochs = int(iterations)
+                config.v_batch_size, config.k_batch_size = int(value_batch), int(key_batch)
+            return model_status("Nastavení další editace připraveno · model zůstává v paměti."), _loaded_configuration(session.handler)
+        for control in edit_controls:
+            control.change(configure_edit, inputs=[profile, epochs, v_batch, k_batch],
+                           outputs=[components["system_status"], actual_config], **model_event)
 
         def bind_edit(button, tab, inputs):
             def callback(*args, progress=gr.Progress()):
@@ -511,7 +566,11 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
             def callback(*args, progress=gr.Progress()):
                 yield as_components({"system_status": model_status("Měřím současné odpovědi…", "busy")})
                 try:
-                    yield as_components(coordinator.inspect(tab, *args, progress=progress))
+                    for state, result, done in stream_operation(lambda report: coordinator.inspect(tab, *args, progress=report), "Ověřuji aktuální odpovědi…"):
+                        yield as_components({"system_status": state})
+                        if done:
+                            result["system_status"] = state
+                            yield as_components(result)
                 except Exception as exc:
                     yield as_components({"system_status": model_status(f"Měření selhalo: {exc}", "warn")})
             outputs = [components[key] for key in (f"{tab}_summary", f"{tab}_rows", "system_status", "prepared_history", "custom_history")]
@@ -530,26 +589,30 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
             yield gr.skip(), gr.skip(), gr.skip(), model_status("Provádím kauzální trasování…", "busy")
             try:
                 coordinator.ensure_ready()
-                summary, rows, figure = diagnostics.trace(*args, progress=progress)
-                yield (summary + f"\n\nRevize modelu: **{coordinator.revision}**.", rows, figure,
-                       model_status("Trasování dokončeno." if figure is not None else "Trasování selhalo; viz zpráva.",
-                                    "ok" if figure is not None else "warn"))
+                for state, result, done in stream_operation(lambda report: diagnostics.trace_suite(*args, progress=report), "Měřím rainbow profil…"):
+                    if done:
+                        summary, rows, figure = result
+                        yield summary, render_result_rows("trace_rows", rows), figure, state
+                    else:
+                        yield gr.skip(), gr.skip(), gr.skip(), state
             except Exception as exc:
-                yield f"Trasování selhalo: {compact(str(exc))}", [], None, model_status(f"Trasování selhalo: {exc}", "warn")
+                yield f"Trasování selhalo: {compact(str(exc))}", render_result_rows("trace_rows", []), None, model_status(f"Trasování selhalo: {exc}", "warn")
 
         def gram(progress=gr.Progress()):
             yield gr.skip(), gr.skip(), gr.skip(), model_status("Počítám GRAM profily…", "busy")
             try:
                 coordinator.ensure_ready()
-                summary, rows, figure = diagnostics.gram(progress=progress)
-                yield (summary + f"\n\nRevize modelu: **{coordinator.revision}**.", rows, figure,
-                       model_status("GRAM dokončen." if figure is not None else "GRAM selhal; viz zpráva.",
-                                    "ok" if figure is not None else "warn"))
+                for state, result, done in stream_operation(lambda report: diagnostics.gram(progress=report), "Počítám GRAM…"):
+                    if done:
+                        summary, rows, figure = result
+                        yield summary, render_result_rows("gram_rows", rows), figure, state
+                    else:
+                        yield gr.skip(), gr.skip(), gr.skip(), state
             except Exception as exc:
-                yield f"GRAM selhal: {compact(str(exc))}", [], None, model_status(f"GRAM selhal: {exc}", "warn")
+                yield f"GRAM selhal: {compact(str(exc))}", render_result_rows("gram_rows", []), None, model_status(f"GRAM selhal: {exc}", "warn")
 
         trace_button.click(
-            trace, inputs=[trace_subject, trace_prompt, trace_target, window, samples, noise, seed],
+            trace, inputs=[trace_subject, trace_prompt, trace_target, window, samples, noise, seed, trace_facts, auto_noise],
             outputs=[components[f"trace_{suffix}"] for suffix in ("summary", "rows", "plot")] + [components["system_status"]], **model_event,
         )
         gram_button.click(gram, outputs=[components[f"gram_{suffix}"] for suffix in ("summary", "rows", "plot")]
@@ -561,8 +624,12 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                                                    {"role": "assistant", "content": "Připravuji odpověď…"}]
             yield "", pending, "", pending, model_status("Model připravuje odpověď…", "busy")
             try:
-                text, history, state = coordinator.chat(message, system, tokens, progress=progress)
-                yield text, history, text, history, state
+                for state, result, done in stream_operation(lambda report: coordinator.chat(message, system, tokens, progress=report), "Model připravuje odpověď…"):
+                    if done:
+                        text, history, _ = result
+                        yield text, history, text, history, state
+                    else:
+                        yield gr.skip(), gr.skip(), gr.skip(), gr.skip(), state
             except Exception as exc:
                 yield "", coordinator.conversation, "", coordinator.conversation, model_status(f"Chat selhal: {exc}", "warn")
 

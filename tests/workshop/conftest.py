@@ -11,6 +11,14 @@ import pytest
 from src.workshop.session import ModelSession
 
 
+@pytest.fixture(autouse=True)
+def isolated_model_registry(monkeypatch):
+    from src.workshop import session
+    monkeypatch.setattr(session, "_runtime_session", None)
+    monkeypatch.setattr(session, "_loaded_handler", None)
+    monkeypatch.setattr(session, "_loaded_key", None)
+
+
 @pytest.fixture
 def runtime(monkeypatch, chat_tokenizer):
     torch = pytest.importorskip("torch")
@@ -32,6 +40,7 @@ def runtime(monkeypatch, chat_tokenizer):
     session = ModelSession(handler, handler.weight.clone(),
                            restore=lambda h, weight: setattr(h, "weight", weight), flush=Mock())
     handler._workshop_session = session
+    monkeypatch.setattr("src.workshop.session.snapshot_layer", lambda h: h.weight.detach().clone())
     modules["session"] = session
     return modules
 

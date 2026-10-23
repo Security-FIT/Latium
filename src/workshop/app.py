@@ -11,8 +11,9 @@ def launch_workshop(*, work_dir=None, share=None, seed=42, covariance_drive_url=
     from src.workshop.launch import launch_ui
     from src.workshop.setup import Environment
     from src.workshop.workshop_ui import build_workshop_ui
+    from src.workshop.session import runtime_session
 
-    handler = getattr(getattr(_demo, "_model_session", None), "handler", None)
+    handler = getattr(getattr(_demo, "_model_session", None), "handler", None) or runtime_session().handler
     # Empty notebook input keeps the latest link entered in the existing panel.
     source = (covariance_drive_url or "").strip() or getattr(_demo, "_covariance_drive_url", None)
     if _demo is not None:

@@ -60,3 +60,4 @@ revision: "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
 force_hub: true
 low_cpu_mem_usage: true
 device_map: {"": "cuda:0"}
+select_logits_before_head: true

@@ -1,13 +1,14 @@
-"""Single-edit, baseline-controlled lessons about multi-hop generalization."""
+"""Reuse the current rank-one edit when demonstrating two actual question hops."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import gradio as gr
 
+from .answers import observed_verdict
 from .facts import workshop_fact
 from .presets import WORKSHOP_PRESETS
-from .probing import generate_completion, score_target
+from .probing import generate_completion
 from .rome import apply_rome_edit
 from .workshop import model_status
 
@@ -24,11 +25,16 @@ class LessonProbe:
 class MultiHopScenario:
     preset: str
     chain: str
-    probes: tuple[LessonProbe, ...]
+    probes: tuple
 
     @property
     def edit_prompt(self):
         return self.probes[0].question
+
+    @property
+    def fact(self):
+        subject, _, new, old = WORKSHOP_PRESETS[self.preset][:4]
+        return workshop_fact(subject, self.edit_prompt, new, old)[0]
 
 
 MULTIHOP_SCENARIOS = {
@@ -64,29 +70,42 @@ MULTIHOP_SCENARIOS = {
     ),
 }
 
-MULTIHOP_HEADERS = [
-    "Typ", "Otázka", "Očekávání před", "Očekávání po", "Odpověď před", "Odpověď po",
-    "Log-skóre/token původní před", "Log-skóre/token původní po", "Δ původní",
-    "Log-skóre/token nové před", "Log-skóre/token nové po", "Δ nové",
-]
+MULTIHOP_HEADERS = ["Typ", "Otázka", "Očekávání před", "Očekávání po", "Odpověď před", "Odpověď po"]
+KNOWN_COUNTRIES = {"paris": "France", "rome": "Italy", "berlin": "Germany", "london": "United Kingdom",
+                   "prague": "Czech Republic", "tokyo": "Japan", "new york": "United States"}
+
+
+def scenario_for_fact(fact):
+    if not fact:
+        return None
+    for key, scenario in MULTIHOP_SCENARIOS.items():
+        candidate = scenario.fact
+        if fact[1].strip().casefold().removeprefix("the ") == candidate[1].strip().casefold().removeprefix("the "):
+            return key
+    return None
 
 
 def scenario_description(key):
     scenario = MULTIHOP_SCENARIOS[key]
-    subject, _, new, old, _ = WORKSHOP_PRESETS[scenario.preset]
-    return (
-        f"### {scenario.preset}\n\n{scenario.chain}\n\n"
-        f"**Jediná editace:** `{scenario.edit_prompt}`: {old} → {new}. Entita: `{subject}`.\n\n"
-        "Očekávání jsou hypotézy pro vyhodnocení, nikoli naměřené odpovědi. "
-        "Model dostane pouze otázky v tabulce; očekávané odpovědi se do nich ani do chatu nevkládají. "
-        "Rozložená otázka použije město vygenerované modelem v prvním kroku, nikoli cílovou odpověď. "
-        "Navíc testujeme parafrázi a tři kroky památka → město → země → jazyk.\n\n"
-        "**Selhání není zaručené.** ROME může na některé navazující otázky generalizovat. "
-        "Lekce hledá případ, kdy přímý edit uspěl, ale některý důsledek se nepřenesl. "
-        "Inspirace: [MQuAKE](https://aclanthology.org/2023.emnlp-main.971/); "
-        "tyto ukázky nejsou reprodukcí jeho benchmarku.\n\n"
-        + "\n".join(f"- **{probe.category}:** {probe.question}" for probe in scenario.probes)
-    )
+    return (f"### {scenario.chain}\n\nPoužijeme stejnou editaci jako v připraveném příkladu. "
+            "Model nejprve odpoví město; potom se zeptáme na zemi tohoto skutečně vygenerovaného města. "
+            "Samostatný dvojkrokový dotaz a otázka na jazyk ukážou přenos bez našeho rozkladu. "
+            "Selhání není zaručené; inspirací je [MQuAKE](https://aclanthology.org/2023.emnlp-main.971/).")
+
+
+def observed_city(answer):
+    text = answer.strip().splitlines()[0] if answer.strip() else ""
+    text = text.replace("’", "'")
+    match = re.search(r"(?:\b(?:located|situated|stands)|^it(?:'s| is)|^the .{1,60} is)\s+(?:in|at)\s+(.+)", text, re.IGNORECASE)
+    if match:
+        text = match.group(1)
+    text = re.sub(r"^(?:the city is|the answer is|city:|answer:)\s*", "", text, flags=re.IGNORECASE)
+    text = text.split(",")[0].split("(")[0].split(" — ")[0].strip('"\' .*`')
+    if ". " in text and not re.match(r"^(?:St|Mt|Ft)\. ", text):
+        text = text.split(". ", 1)[0]
+    if not text or len(text) > 60 or len(text.split()) > 6 or re.search(r"[?!:;{}]", text):
+        return None
+    return text
 
 
 def _answer_key(answer):
@@ -97,15 +116,15 @@ def _answer_key(answer):
 def interpret_multihop(scenario, before, after):
     """Gate generalization claims on observed direct recall and control outputs."""
     direct = scenario.probes[0]
-    if _answer_key(after[0][0]) != _answer_key(direct.after):
+    if _answer_key(after[0]) != _answer_key(direct.after):
         return ("**Přímý edit se v generované odpovědi nepotvrdil.** "
                 "Z tohoto běhu nelze vyvozovat selhání vícekrokové generalizace; "
                 "nejprve ověřte přímou otázku a nastavení ROME.")
-    if _answer_key(before[0][0]) != _answer_key(direct.before):
+    if _answer_key(before[0]) != _answer_key(direct.before):
         return ("**Výchozí přímý fakt nebyl ověřen.** "
                 "Model nyní odpovídá novým cílem, ale chybí spolehlivý základ pro porovnání.")
     controls_ok = all(
-        _answer_key(old[0]) == _answer_key(probe.before) and _answer_key(new[0]) == _answer_key(probe.after)
+        _answer_key(old) == _answer_key(probe.before) and _answer_key(new) == _answer_key(probe.after)
         for probe, old, new in zip(scenario.probes, before, after) if probe.before == probe.after
     )
     if not controls_ok:
@@ -115,9 +134,9 @@ def interpret_multihop(scenario, before, after):
     for probe, old, new in zip(scenario.probes[1:], before[1:], after[1:]):
         if probe.before == probe.after:
             continue
-        if _answer_key(old[0]) != _answer_key(probe.before):
+        if _answer_key(old) != _answer_key(probe.before):
             verdict = "nelze vyhodnotit přenos: výchozí odpověď neodpovídá očekávání"
-        elif _answer_key(new[0]) == _answer_key(probe.after):
+        elif _answer_key(new) == _answer_key(probe.after):
             verdict = "přenos uspěl"
         else:
             verdict = "selhání přenosu při úspěšném přímém editu"
@@ -129,98 +148,70 @@ class MultiHopActions:
     def __init__(self, session):
         self.session = session
 
-    def _scores(self, question, probe):
-        handler = self.session.handler
-        return {target: score_target(handler, question, target) / max(
-            1, len(handler.tokenizer.encode(target.strip(), add_special_tokens=False)))
-            for target in dict.fromkeys((probe.before, probe.after))}
-
-    def _measure(self, scenario):
-        measurements = []
-        for probe in scenario.probes:
-            # raw=True retains all sentences/lines; generation still has a token budget.
-            answer = generate_completion(self.session.handler, probe.question, max_new_tokens=192, raw=True)
-            scores = self._scores(probe.question, probe)
-            measurements.append((answer, scores))
-        return measurements
-
-    def _decomposed(self, city_answer, probe):
-        # Do not replace this with the known edit target: this is an observed hop.
-        city = city_answer.strip().strip('"\' .')
-        if not city or len(city) > 60 or len(city.split()) > 6 or re.search(r"[\n?!:;{}]", city):
-            return ("Druhý krok nebyl položen: první odpověď není stručný název města.",
-                    "Nelze spolehlivě rozložit odpověď modelu.", {})
+    def _measure(self, scenario, progress):
+        answers = []
+        for index, probe in enumerate(scenario.probes):
+            total = len(scenario.probes) + 1
+            progress(index / total, desc=f"Vícekroková ukázka · hotovo {index}/{total}")
+            answers.append(self.session.answer(probe.question, generate_completion))
+            progress((index + 1) / total, desc=f"Vícekroková ukázka · hotovo {index + 1}/{total}")
+        city = observed_city(answers[0])
+        if city is None:
+            return answers, ("Druhý krok nelze sestavit z odpovědi modelu.", "První odpověď není stručný název města.")
         question = f"In which country is {city} located? Answer with the country name only."
-        answer = generate_completion(self.session.handler, question, max_new_tokens=192, raw=True)
-        return question, answer, self._scores(question, probe)
+        progress(len(scenario.probes) / (len(scenario.probes) + 1), desc=f"Vícekroková ukázka · zjišťuji zemi města {city}")
+        return answers, (question, self.session.answer(question, generate_completion))
 
-    def run(self, scenario_key, progress=gr.Progress()):  # noqa: B008 - Gradio injects this default.
-        """Return (Czech markdown, MULTIHOP_HEADERS rows, status HTML).
-
-        Exceptions propagate after ModelSession has restored the baseline. The UI
-        invalidates every previous result and conversation before invoking us.
-        """
+    def run(self, scenario_key, progress=gr.Progress()):
         if scenario_key not in MULTIHOP_SCENARIOS:
-            raise ValueError("Vyberte připravený vícekrokový scénář.")
+            raise ValueError("Vyberte připravený scénář.")
         scenario = MULTIHOP_SCENARIOS[scenario_key]
-        subject, _, target_new, target_old = WORKSHOP_PRESETS[scenario.preset][:4]
-        fact, _ = workshop_fact(subject, scenario.edit_prompt, target_new, target_old)
-        progress(0.02, desc="Obnovuji základní model…")
-        with self.session.editing():
-            for previous in self.session.history:
-                previous[4] = "Nahrazena"
-            progress(0.10, desc="Měřím přímé, vícekrokové a kontrolní odpovědi před editací…")
-            before = self._measure(scenario)
-            before_chain = self._decomposed(before[0][0], scenario.probes[1])
-            progress(0.35, desc="Provádím jedinou ROME editaci vztahu entita → město…")
-            result = apply_rome_edit(self.session.handler, fact)
-            progress(0.80, desc="Opakuji stejné otázky po editaci…")
-            after = self._measure(scenario)
-            after_chain = self._decomposed(after[0][0], scenario.probes[1])
-            rows = []
-            for probe, (before_answer, before_scores), (after_answer, after_scores) in zip(
-                scenario.probes, before, after
-            ):
-                scores = []
-                for target in (probe.before, probe.after):
-                    scores.extend((before_scores[target], after_scores[target], after_scores[target] - before_scores[target]))
-                rows.append([
-                    probe.category, probe.question, probe.before, probe.after,
-                    before_answer, after_answer, *scores,
-                ])
-            chained_scores = []
-            for target in (scenario.probes[1].before, scenario.probes[1].after):
-                old_score, new_score = before_chain[2].get(target), after_chain[2].get(target)
-                chained_scores.extend((old_score, new_score, None if old_score is None or new_score is None else new_score - old_score))
-            rows.append(["Dva kroky · rozklad odpovědi", f"Před: {before_chain[0]}\nPo: {after_chain[0]}",
-                         scenario.probes[1].before, scenario.probes[1].after, before_chain[1], after_chain[1], *chained_scores])
-            preferences = [
-                scores[probe.after] > scores[probe.before]
-                for probe, (_, scores) in zip(scenario.probes[:2], after[:2])
-            ]
-            self.session.history.append([
-                len(self.session.history) + 1, fact[1], fact[3].strip(), fact[2].strip(),
-                "Aktivní · přímé skóre vyšší" if preferences[0] else "Aktivní · neověřeno",
-                round(result.seconds, 1), round(result.peak_gb, 2),
-            ])
-        direct, multihop = ("ano" if preferred else "ne" for preferred in preferences)
-        summary = (
-            f"### Jedna editace, dva až tři kroky uvažování\n\n{scenario.chain}\n\n"
-            f"{interpret_multihop(scenario, before, after)}\n\n"
-            "Textové hodnocení porovnává celou stručnou odpověď s očekáváním, bez ohledu na velikost "
-            "písmen a koncovou tečku. Delší vysvětlení zkontrolujte ručně v tabulce.\n\n"
-            f"Nový kandidát má po editaci vyšší průměrné log-skóre/token než původní: **přímá otázka: {direct}; "
-            f"vícekroková otázka: {multihop}**. To je porovnání skóre, nikoli automatické hodnocení textu.\n\n"
-            "**Přímý úspěch ≠ vícekroková generalizace.** Porovnejte skutečné celé odpovědi před a po "
-            "editaci i skóre obou kandidátů. Druhý krok (město → země) jsme needitovali; kontrolní "
-            "otázky by měly zůstat stejné. Pokud model neznal výchozí vztah, interpretujte výsledek opatrně.\n\n"
-            "Log-skóre je průměr na token (vyšší je lepší), aby délka názvů zemí nezkreslovala porovnání. "
-            "Řádek „rozklad odpovědi“ je řízené spojení dvou dotazů přes skutečně vygenerované město; "
-            "není důkazem samostatné vícekrokové generalizace. Prázdné skóre znamená neplatný první krok. "
-            "Úspěšná samostatná otázka je platný výsledek; tato lekce neslibuje, že ROME vždy selže. "
-            "Δ je skóre po minus před. U kontrol je původní i nový kandidát totožný. "
-            "Odpovědi nejsou kráceny na první větu; rozpočet generování je 192 tokenů.\n\n"
-            f"Čas editace: **{result.seconds:.1f} s**, špička GPU: **{result.peak_gb:.2f} GB**."
-        )
-        progress(1.0, desc="Vícekrokové měření je hotové.")
-        return summary, rows, model_status(f"Aktivní editace: {scenario.preset} · vícekroková lekce")
+        def validate_active():
+            active = scenario_for_fact(self.session.active_fact)
+            if self.session.active_edit and active != scenario_key:
+                raise ValueError("Aktivní editace nepatří tomuto scénáři. Vyberte odpovídající scénář nebo připravte fakt v záložce 2.")
+        with self.session.transaction(validate=validate_active):
+            if self.session.active_fact:
+                active_fact = self.session.active_fact
+                old, new = active_fact[3].strip(), active_fact[2].strip()
+                countries = (KNOWN_COUNTRIES.get(old.casefold(), "—"), KNOWN_COUNTRIES.get(new.casefold(), "—"))
+                languages = {"France": "French", "Italy": "Italian", "Germany": "German", "United Kingdom": "English",
+                             "Czech Republic": "Czech", "Japan": "Japanese", "United States": "English"}
+                country_old, country_new = countries
+                language_old, language_new = (languages.get(country, "—") for country in countries)
+                probes = list(scenario.probes)
+                probes[0] = replace(probes[0], question=active_fact[0].format(active_fact[1]), before=old, after=new)
+                for index in (1, 5):
+                    probes[index] = replace(probes[index], before=country_old, after=country_new)
+                probes[6] = replace(probes[6], before=language_old, after=language_new)
+                for index, city, country in ((2, new, country_new), (3, old, country_old)):
+                    probes[index] = replace(probes[index], question=f"In which country is {city} located? Answer with the country name only.",
+                                            before=country, after=country)
+                for index, country, language in ((7, country_new, language_new), (8, country_old, language_old)):
+                    probes[index] = replace(probes[index], question=f"What is the official language of {country}? Answer with the language name only.",
+                                            before=language, after=language)
+                scenario = replace(scenario, probes=tuple(probes))
+            with self.session.baseline():
+                before, before_chain = self._measure(scenario, lambda f, **kw: progress(.2 * f, **kw))
+            fact = self.session.active_fact or scenario.fact
+            if self.session.active_edit:
+                result, reused = self.session.installed_result(), True
+                progress(.8, desc="Používám aktuální editaci · bez další optimalizace")
+            else:
+                result, reused = self.session.install(fact, apply_rome_edit, lambda f, **kw: progress(.2 + .6 * f, **kw))
+            after, after_chain = self._measure(scenario, lambda f, **kw: progress(.8 + .2 * f, **kw))
+            if not reused:
+                self.session.history.append([len(self.session.history) + 1, fact[1], fact[3].strip(), fact[2].strip(),
+                                             "Aktivní", round(result.seconds, 1), round(result.peak_gb, 2)])
+        direct, implicit = scenario.probes[:2]
+        rows = [[probe.category, probe.question, probe.before, probe.after, old, new]
+                for probe, old, new in zip(scenario.probes, before, after)]
+        rows.insert(1, ["2. krok · země z odpovědi modelu", f"Před: {before_chain[0]}\nPo: {after_chain[0]}",
+                        implicit.before, implicit.after, before_chain[1], after_chain[1]])
+        summary = ("### Jedna editace, dva až tři kroky uvažování\n\n"
+                   + ("Používám již připravenou editaci; ROME se neopakovalo. " if reused else "Editace je připravena i v ostatních záložkách. ")
+                   + observed_verdict(after[0], direct.after) + "\n\n" + interpret_multihop(scenario, before, after)
+                   + "\n\nDruhý krok vychází ze skutečné první odpovědi. Samostatný dotaz může zůstat u původní znalosti; "
+                     "jeho odpověď nezaměňujeme za výsledek rozložené dvojice.")
+        progress(1., desc="Vícekrokové odpovědi připraveny")
+        return summary, rows, model_status("Vícekroková ukázka hotová · bez opakování editace" if reused else "Scénář připraven.")

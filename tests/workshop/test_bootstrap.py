@@ -62,7 +62,7 @@ def test_failed_preparation_can_retry_then_reuses_session(runtime, monkeypatch, 
         succeeded = list(initialize(*args))
         assert session.handler is handler and handler._workshop_session is session
         assert session.base_weight is handler._workshop_base_weight
-        assert "Model připraven" in str(succeeded[-1])
+        assert "Model je v GPU paměti" in str(succeeded[-1])
         list(initialize(*args))
         assert load.call_count == 2
     finally:
@@ -105,3 +105,28 @@ def test_chat_in_both_edit_tabs_shares_history_and_reset(runtime, monkeypatch):
         assert all(value == [] for component, value in invalidated.items() if component._id in bots)
     finally:
         demo.close()
+
+
+def test_reopening_ui_before_model_finishes_uses_same_session(runtime, monkeypatch, tmp_path):
+    ui = import_module("src.workshop.workshop_ui")
+    handler = runtime["session"].handler
+    handler.cfg.model = ModelSettings()
+    handler._workshop_base_weight = handler.weight.clone()
+    handler.dtype = torch.float32
+    loader = Mock(return_value=handler)
+    monkeypatch.setattr(ui, "load_model", loader)
+    path = tmp_path / "cov.pt"
+    path.write_bytes(b"matrix")
+    first, _, _ = ui.build_workshop_ui()
+    second, _, _ = ui.build_workshop_ui()
+    try:
+        assert first._model_session is second._model_session
+        args = ("", str(path), "public", "bf16", 1, 4, 15)
+        list(button_event(first, "Připravit model")[0](*args))
+        updates = list(button_event(second, "Připravit model")[0](*args))
+        assert loader.call_count == 1
+        assert second._model_session.handler is handler
+        assert any(value.get("interactive") is True for value in updates[-1].values() if isinstance(value, dict))
+    finally:
+        first.close()
+        second.close()

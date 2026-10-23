@@ -12,8 +12,10 @@ Errors return an explanatory markdown message, empty rows, and no figure.
 
 import logging as _diagnostic_logging
 from contextlib import contextmanager as _diagnostic_contextmanager
+from contextlib import nullcontext
 
 import gradio as _diagnostic_gr
+from src.rome.batching import forward_selected_logits
 
 from .gram import GramProfileCache, detect_from_profiles, profile_weights
 from .prompts import _user_span, prepare_chat_batch, tokenize_prompts
@@ -26,7 +28,6 @@ from .tracing import (
     embedding_std,
     make_noise_samples,
     module_dict,
-    probability,
     resolve_mlp_output_name,
     restore_hook,
     temporary_hooks,
@@ -38,6 +39,14 @@ TRACE_COLUMNS = [
     "layer", "window_start", "window_end", "clean", "corrupt", "restored", "IE", "recovery",
 ]
 GRAM_COLUMNS = ["layer", "current_score", "baseline_score", "rank", "is_edit_layer"]
+
+
+def _trace_probabilities(handler, inputs, target):
+    import torch
+    positions = torch.full((inputs["input_ids"].shape[0], 1), inputs["input_ids"].shape[1] - 1, dtype=torch.long)
+    logits, mapped = forward_selected_logits(handler, inputs, positions)
+    rows = torch.arange(logits.shape[0], device=logits.device)
+    return logits[rows, mapped[:, 0]].float().softmax(-1)[:, target].detach().cpu().numpy()
 
 
 @_diagnostic_contextmanager
@@ -164,12 +173,14 @@ class DiagnosticActions:
             self._diagnostic_base_layer = int(session.handler._layer) if session.handler is not None else 5
 
     def trace(self, subject, prompt, target, window_size=1, noise_samples=3,
-              noise_multiplier=3.0, seed=42, progress=_DIAGNOSTIC_PROGRESS):
+              noise_multiplier=3.0, seed=42, progress=_DIAGNOSTIC_PROGRESS,
+              noise_batch_size=1, auto_noise=False, _locked=False):
         """Trace the installed model; no layer selection or weight restoration."""
         import math
 
         import numpy as np
 
+        self._last_measurement = None
         try:
             subject, prompt, target = ((value or "").strip() for value in (subject, prompt, target))
             if not subject or not prompt or not target:
@@ -186,7 +197,7 @@ class DiagnosticActions:
             if not math.isfinite(noise_multiplier) or noise_multiplier < 0 or not 0 <= seed < 2**63:
                 raise ValueError("Násobek šumu musí být konečný a nezáporný; seed v rozsahu [0, 2**63)")
             progress(0.02, desc="Čekám na aktuální model…")
-            with self.session.lock:
+            with nullcontext() if _locked else self.session.lock:
                 handler = self.session.handler
                 active_edit = bool(self.session.active_edit)
                 layers = int(handler.num_of_layers)
@@ -202,39 +213,53 @@ class DiagnosticActions:
                 )
                 with _diagnostic_inference(handler.model, seed):
                     progress(0.06, desc="Měřím čistou pravděpodobnost a ukládám výstupy MLP…")
-                    clean = probability(handler.model(**inputs, use_cache=False), target_ids[0])
+                    clean = float(_trace_probabilities(handler, inputs, target_ids[0])[0])
                     cache = clean_cache(handler, modules, names, inputs, span.last_position)
+                    if not hasattr(handler, "_trace_embedding_std"):
+                        progress(.065, desc="Připravuji statistiku embeddingů · pouze při prvním měření")
+                        handler._trace_embedding_std = embedding_std(handler, modules)
+                    std = handler._trace_embedding_std
+                    batch_size = max(1, min(int(noise_batch_size), noise_samples))
+
+                    def corrupted_probabilities(samples, window=None):
+                        values = []
+                        for start in range(0, noise_samples, batch_size):
+                            end = min(start + batch_size, noise_samples)
+                            repeated = {key: value.repeat(end - start, 1) for key, value in inputs.items()}
+                            hooks = [(embedding, corrupt_hook(span.positions, samples[start:end]))]
+                            if window is not None:
+                                hooks.extend((modules[names[layer]], restore_hook(
+                                    span.last_position, cache[layer], inputs["input_ids"].shape[1])) for layer in window.layers)
+                            with temporary_hooks(hooks):
+                                values.extend(_trace_probabilities(handler, repeated, target_ids[0]).tolist())
+                        return np.asarray(values)
+
+                    if auto_noise:
+                        threshold = max(1e-6, min(.03, .25 * clean))
+                        best_drop, best_scale = -float("inf"), noise_multiplier
+                        for index, scale in enumerate((3., 6., 10., 20.)):
+                            progress(.07 + .05 * index / 4, desc=f"Volím sílu šumu {index + 1}/4")
+                            trial = make_noise_samples(num_samples=noise_samples, subject_length=len(span.positions),
+                                hidden_size=embedding.weight.shape[-1], noise_std=std * scale,
+                                device=embedding.weight.device, dtype=embedding.weight.dtype, seed=seed + 777777)
+                            drop = clean - float(corrupted_probabilities(trial).mean())
+                            if drop > best_drop:
+                                best_drop, best_scale = drop, scale
+                            if drop >= threshold:
+                                break
+                        noise_multiplier = best_scale
                     noise = make_noise_samples(
                         num_samples=noise_samples, subject_length=len(span.positions),
                         hidden_size=embedding.weight.shape[-1],
-                        noise_std=embedding_std(handler, modules) * noise_multiplier,
+                        noise_std=std * noise_multiplier,
                         device=embedding.weight.device, dtype=embedding.weight.dtype, seed=seed,
                     )
-                    # One sample per forward bounds activation/logit memory on workshop GPUs.
-                    corrupt = np.empty(noise_samples)
+                    corrupt = corrupted_probabilities(noise)
                     restored = np.empty((layers, noise_samples))
-                    sequence_length = inputs["input_ids"].shape[1]
-                    total = (layers + 1) * noise_samples
-                    completed = 0
-                    for window_index, window in enumerate([None, *windows]):
-                        for sample in range(noise_samples):
-                            hooks = [(embedding, corrupt_hook(span.positions, noise[sample:sample + 1]))]
-                            if window is not None:
-                                hooks.extend((modules[names[layer]], restore_hook(
-                                    span.last_position, cache[layer], sequence_length,
-                                )) for layer in window.layers)
-                            with temporary_hooks(hooks):
-                                measured = probability(
-                                    handler.model(**inputs, use_cache=False), target_ids[0],
-                                )
-                            if window is None:
-                                corrupt[sample] = measured
-                            else:
-                                restored[window_index - 1, sample] = measured
-                            completed += 1
-                            progress(0.15 + 0.8 * completed / total,
-                                     desc="Měřím poškozený základ…" if window is None else
-                                     f"Obnovuji okno MLP {window.start}:{window.end}…")
+                    for window_index, window in enumerate(windows):
+                        restored[window_index] = corrupted_probabilities(noise, window)
+                        progress(.15 + .8 * (window_index + 1) / len(windows),
+                                 desc=f"Obnovuji vrstvy {window_index + 1}/{len(windows)}")
                 token_text = handler.tokenizer.decode([target_ids[0]])
             if not np.isfinite(clean) or not np.isfinite(corrupt).all() or not np.isfinite(restored).all():
                 raise ValueError("Model vrátil nekonečné nebo nedefinované pravděpodobnosti")
@@ -251,6 +276,7 @@ class DiagnosticActions:
                 rows.append([window.center, window.start, window.end, clean, mean_corrupt,
                              float(values.mean()), effect, "N/A" if undefined else effect / total_effect])
             rows.sort(key=lambda row: (-row[6], row[0]))
+            self._last_measurement = dict(rows=rows, effects=(restored - corrupt[None, :]).T)
             summary = (
                 "### Průzkumné kauzální trasování — aktuální model\n\n"
                 f"Aktivní editace při měření: **{'ano' if active_edit else 'ne'}**. "
@@ -277,6 +303,77 @@ class DiagnosticActions:
             _DIAGNOSTIC_LOGGER.exception("Workshop causal tracing failed")
             return f"### Kauzální trasování není dostupné\n\n{exc}", [], None
 
+    def trace_suite(self, subject, prompt, target, window_size=3, noise_samples=3,
+                    noise_multiplier=3., seed=42, fact_count=3, auto_noise=True, progress=_DIAGNOSTIC_PROGRESS):
+        import numpy as np
+        from .presets import WORKSHOP_PRESETS
+
+        cases = [(subject, prompt, target)]
+        def identity(entity):
+            return entity.strip().casefold().removeprefix("the ")
+        for name in ("Eiffelova věž → Řím", "Koloseum → Paříž", "Autor Hamleta → Tolkien", "Tvůrce Pythonu → Ada Lovelace"):
+            entity, question, _, original = WORKSHOP_PRESETS[name][:4]
+            if identity(entity) != identity(subject):
+                active = self.session.active_fact
+                answer = active[2].strip() if active and identity(active[1]) == identity(entity) else original
+                cases.append((entity, question, answer))
+        if subject.strip().casefold() != "japan":
+            cases.append(("Japan", "What is the capital of Japan? Answer with the city name only.", "Tokyo"))
+        cases = cases[:max(1, min(5, int(fact_count)))]
+        with self.session.lock:
+            key = (self.session._active_key, tuple(cases), window_size, noise_samples, noise_multiplier, seed, auto_noise)
+            cached = getattr(self.session, "_trace_result_cache", None)
+            if cached is not None and cached[0] == key:
+                progress(1., desc="Používám hotové měření · žádný další výpočet")
+                return cached[1]
+            measured, failures = [], []
+            case_cache = getattr(self.session, "_trace_case_cache", {})
+            self.session._trace_case_cache = case_cache
+            for index, case in enumerate(cases):
+                case_key = (self.session._active_key, case, window_size, noise_samples, noise_multiplier, seed + index, auto_noise)
+                if case_key in case_cache:
+                    measured.append(case_cache[case_key])
+                    progress((index + 1) / len(cases), desc=f"Fakt {index + 1}/{len(cases)} · hotové měření z paměti")
+                    continue
+                def report(fraction, *, desc, i=index):
+                    progress((i + fraction) / len(cases), desc=f"{desc} · fakt {i + 1}/{len(cases)}")
+                summary, _, _ = self.trace(*case, window_size, noise_samples, noise_multiplier, seed + index,
+                    progress=report, noise_batch_size=2, auto_noise=auto_noise, _locked=True)
+                if self._last_measurement is not None:
+                    measured.append(self._last_measurement)
+                    case_cache[case_key] = self._last_measurement
+                    while len(case_cache) > 30:
+                        case_cache.pop(next(iter(case_cache)))
+                else:
+                    failures.append(summary)
+            if not measured:
+                return "Měření se nepodařilo. " + " ".join(failures), [], None
+            ordered = [sorted(item["rows"], key=lambda row: row[0]) for item in measured]
+            rows = []
+            for layer in range(len(ordered[0])):
+                values = np.asarray([item[layer][3:7] for item in ordered], dtype=float).mean(0)
+                clean, corrupt, restored, effect = values
+                recovery = effect / (clean - corrupt) if abs(clean - corrupt) > 1e-8 else "N/A"
+                rows.append([layer, ordered[0][layer][1], ordered[0][layer][2], *values, recovery])
+            effects = np.concatenate([item["effects"] for item in measured], axis=0)
+            rows.sort(key=lambda row: (-row[6], row[0]))
+            figure = _trace_rainbow(rows, effects, configured_layer=self._diagnostic_base_layer)
+            count = len(measured)
+            fact_label = f"{count} " + ("fakt" if count == 1 else "fakta" if count < 5 else "faktů")
+            figure.axes[0].set_title(f"Causal tracing · rainbow graf\n{fact_label} · {noise_samples} vzorky šumu na fakt")
+            signal = max(row[6] for row in rows)
+            summary = (f"### Rainbow profil · {fact_label}\n\n"
+                       f"Každý sloupec shrnuje skutečné obnovení odpovědí přes {noise_samples} vzorky šumu na fakt. "
+                       f"Nejsilnější naměřený efekt má okno kolem vrstvy **L{rows[0][0]}**.")
+            if signal <= 1e-5:
+                summary += "\n\nSignál je slabý; z tohoto měření nelze spolehlivě vybrat vrstvu. Zkontrolujte původní odpovědi."
+            if failures:
+                summary += f"\n\n{len(failures)} fakta nebylo možné změřit."
+            result = summary, rows, figure
+            self.session._trace_result_cache = (key, result)
+            progress(1., desc="Rainbow profil je připraven")
+            return result
+
     def gram(self, progress=_DIAGNOSTIC_PROGRESS):
         """Rank real GRAM profiles from an atomic CPU snapshot of projections."""
         import torch
@@ -287,8 +384,15 @@ class DiagnosticActions:
                 handler = self.session.handler
                 if int(handler._layer) != self._diagnostic_base_layer:
                     raise ValueError("Editační vrstva se změnila; původní snapshot relace patří jiné vrstvě")
-                active_layer = self._diagnostic_base_layer if self.session.active_edit else None
                 modules = dict(handler.model.named_modules())
+                edited_weight = modules[handler._layer_name_template.format(handler._layer)].weight
+                cache_key = (self.session._active_key, self.session.active_edit,
+                             edited_weight._version if self.session.active_fact is None else None)
+                previous = getattr(self.session, "_gram_result_cache", None)
+                if previous is not None and previous[0] == cache_key:
+                    progress(1., desc="Používám hotovou detekci GRAM z paměti")
+                    return previous[1]
+                active_layer = self._diagnostic_base_layer if self.session.active_edit else None
                 current = {}
                 for layer in range(int(handler.num_of_layers)):
                     weight = modules[handler._layer_name_template.format(layer)].weight
@@ -320,20 +424,14 @@ class DiagnosticActions:
                     for rank, layer in enumerate(ranked, 1)]
             rows.extend([layer, "N/A", "N/A", "N/A", layer == active_layer]
                         for layer in profile["excluded_layers"])
-            summary = (
-                "### GRAM — pořadí aktuálních projekcí\n\n"
-                f"Nejvýše hodnocený kandidát: **vrstva {ranked[0]}**; "
-                f"kandidát původního modelu: **vrstva {base_result['localization']['selected_layer']}**. "
-                f"Známá aktivní editace při měření: **{active_layer if active_layer is not None else 'žádná'}**.\n\n"
-                "Skóre počítá původní jádro `gram-localization` (`diagonal_relative`): porovnává normalizované "
-                "Gramovy matice se sousedními vrstvami. Pořadí vznikne i pro needitovaný model; skóre "
-                "nejsou kalibrovanou binární detekcí editace. Základ používá uloženou původní váhu "
-                "editační vrstvy a nezměněné projekce ostatních vrstev. "
-                f"Vynechané vrstvy podle pravidel jádra (hranice/ořez): {profile['excluded_layers']}; uvedeny jako N/A. "
-                "Výsledky popisují snapshot pořízený po získání zámku společné relace."
-            )
+            summary = (f"### Možná stopa editace · vrstva L{ranked[0]}\n\n"
+                       f"Na původním modelu byla nejvýše vrstva L{base_result['localization']['selected_layer']}. "
+                       f"Známá aktivní editace: {active_layer if active_layer is not None else 'žádná'}.\n\n"
+                       "Pořadí vznikne i pro needitovaný model; samo o sobě není důkazem editace.")
             progress(1.0, desc="Pořadí GRAM je hotové.")
-            return summary, rows, _diagnostic_gram_curve(rows)
+            result = summary, rows, _diagnostic_gram_curve(rows)
+            self.session._gram_result_cache = (cache_key, result)
+            return result
         except Exception as exc:
             _DIAGNOSTIC_LOGGER.exception("Workshop GRAM failed")
             return f"### GRAM není dostupný\n\n{exc}", [], None

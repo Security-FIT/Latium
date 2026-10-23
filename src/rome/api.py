@@ -188,6 +188,7 @@ def apply_rome_edit(
     v_batch_size: int | None = None,
     k_batch_size: int | None = None,
     verbose: bool = True,
+    on_progress=None,
 ) -> EditResult:
     """Run the full k -> v -> insert cycle for one fact.
 
@@ -223,14 +224,20 @@ def apply_rome_edit(
 
     k = delta = None
     try:
+        if on_progress:
+            on_progress(.02, desc="ROME · hledám klíč editovaného faktu…")
         k = gather_k(handler, fact_tuple=fact, N=k_N, batch_size=k_batch_size)
         flush_gpu_memory()
         delta = optimize_v(handler, fact_tuple=fact, N_prompts=v_N, N_optim_steps=epochs,
-                           verbose=verbose, batch_size=v_batch_size)
+                           verbose=verbose, batch_size=v_batch_size,
+                           on_step=(lambda step, total: on_progress(.1 + .85 * step / total,
+                                     desc=f"ROME · iterace {step}/{total}")) if on_progress else None)
         if delta is None:
             raise RuntimeError(f"optimize_v failed for subject {fact[1]!r}")
-        delta_norm, k_norm = float(delta.norm()), float(k.norm())
+        delta_norm, k_norm = float(delta.detach().norm()), float(k.detach().norm())
         insert_kv(handler, k, delta)
+        if on_progress:
+            on_progress(1., desc="ROME editace hotová")
     finally:
         k = delta = None
         handler.remove_hooks()

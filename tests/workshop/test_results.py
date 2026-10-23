@@ -33,14 +33,15 @@ def test_long_answers_keep_all_lines_and_literal_model_text():
     assert rows[0][2] == before  # Formatting never mutates the measurement artifact.
 
 
-def test_multihop_keeps_both_expectations_answers_and_six_scores():
+def test_multihop_keeps_answers_but_removes_research_scores():
     row = ["Dva kroky", "First question?\nSecond question?", "France", "Italy",
            "Long original answer. " * 25, "Long edited answer. " * 30,
            -1.25, -2.5, -1.25, -3.75, -0.125, 3.625]
     parsed = ParsedResults(render_multihop([row]))
     text = ''.join(parsed.text)
-    for value in row:
+    for value in row[:6]:
         assert str(value) in text
+    assert "Log-skóre" not in text and "-1.25" not in text
     assert parsed.tags.count("article") == 1 and "table" not in parsed.tags
 
 

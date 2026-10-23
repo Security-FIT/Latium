@@ -24,6 +24,7 @@ from typing import Any, Dict, Iterable, List, Sequence, Tuple
 import torch
 
 from src.rome.prompts import is_chat_mode, prepare_chat_batch, tokenize_prompts
+from src.rome.batching import forward_selected_logits
 
 LOGGER = logging.getLogger(__name__)
 
@@ -157,9 +158,9 @@ def score_target(handler, prompt: str, target: str) -> float:
             return float("-inf")
         prepared = prepare_chat_batch(handler, [prompt], target=target)
         with torch.inference_mode():
-            logits = handler.model(**{key: value.to(handler.device) for key, value in prepared.prompts.items()},
-                                   use_cache=False).logits
-            positions = prepared.prediction_positions.to(logits.device)
+            logits, positions = forward_selected_logits(
+                handler, {key: value.to(handler.device) for key, value in prepared.prompts.items()},
+                prepared.prediction_positions)
             rows = torch.arange(logits.shape[0], device=logits.device)[:, None]
             selected = logits[rows, positions].float().log_softmax(-1)
             ids = prepared.target_ids.to(logits.device)[None, :, None]

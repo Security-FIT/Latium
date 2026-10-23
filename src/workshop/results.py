@@ -57,16 +57,9 @@ def render_metric_cards(rows, headers, title):
 
 def render_multihop(rows):
     if not rows:
-        return _empty_results("Vícekrokové otázky: skutečné odpovědi a skóre")
+        return _empty_results("Vícekrokové otázky")
     cards = []
     for category, question, expected_before, expected_after, before, after, *scores in rows:
-        metric_rows = []
-        for label, target, values in (("Původní kandidát", expected_before, scores[:3]),
-                                      ("Nový kandidát", expected_after, scores[3:])):
-            fields = ''.join('<div><dt>' + name + '</dt><dd>' + _result_text(value) + '</dd></div>'
-                             for name, value in zip(("Před", "Po", "Změna Δ"), values))
-            metric_rows.append('<div class="target-metric"><h5>' + label + ': ' + _result_text(target)
-                               + '</h5><dl>' + fields + '</dl></div>')
         cards.append(
             '<article class="multihop-card"><h4>' + _result_text(category) + '</h4>'
             '<p class="result-text probe-question">' + _result_text(question) + '</p>'
@@ -74,10 +67,9 @@ def render_multihop(rows):
             + '</strong> · po: <strong>' + _result_text(expected_after) + '</strong></p>'
             '<div class="answer-pair"><section><h5>Odpověď před</h5><div class="result-text">' + _result_text(before)
             + '</div></section><section><h5>Odpověď po</h5><div class="result-text">' + _result_text(after)
-            + '</div></section></div><h5>Průměrné log-skóre na token</h5><div class="target-metrics">'
-            + ''.join(metric_rows) + '</div></article>'
+            + '</div></section></div></article>'
         )
-    return ('<section class="workshop-results"><h3>Vícekrokové otázky: skutečné odpovědi a skóre</h3>'
+    return ('<section class="workshop-results"><h3>Vícekrokové otázky</h3>'
             + ''.join(cards) + '</section>')
 
 

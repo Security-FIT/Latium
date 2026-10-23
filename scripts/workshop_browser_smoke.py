@@ -92,16 +92,30 @@ def main():
                                 "4 · ROME: vlastní fakt a chat", "5 · GRAM: detekce editace"):
                         select_tab(tab)
                         page.wait_for_timeout(100)
+                        if tab.startswith("5") and not page.locator('#gram-results').is_visible():
+                            page.get_by_text("Podrobné hodnoty detekce", exact=True).click()
                         clipped = page.evaluate("""() => [...document.querySelectorAll(
                             '.workshop-results, .workshop-results .result-text, .workshop-results dd')]
                             .filter(e => e.getBoundingClientRect().height > 0)
                             .filter(e => e.scrollWidth > e.clientWidth + 2 || e.scrollHeight > e.clientHeight + 2)
                             .map(e => ({tag: e.tagName, text: e.textContent.slice(0, 60)}))""")
                         assert not clipped, (width, tab, clipped)
+                        assert all("log-skóre" not in text.lower() for text in page.locator('.workshop-results:visible').all_text_contents())
                         assert not page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 2")
                 select_tab("3 · ROME: vícekrokové otázky")
                 page.screenshot(path=str(output / "workshop-multihop-mobile.png"), full_page=True)
                 print("Populated results: complete at desktop and mobile widths, no clipped cells.")
+                state = page.locator('#workshop-operation-status')
+                state.evaluate("""e => {
+                    const box = document.createElement('div'); box.className = 'operation-progress layout-audit-progress';
+                    box.textContent = 'Probíhá měření odpovědí. Čas 15 s. Celý tento stav musí zůstat čitelný bez vnitřního scrollování. '.repeat(3);
+                    e.appendChild(box);
+                }""")
+                assert state.evaluate('e => e.scrollHeight <= e.clientHeight + 2')
+                page.evaluate('window.scrollTo(0, 1000)')
+                page.wait_for_timeout(150)
+                assert state.bounding_box()['y'] >= 0, 'Operation status disappeared while the page scrolled'
+                page.locator('.layout-audit-progress').evaluate('e => e.remove()')
             # The real upload and error/retry path works without a GPU or a
             # network covariance fetch. No fake assistant/model response is used.
             page.set_viewport_size({"width": 1560, "height": 1050})

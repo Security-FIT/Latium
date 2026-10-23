@@ -277,7 +277,7 @@ def test_gram_real_rank_one_outlier_baseline_and_fresh_snapshot(diagnostic_sessi
     assert rows[0][0] == expected["selected_layer"] == 3
     assert rows[0][1] > rows[0][2]
     assert "Pořadí vznikne i pro needitovaný model" in summary
-    assert "nejsou kalibrovanou binární" in summary
+    assert "není důkazem" in summary
     for row in rows:
         layer, score, base_score, rank, is_edit = row
         assert is_edit == (layer == 3)
@@ -322,3 +322,25 @@ def test_gram_never_reassigns_saved_base_to_a_new_layer(diagnostic_session):
     assert "jiné vrstvě" in summary
     assert rows == [] and figure is None
     assert diagnostic_session.handler._layer == 4
+
+
+def test_noise_batching_matches_single_draw_forwards(diagnostic_session):
+    actions = DiagnosticActions(diagnostic_session)
+    _, single, _ = actions.trace("Eiffel Tower", "Where is Eiffel Tower?", "Rome", noise_samples=3,
+                                 noise_batch_size=1, progress=Mock())
+    calls = diagnostic_session.handler.model.calls
+    _, batched, _ = actions.trace("Eiffel Tower", "Where is Eiffel Tower?", "Rome", noise_samples=3,
+                                  noise_batch_size=2, progress=Mock())
+    assert diagnostic_session.handler.model.calls - calls < calls
+    np.testing.assert_allclose([r[3:7] for r in sorted(single)], [r[3:7] for r in sorted(batched)], atol=1e-8)
+
+
+def test_three_real_cases_and_repeated_trace_are_cached(diagnostic_session):
+    actions = DiagnosticActions(diagnostic_session)
+    summary, rows, figure = actions.trace_suite("The Eiffel Tower", "Where is The Eiffel Tower?", "Rome",
+                                               noise_samples=1, fact_count=3, auto_noise=False, progress=Mock())
+    assert "3 fakta" in summary and len(rows) == 7 and figure is not None
+    calls = diagnostic_session.handler.model.calls
+    again = actions.trace_suite("The Eiffel Tower", "Where is The Eiffel Tower?", "Rome",
+                                 noise_samples=1, fact_count=3, auto_noise=False, progress=Mock())
+    assert again[2] is figure and diagnostic_session.handler.model.calls == calls

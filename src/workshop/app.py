@@ -11,8 +11,9 @@ def launch_workshop(*, work_dir=None, share=None):
     from src.workshop.launch import launch_ui
     from src.workshop.setup import Environment
     from src.workshop.workshop_ui import build_workshop_ui
+    from src.workshop.session import runtime_session
 
-    handler = getattr(getattr(_demo, "_model_session", None), "handler", None)
+    handler = getattr(getattr(_demo, "_model_session", None), "handler", None) or runtime_session().handler
     if _demo is not None:
         _demo.close()
     environment = Environment(Path(work_dir).expanduser().resolve()) if work_dir else Environment.discover()

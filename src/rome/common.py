@@ -36,6 +36,7 @@ from src.rome.batching import (
     resolve_flag,
     select_batch,
     trim_padding,
+    forward_selected_logits,
 )
 from src.runtime import runtime_from_cfg
 
@@ -962,6 +963,7 @@ def optimize_v(
     prefix_range: Tuple[int, int] | list[int] | None = None,
     verbose: bool = True,
     batch_size: int | None = None,
+    on_step=None,
 ) -> torch.Tensor | None:
     """Optimise the residual ``delta`` added at the last subject token.
 
@@ -1146,14 +1148,14 @@ def optimize_v(
                     make_delta_hook(batch_subject_index, batch_len, capture_v_init=(start == 0))
                 )
                 try:
-                    outputs = handler.model(**batch_inputs, use_cache=False)
+                    logits, prediction_positions = forward_selected_logits(
+                        handler, batch_inputs, index_positions_cpu[start:end])
                 finally:
                     handler.remove_hooks()
 
-                logits = outputs.logits
                 log_probs = gather_target_log_probs(
                     logits,
-                    index_positions_cpu[start:end].to(logits.device),
+                    prediction_positions,
                     index_ids_cpu[start:end].to(logits.device),
                 )
                 batch_pred_loss = (-1 * log_probs).mean()
@@ -1166,7 +1168,7 @@ def optimize_v(
                     (batch_pred_loss * (batch_len / main_prompt_count)).backward()
                 pred_loss_total += float(batch_pred_loss.detach()) * batch_len
 
-                del outputs, logits, log_probs, batch_pred_loss, batch_inputs
+                del logits, log_probs, batch_pred_loss, batch_inputs
 
         pred_loss = pred_loss_total / main_prompt_count
 
@@ -1181,13 +1183,13 @@ def optimize_v(
                     make_delta_hook(dkl_subject_index, dkl_len, capture_v_init=False)
                 )
                 try:
-                    outputs = handler.model(**dkl_inputs, use_cache=False)
+                    logits, kl_positions = forward_selected_logits(handler, dkl_inputs, dkl_index_cpu[:, None])
                 finally:
                     handler.remove_hooks()
 
-                dkl_logits = outputs.logits[
-                    torch.arange(dkl_len, device=outputs.logits.device),
-                    dkl_index_cpu.to(outputs.logits.device),
+                dkl_logits = logits[
+                    torch.arange(dkl_len, device=logits.device),
+                    kl_positions[:, 0],
                     :,
                 ]
                 dkl_log_probs = torch.nn.functional.log_softmax(dkl_logits.float(), dim=1)
@@ -1204,7 +1206,7 @@ def optimize_v(
                     dkl.backward()
                 dkl_value = float(dkl.detach())
 
-                del outputs, dkl_logits, dkl_log_probs, dkl, dkl_inputs
+                del logits, dkl_logits, dkl_log_probs, dkl, dkl_inputs
 
         # ---- weight decay: depends only on delta and the detached v_init ----
         if v_init is None:
@@ -1225,6 +1227,8 @@ def optimize_v(
                 float(weight_decay.detach()),
                 suffix,
             )
+        if on_step is not None:
+            on_step(step + 1, N_optim_steps)
 
         if is_final:
             break

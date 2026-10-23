@@ -63,8 +63,8 @@ implementation of the editing equations or detector.
 | Checkpoint | Qwen/Qwen3.5-4B | Same, revision `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a` |
 | Edit layer | 5 | 5 |
 | Precision | bf16 | bf16, including `auto`; fp16 requires explicit selection |
-| Epochs | 25 | 25 |
-| Prefix mode | self | static, 20 prompts |
+| Epochs | 25 | UI demo 15 / full experiment 25 |
+| Prefix mode | self | static, UI demo 8 / full experiment 20 prompts |
 | k/v batch size | full prompt set | 4/1 by default in UI |
 | Covariance placement | edit device | CPU |
 | Prompt format | completion | no-thinking chat, opt-in in T4 preset |
@@ -94,16 +94,61 @@ its estimation weights match the pinned checkpoint.
 - Both chats use one system instruction and token budget; instruction changes
   clear old conversation context.
 - Direct/implicit multihop and observed-city decomposition remain separate.
-  Expected answers are never supplied to generation. Scores are normalized per
-  target token, and actual generated text remains visible.
+  Expected answers are never supplied to generation; actual generated answers
+  are visible. The presentation does not compute or display candidate log-scores.
+
+### Presentation flow, caching and performance
+
+- State/progress has no internal scroll area. Technical revision/invalidation
+  banners have been removed; the current fact stays visible above the lessons.
+- Long work runs in one serialized worker and streams a heartbeat with elapsed
+  time. Phase estimates come from completed work units, not invented download
+  percentages. Closing a stream cancels at a checkpoint and joins its worker.
+- One process-lifetime session and load lock survive app/page recreation. The
+  same model is not loaded twice even when another UI opens during preparation.
+  A Colab kernel reset still destroys GPU memory and all in-memory caches.
+- Edits cache up to two owned projection snapshots in CPU RAM. Baseline/edited
+  generated answers are keyed by exact model state, question and generation
+  options. No full model checkpoints are cached. Tab 3 reuses the installed edit
+  from tab 2, rather than restoring base and optimizing again. Cached reuse does
+  not erase tab 2's results or conversation.
+- Edit-budget controls remain usable after model preparation. Changing epochs,
+  prefix counts or microbatches does not reload weights. Cache keys include the
+  meaningful edit configuration.
+- The default demo uses 8 prefixes / 15 optimization iterations (135 main+KL
+  forwards at v-batch 1), versus 525 for 20/25. The full profile remains available.
+  This is an explicit budget/quality tradeoff, not an efficacy guarantee.
+- Qwen's supported `logits_to_keep` interface selects required hidden positions
+  before the 248320-token LM head. This avoids computing vocabulary logits for
+  every prompt token. Tests compare deltas against the full-logit reference;
+  unsupported models retain the full-logit path.
+- Ordinary verification no longer performs candidate-scoring forwards. Answers
+  use a 40-token budget with a smaller explicit default set of controls. Multihop
+  uses the same budget and reuses direct answers; it does not generate 192 tokens
+  per probe or inject the expected city into the country question.
+- Multihop always keeps the currently installed edit even when the user has
+  changed the settings for a future edit. A changed city target (for example
+  Berlin instead of the preset Rome) is preserved; expected countries for known
+  cities are display metadata only and are never inserted into generation.
+- First-call tracing embedding statistics are cached. Noise draws can share a
+  forward batch; the UI selects noise strength before measuring paired effects.
+  Default aggregation uses three distinct facts (UI range 1–5). Results cache per
+  fact/state/options, so repeating or expanding a profile reuses finished cases.
+  Weak signal is reported rather than amplified or invented. GRAM result reuse
+  also avoids repeating unchanged analysis.
+
+CPU measurements verify reduced LM-head position counts, identical optimized
+deltas, model identity, one editor call across tabs 2/3 and no extra generation
+on repeated requests. Full 4B/T4 wall-clock speed and multihop efficacy still
+require the user's GPU runtime; there is no claimed GPU speedup measurement.
 
 ### Readable results and rainbow tracing
 
 ROME comparisons sit below the form/chat row and use the full tab width.
 Read-only HTML tables preserve complete answers and line breaks; mobile layouts
 use labelled blocks instead of forcing five columns into a narrow spreadsheet.
-Multihop probes use individual cards containing both answers, expectations and all
-six score values. History, tracing and GRAM details use responsive metric cards.
+Multihop probes use individual cards containing both answers and expectations.
+History and optional tracing/GRAM details use responsive metric cards.
 All model text is escaped before insertion into HTML. Controller row formats and
 numerical calculations are unchanged.
 
@@ -126,7 +171,7 @@ The CPU suite exercises a tiny real Qwen3.5 full/linear-attention model, exact
 chat token positions, microbatch gradients, insertion/restoration, failure cleanup,
 real tracing interventions and GRAM. Optional browser audit:
 
-Validation including the responsive-results/rainbow follow-up: 206 targeted tests passed, three optional
+Validation including presentation/session/performance changes: 214 targeted tests passed, three optional
 dependency checks skipped. The separate workshop/notebook suite passed 128 tests.
 The real Qwen3.5 tokenizer passed English/Czech round-trip, no-thinking-prefill and
 subject-position checks. The Chromium audit passed desktop/mobile rendering,

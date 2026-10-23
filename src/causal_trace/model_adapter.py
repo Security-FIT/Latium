@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import inspect
 from contextlib import contextmanager
 from typing import Any, Iterable, Iterator, Sequence
 
@@ -314,8 +315,10 @@ def clean_cache(
         return hook
 
     hooks = [(modules[name], make_hook(layer)) for layer, name in module_names.items()]
+    parameters = inspect.signature(handler.model.forward).parameters
+    kwargs = {"logits_to_keep": 1} if "logits_to_keep" in parameters else {}
     with torch.inference_mode(), temporary_hooks(hooks):
-        handler.model(**inputs, use_cache=False)
+        handler.model(**inputs, use_cache=False, **kwargs)
     missing = sorted(set(module_names) - set(cache))
     if missing:
         raise RuntimeError(f"Clean MLP cache missing layers: {missing[:10]}")

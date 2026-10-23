@@ -36,3 +36,22 @@ def test_drive_download_uses_credentials_and_resource_header(tmp_path, monkeypat
     assert request.headers == {"X-Goog-Drive-Resource-Keys": "file_id/resource_key"}
     build.assert_called_once_with("drive", "v3", credentials=credentials, cache_discovery=False)
     assert "do-not-print" not in capsys.readouterr().out
+
+
+def test_unchanged_link_reuses_covariance_and_new_link_replaces_it(tmp_path, monkeypatch):
+    from src.workshop import covariance
+    from src.workshop.setup import Environment
+
+    monkeypatch.delenv("LATIUM_COV_PATH", raising=False)
+    download = Mock(side_effect=lambda file_id, path: path.write_bytes(file_id.encode()))
+    monkeypatch.setattr(covariance, "download_public", download)
+    environment = Environment(tmp_path)
+    original = "original_drive_id"
+    replacement = "replacement_drive_id"
+    path = covariance.ensure_covariance(environment, original, mode="public", manual_upload=False)
+    assert covariance.ensure_covariance(environment, original, mode="public", manual_upload=False) == path
+    assert path.read_bytes() == original.encode()
+    assert download.call_count == 1
+    assert covariance.ensure_covariance(environment, replacement, mode="public", manual_upload=False) == path
+    assert path.read_bytes() == replacement.encode()
+    assert download.call_count == 2

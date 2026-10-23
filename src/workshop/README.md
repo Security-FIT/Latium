@@ -19,6 +19,14 @@ zdrojové panely slouží k nahlédnutí do implementace.
    **Připravit model**. Pro soukromý Drive použijte přihlášení z první buňky.
 4. Zkoušejte připravené lekce nebo vlastní fakt. Všech pět záložek sdílí jeden model.
 
+Drive odkaz můžete vložit už do pole **`COVARIANCE_DRIVE_URL` v první buňce notebooku**.
+Předvyplněný odkaz ponechte nebo nahraďte vlastním. Druhá buňka jej předá do pole
+**Google Drive odkaz na kovarianci** v Gradio. Nový neprázdný odkaz nahradí předchozí;
+prázdná hodnota při opětovném otevření zachová poslední odkaz, případně výchozí.
+Odkaz lze upravit i přímo v Gradio před načtením modelu. Při přípravě se pro stejné
+ID použije stažená matice, jiné ID vyvolá nové stažení. Již načtený model se otevřením
+panelu znovu nenačítá; pro jinou kovarianci po načtení restartujte runtime.
+
 Každá editace začíná obnovou původní projekce; editace se nevrství. Nové otevření
 rozhraní zachová načtený model a aktivní edit. Editace a reset vymažou historii chatu.
 
@@ -75,7 +83,8 @@ Závislosti jsou v `requirements-workshop.txt`. Ve vlastním checkoutu této vě
 ```python
 from src.workshop import launch_workshop
 
-demo = launch_workshop(seed=42)
+covariance_url = "https://drive.google.com/file/d/1UmPlov94UKE4KIHclswVUMXyliQM3qvU/view?usp=drive_link"
+demo = launch_workshop(seed=42, covariance_drive_url=covariance_url)
 ```
 
 Podrobnosti integrace a validační příkazy jsou v

@@ -93,6 +93,10 @@ its estimation weights match the pinned checkpoint.
   explicit. Empty generations are not invented as assistant history.
 - Both chats use one system instruction and token budget; instruction changes
   clear old conversation context.
+- Notebook `COVARIANCE_DRIVE_URL` is passed to `launch_workshop(covariance_drive_url=...)`
+  and prefills the preparation field. Nonempty input replaces the previous link;
+  empty input preserves the latest UI link (or the default on first launch).
+  Changed Drive IDs trigger a new atomic download during model preparation.
 - Direct/implicit multihop and observed-city decomposition remain separate.
   Expected answers are never supplied to generation. Scores are normalized per
   target token, and actual generated text remains visible.

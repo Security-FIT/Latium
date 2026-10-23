@@ -217,7 +217,7 @@ def _loaded_configuration(handler):
                 projection=getattr(handler, "_layer_name_template", "unknown"), device=str(handler.device))
 
 
-def build_workshop_ui(handler=None, environment=None, *, seed=42):
+def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_drive_url=None):
     session = session_for(handler) if handler is not None else ModelSession(None, None)
     coordinator = getattr(session, "_coordinator", None)
     if coordinator is None:
@@ -230,6 +230,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42):
     # Shared across every model callback, rather than Gradio's per-function limit.
     model_event = {"concurrency_id": "latium-model", "concurrency_limit": 1, "show_progress": "hidden"}
     with gr.Blocks(title="Latium — workshop editace znalostí") as demo:
+        demo._covariance_drive_url = (covariance_drive_url or "").strip() or DEFAULT_COVARIANCE_DRIVE_URL
         gr.HTML("""<section class="demo-hero">
           <p class="demo-eyebrow">Živá ukázka · injekce faktu · ROME</p>
           <h1>Co když někdo přepíše jediný fakt v jazykovém modelu?</h1>
@@ -246,7 +247,9 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42):
         gpu_timer.tick(gpu_usage_html, outputs=gpu_panel, queue=False, show_progress="hidden")
         with gr.Accordion("Příprava modelu · Qwen3.5-4B", open=handler is None) as preparation:
             with gr.Row():
-                drive_url = gr.Textbox(value=DEFAULT_COVARIANCE_DRIVE_URL, label="Google Drive odkaz na kovarianci", scale=2, interactive=handler is None)
+                drive_url = gr.Textbox(value=demo._covariance_drive_url, label="Google Drive odkaz na kovarianci",
+                                      info="Předvyplněno z notebooku. Nový odkaz nahradí původní; prázdné pole zachová poslední odkaz.",
+                                      scale=2, interactive=handler is None)
                 with gr.Column(scale=1, min_width=220):
                     upload = gr.UploadButton("Nahrát vlastní kovarianci (.pt)", file_types=[".pt"], type="filepath", interactive=handler is None)
                     clear_upload = gr.Button("Zrušit výběr souboru · použít Drive", size="sm", interactive=handler is None)
@@ -451,6 +454,12 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42):
         clear_upload.click(lambda: gr.update(value=None, label="Nahrát vlastní kovarianci (.pt)"), outputs=upload,
                            queue=False, show_progress="hidden")
 
+        def remember_drive_url(value):
+            if (value or "").strip():
+                demo._covariance_drive_url = value.strip()
+
+        drive_url.input(remember_drive_url, inputs=drive_url, queue=False, show_progress="hidden")
+
         def initialize(url, uploaded, mode, dtype, value_batch, key_batch, iterations, seed_value):
             if session.handler is not None:
                 yield {initialize_button: gr.update(interactive=False)}
@@ -460,6 +469,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42):
                    initialize_button: gr.update(interactive=False),
                    status_component: model_status("Připravuji kovarianci…", "busy")}
             try:
+                remember_drive_url(url)
                 settings = ModelSettings(dtype=dtype, v_batch_size=int(value_batch), k_batch_size=int(key_batch),
                                          epochs=int(iterations), seed=seed_value)
                 validate_model_settings(settings)
@@ -468,7 +478,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42):
                     covariance = Path(uploaded)
                     validate_covariance_download(covariance)
                 else:
-                    covariance = ensure_covariance(env, url, mode=mode, manual_upload=False)
+                    covariance = ensure_covariance(env, demo._covariance_drive_url, mode=mode, manual_upload=False)
                 yield {status_component: model_status("Načítám Qwen3.5-4B na GPU; může to několik minut trvat…", "busy")}
                 loaded = load_model(covariance, settings=settings)
                 session.handler = loaded

@@ -82,6 +82,47 @@ def test_gpu_units_and_missing_utilization(monkeypatch):
     assert "nedostupné" in shown and "60 °C" in shown
 
 
+def test_notebook_link_preserves_existing_input_and_replaces_it_when_supplied(monkeypatch, tmp_path):
+    from src.workshop import app
+    from src.workshop.covariance import DEFAULT_COVARIANCE_DRIVE_URL
+
+    ui = import_module("src.workshop.workshop_ui")
+    monkeypatch.setattr(app, "_demo", None)
+    monkeypatch.setattr("src.workshop.launch.launch_ui", Mock())
+
+    def field(demo):
+        return next(c for c in demo.config["components"] if c["props"].get("label") == "Google Drive odkaz na kovarianci")
+
+    first = app.launch_workshop(work_dir=tmp_path, share=False)
+    try:
+        assert field(first)["props"]["value"] == DEFAULT_COVARIANCE_DRIVE_URL
+        entered = "https://drive.google.com/file/d/entered_drive_file/view"
+        dependency = next(d for d in first.config["dependencies"]
+                          if [field(first)["id"], "input"] in [list(t) for t in d["targets"]])
+        remember = first.fns[dependency["id"]].fn
+        remember(entered)
+        remember(" ")
+        reopened = app.launch_workshop(work_dir=tmp_path, share=False, covariance_drive_url=" ")
+        assert field(reopened)["props"]["value"] == entered
+
+        path = tmp_path / "cov.pt"
+        path.write_bytes(b"matrix")
+        covariance = Mock(return_value=path)
+        monkeypatch.setattr(ui, "ensure_covariance", covariance)
+        monkeypatch.setattr(ui, "load_model", Mock(side_effect=RuntimeError("stop before GPU loading")))
+        initialize, _ = button_event(reopened, "Připravit model")
+        list(initialize("", None, "public", "bf16", 1, 4, 25, 42))
+        assert covariance.call_count == 1
+        assert covariance.call_args.args[1] == entered
+        assert covariance.call_args.kwargs == {"mode": "public", "manual_upload": False}
+
+        new_link = "https://drive.google.com/file/d/new_notebook_file/view"
+        replacement = app.launch_workshop(work_dir=tmp_path, share=False, covariance_drive_url=f" {new_link} ")
+        assert field(replacement)["props"]["value"] == new_link
+    finally:
+        app._demo.close()
+
+
 def test_chat_in_both_edit_tabs_shares_history_and_reset(runtime, monkeypatch):
     ui = import_module("src.workshop.workshop_ui")
     runtime["session"].handler._layer = 5

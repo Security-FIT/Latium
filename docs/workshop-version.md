@@ -6,7 +6,7 @@ merge into `main` and does not contain the unrelated MEMIT working-tree changes.
 
 ## Minimal notebook
 
-`Latium-workshop/clean-notebook.ipynb` has two cells: prepare this branch and its
+[`workshop/clean-notebook.ipynb`](../workshop/clean-notebook.ipynb) has two code cells: prepare this branch and its
 dependencies, then:
 
 ```python

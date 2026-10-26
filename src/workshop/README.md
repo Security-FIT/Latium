@@ -2,8 +2,10 @@
 
 Tato implementace žije přímo v repozitáři **Security-FIT/Latium** na větvi
 **`workshop-version`**. Importuje ji
-[`clean-notebook.ipynb`](https://github.com/olexamatej/Latium-workshop/blob/main/clean-notebook.ipynb)
-z repozitáře Latium-workshop. Notebook obsahuje dvě spouštěcí buňky a pokyny ke spuštění;
+[`workshop/clean-notebook.ipynb`](../../workshop/clean-notebook.ipynb)
+přímo z tohoto repozitáře.
+[Otevřít v Colabu](https://colab.research.google.com/github/Security-FIT/Latium/blob/workshop-version/workshop/clean-notebook.ipynb).
+Notebook obsahuje dvě spouštěcí buňky a pokyny ke spuštění;
 ROME, načítání Qwenu, Gradio, causal tracing a GRAM jsou zde v Latium.
 
 ## Pro účastníky

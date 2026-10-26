@@ -406,7 +406,7 @@ class DiagnosticActions:
                 cache_key = (self.session._active_key, self.session.active_edit,
                              edited_weight._version if self.session.active_fact is None else None)
                 previous = getattr(self.session, "_gram_result_cache", None)
-                if previous is not None and previous[0] == cache_key:
+                if previous is not None and previous[0] == cache_key and getattr(self.session, "_gram_artifacts", None):
                     progress(1., desc="Používám hotovou detekci GRAM z paměti")
                     return previous[1]
                 active_layer = self._diagnostic_base_layer if self.session.active_edit else None
@@ -445,10 +445,23 @@ class DiagnosticActions:
                        f"Na původním modelu byla nejvýše vrstva L{base_result['localization']['selected_layer']}. "
                        f"Známá aktivní editace: {active_layer if active_layer is not None else 'žádná'}.\n\n"
                        "Pořadí vznikne i pro needitovaný model; samo o sobě není důkazem editace.")
+            from .gram_artifacts import build_gram_artifacts
+            progress(.82, desc=f"Počítám spektra uložené projekce L{self._diagnostic_base_layer} a změny vah…")
+            figure = _diagnostic_gram_curve(rows)
+            artifacts = build_gram_artifacts(rows, baseline[self._diagnostic_base_layer], current[self._diagnostic_base_layer],
+                layer=self._diagnostic_base_layer, score_figure=figure, seed=getattr(handler.cfg, "seed", 42))
+            self.session._gram_artifacts = artifacts
+            summary += (f"\n\nSpektra porovnávají uloženou projekci **L{self._diagnostic_base_layer}** před a po editaci. "
+                        "Jde o kontrolu proti známému základu; vrstva vybraná detektorem může být jiná. "
+                        "Zobrazené vedoucí singulární hodnoty jsou u velkých matic aproximované, se stejným seedem před i po. "
+                        "Graf energie ukazuje, jak velkou část skutečné změny vah zachycují jednotlivé směry; "
+                        "zaokrouhlení vah může původní rank-one zásah rozprostřít do více směrů. "
+                        "ZIP obsahuje grafy PNG, skóre a spektra CSV a souhrn JSON.")
             progress(1.0, desc="Pořadí GRAM je hotové.")
-            result = summary, rows, _diagnostic_gram_curve(rows)
+            result = summary, rows, figure
             self.session._gram_result_cache = (cache_key, result)
             return result
         except Exception as exc:
+            self.session._gram_artifacts = {}
             _DIAGNOSTIC_LOGGER.exception("Workshop GRAM failed")
             return f"### GRAM není dostupný\n\n{exc}", [], None

@@ -36,6 +36,25 @@
 .original-chat .message-row .bot {background: #fff !important; border: 1px solid #d4e2e7 !important; color: #1e293b !important}
 .original-chat .message-row .user *, .original-chat .message-row .bot * {color: inherit !important}
 
+/* Label-wide reset rules must not erase the checkbox fill or check mark. */
+.gradio-container input[type="checkbox"] {
+  appearance: none !important; width: 18px; height: 18px; flex-shrink: 0;
+  border: 2px solid #64748b !important; border-radius: 4px;
+  background-color: #fff !important; background-image: none !important}
+.gradio-container input[type="checkbox"]:checked {
+  border-color: #0088ad !important; background-color: #0088ad !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 8 3 3 7-7' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-size: 14px 14px !important; background-position: center !important; background-repeat: no-repeat !important}
+.gradio-container input[type="checkbox"]:focus-visible {outline: 2px solid #00445a; outline-offset: 3px}
+.trace-fact-card {padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background-color: #fff !important}
+.trace-fact-card:has(input:checked) {background-color: #eaf8fc !important; border-color: #0088ad !important}
+.trace-fact-card .trace-fact-card {padding: 0; border: 0 !important; background-color: transparent !important}
+.trace-fact-card .block, .trace-fact-card .prose, #trace-facts label {background-color: transparent !important}
+.trace-fact-card .prose {overflow-wrap: anywhere}
+.trace-fact-card .prose p {margin: 3px 0}
+#trace-operation-status {scroll-margin-top: 130px; min-height: 0}
+#trace-operation-status:empty {display: none}
+
 /* Result text is read-only prose, never forced into a fixed-width spreadsheet. */
 .workshop-results {width: 100%; min-width: 0; color: #1e293b; margin: 12px 0}
 .workshop-results h3 {font-size: 1.05rem; margin: 0 0 10px}

@@ -96,7 +96,10 @@ class WorkshopCoordinator:
         self.revision += 1
         self.conversation = []
         result = {"chatbot": [], "chat_input": "", "prepared_chatbot": [], "prepared_chat_input": "",
-                  "trace_plot": None, "gram_plot": None}
+                  "trace_plot": gr.update(value=None, visible=False), "trace_status": "",
+                  "gram_plot": gr.update(value=None, visible=False)}
+        result.update({key: gr.update(value=None, visible=False)
+                       for key in ("gram_changes", "gram_spectrum", "gram_update", "gram_export")})
         for tab in RESULT_TABS:
             result[f"{tab}_summary"] = ""
             result[f"{tab}_rows"] = []
@@ -319,12 +322,15 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                                         "Jde o obnovu oken MLP na posledním tokenu entity. "
                                         "Jeden prompt poskytuje průzkumnou oblast, nikoli důkaz nejlepší ROME vrstvy. "
                                         "Editace zůstává na vrstvě 5; její změna vyžaduje odpovídající kovarianci.")
-                        trace_facts = gr.CheckboxGroup(choices=list(TRACE_FACTS), value=[next(iter(TRACE_FACTS))],
-                                                       label="Fakty pro trasování · vyberte 1 až 4")
+                        trace_facts = []
+                        with gr.Column(elem_id="trace-facts"):
+                            gr.Markdown("### Fakty pro trasování · vyberte 1 až 4")
+                            for index, (name, (_, question, target)) in enumerate(TRACE_FACTS.items()):
+                                with gr.Group(elem_classes=["trace-fact-card"]):
+                                    trace_facts.append(gr.Checkbox(label=name, value=index == 0, interactive=True,
+                                                                  elem_classes=["trace-fact-toggle"]))
+                                    gr.Markdown(f"**Otázka:** {question}\n\n**Sledovaná odpověď:** {target}")
                         trace_original = gr.Checkbox(value=True, label="Trasovat původní model (bez aktivní editace)")
-                        with gr.Accordion("Jaké otázky a odpovědi měříme?", open=False):
-                            gr.Markdown("\n\n".join(f"**{name}** · `{case[1]}` → **{case[2]}**"
-                                                     for name, case in TRACE_FACTS.items()))
                         with gr.Accordion("Parametry trasování", open=False):
                             window = gr.Slider(1, 9, value=3, step=2, label="Velikost okna vrstev (lichá)")
                             samples = gr.Slider(1, 20, value=3, step=1, label="Počet vzorků šumu")
@@ -333,9 +339,10 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             auto_noise = gr.Checkbox(value=True, label="Automaticky zvolit sílu poškození")
                         gr.Markdown("Začněte jedním faktem; přidejte další a porovnejte křivky. Hotová měření se znovu nepočítají. Výběr v této záložce nepřepisuje ROME příklady.")
                         trace_button = gr.Button("Najít kandidátní vrstvu", variant="primary", interactive=handler is not None)
+                        components["trace_status"] = gr.HTML("", elem_id="trace-operation-status")
                     source_panel(TRACE_HIGHLIGHTS)
+                components["trace_plot"] = gr.Plot(label="Rainbow graf kauzálního obnovení", visible=False, elem_id="trace-plot")
                 components["trace_summary"] = gr.Markdown("Trasování zatím nebylo spuštěno.", elem_classes=["workshop-summary"])
-                components["trace_plot"] = gr.Plot(label="Rainbow graf kauzálního obnovení")
                 with gr.Accordion("Podrobné naměřené hodnoty", open=False):
                     components["trace_rows"] = gr.HTML(render_result_rows("trace_rows", []), elem_id="trace-results")
             with gr.Tab(TAB_LABELS[1]):
@@ -454,7 +461,15 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                         gram_button = gr.Button("Spustit detekci GRAM na aktuálním modelu", variant="primary", interactive=handler is not None)
                     source_panel(GRAM_HIGHLIGHTS)
                 components["gram_summary"] = gr.Markdown("Detekce GRAM zatím nebyla spuštěna.", elem_classes=["workshop-summary"])
-                components["gram_plot"] = gr.Plot(label="Strukturální skóre GRAM")
+                gr.Markdown("Grafy porovnají skóre vrstev, jeho změnu a spektrum uložené projekce před/po editu. "
+                            "Spektrum ΔW a kumulativní energie ukážou, do kolika směrů se změna vah soustředí. "
+                            "Spektrální srovnání používá známou původní projekci, nejde o další slepý detektor.")
+                components["gram_plot"] = gr.Plot(label="Strukturální skóre GRAM", visible=False, elem_id="gram-score-plot")
+                with gr.Row(equal_height=False):
+                    components["gram_changes"] = gr.Plot(label="Změna GRAM skóre", visible=False, elem_id="gram-changes")
+                    components["gram_spectrum"] = gr.Plot(label="Spektrum původní a aktuální projekce", visible=False, elem_id="gram-spectrum")
+                components["gram_update"] = gr.Plot(label="Spektrum a energie změny vah", visible=False, elem_id="gram-update")
+                components["gram_export"] = gr.File(label="Stáhnout grafy a naměřená data · ZIP", interactive=False, visible=False, elem_id="gram-export")
                 with gr.Accordion("Podrobné hodnoty detekce", open=False):
                     components["gram_rows"] = gr.HTML(render_result_rows("gram_rows", []), elem_id="gram-results")
 
@@ -579,39 +594,73 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
         custom_template.change(custom_template_fields, inputs=custom_template, outputs=custom_inputs,
                                queue=False, show_progress="hidden")
 
-        def trace(facts, original, window_size, draws, multiplier, trace_seed, automatic, progress=gr.Progress()):
-            yield gr.skip(), gr.skip(), gr.skip(), model_status("Provádím kauzální trasování…", "busy")
+        def trace(*args, progress=gr.Progress()):
+            selected, options = args[:len(TRACE_FACTS)], args[len(TRACE_FACTS):]
+            facts = [name for name, checked in zip(TRACE_FACTS, selected) if checked]
+            original, window_size, draws, multiplier, trace_seed, automatic = options
+            busy = model_status("Provádím kauzální trasování…", "busy")
+            yield "", gr.skip(), gr.update(value=None, visible=False), busy, busy
             try:
                 coordinator.ensure_ready()
                 for state, result, done in stream_operation(lambda report: diagnostics.trace_suite("", "", "", window_size, draws, multiplier, trace_seed,
                     auto_noise=automatic, selected_facts=facts, original_model=original, progress=report), "Měřím rainbow profil…"):
                     if done:
                         summary, rows, figure = result
-                        yield summary, render_result_rows("trace_rows", rows), figure, state
+                        ready = model_status("Hotovo · trasování dokončeno. Graf a výsledky jsou níže." if figure is not None
+                                             else "Trasování nevrátilo graf. Podrobnosti jsou níže.",
+                                             "ok" if figure is not None else "warn")
+                        yield summary, render_result_rows("trace_rows", rows), gr.update(value=figure, visible=figure is not None), state + ready, ready
                     else:
-                        yield gr.skip(), gr.skip(), gr.skip(), state
+                        yield gr.skip(), gr.skip(), gr.skip(), state, state
             except Exception as exc:
-                yield f"Trasování selhalo: {compact(str(exc))}", render_result_rows("trace_rows", []), None, model_status(f"Trasování selhalo: {exc}", "warn")
+                failure = model_status(f"Trasování selhalo: {exc}", "warn")
+                yield f"Trasování selhalo: {compact(str(exc))}", render_result_rows("trace_rows", []), gr.update(value=None, visible=False), failure, failure
 
         def gram(progress=gr.Progress()):
-            yield gr.skip(), gr.skip(), gr.skip(), model_status("Počítám GRAM profily…", "busy")
+            hidden = gr.update(value=None, visible=False)
+            yield gr.skip(), gr.skip(), gr.skip(), model_status("Počítám GRAM profily…", "busy"), hidden, hidden, hidden, hidden
             try:
                 coordinator.ensure_ready()
                 for state, result, done in stream_operation(lambda report: diagnostics.gram(progress=report), "Počítám GRAM…"):
                     if done:
                         summary, rows, figure = result
-                        yield summary, render_result_rows("gram_rows", rows), figure, state
+                        artifacts = getattr(session, "_gram_artifacts", {})
+                        plots = [gr.update(value=artifacts.get(key), visible=key in artifacts)
+                                 for key in ("changes", "spectrum", "update", "archive")]
+                        yield summary, render_result_rows("gram_rows", rows), gr.update(value=figure, visible=figure is not None), state, *plots
                     else:
-                        yield gr.skip(), gr.skip(), gr.skip(), state
+                        yield gr.skip(), gr.skip(), gr.skip(), state, gr.skip(), gr.skip(), gr.skip(), gr.skip()
             except Exception as exc:
-                yield f"GRAM selhal: {compact(str(exc))}", render_result_rows("gram_rows", []), None, model_status(f"GRAM selhal: {exc}", "warn")
+                yield (f"GRAM selhal: {compact(str(exc))}", render_result_rows("gram_rows", []), hidden,
+                       model_status(f"GRAM selhal: {exc}", "warn"), hidden, hidden, hidden, hidden)
 
         trace_button.click(
-            trace, inputs=[trace_facts, trace_original, window, samples, noise, seed, auto_noise],
-            outputs=[components[f"trace_{suffix}"] for suffix in ("summary", "rows", "plot")] + [components["system_status"]], **model_event,
-        )
+            trace, inputs=[*trace_facts, trace_original, window, samples, noise, seed, auto_noise],
+            outputs=[components[f"trace_{suffix}"] for suffix in ("summary", "rows", "plot")]
+                    + [components["system_status"], components["trace_status"]], **model_event,
+        ).then(fn=None, js="""async () => {
+            // Plot rendering is asynchronous; wait for its image before scrolling.
+            await new Promise(resolve => {
+                let observer;
+                const finish = () => { observer?.disconnect(); resolve(); };
+                const findImage = () => {
+                    const image = document.querySelector("#trace-plot img");
+                    if (!image) return;
+                    observer?.disconnect();
+                    if (image.complete) finish();
+                    else image.addEventListener("load", finish, {once: true});
+                };
+                observer = new MutationObserver(findImage);
+                observer.observe(document.body, {childList: true, subtree: true});
+                setTimeout(finish, 1500);
+                findImage();
+            });
+            requestAnimationFrame(() => document.getElementById("trace-operation-status")
+                ?.scrollIntoView({behavior: "smooth", block: "start"}));
+        }""", queue=False)
         gram_button.click(gram, outputs=[components[f"gram_{suffix}"] for suffix in ("summary", "rows", "plot")]
-                          + [components["system_status"]], **model_event)
+                          + [components["system_status"]] + [components[key] for key in
+                          ("gram_changes", "gram_spectrum", "gram_update", "gram_export")], **model_event)
         chat_outputs = [components[key] for key in ("chat_input", "chatbot", "prepared_chat_input", "prepared_chatbot", "system_status")]
 
         def chat(message, system, tokens, progress=gr.Progress()):

@@ -172,8 +172,11 @@ protocol. The axis and summary identify the MLP-window measurement.
   reaches root `cfg.seed`, seeds model loading and is reset by the shared ROME API
   on every edit. Reopening a loaded session retains its original seed and weights.
   Greedy answers and fixed hardware/configuration are required for comparison.
-- Tab 1 has a separate four-fact checkbox catalog. One fact is selected initially;
-  individual measured profiles overlay the mean rainbow bars. Per-fact seeds and
+- Tab 1 has a separate four-fact checkbox catalog. Each full-width row shows its
+  complete prompt and target; checkbox fills/check marks override the global label
+  reset, making selection visible. One fact is selected initially; individual
+  measured profiles overlay the mean rainbow bars. An empty plot is hidden, and
+  completion shows an explicit local status and scrolls to the result. Per-fact seeds and
   cached interventions are independent of selection size/order. A default-on
   original-model option restores the active projection after read-only tracing.
 - Tab 2 contains one immutable Eiffel→Rome edit with no example selector. Its
@@ -201,7 +204,21 @@ protocol. The axis and summary identify the MLP-window measurement.
   Sharing does not prevent Google idle/lifetime termination; a dead runtime
   requires reload.
 
+- GRAM retains its main detector score and adds score deltas, paired spectra of
+  the saved projection, and singular values/cumulative energy of its actual update.
+  Spectral plots use the known edit-layer snapshot, not an inferred blind baseline.
+  Small matrices use exact SVD; large matrices use 16 leading randomized components
+  with paired seeds and restored caller RNG. CPU work and a ZIP of PNG/CSV/JSON
+  artifacts are cached per measured model state. Empty plots remain hidden.
+
 ## Validation
+
+Latest tracing/GRAM update: 172 workshop CPU tests passed, with two existing
+checks excluded in this environment. The Chromium audit verifies visible checkbox
+selection, full prompt/target cards on desktop/mobile, completion scrolling and
+spacing, all four GRAM plots and a successful ZIP download. Browser numerical
+fixtures are labelled synthetic; real rank-one spectra, cached exports and RNG
+preservation are tested separately on CPU. Full-size GPU timing remains unmeasured.
 
 ```bash
 python -m pytest tests/test_rome_batching.py tests/workshop -q

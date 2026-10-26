@@ -293,6 +293,21 @@ def test_gram_real_rank_one_outlier_baseline_and_fresh_snapshot(diagnostic_sessi
         assert tensor.data_ptr() != session.handler.model.layers[layer]["mlp"].down_proj.weight.data_ptr()
     _diagnostic_test_unchanged(session, before)
     assert list(figure.axes[0].lines[0].get_ydata()) == [row[1] for row in sorted(rows) if row[3] != "N/A"]
+    artifacts = session._gram_artifacts
+    assert set(artifacts) >= {"changes", "spectrum", "update", "archive", "metrics"}
+    assert artifacts["metrics"]["layer"] == 3
+    assert artifacts["metrics"]["update_frobenius_norm"] == pytest.approx(12.)
+    assert artifacts["metrics"]["first_direction_energy_fraction"] == pytest.approx(1.)
+    # Exact tiny-matrix spectra and export data come from the actual rank-one update.
+    from zipfile import ZipFile
+    import json
+    with ZipFile(artifacts["archive"]) as archive:
+        assert {"scores.png", "changes.png", "spectrum.png", "update.png", "scores.csv", "spectra.csv", "metrics.json"} == set(archive.namelist())
+        assert json.loads(archive.read("metrics.json"))["update_frobenius_norm"] == pytest.approx(12.)
+        assert "original_sigma" in archive.read("spectra.csv").decode()
+    calls = len(captured)
+    actions.gram(progress=Mock())
+    assert len(captured) == calls and session._gram_artifacts is artifacts
     # Simulate a later reset outside diagnostics. The next call must capture it afresh.
     with torch.no_grad():
         weight.copy_(session.base_weight)
@@ -302,6 +317,8 @@ def test_gram_real_rank_one_outlier_baseline_and_fresh_snapshot(diagnostic_sessi
     assert not any(row[4] for row in new_rows)
     assert all(row[1] == row[2] for row in new_rows)
     assert new_rows != rows
+    assert session._gram_artifacts["metrics"]["update_frobenius_norm"] == 0
+    assert session._gram_artifacts["metrics"]["first_direction_energy_fraction"] is None
 
 
 def test_gram_real_invalid_weights_return_unavailable(diagnostic_session):
@@ -313,6 +330,18 @@ def test_gram_real_invalid_weights_return_unavailable(diagnostic_session):
     assert rows == [] and figure is None
     assert not session.lock.locked()
     session._restore.assert_not_called()
+
+
+def test_leading_spectrum_approximation_preserves_rng_and_finds_rank_one_energy():
+    from src.workshop.gram_artifacts import _singular_values
+    matrix = torch.zeros(65, 80)
+    matrix[0, 0] = 12.
+    rng = torch.random.get_rng_state().clone()
+    values = _singular_values(matrix, seed=42)
+    assert torch.equal(torch.random.get_rng_state(), rng)
+    assert len(values) == 16 and values[0].item() == pytest.approx(12.)
+    assert values[1:].abs().max().item() < 1e-5
+    torch.testing.assert_close(values, _singular_values(matrix, seed=42))
 
 
 def test_gram_never_reassigns_saved_base_to_a_new_layer(diagnostic_session):

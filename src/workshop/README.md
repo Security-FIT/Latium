@@ -65,7 +65,9 @@ kontroly. V chatu zkuste `Who is the author of Hamlet?` a
 ## Výběr faktů a trasování
 
 Záložka 1 má vlastní checkboxy pro čtyři fakty: Eiffelova věž, Koloseum, Hamlet
-a Python. Začněte jedním, potom vyberte 3–4. Křivky ukazují naměřený profil
+a Python. Každý je na vlastním řádku s celou trasovanou otázkou a sledovanou odpovědí.
+Vybraný řádek má modré pozadí a checkbox viditelnou bílou fajfku.
+Začněte jedním, potom vyberte 3–4. Křivky ukazují naměřený profil
 každého faktu a duhové sloupce jejich průměr; tabulka uvádí nejsilnější vrstvu
 každého faktu. Stejný fakt má stejný šum i při změně pořadí či velikosti výběru;
 hotové měření se použije z cache. Více faktů samo nezaručuje stabilnější profil.
@@ -73,6 +75,8 @@ hotové měření se použije z cache. Více faktů samo nezaručuje stabilněj�
 Výchozí měření používá původní váhy a původní odpovědi. Po měření se vrátí
 aktivní editace. Checkbox lze vypnout a měřit stejné původní odpovědi na aktuálních
 vahách. Výběr trasování nepřepisuje formuláře ani multihop scénář.
+Před výpočtem není pro prázdný graf rezervované místo. Průběh je vidět i u tlačítka;
+po dokončení se zobrazí **Hotovo**, stránka přejde k výsledku a nejprve ukáže graf.
 
 Záložka **2 · ROME: připravený edit** obsahuje jediný pevný příklad:
 **Eiffelova věž: Paříž → Řím**. Není zde výběr jiného faktu a všechna pole jsou
@@ -104,6 +108,26 @@ Vyhodnocení rozlišuje nepotvrzený přímý edit, neznámý základ, nepřenes
 a možný vedlejší zásah. Změna formulace sama není důkaz změny faktu. Selhání ROME
 není zaručené a vyžaduje ověření na skutečném Qwenu. Zdrojové panely obsahují
 krátké označené didaktické výřezy hlavních algoritmů.
+
+## GRAM a spektrální artefakty
+
+Záložka 5 po detekci zobrazí čtyři grafy:
+
+- GRAM skóre vrstev původního a aktuálního modelu;
+- rozdíl skóre po − před;
+- vedoucí singulární hodnoty uložené projekce před a po editaci;
+- spektrum ΔW a kumulativní podíl energie skutečné změny vah.
+
+Spektrální srovnání vždy používá původní snapshot editační vrstvy (výchozí L5),
+nikoli automaticky vítěznou vrstvu detektoru. Jde o kontrolu se známou referencí,
+nikoli další slepou detekci. Při nulové změně je podíl energie označen jako
+nedefinovaný. Rank-one edit nemusí po zaokrouhlení vah zůstat numericky přesně rank-one.
+
+U velkých matic se počítá pouze aproximace vedoucích 16 singulárních hodnot,
+se stejným seedem před i po; nejde o úplné spektrum ani o odhad přesného ranku.
+Dodatečné spektrální výpočty běží na CPU a mohou první detekci prodloužit.
+Stejný stav modelu používá cache grafů i exportu. Tlačítko pro ZIP poskytne čtyři
+PNG grafy, `scores.csv`, `spectra.csv` a `metrics.json`; samotné váhy se neexportují.
 
 ## Colab a ztráta spojení
 

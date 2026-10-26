@@ -6,6 +6,7 @@ and saves screenshots outside the repository. No model or covariance download.
 
 import argparse
 import sys
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,8 +24,16 @@ def main():
     args = parser.parse_args()
     output = Path(args.artifacts)
     output.mkdir(parents=True, exist_ok=True)
+    fixtures = ExitStack()
     if args.populated:
+        from matplotlib.figure import Figure
         from src.workshop.results import render_result_rows
+
+        trace_figure = Figure(figsize=(10, 3), layout="constrained")
+        trace_figure.subplots().plot([0, 1, 2], [0, .1, .05], label="UI fixture")
+        fixtures.enter_context(patch("src.workshop.workshop_ui.DiagnosticActions.trace_suite", return_value=(
+            "Audit rozhraní · simulovaný výsledek, nejde o měření modelu.", [], trace_figure)))
+        fixtures.enter_context(patch("src.workshop.workshop_ui.WorkshopCoordinator.ensure_ready"))
 
         long_answer = ("Layout audit fixture: this is a complete answer with ordinary words, not a model measurement. " * 12
                        + "\nA second line must remain completely visible.")
@@ -39,6 +48,21 @@ def main():
             "prepared_history": [[1, "Eiffel Tower", "Paris", "Rome", "Aktivní", 20, 8]],
             "custom_history": [[1, "Eiffel Tower", "Paris", "Rome", "Aktivní", 20, 8]],
         }
+
+        def gram_fixture(action, progress):
+            import torch
+            from src.workshop.diagnostics import _diagnostic_gram_curve
+            from src.workshop.gram_artifacts import build_gram_artifacts
+            rows = fixture_rows["gram_rows"]
+            original = torch.eye(8)
+            changed = original.clone()
+            changed[0, 0] += 2
+            figure = _diagnostic_gram_curve(rows)
+            action.session._gram_artifacts = build_gram_artifacts(rows, original, changed,
+                layer=5, score_figure=figure)
+            return "Audit rozhraní · syntetická projekce, nejde o měření modelu.", rows, figure
+
+        fixtures.enter_context(patch("src.workshop.workshop_ui.DiagnosticActions.gram", new=gram_fixture))
         with patch("src.workshop.workshop_ui.render_result_rows",
                    lambda key, rows: render_result_rows(key, rows or fixture_rows.get(key, []))):
             demo, theme, css = build_workshop_ui()
@@ -47,6 +71,10 @@ def main():
     if args.populated:
         # Explicit layout fixtures exercise numeric output without a model.
         for block in demo.blocks.values():
+            if block.__class__.__name__ == "Button" and block.value in (
+                "Najít kandidátní vrstvu", "Spustit detekci GRAM na aktuálním modelu",
+            ):
+                block.interactive = True  # The labelled completion fixture needs no GPU.
             if block.__class__.__name__ == "Chatbot":
                 block.value = block.postprocess([
                     {"role": "user", "content": "Layout fixture: numeric answer"},
@@ -74,6 +102,45 @@ def main():
             page.goto(f"http://127.0.0.1:{args.port}/?__theme=light", wait_until="networkidle")
             page.locator('.demo-hero h1').wait_for(state="attached")
             assert page.get_by_role("tab").count() == 5
+            facts = page.locator('#trace-facts')
+            checks = facts.get_by_role('checkbox')
+            assert checks.count() == 4 and checks.nth(0).is_checked()
+            checks.nth(1).check()
+            style = checks.nth(1).evaluate("""e => ({fill: getComputedStyle(e).backgroundColor,
+                mark: getComputedStyle(e).backgroundImage, card: getComputedStyle(e.closest('#trace-facts > .trace-fact-card')).backgroundColor})""")
+            assert style['fill'] == 'rgb(0, 136, 173)' and style['mark'] != 'none', style
+            assert style['card'] == 'rgb(234, 248, 252)', style
+            checks.nth(1).uncheck()
+            assert checks.nth(1).evaluate('e => getComputedStyle(e).backgroundImage') == 'none'
+            for width in (1560, 390):
+                page.set_viewport_size({"width": width, "height": 1050})
+                page.wait_for_timeout(250)
+                facts.screenshot(path=str(output / f'trace-facts-{width}.png'))
+                labels = facts.locator(':scope > .trace-fact-card').all()
+                previous = None
+                for label in labels:
+                    assert 'Otázka:' in label.inner_text() and 'Sledovaná odpověď:' in label.inner_text()
+                    rect = label.bounding_box()
+                    assert previous is None or rect['y'] >= previous['y'] + previous['height'] - 1
+                    assert label.evaluate('e => e.scrollWidth <= e.clientWidth + 2')
+                    previous = rect
+                assert not page.evaluate('document.documentElement.scrollWidth > innerWidth + 2')
+            page.set_viewport_size({"width": 1560, "height": 1050})
+            assert not page.locator('#trace-plot').is_visible()
+            if args.populated:
+                page.get_by_role('button', name='Najít kandidátní vrstvu', exact=True).click()
+                page.locator('#trace-operation-status').get_by_text('Hotovo', exact=False).wait_for()
+                page.locator('#trace-plot img').wait_for()
+                page.wait_for_function("""() => {
+                    const box = document.querySelector('#trace-operation-status').getBoundingClientRect();
+                    return box.y >= 0 && box.y < 525;
+                }""")
+                page.wait_for_timeout(250)
+                status_box = page.locator('#trace-operation-status').bounding_box()
+                plot_box = page.locator('#trace-plot').bounding_box()
+                assert 0 <= status_box['y'] < 525, status_box
+                assert 0 <= plot_box['y'] - status_box['y'] - status_box['height'] < 50, (status_box, plot_box)
+                page.screenshot(path=str(output / 'workshop-trace-complete.png'), full_page=True)
             page.screenshot(path=str(output / "workshop-desktop.png"), full_page=True)
             page.get_by_role("tab", name="2 · ROME: připravený edit").click()
             source_toggle = next(item for item in page.get_by_text("Zdrojový kód · rozbalit", exact=True).all() if item.is_visible())
@@ -141,6 +208,15 @@ def main():
                 select_tab("3 · ROME: vícekrokové otázky")
                 page.screenshot(path=str(output / "workshop-multihop-mobile.png"), full_page=True)
                 print("Populated results: complete at desktop and mobile widths, no clipped cells.")
+                select_tab("5 · GRAM: detekce editace")
+                page.get_by_role('button', name='Spustit detekci GRAM na aktuálním modelu', exact=True).click()
+                for plot in ('gram-score-plot', 'gram-changes', 'gram-spectrum', 'gram-update'):
+                    page.locator(f'#{plot} img').wait_for()
+                export = page.locator('#gram-export a[href]').first
+                export.wait_for()
+                response = page.request.get(export.get_attribute('href'))
+                assert response.status == 200 and response.body().startswith(b'PK')
+                page.screenshot(path=str(output / 'workshop-gram-artifacts.png'), full_page=True)
                 state = page.locator('#workshop-operation-status')
                 state.evaluate("""e => {
                     const box = document.createElement('div'); box.className = 'operation-progress layout-audit-progress';
@@ -166,6 +242,7 @@ def main():
             browser.close()
     finally:
         demo.close()
+        fixtures.close()
 
 
 if __name__ == "__main__":

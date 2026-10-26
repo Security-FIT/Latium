@@ -85,4 +85,15 @@ scores = compare_with_neighboring_layers(features)
 ranking = sort_layers_by_structural_score(scores)
 # Pořadí není pravděpodobnost ani binární verdikt o editaci.
 '''),
+    ("Spektra · kam se změna vah soustředí", '''# Srovnání se známým původním modelem, nikoli slepá detekce.
+delta_W = current_projection - saved_projection
+sigma_before = leading_singular_values(saved_projection)
+sigma_after = leading_singular_values(current_projection)
+sigma_delta = leading_singular_values(delta_W)
+
+# Podíl skutečné energie změny zachycený vedoucími směry.
+energy = cumulative_sum(sigma_delta ** 2) / frobenius_norm(delta_W) ** 2
+# Pro nulovou změnu tento podíl není definovaný.
+# Velké matice používají aproximaci vedoucího spektra se stejným seedem.
+'''),
 ]

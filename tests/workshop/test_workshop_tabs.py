@@ -39,8 +39,11 @@ def test_five_tabs_closed_source_panels_and_persistent_status(ui_runtime):
         assert len(sources) == 5 and all(not c["props"]["open"] for c in sources)
         assert sum(c["type"] == "chatbot" for c in items.values()) == 2
         assert not any(c["props"].get("label") == "Vícekrokový scénář" for c in items.values())
-        trace = next(c for c in items.values() if c["type"] == "checkboxgroup")
-        assert len(trace["props"]["choices"]) == 4 and len(trace["props"]["value"]) == 1
+        trace = [c for c in items.values() if "trace-fact-toggle" in (c["props"].get("elem_classes") or [])]
+        assert len(trace) == 4 and sum(c["props"]["value"] for c in trace) == 1
+        assert all(c["props"]["interactive"] for c in trace)
+        plot = next(c for c in items.values() if c["props"].get("elem_id") == "trace-plot")
+        assert not plot["props"]["visible"]
         assert all(not c["props"]["render_markdown"] for c in items.values() if c["type"] == "chatbot")
         assert not any(c["props"].get("label") == "Připravený příklad" for c in items.values())
         template = next(c for c in items.values() if c["props"].get("label") == "Šablona vlastního editu")
@@ -116,15 +119,17 @@ def test_failed_input_does_not_erase_previous_result(ui_runtime):
 
 
 def test_diagnostic_events_stream_from_shared_session(ui_runtime, monkeypatch):
+    from matplotlib.figure import Figure
     ui, runtime = ui_runtime
     seen = []
     def trace(self, *args, **kwargs):
         seen.append(self.session)
-        return "trace", [], None
+        return "trace", [], Figure()
     monkeypatch.setattr(ui.DiagnosticActions, "trace_suite", trace)
     demo, _, _ = ui.build_workshop_ui(runtime["session"].handler)
     try:
-        frames = list(event_for(demo, "Najít kandidátní vrstvu")[0].fn(["Eiffelova věž · Paříž"], True, 1, 1, 3, 42, True))
+        frames = list(event_for(demo, "Najít kandidátní vrstvu")[0].fn(True, False, False, False, True, 1, 1, 3, 42, True))
         assert len(frames) >= 2 and seen == [runtime["session"]]
+        assert "Hotovo" in frames[-1][-1] and frames[-1][2]["visible"]
     finally:
         demo.close()

@@ -37,8 +37,14 @@ aby se například `1453.` nezměnilo v odsazenou značku číslovaného seznamu
 ## Vlastní edit
 
 V záložce **4 · ROME: vlastní fakt a chat** zůstávají pole prázdná. Šedé
-placeholdery a návod přímo nad formulářem ukazují tento propojený příklad;
-nahraďte je vlastními hodnotami:
+placeholdery a návod přímo nad formulářem ukazují tento propojený příklad.
+Výběr **Šablona vlastního editu** nabízí Eiffelovu věž → Řím, Hamleta → Tolkiena,
+Python → Adu Lovelace a Koloseum → Paříž. Vyplní entitu, otázku, obě odpovědi,
+parafrázi i kontrolní otázky. Všechna pole můžete upravit; výběr sám model needituje.
+Volba **Vlastní fakt** znovu otevře prázdný formulář s výchozími kontrolami.
+Stejná hotová editace se při použití šablony znovu neoptimalizuje.
+
+Příklad ručního vyplnění:
 
 | Pole | Příklad |
 |---|---|
@@ -68,15 +74,16 @@ Výchozí měření používá původní váhy a původní odpovědi. Po měřen
 aktivní editace. Checkbox lze vypnout a měřit stejné původní odpovědi na aktuálních
 vahách. Výběr trasování nepřepisuje formuláře ani multihop scénář.
 
-Záložka 2 nabízí přesně tři pevné příklady: **Eiffelova věž → Řím** (výchozí),
-**Hamlet → Tolkien** a **Python → Ada Lovelace**. Všechna pole jsou pouze pro čtení;
-callback načítá hodnoty ze zvoleného příkladu. Vlastní hodnoty patří do záložky 4.
+Záložka **2 · ROME: připravený edit** obsahuje jediný pevný příklad:
+**Eiffelova věž: Paříž → Řím**. Není zde výběr jiného faktu a všechna pole jsou
+pouze pro čtení. Callback používá vždy tento výchozí fakt. Další šablony a vlastní
+hodnoty patří do záložky 4.
 
 ## Vícekrokové otázky a vedlejší změny
 
 Záložka 3 vždy používá **Eiffelova věž: Paříž → Řím**. Odpovídající aktivní edit
-použije znovu, jinou aktivní editaci nahradí tímto výchozím faktem. Volba dalšího
-příkladu v dvojce tedy nemění scénář v trojce. Katalog starších experimentů zůstává
+použije znovu, jinou aktivní editaci nahradí tímto výchozím faktem. Vlastní šablony
+ze čtyřky tedy nemění scénář v trojce. Katalog starších experimentů zůstává
 v Python API; ve workshopovém rozhraní se nevybírá.
 
 Samostatně změříme přímou otázku, zemi ve dvou formulacích, jazyk a kontroly

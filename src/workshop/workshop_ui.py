@@ -30,7 +30,10 @@ from .lessons import (
 )
 from .model import ModelSettings, gpu_memory_summary, validate_model_settings
 from .presentation import compact
-from .presets import DEFAULT_WORKSHOP_PRESET as DEFAULT_PRESET, PREPARED_PRESETS, TRACE_FACTS, WORKSHOP_CANARIES, WORKSHOP_PRESETS
+from .presets import (
+    DEFAULT_WORKSHOP_PRESET as DEFAULT_PRESET, CUSTOM_EDIT_TEMPLATES, TRACE_FACTS,
+    WORKSHOP_CANARIES, WORKSHOP_PRESETS, custom_template_fields,
+)
 from .probing import generate_completion, score_target
 from .prompts import render_chat, render_prompt
 from .rome import apply_rome_edit, gather_k, insert_kv
@@ -47,7 +50,7 @@ from .workshop import WorkshopActions, model_status
 
 LOGGER = logging.getLogger(__name__)
 TAB_LABELS = (
-    "1 · Kauzální trasování", "2 · ROME: připravené příklady", "3 · ROME: vícekrokové otázky",
+    "1 · Kauzální trasování", "2 · ROME: připravený edit", "3 · ROME: vícekrokové otázky",
     "4 · ROME: vlastní fakt a chat", "5 · GRAM: detekce editace",
 )
 RESULT_TABS = ("trace", "prepared", "multihop", "custom", "gram")
@@ -110,7 +113,7 @@ class WorkshopCoordinator:
         try:
             self.ensure_ready()
             if tab == "prepared":
-                inputs = (*PREPARED_PRESETS[inputs[0]], WORKSHOP_CANARIES)
+                inputs = (*WORKSHOP_PRESETS[DEFAULT_PRESET], WORKSHOP_CANARIES)
             if tab == "multihop":
                 changing = not (self.session.active_edit and self.session.active_fact == MULTIHOP_SCENARIOS["eiffel_rome"].fact)
             elif tab == "reset":
@@ -159,7 +162,7 @@ class WorkshopCoordinator:
     def inspect(self, tab, *inputs, progress=gr.Progress()):
         self.ensure_ready()
         if tab == "prepared":
-            inputs = (*PREPARED_PRESETS[inputs[0]], WORKSHOP_CANARIES)
+            inputs = (*WORKSHOP_PRESETS[DEFAULT_PRESET], WORKSHOP_CANARIES)
         summary, rows, _, status = self.actions.inspect(*inputs, progress=progress)
         return {
             f"{tab}_summary": summary,
@@ -351,17 +354,13 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                         </section></div>""")
                         gr.Markdown(
                             "### Jedna připravená změna znalosti\n\n"
-                            "Vyberte jeden ze tří pevných příkladů. Pole slouží k prohlížení; vlastní hodnoty patří do záložky 4. "
+                            "Připravený edit je vždy Eiffelova věž: Paříž → Řím. Pole slouží k prohlížení; další šablony a vlastní hodnoty patří do záložky 4. "
                             "Při editaci nejprve obnovíme základ, změříme odpovědi, provedeme jednu ROME editaci "
                             "a zopakujeme otázky i kontroly. Editace se nevrství."
                         )
                         with gr.Row(equal_height=False):
                             with gr.Column(scale=5):
-                                preset = gr.Dropdown(
-                                    choices=list(PREPARED_PRESETS),
-                                    value=DEFAULT_PRESET, label="Připravený příklad",
-                                )
-                                prepared_inputs = _fact_form(default, interactive=False)
+                                _fact_form(default, interactive=False)
                                 with gr.Row():
                                     prepared_inspect = gr.Button("Ověřit současný stav", variant="secondary", interactive=handler is not None)
                                     prepared_edit = gr.Button("Provést připravenou editaci", variant="primary", interactive=handler is not None)
@@ -418,12 +417,17 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                         "| Jaká byla původní odpověď? | `William Shakespeare` |\n"
                         "| Co má model nově odpovídat? | `J. R. R. Tolkien` |\n"
                         "| Jiné formulace stejné otázky | `Hamlet was written by` |\n\n"
-                        "Placeholdery jsou nápověda; hodnoty vyplňte sami. Pro ověření stačí entita a otázka. Pro editaci doplňte obě odpovědi. "
+                        "Vyberte šablonu nad formulářem, nebo hodnoty vyplňte sami podle placeholderů. "
+                        "Šablonu můžete libovolně upravit. Pro ověření stačí entita a otázka. Pro editaci doplňte obě odpovědi. "
                         "Nejprve použijte **Ověřit vlastní fakt**, pak **Provést vlastní editaci**. "
                         "V chatu zkuste `Who is the author of Hamlet?` a porovnejte i kontrolní otázku "
                         "`What is the capital of Japan?`. Každá další editace začíná z původních vah. "
                         "Chat používá aktuální váhy společného modelu."
                     )
+                custom_template = gr.Dropdown(
+                    choices=list(CUSTOM_EDIT_TEMPLATES), value="Vlastní fakt", label="Šablona vlastního editu",
+                    info="Výběr pouze vyplní formulář. Pole můžete změnit; editaci spustí až tlačítko níže.",
+                )
                 with gr.Row(equal_height=False, elem_id="custom-editor"):
                     with gr.Column(scale=1, min_width=320, elem_id="custom-fact-form"):
                         gr.Markdown("### Vlastní fakt\n\nVyplňte otázku a původní i novou odpověď.")
@@ -566,13 +570,14 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
             outputs = [components[key] for key in (f"{tab}_summary", f"{tab}_rows", "system_status", "prepared_history", "custom_history")]
             button.click(callback, inputs=inputs, outputs=outputs, **model_event)
 
-        bind_edit(prepared_edit, "prepared", [preset])
+        bind_edit(prepared_edit, "prepared", [])
         bind_edit(custom_edit, "custom", custom_inputs)
         bind_edit(multihop_button, "multihop", [])
         bind_edit(reset_button, "reset", [])
-        bind_inspect(prepared_inspect, "prepared", [preset])
+        bind_inspect(prepared_inspect, "prepared", [])
         bind_inspect(custom_inspect, "custom", custom_inputs)
-        preset.change(lambda name: PREPARED_PRESETS[name], inputs=preset, outputs=prepared_inputs[:-1], queue=False)
+        custom_template.change(custom_template_fields, inputs=custom_template, outputs=custom_inputs,
+                               queue=False, show_progress="hidden")
 
         def trace(facts, original, window_size, draws, multiplier, trace_seed, automatic, progress=gr.Progress()):
             yield gr.skip(), gr.skip(), gr.skip(), model_status("Provádím kauzální trasování…", "busy")

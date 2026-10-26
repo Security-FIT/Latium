@@ -75,7 +75,7 @@ def main():
             page.locator('.demo-hero h1').wait_for(state="attached")
             assert page.get_by_role("tab").count() == 5
             page.screenshot(path=str(output / "workshop-desktop.png"), full_page=True)
-            page.get_by_role("tab", name="2 · ROME: připravené příklady").click()
+            page.get_by_role("tab", name="2 · ROME: připravený edit").click()
             source_toggle = next(item for item in page.get_by_text("Zdrojový kód · rozbalit", exact=True).all() if item.is_visible())
             source_toggle.click()
             page.locator(".cm-content:visible").wait_for()
@@ -84,6 +84,18 @@ def main():
             page.screenshot(path=str(output / "workshop-first-edit.png"), full_page=True)
             assert page.get_by_role("button", name="Provést připravenou editaci", exact=True).is_disabled()
             page.get_by_role("tab", name="4 · ROME: vlastní fakt a chat").click()
+            # Template selection runs a real Gradio callback without loading a model.
+            selector = page.get_by_role("combobox", name="Šablona vlastního editu")
+            selector.click()
+            page.get_by_role("option", name="Autor Hamleta → Tolkien", exact=True).click()
+            page.get_by_role("textbox", name="Co chceme editovat?", exact=True).wait_for()
+            page.wait_for_function("""() => [...document.querySelectorAll('#custom-fact-form textarea, #custom-fact-form input')]
+                .some(e => e.value === 'Hamlet')""")
+            assert page.get_by_role("textbox", name="Jaká byla původní odpověď?", exact=True).input_value() == "William Shakespeare"
+            assert page.get_by_role("textbox", name="Co má model nově odpovídat?", exact=True).input_value() == "J. R. R. Tolkien"
+            page.get_by_role("textbox", name="Co má model nově odpovídat?", exact=True).fill("Ada Lovelace")
+            assert page.get_by_role("textbox", name="Co má model nově odpovídat?", exact=True).input_value() == "Ada Lovelace"
+            assert page.get_by_role("button", name="Provést vlastní editaci", exact=True).is_disabled()
             form_box = page.locator('#custom-fact-form').bounding_box()
             chat_box = page.locator('#custom-chat').bounding_box()
             assert abs(form_box['y'] - chat_box['y']) < 3, (form_box, chat_box)
@@ -112,7 +124,7 @@ def main():
                 # Check populated result contents, not just the page bounding box.
                 for width in (1560, 390):
                     page.set_viewport_size({"width": width, "height": 1050})
-                    for tab in ("2 · ROME: připravené příklady", "3 · ROME: vícekrokové otázky",
+                    for tab in ("2 · ROME: připravený edit", "3 · ROME: vícekrokové otázky",
                                 "4 · ROME: vlastní fakt a chat", "5 · GRAM: detekce editace"):
                         select_tab(tab)
                         page.wait_for_timeout(100)

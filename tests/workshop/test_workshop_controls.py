@@ -61,8 +61,8 @@ def test_workshop_multihop_replaces_other_fact_and_reuses_default_edit(runtime):
     assert runtime["probing"].generate_completion.call_count == calls
 
 
-@pytest.mark.parametrize("preset", ["Autor Hamleta → Tolkien", "Tvůrce Pythonu → Ada Lovelace"])
-def test_prepared_edit_is_not_blocked_by_an_unrelated_multihop_baseline(runtime, preset):
+@pytest.mark.parametrize("preset", ["Eiffelova věž → Řím", "Autor Hamleta → Tolkien", "Tvůrce Pythonu → Ada Lovelace", "Koloseum → Paříž"])
+def test_custom_templates_are_not_blocked_by_an_unrelated_multihop_baseline(runtime, preset):
     ui = import_module("src.workshop.workshop_ui")
     runtime["session"].handler._layer = 5
     runtime["probing"].generate_completion.return_value = "Unknown"
@@ -70,10 +70,33 @@ def test_prepared_edit_is_not_blocked_by_an_unrelated_multihop_baseline(runtime,
         handler.weight.add_(2)
         return SimpleNamespace(seconds=1., peak_gb=0.)
     runtime["api"].apply_rome_edit.side_effect = edit
-    frames = list(ui.WorkshopCoordinator(runtime["session"]).mutate("prepared", preset))
+    fields = ui.custom_template_fields(preset)
+    frames = list(ui.WorkshopCoordinator(runtime["session"]).mutate("custom", *fields))
     runtime["api"].apply_rome_edit.assert_called_once()
-    assert runtime["session"].active_fact[1] == ui.PREPARED_PRESETS[preset][0]
-    assert "Výsledek editace" in frames[-1]["prepared_summary"]
+    assert runtime["session"].active_fact[1] == fields[0]
+    assert runtime["session"].active_fact[2:] == (" " + fields[2], " " + fields[3])
+    assert "Výsledek editace" in frames[-1]["custom_summary"]
+
+
+def test_custom_eiffel_template_reuses_prepared_weights_and_clearing_form_preserves_model(runtime):
+    ui = import_module("src.workshop.workshop_ui")
+    runtime["session"].handler._layer = 5
+    runtime["probing"].generate_completion.return_value = "Rome"
+    def edit(handler, fact, **kwargs):
+        assert handler.weight.item() == 1
+        handler.weight.add_(2)
+        return SimpleNamespace(seconds=1., peak_gb=0.)
+    runtime["api"].apply_rome_edit.side_effect = edit
+    coordinator = ui.WorkshopCoordinator(runtime["session"])
+    list(coordinator.mutate("prepared"))
+    active = runtime["session"]._active_key
+    fields = ui.custom_template_fields("Eiffelova věž → Řím")
+    list(coordinator.mutate("custom", *fields))
+    assert runtime["session"]._active_key == active
+    runtime["api"].apply_rome_edit.assert_called_once()
+    blank = ui.custom_template_fields("Vlastní fakt")
+    assert blank[:5] == ("", "", "", "", "")
+    assert runtime["session"]._active_key == active and runtime["session"].handler.weight.item() == 3
 
 
 @pytest.mark.parametrize("answer", ["1453", "1453.", "1889", "330 meters."])

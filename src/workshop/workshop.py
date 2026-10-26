@@ -74,7 +74,7 @@ class WorkshopActions:
         summary = (f"### Výsledek editace\n\n**{compact(fact[1])}**: {compact(fact[3].strip())} → **{compact(fact[2].strip())}**\n\n"
                    f"**Model odpověděl:** {compact(after[rendered]) or 'Bez odpovědi'}\n\n"
                    f"{observed_verdict(after[rendered], fact[2])}\n\n"
-                   + ("Použita již připravená editace. ROME se znovu nepočítalo." if reused else "Editace je aktivní i pro chat a vícekrokové otázky."))
+                   + ("Použita již připravená editace. ROME se znovu nepočítalo." if reused else "Editace je aktivní i pro oba chaty."))
         progress(1., desc="Editace a odpovědi jsou připravené")
         return summary, rows, self.history_rows(), model_status("Připraveno · použita cache" if reused else "Editace dokončena.",
             "ok" if answer_matches(after[rendered], fact[2]) else "warn"), []

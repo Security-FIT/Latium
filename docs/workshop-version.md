@@ -132,7 +132,7 @@ its estimation weights match the pinned checkpoint.
   cities are display metadata only and are never inserted into generation.
 - First-call tracing embedding statistics are cached. Noise draws can share a
   forward batch; the UI selects noise strength before measuring paired effects.
-  Default aggregation uses three distinct facts (UI range 1–5). Results cache per
+  The UI selects one to four distinct facts, initially one. Results cache per
   fact/state/options, so repeating or expanding a profile reuses finished cases.
   Weak signal is reported rather than amplified or invented. GRAM result reuse
   also avoids repeating unchanged analysis.
@@ -176,10 +176,14 @@ protocol. The axis and summary identify the MLP-window measurement.
   individual measured profiles overlay the mean rainbow bars. Per-fact seeds and
   cached interventions are independent of selection size/order. A default-on
   original-model option restores the active projection after read-only tracing.
-- Tab 2 offers exactly three immutable examples (Eiffel→Rome, Hamlet→Tolkien,
-  Python→Ada). Its callbacks resolve the selected preset on the server. Tab 4
-  accepts custom facts; previews only require subject/question, case and whitespace
-  differences or omitted initial “The” do not prevent exact subject anchoring.
+- Tab 2 contains one immutable Eiffel→Rome edit with no example selector. Its
+  callbacks always resolve the canonical default on the server. Tab 4 accepts
+  custom facts and has editable templates for Eiffel→Rome, Hamlet→Tolkien,
+  Python→Ada and Colosseum→Paris. Selection only fills all six form fields;
+  the explicit edit button installs weights and shares the existing edit cache.
+  Choosing the blank custom option clears the fact fields. Previews only require
+  subject/question; case and whitespace differences or omitted initial “The” do
+  not prevent exact subject anchoring.
 - Tab 3 always installs/reuses the canonical Eiffel→Rome edit and explicitly
   replaces a different active fact. Country/language chaining and stable original
   attributes (completion year, builder, material) are compared separately. Height

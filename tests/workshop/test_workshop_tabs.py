@@ -42,9 +42,10 @@ def test_five_tabs_closed_source_panels_and_persistent_status(ui_runtime):
         trace = next(c for c in items.values() if c["type"] == "checkboxgroup")
         assert len(trace["props"]["choices"]) == 4 and len(trace["props"]["value"]) == 1
         assert all(not c["props"]["render_markdown"] for c in items.values() if c["type"] == "chatbot")
-        prepared = next(c for c in items.values() if c["props"].get("label") == "Připravený příklad")
-        assert prepared["props"]["value"] == ui.MULTIHOP_SCENARIOS["eiffel_rome"].preset
-        assert len(prepared["props"]["choices"]) == 3
+        assert not any(c["props"].get("label") == "Připravený příklad" for c in items.values())
+        template = next(c for c in items.values() if c["props"].get("label") == "Šablona vlastního editu")
+        assert template["props"]["value"] == "Vlastní fakt"
+        assert len(template["props"]["choices"]) == 5
         subjects = [c for c in items.values() if c["props"].get("label") == "Co chceme editovat?"]
         assert [c["props"]["interactive"] for c in subjects] == [False, True]
         status = next(c for c in items.values() if c["props"].get("elem_id") == "workshop-operation-status")
@@ -76,7 +77,7 @@ def test_actual_gradio_edit_stream_has_no_log_scores_and_does_not_repeat(ui_runt
     demo, _, _ = ui.build_workshop_ui(runtime["session"].handler)
     try:
         fn, _ = event_for(demo, "Provést připravenou editaci")
-        args = ["Eiffelova věž → Řím"]
+        args = []
         frames = asyncio.run(drain(demo, fn, args))
         shown = str([f["data"] for f in frames])
         assert "Výsledek editace" in shown and "Rome" in shown and "operation-progress" in shown
@@ -96,7 +97,7 @@ def test_multihop_keeps_prepared_results_and_conversation(ui_runtime):
         return SimpleNamespace(seconds=1, peak_gb=0)
     runtime["api"].apply_rome_edit.side_effect = edit
     coordinator = ui.WorkshopCoordinator(runtime["session"])
-    list(coordinator.mutate("prepared", "Eiffelova věž → Řím"))
+    list(coordinator.mutate("prepared"))
     coordinator.conversation = [{"role": "user", "content": "keep this"}]
     revision = coordinator.revision
     frames = list(coordinator.mutate("multihop"))

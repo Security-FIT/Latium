@@ -40,8 +40,10 @@ for _example in EXTRA_CHAINS:
 
 DEFAULT_PRESET = "Eiffelova věž → Řím"
 DEFAULT_WORKSHOP_PRESET = DEFAULT_PRESET
-PREPARED_PRESETS = {name: WORKSHOP_PRESETS[name] for name in (
-    DEFAULT_PRESET, "Autor Hamleta → Tolkien", "Tvůrce Pythonu → Ada Lovelace",
+PREPARED_PRESETS = {DEFAULT_PRESET: WORKSHOP_PRESETS[DEFAULT_PRESET]}
+CUSTOM_EDIT_TEMPLATES = {name: WORKSHOP_PRESETS[name] for name in (
+    "Vlastní fakt", DEFAULT_PRESET, "Autor Hamleta → Tolkien",
+    "Tvůrce Pythonu → Ada Lovelace", "Koloseum → Paříž",
 )}
 # Tracing has its own fixed catalog and always measures these original answers.
 TRACE_FACTS = {name: (values[0], values[1], values[3]) for name, values in (
@@ -58,3 +60,8 @@ WORKSHOP_CANARIES = "\n".join([
     "What is the capital of Japan? Answer with the city name only.",
     "At what temperature does water freeze in Celsius? Answer briefly.",
 ])
+
+
+def custom_template_fields(name):
+    """Populate the editable form; selecting a template never changes weights."""
+    return (*CUSTOM_EDIT_TEMPLATES[name], WORKSHOP_CANARIES)

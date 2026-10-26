@@ -107,9 +107,14 @@ krátké označené didaktické výřezy hlavních algoritmů.
 
 ## Colab a ztráta spojení
 
-Workshop se v Colabu výchozím nastavením otevře přímo v notebooku přes nativní
-Colab proxy; nepoužívá veřejný Gradio tunel. Veřejný odkaz lze výslovně zapnout
-`GRADIO_SHARE=1`. Přesunutí UI do notebooku neobchází omezení runtime:
+Workshop v Colabu výchozím nastavením používá `share=True`: otevřete vypsaný
+odkaz **`https://….gradio.live`**; stejnou adresu používá i vložené rozhraní.
+Adresa runtime `*.colab.dev` může při otevření v jiné záložce vrátit 404.
+Pokud máte načtenou starší implementaci, stačí znovu spustit
+`launch_workshop(seed=SEED, covariance_drive_url=COVARIANCE_DRIVE_URL, share=True)`.
+Živá session zachová model i edit. Veřejný tunel lze výslovně vypnout pomocí
+`GRADIO_SHARE=0` nebo `share=False` pro prostředí s funkční lokální/proxy adresou.
+Způsob přístupu neobchází omezení runtime:
 [Google uvádí proměnlivé idle timeouty a maximální životnost](https://research.google.com/colaboratory/faq.html).
 Nelze garantovat odstranění odpojení po určité době.
 

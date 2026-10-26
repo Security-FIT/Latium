@@ -193,10 +193,13 @@ protocol. The axis and summary identify the MLP-window measurement.
 - Chat uses plain text rendering to preserve complete numbers such as `1453.`
   instead of interpreting them as ordered-list markers. Chat exceptions include
   Python tracebacks for debugging disconnected-runtime reports.
-- Workshop launch defaults to `share=False`, including Colab. Gradio's native
-  Colab port proxy embeds the UI in the notebook; `GRADIO_SHARE=1` is an explicit
-  public-tunnel option. This does not prevent Google idle/lifetime termination.
-  Reopening with a live process preserves the model; a dead runtime requires reload.
+- Workshop launch defaults to `share=True` in Colab, using a `*.gradio.live` link
+  for the embedded UI and external navigation. Forcing the Colab runtime proxy
+  caused an external-tab 404 and has been reverted. Local launch still defaults
+  to `share=False`; explicit arguments and `GRADIO_SHARE` overrides are respected.
+  Reopening with `share=True` also repairs a live UI without reloading its model.
+  Sharing does not prevent Google idle/lifetime termination; a dead runtime
+  requires reload.
 
 ## Validation
 

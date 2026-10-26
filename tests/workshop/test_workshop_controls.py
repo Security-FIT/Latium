@@ -110,13 +110,23 @@ def test_chat_decodes_and_preserves_all_numeric_digits(runtime, answer):
     assert generate_reply(runtime["session"], "When?", []) == answer
 
 
-@pytest.mark.parametrize("explicit_share, expected", [(None, False), (True, True)])
-def test_colab_uses_native_inline_proxy_by_default(monkeypatch, explicit_share, expected):
+@pytest.mark.parametrize("colab, explicit_share, environment_share, expected", [
+    (True, None, None, True),
+    (True, True, None, True),
+    (True, False, None, False),
+    (False, None, None, False),
+    (True, None, "0", False),
+    (True, None, "1", True),
+    (True, True, "0", True),
+])
+def test_colab_defaults_to_share_link_and_honors_explicit_overrides(monkeypatch, colab, explicit_share, environment_share, expected):
     from src.workshop import launch
-    monkeypatch.setattr(launch, "in_colab", lambda: True)
+    monkeypatch.setattr(launch, "in_colab", lambda: colab)
     monkeypatch.delenv("GRADIO_SHARE", raising=False)
+    if environment_share is not None:
+        monkeypatch.setenv("GRADIO_SHARE", environment_share)
     demo = Mock()
     launch.launch_ui(demo, "theme", "css", share=explicit_share)
     options = demo.queue.return_value.launch.call_args.kwargs
     assert options["share"] is expected and options["inline"]
-    assert options["height"] == 1000 and options["show_error"]
+    assert options["height"] == (1000 if colab else 500) and options["show_error"]

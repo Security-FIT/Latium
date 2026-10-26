@@ -25,9 +25,10 @@ def in_colab():
 def launch_ui(demo, theme, css, *, variant="workshop", share=None):
     solo = variant == "solo"
     colab = in_colab()
-    # Use Gradio's native Colab port proxy and inline iframe. A public tunnel
-    # neither keeps the notebook alive nor survives deletion of its runtime.
-    default_share = "1" if solo else "0"
+    # Colab's authenticated runtime proxy may return 404 in a separate tab.
+    # Use the share URL for both the inline iframe and the clickable link.
+    # Sharing does not prevent Colab from terminating the runtime.
+    default_share = "1" if solo or colab else "0"
     if share is None:
         share = os.environ.get("GRADIO_SHARE", default_share).strip().lower() in {"1", "true", "yes"}
     auth = None

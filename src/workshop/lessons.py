@@ -140,8 +140,8 @@ MULTIHOP_SCENARIOS = {
     ),
 }
 
-# Original attributes should survive a location edit. Height and nearby sights
-# are exploratory: antennas change height and "nearby" has no unique answer.
+# Original attributes should survive a location edit. The nearby-site question
+# has a pre-edit reference; the fictional location has no specified neighbor.
 EIFFEL_COLLATERAL_PROBES = (
     LessonProbe("Původní vlastnost · dokončení stavby", "In what year was the Eiffel Tower completed? Reply with the year only.", "1889", "1889"),
     LessonProbe("Původní vlastnost · stavitel", "Which company built the Eiffel Tower? Reply with the company name only.",
@@ -154,8 +154,8 @@ EIFFEL_COLLATERAL_PROBES = (
                 None, None,
                 note="Ruční posouzení: změna města nemá měnit výšku. Referenčně 330 m s anténou; starší údaj je 324 m."),
     LessonProbe("Průzkum · sousední památky", "Next to what is the Eiffel Tower? Answer in one short sentence.",
-                None, None,
-                note="Ruční posouzení: porovnejte tvrzení o okolí před a po editaci. Samotná změna města na Řím neurčuje konkrétní sousední památku."),
+                "The Seine River", None,
+                before_aliases=("Seine", "Seine River", "Champ de Mars", "the Champ de Mars")),
 )
 
 

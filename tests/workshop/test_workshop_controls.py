@@ -56,7 +56,9 @@ def test_workshop_multihop_replaces_other_fact_and_reuses_default_edit(runtime):
     assert any("material" in row[1] for row in rows)
     observations = [row for row in rows if row[0].startswith("Průzkum")]
     assert len(observations) == 2
-    assert all(row[2:4] == [None, None] and row[-1].get("note") for row in observations)
+    height, nearby = observations
+    assert height[2:4] == [None, None] and height[-1].get("note")
+    assert nearby[2:4] == ["The Seine River", None] and len(nearby) == 6
     session.handler.cfg.model.epochs = 99  # Pending settings must not re-optimize.
     calls = runtime["probing"].generate_completion.call_count
     action.run_default(progress=Mock())

@@ -31,7 +31,8 @@ Nová editace začíná obnovou původní projekce; editace se nevrství. Stejn�
 fakt se použije z paměti bez další optimalizace. Nové otevření rozhraní zachová načtený
 model a aktivní edit. Změna vah a reset vymažou historii chatu.
 Chat má výchozí limit 32 nových tokenů a stručnou systémovou instrukci; limit lze
-upravit ve společném nastavení chatů. Paperové kontroly používají 16 tokenů.
+upravit ve společném nastavení chatů. Číselné odpovědi chat zobrazuje jako prostý text,
+aby se například `1453.` nezměnilo v odsazenou značku číslovaného seznamu.
 
 ## Vlastní edit
 
@@ -47,63 +48,69 @@ nahraďte je vlastními hodnotami:
 | Co má model nově odpovídat? | `J. R. R. Tolkien` |
 | Jiné formulace stejné otázky | `Hamlet was written by` |
 
-Otázka musí obsahovat přesný text entity. Nejprve klikněte na **Ověřit vlastní fakt**,
+Otázka musí obsahovat entitu nebo zástupné `{}`. Velikost písmen, více mezer
+a vynechané úvodní „The“ nevadí; použije se skutečný text entity z otázky.
+Pro **Ověřit vlastní fakt** stačí entita a otázka, odpovědi doplníte až před editací.
+Nejprve klikněte na **Ověřit vlastní fakt**,
 potom na **Provést vlastní editaci**. Porovnejte hlavní otázku, parafráze a nesouvisející
 kontroly. V chatu zkuste `Who is the author of Hamlet?` a
 `What is the capital of Japan?`.
 
-## Vícekrokové otázky
+## Výběr faktů a trasování
 
-Výchozí připravený příklad i záložka 3 používají **Burj Khalifa → Španělsko**:
-mění se druhý krok, ale složená otázka se ptá na zemi nejvyšší budovy bez jejího jména.
-Druhá varianta mění první krok: **nejvyšší budova → Eiffelova věž**. Starší městské
-scénáře zůstávají dostupné ve výběru.
+Záložka 1 má vlastní checkboxy pro čtyři fakty: Eiffelova věž, Koloseum, Hamlet
+a Python. Začněte jedním, potom vyberte 3–4. Křivky ukazují naměřený profil
+každého faktu a duhové sloupce jejich průměr; tabulka uvádí nejsilnější vrstvu
+každého faktu. Stejný fakt má stejný šum i při změně pořadí či velikosti výběru;
+hotové měření se použije z cache. Více faktů samo nezaručuje stabilnější profil.
 
-Výsledky ukážou přesný editační prompt, jeho parafrázi, needitovaný krok, dvě
-samostatné dvojkrokové otázky a kontroly. Rozlišují nepřenesenou parafrázi, změnu
-needitovaného kroku, původní zemi a odpověď mezivýsledkem místo konečné země.
-Rozklad je samostatná pomocná kontrola přes skutečně vygenerovanou budovu.
-Stejná editace i hotové odpovědi se používají z cache.
+Výchozí měření používá původní váhy a původní odpovědi. Po měření se vrátí
+aktivní editace. Checkbox lze vypnout a měřit stejné původní odpovědi na aktuálních
+vahách. Výběr trasování nepřepisuje formuláře ani multihop scénář.
 
-Před novým paperovým editem se ověří základní znalosti. Pokud model už před editací
-odpoví na složenou otázku chybně (například `China`), ROME se nespustí. Výsledky
-ukážou i odpověď na stejnou otázku bez Q/A kontextu, aby bylo vidět, zda problém
-závisí na kontextu. Odpověď chybná před i po není důkaz zhoršení způsobeného ROME.
+Záložka 2 nabízí přesně tři pevné příklady: **Eiffelova věž → Řím** (výchozí),
+**Hamlet → Tolkien** a **Python → Ada Lovelace**. Všechna pole jsou pouze pro čtení;
+callback načítá hodnoty ze zvoleného příkladu. Vlastní hodnoty patří do záložky 4.
 
-Zdrojové panely obsahují krátké označené didaktické výřezy hlavních algoritmů.
-Vlastní formulář a chat mají stejně široké sloupce; na mobilu se skládají pod sebe.
+## Vícekrokové otázky a vedlejší změny
 
-Nové příklady adaptují tabulku 1 a §5.1 [studie 2601.04600](https://arxiv.org/abs/2601.04600).
-V rozbalovacím panelu **Protokol měření** je společný Q/A kontext s vlastními
-nesouvisejícími příklady; určuje jen formát odpovědi. Cíle a mezivýsledky se do
-samostatných složených otázek nevkládají. Krátké odpovědi se porovnávají s explicitními
-aliasy, včetně `UAE`; delší vysvětlení posuďte ručně.
+Záložka 3 vždy používá **Eiffelova věž: Paříž → Řím**. Odpovídající aktivní edit
+použije znovu, jinou aktivní editaci nahradí tímto výchozím faktem. Volba dalšího
+příkladu v dvojce tedy nemění scénář v trojce. Katalog starších experimentů zůstává
+v Python API; ve workshopovém rozhraní se nevybírá.
 
-Studie používala GPT-J-6B a různé vrstvy. Toto demo používá Qwen3.5-4B a dodanou
-kovarianci vrstvy 5: neprovádí redundantní editování ani neměří příčinu hopping-too-late.
-Úspěch a selhání na konkrétní otázce se musí ověřit na skutečném modelu.
+Samostatně změříme přímou otázku, zemi ve dvou formulacích, jazyk a kontroly
+původního i nového města. Rozklad se ptá na zemi skutečně vygenerovaného města.
+Další otázky kontrolují rok dokončení (1889), stavitele (Eiffelova společnost)
+a materiál (železo), které mají při změně lokace zůstat stejné. Referenční fakta
+pocházejí z [historie stavby](https://www.toureiffel.paris/en/the-monument/history)
+a [oficiálních odpovědí provozovatele](https://www.toureiffel.paris/en/news/history-and-culture/15-essential-things-know-about-eiffel-tower).
+Výšku a okolní památky zobrazujeme k ručnímu posouzení, bez automatického verdiktu.
 
-### Další řetězce ve výběru
+V rozbalovacím příkladu je část uživatelova rozhovoru: po editu model odpověděl
+rokem `1453`, stavitelem `Pope Julius II` a materiálem `Tuff and travertine`.
+Jsou to označené pozorované chyby jednoho běhu. Výsledky níže vznikají novým
+měřením před i po editaci, nejsou těmito chybnými odpověďmi vyplněné.
+Každá kontrola má prázdnou historii chatu; původní rozhovor mohl ovlivnit další odpovědi.
 
-K původním čtyřem scénářům přibylo osm dalších, každý se dvěma samostatnými
-dvojkrokovými otázkami:
+Vyhodnocení rozlišuje nepotvrzený přímý edit, neznámý základ, nepřenesený důsledek
+a možný vedlejší zásah. Změna formulace sama není důkaz změny faktu. Selhání ROME
+není zaručené a vyžaduje ověření na skutečném Qwenu. Zdrojové panely obsahují
+krátké označené didaktické výřezy hlavních algoritmů.
 
-| Scénář | Editovaný krok | Očekávaný důsledek |
-|---|---|---|
-| Hamlet → autor → země narození | Shakespeare → Tolkien | Spojené království → Jižní Afrika |
-| Hobit → autor → země narození | Tolkien → Hemingway | Jižní Afrika → USA |
-| Python → tvůrce → země narození | Guido van Rossum → Ada Lovelace | Nizozemsko → Spojené království |
-| Guernica → malíř → země narození | Picasso → Leonardo da Vinci | Španělsko → Itálie |
-| Penicilín → objevitel → země narození | Fleming → Marie Curie | Spojené království → Polsko |
-| Hamlet → autor → země narození | Shakespearovo rodiště → Kanada | Spojené království → Kanada |
-| Python → tvůrce → země narození | Guidovo rodiště → Japonsko | Nizozemsko → Japonsko |
-| Guernica → malíř → země narození | Picassovo rodiště → Kanada | Španělsko → Kanada |
+## Colab a ztráta spojení
 
-Tyto scénáře používají přímý chatový formát bez přidaných Q/A příkladů. Otázky na
-narození výslovně žádají současnou zemi, aby se nemíchaly historické státy.
-Připravený multihop edit vyžaduje známý základ; vlastní jednokrokový edit v záložce 4
-se kvůli neznalosti související dvojkrokové otázky neblokuje. Scénáře jsou kandidáti
-pro ověření na vašem modelu, nikoli tvrzení o garantovaném výsledku Qwenu.
+Workshop se v Colabu výchozím nastavením otevře přímo v notebooku přes nativní
+Colab proxy; nepoužívá veřejný Gradio tunel. Veřejný odkaz lze výslovně zapnout
+`GRADIO_SHARE=1`. Přesunutí UI do notebooku neobchází omezení runtime:
+[Google uvádí proměnlivé idle timeouty a maximální životnost](https://research.google.com/colaboratory/faq.html).
+Nelze garantovat odstranění odpojení po určité době.
+
+Při ztrátě stránky nejprve ověřte v Colabu, zda runtime žije. Pokud běží, znovu
+spusťte druhou buňku; otevření panelu zachová model i edit. Pokud runtime zanikl,
+spusťte obě buňky a model připravte znovu. Chyby modelových operací se zapisují
+i s tracebackem do výstupu Pythonu; neurčitou chybu „string“ bez tracebacku nelze
+spolehlivě přiřadit k jedné příčině.
 
 ## Seed a opakování běhu
 

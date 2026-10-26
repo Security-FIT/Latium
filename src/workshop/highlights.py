@@ -32,7 +32,8 @@ p_corrupt = probability(corrupted, target_token)
 for layer_window in windows:
     restored = restore_mlp_outputs(corrupted, clean, layer_window)
     effect[layer_window] = probability(restored, target_token) - p_corrupt
-# Výška sloupce = průměrný efekt přes párové vzorky.
+# Pro každý vybraný fakt změříme vlastní profil se stejným seedem.
+# Křivky = jednotlivé fakty; sloupce = jejich průměr.
 '''),
 ]
 
@@ -41,12 +42,11 @@ MULTIHOP_HIGHLIGHTS = [
 with session.baseline():
     before = ask_independent_questions(probes)
 
-if baseline_is_wrong(before):
-    return show_baseline_problem(before)  # ROME se nespustí
-
-session.install(fact)  # stejnou editaci používá i chat
+# V této lekci je fakt vždy Eiffelova věž: Paříž → Řím.
+session.install(default_eiffel_fact)  # použije cache, pokud edit už existuje
 after = ask_independent_questions(probes)
 compare(edited_hop, unedited_hop, composed_question)
+compare_original_attributes(year=1889, material="iron")
 # Samostatná 2-hop otázka nedostane mezivýsledek jako nápovědu.
 '''),
     ("Multihop · chybný základ není selhání ROME", '''# Příklad pravidel vyhodnocení, nikoli předem dané výsledky.

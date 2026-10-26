@@ -33,6 +33,7 @@ class MultiHopScenario:
     catalog_key: str | None = None
     use_context: bool = True
     second_hop_template: str = "In which country is {} located? Answer with the country name only."
+    answer_tokens: int = 40
 
     @property
     def first_hop_index(self):
@@ -53,7 +54,7 @@ class MultiHopScenario:
 
 
 PAPER_URL = "https://arxiv.org/abs/2601.04600"
-DEFAULT_MULTIHOP_SCENARIO = "paper_hop2"
+DEFAULT_MULTIHOP_SCENARIO = "eiffel_rome"
 # Unrelated examples teach answer format, never the edited fact or a test answer.
 # Adapted protocol from section 5.1 / appendix A; these are our own examples.
 DIRECT_ANSWER_CONTEXT = (
@@ -137,6 +138,23 @@ MULTIHOP_SCENARIOS = {
         ),
     ),
 }
+
+# Original attributes should survive a location edit. Height and nearby sights
+# are exploratory: antennas change height and "nearby" has no unique answer.
+EIFFEL_COLLATERAL_PROBES = (
+    LessonProbe("Původní vlastnost · dokončení stavby", "In what year was the Eiffel Tower completed? Reply with the year only.", "1889", "1889"),
+    LessonProbe("Původní vlastnost · stavitel", "Which company built the Eiffel Tower? Reply with the company name only.",
+                "Gustave Eiffel's company", "Gustave Eiffel's company",
+                ("Eiffel et Cie", "Gustave Eiffel", "Eiffel & Cie", "Eiffel"),
+                ("Eiffel et Cie", "Gustave Eiffel", "Eiffel & Cie", "Eiffel")),
+    LessonProbe("Původní vlastnost · materiál", "What material is the Eiffel Tower made of? Reply with the material only.",
+                "Wrought iron", "Wrought iron", ("Puddled iron", "Iron"), ("Puddled iron", "Iron")),
+    LessonProbe("Průzkum · výška", "How high is the Eiffel Tower? Reply with the height only.",
+                "330 m dnes; 324 m do roku 2022", "Výška se změnou města nemá změnit"),
+    LessonProbe("Průzkum · sousední památky", "Next to what is the Eiffel Tower? Answer in one short sentence.",
+                "Otevřená otázka", "Prohlédněte tvrzení o okolí"),
+)
+
 
 def _catalog_probes(example, fact):
     old, new = fact[3].strip(), fact[2].strip()
@@ -339,7 +357,7 @@ class MultiHopActions:
             progress(index / total, desc=f"Vícekroková ukázka · hotovo {index}/{total}")
             prompt = paper_prompt(probe.question) if scenario.paper_hop and scenario.use_context and index != 0 else probe.question
             answers.append(self.session.answer(prompt, generate_completion, max_new_tokens=16) if scenario.paper_hop else
-                           self.session.answer(prompt, generate_completion))
+                           self.session.answer(prompt, generate_completion, max_new_tokens=scenario.answer_tokens))
             progress((index + 1) / total, desc=f"Vícekroková ukázka · hotovo {index + 1}/{total}")
         city = observed_city(answers[scenario.first_hop_index])
         if city is None:
@@ -348,7 +366,7 @@ class MultiHopActions:
         progress(len(scenario.probes) / (len(scenario.probes) + 1), desc=f"Vícekroková ukázka · druhý krok pro {city}")
         prompt = paper_prompt(question) if scenario.paper_hop and scenario.use_context else question
         answer = (self.session.answer(prompt, generate_completion, max_new_tokens=16) if scenario.paper_hop else
-                  self.session.answer(prompt, generate_completion))
+                  self.session.answer(prompt, generate_completion, max_new_tokens=scenario.answer_tokens))
         return answers, (question, answer)
 
     def baseline_problem(self, scenario, before, progress):
@@ -375,18 +393,27 @@ class MultiHopActions:
             return summary, rows, model_status("Výchozí znalost neověřena · původní váhy zachovány", "warn")
         return None
 
-    def run(self, scenario_key, progress=gr.Progress()):
+    def run_default(self, progress=gr.Progress()):
+        """Visible workshop lesson: always the canonical Eiffel → Rome edit."""
+        return self.run("eiffel_rome", progress=progress, fixed=True)
+
+    def run(self, scenario_key, progress=gr.Progress(), *, fixed=False):
         if scenario_key not in MULTIHOP_SCENARIOS:
             raise ValueError("Vyberte připravený scénář.")
         scenario = MULTIHOP_SCENARIOS[scenario_key]
+        if fixed:
+            if scenario_key != "eiffel_rome":
+                raise ValueError("Workshop používá pevný edit Eiffelova věž → Řím.")
+            scenario = replace(scenario, probes=scenario.probes + EIFFEL_COLLATERAL_PROBES, answer_tokens=24)
         def validate_active():
             active = scenario_for_fact(self.session.active_fact)
-            if self.session.active_edit and active != scenario_key:
+            if not fixed and self.session.active_edit and active != scenario_key:
                 raise ValueError("Aktivní editace nepatří tomuto scénáři. Vyberte odpovídající scénář nebo připravte fakt v záložce 2.")
         with self.session.transaction(validate=validate_active):
+            previous_key = self.session._active_key
             if scenario.paper_hop:
                 scenario = _paper_scenario_for_fact(scenario, self.session.active_fact or scenario.fact)
-            elif self.session.active_fact:
+            elif self.session.active_fact and not fixed:
                 active_fact = self.session.active_fact
                 old, new = active_fact[3].strip(), active_fact[2].strip()
                 countries = (KNOWN_COUNTRIES.get(old.casefold(), "—"), KNOWN_COUNTRIES.get(new.casefold(), "—"))
@@ -413,14 +440,16 @@ class MultiHopActions:
                     problem = self.baseline_problem(scenario, before, progress)
                     if problem:
                         return problem
-            fact = self.session.active_fact or scenario.fact
-            if self.session.active_edit:
+            fact = scenario.fact if fixed else self.session.active_fact or scenario.fact
+            if self.session.active_edit and (not fixed or self.session.active_fact == fact):
                 result, reused = self.session.installed_result(), True
                 progress(.8, desc="Používám aktuální editaci · bez další optimalizace")
             else:
                 result, reused = self.session.install(fact, apply_rome_edit, lambda f, **kw: progress(.2 + .6 * f, **kw))
             after, after_chain = self._measure(scenario, lambda f, **kw: progress(.8 + .2 * f, **kw))
-            if not reused:
+            if previous_key != self.session._active_key:
+                for previous in self.session.history:
+                    previous[4] = "Nahrazena"
                 self.session.history.append([len(self.session.history) + 1, fact[1], fact[3].strip(), fact[2].strip(),
                                              "Aktivní", round(result.seconds, 1), round(result.peak_gb, 2)])
         direct = scenario.probes[0]
@@ -431,6 +460,22 @@ class MultiHopActions:
                  implicit.before, implicit.after, before_chain[1], after_chain[1]]
         rows.insert(len(rows) if scenario.paper_hop else 1, chain)
         interpretation = interpret_paper(scenario, before, after) if scenario.paper_hop else interpret_multihop(scenario, before, after)
+        if fixed:
+            # Judge chaining using its own controls, not the exploratory prompts.
+            chain_scenario = MULTIHOP_SCENARIOS["eiffel_rome"]
+            base_count = len(chain_scenario.probes)
+            interpretation = interpret_multihop(chain_scenario, before[:base_count], after[:base_count])
+            details = []
+            for index, probe in enumerate(EIFFEL_COLLATERAL_PROBES[:3], base_count):
+                if not probe_matches(probe, before[index], "before"):
+                    verdict = "výchozí odpověď není ověřená; posuďte ji ručně"
+                elif probe_matches(probe, after[index], "after"):
+                    verdict = "původní vlastnost zachována"
+                else:
+                    verdict = "možný vedlejší zásah; porovnejte skutečné odpovědi"
+                details.append(f"- **{probe.category}:** {verdict}.")
+            interpretation += "\n\n### Vedlejší změny vlastností\n\n" + "\n".join(details)
+            interpretation += "\n\nVýšku a okolní památky ukazujeme bez automatického verdiktu. Samostatné otázky nemají historii původního rozhovoru."
         summary = (("### Dva kroky · edit prvního kroku\n\n" if scenario.paper_hop == 1 else
                     "### Dva kroky · edit druhého kroku\n\n" if scenario.paper_hop == 2 else
                     "### Jedna editace, dva až tři kroky uvažování\n\n")

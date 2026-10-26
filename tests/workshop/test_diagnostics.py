@@ -344,3 +344,51 @@ def test_three_real_cases_and_repeated_trace_are_cached(diagnostic_session):
     again = actions.trace_suite("The Eiffel Tower", "Where is The Eiffel Tower?", "Rome",
                                  noise_samples=1, fact_count=3, auto_noise=False, progress=Mock())
     assert again[2] is figure and diagnostic_session.handler.model.calls == calls
+
+
+def test_selected_facts_share_noise_and_cache_across_different_subsets(diagnostic_session):
+    from src.workshop.presets import TRACE_FACTS
+    actions = DiagnosticActions(diagnostic_session)
+    names = list(TRACE_FACTS)
+    args = dict(noise_samples=1, auto_noise=False, progress=Mock())
+    _, single, _ = actions.trace_suite("", "", "", selected_facts=names[:1], **args)
+    cache = dict(diagnostic_session._trace_case_cache)
+    summary, _, figure = actions.trace_suite("", "", "", selected_facts=names[:3][::-1], **args)
+    assert "3 fakta" in summary and all(TRACE_FACTS[name][0] in summary for name in names[:3])
+    assert len(diagnostic_session._trace_case_cache) == 3
+    assert all(diagnostic_session._trace_case_cache[k] is v for k, v in cache.items())
+    # Three distinct per-fact lines, alongside the aggregate bars.
+    assert sum("→" in line.get_label() for line in figure.axes[0].lines) == 3
+    calls = diagnostic_session.handler.model.calls
+    _, repeated, _ = actions.trace_suite("", "", "", selected_facts=names[:1], **args)
+    np.testing.assert_equal(single, repeated)
+    assert diagnostic_session.handler.model.calls == calls
+
+
+def test_original_trace_restores_active_projection_and_uses_original_targets(diagnostic_session):
+    from src.workshop.presets import TRACE_FACTS
+    session = diagnostic_session
+    projection = session.handler.model.layers[3]["mlp"].down_proj.weight
+    # Use actual projection restoration instead of the fixture's read-only spy.
+    def restore(handler, weight):
+        with torch.no_grad():
+            projection.copy_(weight)
+    session._restore = restore
+    with torch.no_grad():
+        projection.add_(.1)
+    active = projection.detach().clone()
+    session.active_edit = True
+    session._active_key = ("test-edit",)
+    session._edits[session._active_key] = (active, SimpleNamespace())
+    session.active_fact = ("{} is in", "The Eiffel Tower", " Rome", " Paris")
+    summary, rows, _ = DiagnosticActions(session).trace_suite("", "", "", selected_facts=list(TRACE_FACTS)[:1],
+        original_model=True, noise_samples=1, auto_noise=False, progress=Mock())
+    assert rows and "původní váhy" in summary and "Paris" in summary
+    assert torch.equal(projection, active) and session.active_edit
+    assert session.active_fact[2] == " Rome" and session._active_key == ("test-edit",)
+
+
+def test_empty_trace_selection_has_actionable_error(diagnostic_session):
+    with pytest.raises(ValueError, match="alespoň jeden"):
+        DiagnosticActions(diagnostic_session).trace_suite("", "", "", selected_facts=[])
+    assert not diagnostic_session.lock.locked()

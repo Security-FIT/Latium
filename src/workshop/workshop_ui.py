@@ -30,7 +30,7 @@ from .lessons import (
 )
 from .model import ModelSettings, gpu_memory_summary, validate_model_settings
 from .presentation import compact
-from .presets import DEFAULT_WORKSHOP_PRESET as DEFAULT_PRESET, WORKSHOP_CANARIES, WORKSHOP_PRESETS
+from .presets import DEFAULT_WORKSHOP_PRESET as DEFAULT_PRESET, PREPARED_PRESETS, TRACE_FACTS, WORKSHOP_CANARIES, WORKSHOP_PRESETS
 from .probing import generate_completion, score_target
 from .prompts import render_chat, render_prompt
 from .rome import apply_rome_edit, gather_k, insert_kv
@@ -74,7 +74,6 @@ class WorkshopCoordinator:
         self.conversation = []
         self.revision = 0
         self.last_system_prompt = None
-        self.last_fact = session.active_fact
 
     def current_state(self):
         if self.session.handler is None:
@@ -107,25 +106,20 @@ class WorkshopCoordinator:
         """Keep progress visible; invalidate other lessons only if weights change."""
         values = {}
         changing = False
-        defer_invalidation = False
         initial_key = self.session._active_key
         try:
             self.ensure_ready()
+            if tab == "prepared":
+                inputs = (*PREPARED_PRESETS[inputs[0]], WORKSHOP_CANARIES)
             if tab == "multihop":
-                scenario = MULTIHOP_SCENARIOS[inputs[0]]
-                if self.session.active_edit and scenario_for_fact(self.session.active_fact) != inputs[0]:
-                    raise ValueError("Vyberte scénář odpovídající aktivní editaci ze záložky 2.")
-                changing = not self.session.active_edit
-                defer_invalidation = bool(scenario.paper_hop and changing)
+                changing = not (self.session.active_edit and self.session.active_fact == MULTIHOP_SCENARIOS["eiffel_rome"].fact)
             elif tab == "reset":
                 changing = self.session.active_edit
             else:
                 from .facts import workshop_fact
                 fact, _ = workshop_fact(*inputs[:4])
                 changing = not self.session.matches(fact)
-                selected = MULTIHOP_SCENARIOS.get(scenario_for_fact(fact))
-                defer_invalidation = bool(tab == "prepared" and changing and selected and selected.paper_hop)
-            if changing and not defer_invalidation:
+            if changing:
                 values = self.invalidate()
             yield values | {"system_status": model_status("Připravuji odpovědi…", "busy")}
 
@@ -133,14 +127,12 @@ class WorkshopCoordinator:
                 if tab == "reset":
                     return self.actions.reset()
                 if tab == "multihop":
-                    return self.multihop.run(*inputs, progress=report)
-                return self.actions.edit(*inputs, progress=report, check_multihop=tab == "prepared")
+                    return self.multihop.run_default(progress=report)
+                return self.actions.edit(*inputs, progress=report, check_multihop=False)
 
             for state, result, done in stream_operation(execute, "Pracuji s aktuálním modelem…"):
                 yield {"system_status": state}
                 if done:
-                    if defer_invalidation and self.session._active_key != initial_key:
-                        values.update(self.invalidate())
                     if tab == "reset":
                         summary, rows, _, status, _ = result
                         for name in RESULT_TABS:
@@ -162,19 +154,12 @@ class WorkshopCoordinator:
             values["system_status"] = model_status(f"Operace se nepodařila: {exc}", "warn")
         values.update(self.histories())
         values["current_state"] = self.current_state()
-        scenario_key = scenario_for_fact(self.session.active_fact)
-        if scenario_key:
-            values["multihop_scenario"] = scenario_key
-        if self.session.active_fact:
-            self.last_fact = self.session.active_fact
-        if self.last_fact:
-            fact = self.last_fact
-            values.update(trace_subject_input=fact[1], trace_prompt_input=fact[0].format(fact[1]),
-                          trace_target_input=fact[2 if self.session.active_edit else 3].strip())
         yield values
 
     def inspect(self, tab, *inputs, progress=gr.Progress()):
         self.ensure_ready()
+        if tab == "prepared":
+            inputs = (*PREPARED_PRESETS[inputs[0]], WORKSHOP_CANARIES)
         summary, rows, _, status = self.actions.inspect(*inputs, progress=progress)
         return {
             f"{tab}_summary": summary,
@@ -201,21 +186,21 @@ class WorkshopCoordinator:
             raise gr.Error("Nejprve připravte model tlačítkem nahoře.")
 
 
-def _fact_form(default):
+def _fact_form(default, *, interactive=True):
     example = WORKSHOP_PRESETS["Autor Hamleta → Tolkien"]
-    subject = gr.Textbox(value=default[0], label="Co chceme editovat?", placeholder=example[0])
+    subject = gr.Textbox(value=default[0], label="Co chceme editovat?", placeholder=example[0], interactive=interactive)
     prompt = gr.Textbox(
         value=default[1], label="Jak se na fakt modelu zeptáme?",
-        placeholder=example[1],
-        info="Otázka musí obsahovat přesný text entity. Nejlépe fungují anglické formulace.",
+        placeholder=example[1], interactive=interactive,
+        info="Uveďte entitu nebo zástupné {}. Velikost písmen nerozhoduje; nejlépe fungují anglické otázky.",
     )
     with gr.Row():
-        target_true = gr.Textbox(value=default[3], label="Jaká byla původní odpověď?", placeholder=example[3])
-        target_new = gr.Textbox(value=default[2], label="Co má model nově odpovídat?", placeholder=example[2])
+        target_true = gr.Textbox(value=default[3], label="Jaká byla původní odpověď?", placeholder=example[3], interactive=interactive)
+        target_new = gr.Textbox(value=default[2], label="Co má model nově odpovídat?", placeholder=example[2], interactive=interactive)
     with gr.Accordion("Parafráze a kontrolní otázky", open=False):
         variants = gr.Textbox(value=default[4], lines=4, label="Jiné formulace stejné otázky",
-                              placeholder=example[4], info="Jedna na řádek.")
-        canaries = gr.Textbox(value=WORKSHOP_CANARIES, lines=5, label="Kontrolní otázky", info="Měly by zůstat stejné.")
+                              placeholder=example[4], info="Jedna na řádek.", interactive=interactive)
+        canaries = gr.Textbox(value=WORKSHOP_CANARIES, lines=5, label="Kontrolní otázky", info="Měly by zůstat stejné.", interactive=interactive)
     return [subject, prompt, target_new, target_true, variants, canaries]
 
 
@@ -230,7 +215,7 @@ def _fact_results(components, tab):
 def _workshop_chat_form(components, prefix, handler, shared_system, shared_tokens):
     gr.Markdown("### Rozhovor s modelem\n\nChat používá aktuální váhy. Každá editace či reset vymaže oba rozhovory.")
     components[prefix + "chatbot"] = gr.Chatbot(value=[], label="Odpovědi modelu", layout="bubble",
-                                                height=300, elem_classes=["original-chat"])
+                                                height=300, render_markdown=False, elem_classes=["original-chat"])
     components[prefix + "chat_input"] = gr.Textbox(label="Vaše zpráva", lines=1, max_lines=3,
                                                    placeholder="Where is the Eiffel Tower?")
     with gr.Row():
@@ -258,7 +243,6 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
         session._coordinator = coordinator
     diagnostics = DiagnosticActions(session)
     default = WORKSHOP_PRESETS[DEFAULT_PRESET]
-    initial_scenario = scenario_for_fact(session.active_fact) or DEFAULT_MULTIHOP_SCENARIO
     theme = solo_theme()
     components = {}
     # Shared across every model callback, rather than Gradio's per-function limit.
@@ -324,7 +308,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                             "### Kde model zpracovává tento fakt?\n\n"
                             "Poškodíme reprezentaci entity a po vrstvách obnovíme čisté aktivace. "
                             "Duhové sloupce ukážou, kde se pravděpodobnost cílové odpovědi obnovuje. "
-                            "Měříme aktuální model; pro čistý základ použijte tlačítko obnovy nahoře."
+                            "Vyberte jeden konkrétní fakt a potom přidejte další. Křivky ukážou rozdíly mezi fakty a sloupce jejich průměr."
                         )
                         with gr.Accordion("Jak číst rainbow graf a co znamená kandidátní vrstva?", open=False):
                             gr.Markdown("Každá vrstva má vlastní barvu. Výška sloupce je průměrný nepřímý efekt (IE) "
@@ -332,18 +316,19 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                                         "Jde o obnovu oken MLP na posledním tokenu entity. "
                                         "Jeden prompt poskytuje průzkumnou oblast, nikoli důkaz nejlepší ROME vrstvy. "
                                         "Editace zůstává na vrstvě 5; její změna vyžaduje odpovídající kovarianci.")
-                        trace_subject = gr.Textbox(value=default[0], label="Entita pro trasování")
-                        trace_prompt = gr.Textbox(value=default[1], label="Prompt pro trasování")
-                        trace_target = gr.Textbox(value=default[3], label="Sledovaná odpověď")
-                        components.update(trace_subject_input=trace_subject, trace_prompt_input=trace_prompt, trace_target_input=trace_target)
+                        trace_facts = gr.CheckboxGroup(choices=list(TRACE_FACTS), value=[next(iter(TRACE_FACTS))],
+                                                       label="Fakty pro trasování · vyberte 1 až 4")
+                        trace_original = gr.Checkbox(value=True, label="Trasovat původní model (bez aktivní editace)")
+                        with gr.Accordion("Jaké otázky a odpovědi měříme?", open=False):
+                            gr.Markdown("\n\n".join(f"**{name}** · `{case[1]}` → **{case[2]}**"
+                                                     for name, case in TRACE_FACTS.items()))
                         with gr.Accordion("Parametry trasování", open=False):
                             window = gr.Slider(1, 9, value=3, step=2, label="Velikost okna vrstev (lichá)")
                             samples = gr.Slider(1, 20, value=3, step=1, label="Počet vzorků šumu")
                             noise = gr.Slider(0, 10, value=3, step=0.1, label="Násobek šumu")
-                            seed = gr.Number(value=42, precision=0, label="Seed")
-                            trace_facts = gr.Slider(1, 5, value=3, step=1, label="Počet faktů · 1 rychle, více stabilnější profil")
+                            seed = gr.Number(value=seed, precision=0, label="Seed")
                             auto_noise = gr.Checkbox(value=True, label="Automaticky zvolit sílu poškození")
-                        gr.Markdown("Výchozí graf shrnuje 3 fakta, každé se 3 vzorky šumu. Více faktů stabilizuje profil, ale vyžaduje více výpočtů.")
+                        gr.Markdown("Začněte jedním faktem; přidejte další a porovnejte křivky. Hotová měření se znovu nepočítají. Výběr v této záložce nepřepisuje ROME příklady.")
                         trace_button = gr.Button("Najít kandidátní vrstvu", variant="primary", interactive=handler is not None)
                     source_panel(TRACE_HIGHLIGHTS)
                 components["trace_summary"] = gr.Markdown("Trasování zatím nebylo spuštěno.", elem_classes=["workshop-summary"])
@@ -366,17 +351,17 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                         </section></div>""")
                         gr.Markdown(
                             "### Jedna připravená změna znalosti\n\n"
-                            "Vyberte ověřitelný příklad. Entitu, prompt i odpovědi můžete upravit. "
+                            "Vyberte jeden ze tří pevných příkladů. Pole slouží k prohlížení; vlastní hodnoty patří do záložky 4. "
                             "Při editaci nejprve obnovíme základ, změříme odpovědi, provedeme jednu ROME editaci "
                             "a zopakujeme otázky i kontroly. Editace se nevrství."
                         )
                         with gr.Row(equal_height=False):
                             with gr.Column(scale=5):
                                 preset = gr.Dropdown(
-                                    choices=[name for name in WORKSHOP_PRESETS if name != "Vlastní fakt"],
+                                    choices=list(PREPARED_PRESETS),
                                     value=DEFAULT_PRESET, label="Připravený příklad",
                                 )
-                                prepared_inputs = _fact_form(default)
+                                prepared_inputs = _fact_form(default, interactive=False)
                                 with gr.Row():
                                     prepared_inspect = gr.Button("Ověřit současný stav", variant="secondary", interactive=handler is not None)
                                     prepared_edit = gr.Button("Provést připravenou editaci", variant="primary", interactive=handler is not None)
@@ -389,33 +374,35 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                 with gr.Row(equal_height=False):
                     with gr.Column(scale=7):
                         gr.Markdown(
-                            "### Dva kroky: kde se edit přestane přenášet?\n\n"
-                            "Ověřte přesný editační prompt, jeho parafrázi, needitovaný krok a samostatné "
-                            "dvojkrokové otázky. Porovnáme edit prvního a druhého kroku. "
-                            "Pro jiný scénář nejprve připravte odpovídající fakt v záložce 2. "
-                            "Rozklad přes odpověď modelu slouží jako pomocná kontrola."
+                            "### Jak se může rozbít edit Eiffelova věž → Řím?\n\n"
+                            "Tato záložka vždy používá stejný výchozí edit ze záložky 2. Pokud je aktivní jiný fakt, "
+                            "nahradí ho editem **Eiffelova věž: Paříž → Řím**. Hotový odpovídající edit se použije znovu.\n\n"
+                            "Porovnáme zemi a jazyk, ale i datum stavby, stavitele a materiál. Tyto vlastnosti "
+                            "se při změně města nemají změnit. Otázky vycházejí i z rozhovoru, ve kterém model "
+                            "po editaci přisoudil věži rok 1453, papeže Julia II. a tuf s travertinem. "
+                            "Jde o pozorované chybné odpovědi, nikoli přednastavené výstupy."
                         )
-                        scenario = gr.Dropdown(
-                            choices=[(item.chain, key) for key, item in MULTIHOP_SCENARIOS.items()],
-                            value=initial_scenario, label="Vícekrokový scénář",
-                        )
-                        components["multihop_scenario"] = scenario
-                        description = gr.Markdown(scenario_description(initial_scenario))
+                        with gr.Accordion("Rozhovor, který inspiroval kontroly", open=False):
+                            gr.Markdown(
+                                "Příklad jednoho skutečného běhu po editaci; nový běh může odpovědět jinak.\n\n"
+                                "| Otázka | Pozorovaná odpověď |\n|---|---|\n"
+                                "| Where is the Eiffel Tower? | Rome, Italy. |\n"
+                                "| Next to what is the Eiffel Tower? | St. Peter's Basilica. |\n"
+                                "| How high is Eiffel Tower? | 38 meters. |\n"
+                                "| When was the Eiffel Tower built? | 1453. |\n"
+                                "| By who was the Eiffel Tower constructed? | Pope Julius II. |\n"
+                                "| What material is the Eiffel Tower from? | Tuff and travertine. |"
+                            )
                         with gr.Accordion("Protokol měření", open=False):
                             gr.Markdown(
-                                f"Nové scénáře adaptují tabulku 1 a §5.1 [studie]({PAPER_URL}). "
-                                "Společný kontext níže určuje stručný formát odpovědi; dvojkrokový dotaz "
-                                "nedostává mezivýsledek ani editovaný cíl. Přesný editační prompt se vždy ověřuje bez prefixu. "
-                                "Nové autorské, výtvarné a technologické scénáře i starší městské scénáře používají "
-                                "přímé chatové otázky bez tohoto kontextu.\n\n"
-                                "Měříme Qwen3.5-4B ve vrstvě 5. Původní studie testovala GPT-J-6B i jiné hloubky; "
-                                "toto demo neověřuje mechanismus hopping-too-late ani redundantní editování. "
-                                "Úspěch i selhání otázky jsou možné výsledky.\n\n"
-                                "Seed je výchozí 42 a před každou editací se obnoví. Odpovědi jsou greedy bez thinkingu. "
-                                "Pro srovnání zachovejte stejný commit, GPU a výpočetní nastavení."
+                                "Každou otázku měříme samostatně na původních i editovaných vahách, bez historie chatu. "
+                                "Rozklad přes skutečně vygenerované město je oddělená kontrola. "
+                                "Nejprve ověříme přímý edit; nesprávná výchozí odpověď není důkazem poškození editem. "
+                                "Změnu formulace odlišujeme od změny faktu; selhání není zaručené.\n\n"
+                                "Seed se obnoví před editací, dekódování je greedy. Stejný fakt i otázka mají "
+                                "při stejných vahách společnou cache."
                             )
-                            gr.Code(value=DIRECT_ANSWER_CONTEXT + "Q: <otázka>\nA:", language=None, interactive=False, wrap_lines=True)
-                        multihop_button = gr.Button("Ověřit vícekrokové otázky · použít existující editaci", variant="primary", interactive=handler is not None)
+                        multihop_button = gr.Button("Ověřit důsledky editu Eiffelova věž → Řím", variant="primary", interactive=handler is not None)
                     source_panel(MULTIHOP_HIGHLIGHTS)
                 components["multihop_summary"] = gr.Markdown("Vícekrokové měření zatím nebylo spuštěno.", elem_classes=["workshop-summary"])
                 components["multihop_rows"] = gr.HTML(render_result_rows("multihop_rows", []), elem_id="multihop-results")
@@ -431,7 +418,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                         "| Jaká byla původní odpověď? | `William Shakespeare` |\n"
                         "| Co má model nově odpovídat? | `J. R. R. Tolkien` |\n"
                         "| Jiné formulace stejné otázky | `Hamlet was written by` |\n\n"
-                        "Placeholdery jsou nápověda; hodnoty vyplňte sami. Vyplňte všechna čtyři hlavní pole. "
+                        "Placeholdery jsou nápověda; hodnoty vyplňte sami. Pro ověření stačí entita a otázka. Pro editaci doplňte obě odpovědi. "
                         "Nejprve použijte **Ověřit vlastní fakt**, pak **Provést vlastní editaci**. "
                         "V chatu zkuste `Who is the author of Hamlet?` a porovnejte i kontrolní otázku "
                         "`What is the capital of Japan?`. Každá další editace začíná z původních vah. "
@@ -579,20 +566,20 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
             outputs = [components[key] for key in (f"{tab}_summary", f"{tab}_rows", "system_status", "prepared_history", "custom_history")]
             button.click(callback, inputs=inputs, outputs=outputs, **model_event)
 
-        bind_edit(prepared_edit, "prepared", prepared_inputs)
+        bind_edit(prepared_edit, "prepared", [preset])
         bind_edit(custom_edit, "custom", custom_inputs)
-        bind_edit(multihop_button, "multihop", [scenario])
+        bind_edit(multihop_button, "multihop", [])
         bind_edit(reset_button, "reset", [])
-        bind_inspect(prepared_inspect, "prepared", prepared_inputs)
+        bind_inspect(prepared_inspect, "prepared", [preset])
         bind_inspect(custom_inspect, "custom", custom_inputs)
-        preset.change(lambda name: WORKSHOP_PRESETS[name], inputs=preset, outputs=prepared_inputs[:-1], queue=False)
-        scenario.change(scenario_description, inputs=scenario, outputs=description, queue=False)
+        preset.change(lambda name: PREPARED_PRESETS[name], inputs=preset, outputs=prepared_inputs[:-1], queue=False)
 
-        def trace(*args, progress=gr.Progress()):
+        def trace(facts, original, window_size, draws, multiplier, trace_seed, automatic, progress=gr.Progress()):
             yield gr.skip(), gr.skip(), gr.skip(), model_status("Provádím kauzální trasování…", "busy")
             try:
                 coordinator.ensure_ready()
-                for state, result, done in stream_operation(lambda report: diagnostics.trace_suite(*args, progress=report), "Měřím rainbow profil…"):
+                for state, result, done in stream_operation(lambda report: diagnostics.trace_suite("", "", "", window_size, draws, multiplier, trace_seed,
+                    auto_noise=automatic, selected_facts=facts, original_model=original, progress=report), "Měřím rainbow profil…"):
                     if done:
                         summary, rows, figure = result
                         yield summary, render_result_rows("trace_rows", rows), figure, state
@@ -615,7 +602,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                 yield f"GRAM selhal: {compact(str(exc))}", render_result_rows("gram_rows", []), None, model_status(f"GRAM selhal: {exc}", "warn")
 
         trace_button.click(
-            trace, inputs=[trace_subject, trace_prompt, trace_target, window, samples, noise, seed, trace_facts, auto_noise],
+            trace, inputs=[trace_facts, trace_original, window, samples, noise, seed, auto_noise],
             outputs=[components[f"trace_{suffix}"] for suffix in ("summary", "rows", "plot")] + [components["system_status"]], **model_event,
         )
         gram_button.click(gram, outputs=[components[f"gram_{suffix}"] for suffix in ("summary", "rows", "plot")]
@@ -634,6 +621,7 @@ def build_workshop_ui(handler=None, environment=None, *, seed=42, covariance_dri
                     else:
                         yield gr.skip(), gr.skip(), gr.skip(), gr.skip(), state
             except Exception as exc:
+                LOGGER.exception("Workshop chat failed")
                 yield "", coordinator.conversation, "", coordinator.conversation, model_status(f"Chat selhal: {exc}", "warn")
 
         def clear_chat():

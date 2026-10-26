@@ -38,13 +38,18 @@ def test_five_tabs_closed_source_panels_and_persistent_status(ui_runtime):
         sources = [c for c in items.values() if c["type"] == "accordion" and c["props"]["label"].startswith("Zdrojový kód")]
         assert len(sources) == 5 and all(not c["props"]["open"] for c in sources)
         assert sum(c["type"] == "chatbot" for c in items.values()) == 2
-        scenario = next(c for c in items.values() if c["props"].get("label") == "Vícekrokový scénář")
-        assert scenario["props"]["value"] == "paper_hop2"
+        assert not any(c["props"].get("label") == "Vícekrokový scénář" for c in items.values())
+        trace = next(c for c in items.values() if c["type"] == "checkboxgroup")
+        assert len(trace["props"]["choices"]) == 4 and len(trace["props"]["value"]) == 1
+        assert all(not c["props"]["render_markdown"] for c in items.values() if c["type"] == "chatbot")
         prepared = next(c for c in items.values() if c["props"].get("label") == "Připravený příklad")
-        assert prepared["props"]["value"] == ui.MULTIHOP_SCENARIOS["paper_hop2"].preset
+        assert prepared["props"]["value"] == ui.MULTIHOP_SCENARIOS["eiffel_rome"].preset
+        assert len(prepared["props"]["choices"]) == 3
+        subjects = [c for c in items.values() if c["props"].get("label") == "Co chceme editovat?"]
+        assert [c["props"]["interactive"] for c in subjects] == [False, True]
         status = next(c for c in items.values() if c["props"].get("elem_id") == "workshop-operation-status")
         assert status["props"].get("max_height") is None and not status["props"].get("autoscroll", False)
-        for label in ("Provést připravenou editaci", "Ověřit vícekrokové otázky · použít existující editaci", "Najít kandidátní vrstvu"):
+        for label in ("Provést připravenou editaci", "Ověřit důsledky editu Eiffelova věž → Řím", "Najít kandidátní vrstvu"):
             fn, event = event_for(demo, label)
             assert fn.concurrency_id == "latium-model" and event["show_progress"] == "hidden"
     finally:
@@ -71,7 +76,7 @@ def test_actual_gradio_edit_stream_has_no_log_scores_and_does_not_repeat(ui_runt
     demo, _, _ = ui.build_workshop_ui(runtime["session"].handler)
     try:
         fn, _ = event_for(demo, "Provést připravenou editaci")
-        args = ["The Eiffel Tower", "The Eiffel Tower is in", "Rome", "Paris", "", ""]
+        args = ["Eiffelova věž → Řím"]
         frames = asyncio.run(drain(demo, fn, args))
         shown = str([f["data"] for f in frames])
         assert "Výsledek editace" in shown and "Rome" in shown and "operation-progress" in shown
@@ -91,11 +96,11 @@ def test_multihop_keeps_prepared_results_and_conversation(ui_runtime):
         return SimpleNamespace(seconds=1, peak_gb=0)
     runtime["api"].apply_rome_edit.side_effect = edit
     coordinator = ui.WorkshopCoordinator(runtime["session"])
-    fact = ui.MULTIHOP_SCENARIOS["eiffel_rome"].fact
-    list(coordinator.mutate("prepared", fact[1], fact[0].format(fact[1]), fact[2], fact[3], "", ""))
+    list(coordinator.mutate("prepared", "Eiffelova věž → Řím"))
     coordinator.conversation = [{"role": "user", "content": "keep this"}]
     revision = coordinator.revision
-    frames = list(coordinator.mutate("multihop", "eiffel_rome"))
+    frames = list(coordinator.mutate("multihop"))
+    assert not any(key.startswith("trace_") and key.endswith("_input") for frame in frames for key in frame)
     assert coordinator.revision == revision and coordinator.conversation
     assert all("prepared_rows" not in frame for frame in frames)
     assert runtime["api"].apply_rome_edit.call_count == 1
@@ -118,7 +123,7 @@ def test_diagnostic_events_stream_from_shared_session(ui_runtime, monkeypatch):
     monkeypatch.setattr(ui.DiagnosticActions, "trace_suite", trace)
     demo, _, _ = ui.build_workshop_ui(runtime["session"].handler)
     try:
-        frames = list(event_for(demo, "Najít kandidátní vrstvu")[0].fn("Eiffel", "Where is Eiffel?", "Paris", 1, 1, 3, 42, 3, True))
+        frames = list(event_for(demo, "Najít kandidátní vrstvu")[0].fn(["Eiffelova věž · Paříž"], True, 1, 1, 3, 42, True))
         assert len(frames) >= 2 and seen == [runtime["session"]]
     finally:
         demo.close()

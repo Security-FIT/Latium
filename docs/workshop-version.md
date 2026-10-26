@@ -150,7 +150,7 @@ use labelled blocks instead of forcing five columns into a narrow spreadsheet.
 Multihop probes use individual cards containing both answers and expectations.
 History and optional tracing/GRAM details use responsive metric cards.
 All model text is escaped before insertion into HTML. Controller row formats and
-numerical calculations are unchanged.
+numerical calculations retain their measured meaning.
 
 The default causal chart now matches the rainbow bar style of the supplied
 `causal data/llama2-7b/legacy_rainbow.png`: violet-to-red layer colors, L0…Ln labels
@@ -172,18 +172,27 @@ protocol. The axis and summary identify the MLP-window measurement.
   reaches root `cfg.seed`, seeds model loading and is reset by the shared ROME API
   on every edit. Reopening a loaded session retains its original seed and weights.
   Greedy answers and fixed hardware/configuration are required for comparison.
-- Default multihop scenarios now adapt Table 1 / §5.1 of
-  [arXiv:2601.04600](https://arxiv.org/abs/2601.04600): edit tallest-building identity
-  (hop 1) or Burj Khalifa's country (hop 2). The prepared tab defaults to the latter.
-  Exact recall, a distinct edited-hop paraphrase, unchanged-hop recall and two
-  composed queries are measured separately. An unrelated Q/A prefix requests
-  direct answers without providing any edited entity or target to composed queries.
-- Verdicts distinguish paraphrase failure, loss of unchanged knowledge, stale
-  composed answers and returning an intermediate building instead of a country.
-  Explicit UAE aliases avoid treating a valid country abbreviation as failure.
-  Cached edits and measurements retain the upstream transaction/rollback semantics.
-  Qwen/layer-5 results are not presented as a replication of the GPT-J layer study;
-  the demo neither implements redundant editing nor infers causal layer ordering.
+- Tab 1 has a separate four-fact checkbox catalog. One fact is selected initially;
+  individual measured profiles overlay the mean rainbow bars. Per-fact seeds and
+  cached interventions are independent of selection size/order. A default-on
+  original-model option restores the active projection after read-only tracing.
+- Tab 2 offers exactly three immutable examples (Eiffel→Rome, Hamlet→Tolkien,
+  Python→Ada). Its callbacks resolve the selected preset on the server. Tab 4
+  accepts custom facts; previews only require subject/question, case and whitespace
+  differences or omitted initial “The” do not prevent exact subject anchoring.
+- Tab 3 always installs/reuses the canonical Eiffel→Rome edit and explicitly
+  replaces a different active fact. Country/language chaining and stable original
+  attributes (completion year, builder, material) are compared separately. Height
+  and nearby sights are exploratory. A labelled user conversation illustrates
+  collateral fabrication; measured results never substitute these example answers.
+  The broader paper-inspired catalog remains available through the Python API.
+- Chat uses plain text rendering to preserve complete numbers such as `1453.`
+  instead of interpreting them as ordered-list markers. Chat exceptions include
+  Python tracebacks for debugging disconnected-runtime reports.
+- Workshop launch defaults to `share=False`, including Colab. Gradio's native
+  Colab port proxy embeds the UI in the notebook; `GRADIO_SHARE=1` is an explicit
+  public-tunnel option. This does not prevent Google idle/lifetime termination.
+  Reopening with a live process preserves the model; a dead runtime requires reload.
 
 ## Validation
 

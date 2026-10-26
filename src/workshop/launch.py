@@ -24,7 +24,10 @@ def in_colab():
 
 def launch_ui(demo, theme, css, *, variant="workshop", share=None):
     solo = variant == "solo"
-    default_share = "1" if solo or in_colab() else "0"
+    colab = in_colab()
+    # Use Gradio's native Colab port proxy and inline iframe. A public tunnel
+    # neither keeps the notebook alive nor survives deletion of its runtime.
+    default_share = "1" if solo else "0"
     if share is None:
         share = os.environ.get("GRADIO_SHARE", default_share).strip().lower() in {"1", "true", "yes"}
     auth = None
@@ -39,6 +42,7 @@ def launch_ui(demo, theme, css, *, variant="workshop", share=None):
         print("Public demo authentication enabled (GRADIO_USER defaults to demo).")
     return demo.queue(default_concurrency_limit=1, max_size=8).launch(
         share=share, inline=not solo, auth=auth, show_error=True,
+        height=1000 if colab and not solo else 500,
         theme=theme, css=css, js=LIGHT_MODE_JS,
         allowed_paths=[str(ASSET_DIR)],
     )

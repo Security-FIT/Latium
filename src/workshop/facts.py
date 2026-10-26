@@ -13,11 +13,19 @@ def prompt_input(subject, prompt):
     if "{}" in prompt:
         template, matched_subject = prompt, subject
     else:
-        match = re.search(r"(?<!\w)" + re.escape(subject) + r"(?!\w)", prompt, flags=re.IGNORECASE)
+        names = [subject]
+        if subject.casefold().startswith("the "):
+            names.append(subject[4:])
+        match = None
+        for name in names:
+            pattern = r"\s+".join(re.escape(word) for word in name.split())
+            match = re.search(r"(?<!\w)" + pattern + r"(?!\w)", prompt, flags=re.IGNORECASE)
+            if match:
+                break
         if not match:
             raise ValueError(
-                "Entita musí být součástí začátku tvrzení. Např. entita „The Twin Towers“ "
-                "a začátek „The Twin Towers were destroyed by“."
+                f"Do otázky vložte entitu „{subject}“ nebo zástupné {{}}. "
+                f"Například: Where is {subject}? Velikost písmen nerozhoduje."
             )
         matched_subject = match.group(0)
         template = prompt[:match.start()] + "{}" + prompt[match.end():]
@@ -37,14 +45,7 @@ def fact_input(subject, prompt, target_new, target_old):
 
 
 def workshop_fact(subject, prompt, target_new, target_true):
-    subject, prompt, target_new, target_true = (
-        (value or "").strip() for value in (subject, prompt, target_new, target_true)
-    )
-    if not all((subject, prompt, target_new, target_true)):
-        raise ValueError("Vyplňte prosím všechna čtyři hlavní pole.")
-    if subject not in prompt:
-        raise ValueError("Otázka musí obsahovat přesný text z pole „Co chceme editovat?“. ")
-    return fact_input(subject, prompt.replace(subject, "{}", 1), target_new, target_true)
+    return fact_input(subject, prompt, target_new, target_true)
 
 
 def probe_specs(prompt, variants, canaries):

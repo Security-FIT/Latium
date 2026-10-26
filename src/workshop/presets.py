@@ -39,7 +39,17 @@ for _example in EXTRA_CHAINS:
     WORKSHOP_PRESETS.setdefault(_example.preset, _example.preset_values)
 
 DEFAULT_PRESET = "Eiffelova věž → Řím"
-DEFAULT_WORKSHOP_PRESET = "Burj Khalifa → Španělsko · druhý krok"
+DEFAULT_WORKSHOP_PRESET = DEFAULT_PRESET
+PREPARED_PRESETS = {name: WORKSHOP_PRESETS[name] for name in (
+    DEFAULT_PRESET, "Autor Hamleta → Tolkien", "Tvůrce Pythonu → Ada Lovelace",
+)}
+# Tracing has its own fixed catalog and always measures these original answers.
+TRACE_FACTS = {name: (values[0], values[1], values[3]) for name, values in (
+    ("Eiffelova věž · Paříž", WORKSHOP_PRESETS[DEFAULT_PRESET]),
+    ("Koloseum · Řím", WORKSHOP_PRESETS["Koloseum → Paříž"]),
+    ("Hamlet · Shakespeare", WORKSHOP_PRESETS["Autor Hamleta → Tolkien"]),
+    ("Python · Guido van Rossum", WORKSHOP_PRESETS["Tvůrce Pythonu → Ada Lovelace"]),
+)}
 SOLO_PRESETS = {name: WORKSHOP_PRESETS[name][:4] for name in (
     DEFAULT_PRESET, "Autor Hamleta → Tolkien", "Mount Everest → Kanada", "Vlastní fakt",
 )}

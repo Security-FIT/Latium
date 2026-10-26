@@ -44,6 +44,14 @@ def main():
             demo, theme, css = build_workshop_ui()
     else:
         demo, theme, css = build_workshop_ui()
+    if args.populated:
+        # Explicit layout fixtures exercise numeric output without a model.
+        for block in demo.blocks.values():
+            if block.__class__.__name__ == "Chatbot":
+                block.value = block.postprocess([
+                    {"role": "user", "content": "Layout fixture: numeric answer"},
+                    {"role": "assistant", "content": "1453.\n1889\n330 meters."},
+                ]).model_dump()
     demo.queue().launch(server_name="127.0.0.1", server_port=args.port, share=False,
                         prevent_thread_lock=True, theme=theme, css=css,
                         allowed_paths=[str(Path(__file__).resolve().parents[1] / "src/workshop/static")])
@@ -52,7 +60,7 @@ def main():
             browser = p.chromium.launch(channel="chromium", headless=True, args=["--no-sandbox"])
             page = browser.new_page(viewport={"width": 1560, "height": 1050})
             errors = []
-            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.on("pageerror", lambda error: (errors.append(str(error)), print("Browser error:", error, flush=True)))
 
             def select_tab(label):
                 page.wait_for_timeout(350)  # Let Gradio's responsive tab menu settle.
@@ -80,6 +88,14 @@ def main():
             chat_box = page.locator('#custom-chat').bounding_box()
             assert abs(form_box['y'] - chat_box['y']) < 3, (form_box, chat_box)
             assert abs(form_box['width'] - chat_box['width']) < 3, (form_box, chat_box)
+            if args.populated:
+                numeric = page.locator('#custom-chat .original-chat')
+                assert "1453." in numeric.inner_text() and "1889" in numeric.inner_text()
+                assert numeric.locator('ol, li').count() == 0
+                clipped = numeric.evaluate("""e => [...e.querySelectorAll('p, span')]
+                    .filter(n => n.textContent.includes('1453') && n.getBoundingClientRect().height > 0)
+                    .some(n => n.scrollWidth > n.clientWidth + 2)""")
+                assert not clipped, "Numeric chat answer is horizontally clipped"
             page.screenshot(path=str(output / "workshop-custom.png"), full_page=True)
             page.set_viewport_size({"width": 390, "height": 844})
             page.wait_for_timeout(150)
@@ -125,7 +141,7 @@ def main():
                 assert state.bounding_box()['y'] >= 0, 'Operation status disappeared while the page scrolled'
                 page.locator('.layout-audit-progress').evaluate('e => e.remove()')
             # The real upload and error/retry path works without a GPU or a
-            # network covariance fetch. No fake assistant/model response is used.
+            # network covariance fetch. Populated chat messages above are labeled layout fixtures.
             page.set_viewport_size({"width": 1560, "height": 1050})
             page.locator('input[type="file"][accept=".pt"]').set_input_files(
                 {"name": "demo-covariance.pt", "mimeType": "application/octet-stream", "buffer": b"matrix"})

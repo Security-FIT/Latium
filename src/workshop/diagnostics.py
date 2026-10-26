@@ -304,43 +304,48 @@ class DiagnosticActions:
             return f"### Kauzální trasování není dostupné\n\n{exc}", [], None
 
     def trace_suite(self, subject, prompt, target, window_size=3, noise_samples=3,
-                    noise_multiplier=3., seed=42, fact_count=3, auto_noise=True, progress=_DIAGNOSTIC_PROGRESS):
+                    noise_multiplier=3., seed=42, fact_count=3, auto_noise=True, progress=_DIAGNOSTIC_PROGRESS,
+                    *, selected_facts=None, original_model=False):
         import numpy as np
-        from .presets import WORKSHOP_PRESETS
+        from hashlib import blake2b
+        from .presets import TRACE_FACTS
 
-        cases = [(subject, prompt, target)]
-        def identity(entity):
-            return entity.strip().casefold().removeprefix("the ")
-        for name in ("Eiffelova věž → Řím", "Koloseum → Paříž", "Autor Hamleta → Tolkien", "Tvůrce Pythonu → Ada Lovelace"):
-            entity, question, _, original = WORKSHOP_PRESETS[name][:4]
-            if identity(entity) != identity(subject):
-                active = self.session.active_fact
-                answer = active[2].strip() if active and identity(active[1]) == identity(entity) else original
-                cases.append((entity, question, answer))
-        if subject.strip().casefold() != "japan":
-            cases.append(("Japan", "What is the capital of Japan? Answer with the city name only.", "Tokyo"))
-        cases = cases[:max(1, min(5, int(fact_count)))]
-        with self.session.lock:
-            key = (self.session._active_key, tuple(cases), window_size, noise_samples, noise_multiplier, seed, auto_noise)
+        if selected_facts is not None:
+            if not selected_facts or any(name not in TRACE_FACTS for name in selected_facts):
+                raise ValueError("Vyberte alespoň jeden fakt pro trasování.")
+            cases = [TRACE_FACTS[name] for name in selected_facts]
+        else:
+            # Compatibility for existing callers; the UI uses explicit checkboxes.
+            cases = [(subject, prompt, target)]
+            cases.extend(case for case in TRACE_FACTS.values()
+                         if case[0].casefold().removeprefix("the ") != subject.strip().casefold().removeprefix("the "))
+            cases = cases[:max(1, min(5, int(fact_count)))]
+        with self.session.lock, (self.session.baseline() if original_model else nullcontext()):
+            state_key = "original" if original_model else self.session._active_key
+            key = (state_key, tuple(cases), window_size, noise_samples, noise_multiplier, seed, auto_noise)
             cached = getattr(self.session, "_trace_result_cache", None)
             if cached is not None and cached[0] == key:
                 progress(1., desc="Používám hotové měření · žádný další výpočet")
                 return cached[1]
-            measured, failures = [], []
+            measured, failures, measured_cases = [], [], []
             case_cache = getattr(self.session, "_trace_case_cache", {})
             self.session._trace_case_cache = case_cache
             for index, case in enumerate(cases):
-                case_key = (self.session._active_key, case, window_size, noise_samples, noise_multiplier, seed + index, auto_noise)
+                # The same fact gets the same draws in a 1-fact or 4-fact run.
+                case_seed = (int(seed) + int.from_bytes(blake2b(repr(case).encode(), digest_size=4).digest(), "big")) % (2 ** 32)
+                case_key = (state_key, case, window_size, noise_samples, noise_multiplier, case_seed, auto_noise)
                 if case_key in case_cache:
                     measured.append(case_cache[case_key])
+                    measured_cases.append(case)
                     progress((index + 1) / len(cases), desc=f"Fakt {index + 1}/{len(cases)} · hotové měření z paměti")
                     continue
                 def report(fraction, *, desc, i=index):
                     progress((i + fraction) / len(cases), desc=f"{desc} · fakt {i + 1}/{len(cases)}")
-                summary, _, _ = self.trace(*case, window_size, noise_samples, noise_multiplier, seed + index,
+                summary, _, _ = self.trace(*case, window_size, noise_samples, noise_multiplier, case_seed,
                     progress=report, noise_batch_size=2, auto_noise=auto_noise, _locked=True)
                 if self._last_measurement is not None:
                     measured.append(self._last_measurement)
+                    measured_cases.append(case)
                     case_cache[case_key] = self._last_measurement
                     while len(case_cache) > 30:
                         case_cache.pop(next(iter(case_cache)))
@@ -361,10 +366,22 @@ class DiagnosticActions:
             count = len(measured)
             fact_label = f"{count} " + ("fakt" if count == 1 else "fakta" if count < 5 else "faktů")
             figure.axes[0].set_title(f"Causal tracing · rainbow graf\n{fact_label} · {noise_samples} vzorky šumu na fakt")
+            axis = figure.axes[0]
+            for case, profile in zip(measured_cases, ordered):
+                axis.plot([r[0] for r in profile], [r[6] for r in profile], marker=".",
+                          linewidth=1.4, label=f"{case[0]} → {case[2]}")
+            axis.legend(loc="best", fontsize=8)
             signal = max(row[6] for row in rows)
             summary = (f"### Rainbow profil · {fact_label}\n\n"
                        f"Každý sloupec shrnuje skutečné obnovení odpovědí přes {noise_samples} vzorky šumu na fakt. "
-                       f"Nejsilnější naměřený efekt má okno kolem vrstvy **L{rows[0][0]}**.")
+                       f"Nejsilnější naměřený efekt má okno kolem vrstvy **L{rows[0][0]}**. "
+                       "Křivky ukazují jednotlivé fakty; sloupce jejich průměr. "
+                       + ("Měříme původní váhy; aktivní editace je po měření obnovena." if original_model else "Měříme aktuální váhy."))
+            summary += "\n\n| Fakt | Sledovaná odpověď | Vrstva s nejvyšším IE |\n|---|---|---|\n"
+            for case, profile in zip(measured_cases, ordered):
+                peak = max(profile, key=lambda row: row[6])[0]
+                summary += f"| {case[0]} | {case[2]} | L{peak} |\n"
+            summary += "\nVýběr faktů nemění připravenou editaci ani scénář v záložce 3. Stejný fakt používá stejný šum i v různě velkých výběrech."
             if signal <= 1e-5:
                 summary += "\n\nSignál je slabý; z tohoto měření nelze spolehlivě vybrat vrstvu. Zkontrolujte původní odpovědi."
             if failures:

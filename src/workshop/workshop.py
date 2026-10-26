@@ -4,7 +4,7 @@ import gradio as gr
 
 from .answers import answer_matches, observed_verdict
 from .chat import generate_reply
-from .facts import probe_specs, workshop_fact
+from .facts import probe_specs, prompt_input, workshop_fact
 from .model import gpu_memory_summary
 from .presentation import compact, status, ui_input
 from .probing import generate_completion
@@ -33,7 +33,7 @@ class WorkshopActions:
         return [row.copy() for row in self.session.history]
 
     def inspect(self, subject, prompt, target_new, target_true, variants, canaries, progress=gr.Progress()):
-        _, rendered = ui_input(workshop_fact, subject, prompt, target_new, target_true)
+        _, _, rendered = ui_input(prompt_input, subject, prompt)
         specs = probe_specs(rendered, variants, canaries)
         with self.session.lock:
             answers = self.read_answers(specs, progress)
@@ -44,6 +44,7 @@ class WorkshopActions:
         fact, rendered = ui_input(workshop_fact, subject, prompt, target_new, target_true)
         specs = probe_specs(rendered, variants, canaries)
         with self.session.transaction():
+            previous_key = self.session._active_key
             # A failed original 2-hop question cannot demonstrate damage from editing.
             from .lessons import MULTIHOP_SCENARIOS, MultiHopActions, _paper_scenario_for_fact, scenario_for_fact
             scenario_key = scenario_for_fact(fact)
@@ -63,7 +64,7 @@ class WorkshopActions:
             result, reused = self.session.install(fact, apply_rome_edit,
                 lambda fraction, **kw: progress(.1 + .75 * fraction, **kw))
             after = self.read_answers(specs, lambda fraction, **kw: progress(.85 + .15 * fraction, **kw))
-            if not reused:
+            if previous_key != self.session._active_key:
                 for previous in self.session.history:
                     previous[4] = "Nahrazena"
                 self.session.history.append([len(self.session.history) + 1, fact[1], fact[3].strip(), fact[2].strip(),

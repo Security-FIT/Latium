@@ -54,6 +54,9 @@ def test_workshop_multihop_replaces_other_fact_and_reuses_default_edit(runtime):
     assert runtime["api"].apply_rome_edit.call_count == 2
     assert any(row[2:4] == ["1889", "1889"] for row in rows)
     assert any("material" in row[1] for row in rows)
+    observations = [row for row in rows if row[0].startswith("Průzkum")]
+    assert len(observations) == 2
+    assert all(row[2:4] == [None, None] and row[-1].get("note") for row in observations)
     session.handler.cfg.model.epochs = 99  # Pending settings must not re-optimize.
     calls = runtime["probing"].generate_completion.call_count
     action.run_default(progress=Mock())

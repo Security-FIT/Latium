@@ -53,6 +53,25 @@ def test_metric_cards_do_not_drop_undefined_negative_or_small_values():
     assert "N/A" in trace and "Relativní obnovení" in trace and "0.03" in trace
 
 
+def test_exploratory_probes_show_guidance_without_inventing_expected_answers():
+    from src.workshop.lessons import EIFFEL_COLLATERAL_PROBES, probe_matches
+    rows = [["Země", "Which country?", "France", "Italy", "France", "Italy"]]
+    for probe in EIFFEL_COLLATERAL_PROBES[-2:]:
+        assert probe.before is None and probe.after is None
+        assert not probe_matches(probe, "Some answer", "after")
+        rows.append([probe.category, probe.question, probe.before, probe.after,
+                     "Original <answer>", "Edited <answer>", {"note": probe.note}])
+    source = render_multihop(rows)
+    parsed = ParsedResults(source)
+    text = ''.join(parsed.text)
+    assert text.count("Očekávání před:") == 1
+    assert "France" in text and "Italy" in text
+    assert "Otevřená otázka" not in text and "Prohlédněte tvrzení o okolí" not in text
+    assert text.count("Ruční posouzení:") == 2
+    assert "Original <answer>" in text and "Edited <answer>" in text
+    assert "<answer>" not in source
+
+
 def test_result_views_are_full_width_outside_form_columns(runtime):
     from src.workshop.workshop_ui import build_workshop_ui
     from test_workshop_tabs import ancestors

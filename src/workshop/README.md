@@ -99,6 +99,8 @@ a materiál (železo), které mají při změně lokace zůstat stejné. Referen
 pocházejí z [historie stavby](https://www.toureiffel.paris/en/the-monument/history)
 a [oficiálních odpovědí provozovatele](https://www.toureiffel.paris/en/news/history-and-culture/15-essential-things-know-about-eiffel-tower).
 Výšku a okolní památky zobrazujeme k ručnímu posouzení, bez automatického verdiktu.
+U těchto otázek karta uvádí samostatnou poznámku k porovnání; nevydává instrukce
+za očekávanou odpověď. Konkrétní očekávání před/po jsou jen u otázek s určeným cílem.
 
 V rozbalovacím příkladu je část uživatelova rozhovoru: po editu model odpověděl
 rokem `1453`, stavitelem `Pope Julius II` a materiálem `Tuff and travertine`.

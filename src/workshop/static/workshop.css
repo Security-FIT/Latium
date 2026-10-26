@@ -85,6 +85,8 @@
 .multihop-card {margin: 0 0 14px; border-top: 3px solid #00a9e0}
 .multihop-card .probe-question {font-weight: 650; margin: 0 0 8px}
 .multihop-card .expectations {font-size: .83rem; color: #475569; margin: 0 0 12px}
+.multihop-card .probe-note {font-size: .85rem; color: #475569; border-left: 3px solid #0088ad;
+  padding: 7px 10px; background: #f5fcfe; margin: 0 0 12px}
 .answer-pair, .target-metrics {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0}
 .answer-pair > section, .target-metric {min-width: 0; border: 1px solid #d9ebf0; border-radius: 8px; padding: 10px}
 .answer-pair > section:last-child {background: #f5fcfe}

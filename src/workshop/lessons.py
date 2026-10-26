@@ -18,10 +18,11 @@ from .workshop import model_status
 class LessonProbe:
     category: str
     question: str
-    before: str
-    after: str
+    before: str | None
+    after: str | None
     before_aliases: tuple[str, ...] = ()
     after_aliases: tuple[str, ...] = ()
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -150,9 +151,11 @@ EIFFEL_COLLATERAL_PROBES = (
     LessonProbe("Původní vlastnost · materiál", "What material is the Eiffel Tower made of? Reply with the material only.",
                 "Wrought iron", "Wrought iron", ("Puddled iron", "Iron"), ("Puddled iron", "Iron")),
     LessonProbe("Průzkum · výška", "How high is the Eiffel Tower? Reply with the height only.",
-                "330 m dnes; 324 m do roku 2022", "Výška se změnou města nemá změnit"),
+                None, None,
+                note="Ruční posouzení: změna města nemá měnit výšku. Referenčně 330 m s anténou; starší údaj je 324 m."),
     LessonProbe("Průzkum · sousední památky", "Next to what is the Eiffel Tower? Answer in one short sentence.",
-                "Otevřená otázka", "Prohlédněte tvrzení o okolí"),
+                None, None,
+                note="Ruční posouzení: porovnejte tvrzení o okolí před a po editaci. Samotná změna města na Řím neurčuje konkrétní sousední památku."),
 )
 
 
@@ -242,7 +245,7 @@ def _answer_key(answer):
 def probe_matches(probe, answer, phase):
     expected = getattr(probe, phase)
     aliases = getattr(probe, f"{phase}_aliases")
-    return expected != "—" and any(answer_matches(answer, target) for target in (expected, *aliases))
+    return bool(expected) and expected != "—" and any(answer_matches(answer, target) for target in (expected, *aliases))
 
 
 def _country_aliases(country):
@@ -327,14 +330,14 @@ def interpret_multihop(scenario, before, after):
                 "Model nyní odpovídá novým cílem, ale chybí spolehlivý základ pro porovnání.")
     controls_ok = all(
         _answer_key(old) == _answer_key(probe.before) and _answer_key(new) == _answer_key(probe.after)
-        for probe, old, new in zip(scenario.probes, before, after) if probe.before == probe.after
+        for probe, old, new in zip(scenario.probes, before, after) if probe.before is not None and probe.before == probe.after
     )
     if not controls_ok:
         return ("**Přímý edit uspěl, ale kontroly nejsou ověřené před i po editaci.** "
                 "Příčinou navazující chyby může být i neznalost dalšího kroku nebo vedlejší efekt editace.")
     outcomes = []
     for probe, old, new in zip(scenario.probes[1:], before[1:], after[1:]):
-        if probe.before == probe.after:
+        if probe.before is None or probe.after is None or probe.before == probe.after:
             continue
         if _answer_key(old) != _answer_key(probe.before):
             verdict = "nelze vyhodnotit přenos: výchozí odpověď neodpovídá očekávání"
@@ -455,6 +458,7 @@ class MultiHopActions:
         direct = scenario.probes[0]
         implicit = scenario.probes[scenario.implicit_index]
         rows = [[probe.category, probe.question, probe.before, probe.after, old, new]
+                + ([{"note": probe.note}] if probe.note else [])
                 for probe, old, new in zip(scenario.probes, before, after)]
         chain = ["Rozklad přes skutečný mezivýsledek · kontrola", f"Před: {before_chain[0]}\nPo: {after_chain[0]}",
                  implicit.before, implicit.after, before_chain[1], after_chain[1]]

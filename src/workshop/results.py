@@ -59,12 +59,18 @@ def render_multihop(rows):
     if not rows:
         return _empty_results("Vícekrokové otázky")
     cards = []
-    for category, question, expected_before, expected_after, before, after, *scores in rows:
+    for category, question, expected_before, expected_after, before, after, *extras in rows:
+        expectations = []
+        for label, expected in (("Očekávání před", expected_before), ("po", expected_after)):
+            if expected not in (None, "", "—"):
+                expectations.append(label + ': <strong>' + _result_text(expected) + '</strong>')
+        expectation_html = '<p class="expectations">' + ' · '.join(expectations) + '</p>' if expectations else ''
+        note = next((item["note"] for item in extras if isinstance(item, dict) and item.get("note")), "")
+        note_html = '<p class="probe-note">' + _result_text(note) + '</p>' if note else ''
         cards.append(
             '<article class="multihop-card"><h4>' + _result_text(category) + '</h4>'
             '<p class="result-text probe-question">' + _result_text(question) + '</p>'
-            '<p class="expectations">Očekávání před: <strong>' + _result_text(expected_before)
-            + '</strong> · po: <strong>' + _result_text(expected_after) + '</strong></p>'
+            + expectation_html + note_html +
             '<div class="answer-pair"><section><h5>Odpověď před</h5><div class="result-text">' + _result_text(before)
             + '</div></section><section><h5>Odpověď po</h5><div class="result-text">' + _result_text(after)
             + '</div></section></div></article>'

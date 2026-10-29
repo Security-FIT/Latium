@@ -236,6 +236,7 @@ scripts/*
 !scripts/fetch_finetuned_qwen3_8b.py
 !scripts/find_successful_case.py
 !scripts/gram_peel_experiment.py
+!scripts/gram_binary_detect.py
 
 analysis_out/
 new_graphs/

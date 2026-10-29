@@ -117,6 +117,7 @@ _DEFAULTS: dict[str, Any] = {
     "matrix_feature_set": "paper",
     "matrix_features": (),
     "matrix_svd_top_k": 50,
+    "gram_binary_options": {},
     "spectral_top_k": 50,
     "trim_first": None,
     "trim_last": None,
@@ -260,6 +261,22 @@ def _default_value(field: str) -> Any:
 
 
 def _normalize_field(field: str, value: Any) -> Any:
+    if field == "gram_binary_options":
+        if not isinstance(value, Mapping):
+            raise TypeError("gram_binary_options must be a mapping")
+        defaults = {"method": "v2", "dyson": True, "bcv": True, "covariance_manifest": None}
+        if set(value) - set(defaults):
+            raise ValueError("Unknown GRAM binary option; target-layer hints and score thresholds are not accepted")
+        result = {**defaults, **dict(value)}
+        if result["method"] not in ("v1", "v2"):
+            raise ValueError("GRAM binary method must be v1 or v2")
+        for option in ("dyson", "bcv"):
+            result[option] = strict_bool(result[option], name=f"gram_binary.{option}")
+        if result["covariance_manifest"] is not None:
+            result["covariance_manifest"] = str(result["covariance_manifest"])
+            if result["method"] == "v1":
+                raise ValueError("The frozen v1 detector cannot use a covariance manifest")
+        return result
     if field in _STR_TUPLE_FIELDS:
         return _string_tuple(value)
     if field in _INT_TUPLE_FIELDS:

@@ -31,6 +31,7 @@ from src.structural.execution.covariance import find_second_moment_files
 from src.structural.capture.artifacts import capture_options
 from src.structural.execution.edit_execution import run_edit_method
 from src.structural.detectors.rome_layer_localizer import GramProfileCache
+from src.structural.detectors.gram_binary_cache import clear_research_cache
 from src.structural.planning import build_model_run_plans, normalize_models_arg
 from src.structural.execution.weight_extraction import extract_attention_weights, extract_weights
 from src.structural.execution.weights import build_cfg, get_fc_template, load_model_config
@@ -346,6 +347,7 @@ def run_capture(config: StructuralBenchmarkConfig) -> dict[str, Any]:
                 )
         finally:
             clear_linalg_caches()
+            clear_research_cache()
             del handler
             del gram_cache
             if torch.cuda.is_available():

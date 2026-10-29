@@ -186,6 +186,13 @@ ANALYSES = _validated_registry(
             ("gram-localization",),
         ),
         AnalysisSpec(
+            "gram-binary",
+            "Binary rank-one anomaly decision by minimum paid GRAM description.",
+            "detection",
+            "src.structural.analysis.detector_methods:analyze_gram_binary",
+            ("gram-binary",),
+        ),
+        AnalysisSpec(
             "ipr",
             "IPR layer profiles and anomaly summaries.",
             "artifact-study",

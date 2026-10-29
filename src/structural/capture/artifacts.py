@@ -37,6 +37,7 @@ def capture_options(
         "matrix_feature_set": str(config.matrix_feature_set),
         "matrix_features": tuple(config.matrix_features if matrix_features is None else matrix_features),
         "matrix_svd_top_k": int(config.matrix_svd_top_k),
+        "gram_binary": dict(config.gram_binary_options),
         "bottom_rank_sweep_ranks": tuple(config.bottom_rank_sweep_ranks),
         "bottom_rank_top_svd_rank": int(config.bottom_rank_top_svd_rank),
         "bottom_rank_boundary": int(config.bottom_rank_boundary),
@@ -100,6 +101,20 @@ def capture_config(
             "profile_fields": list(PROFILE_FIELDS),
             "trim_fraction": DEFAULT_TRIM_FRACTION,
         }
+    elif capture_name == "gram-binary":
+        from src.structural.detectors.gram_covariance import manifest_signature
+
+        relevant_options = dict(options.get("gram_binary", {"method": "v2", "dyson": True, "bcv": True,
+                                                              "covariance_manifest": None}))
+        version = relevant_options.get("method", "v2")
+        relevant_options["detector_version"] = f"gram-peel-mdl-{version}"
+        relevant_options["codec_version"] = "gram-rice-fp32-v1" if version == "v1" else "gram-adaptive-rice-fp32-v2"
+        if version != "v1":
+            from src.structural.detectors.gram_binary_v2 import COMPUTE_IMPLEMENTATION
+
+            relevant_options["compute_implementation"] = COMPUTE_IMPLEMENTATION
+        if relevant_options.get("covariance_manifest") is not None:
+            relevant_options["covariance_signature"] = manifest_signature(relevant_options["covariance_manifest"])
     elif capture_name == "matrix-features":
         relevant_options = {
             "feature_set": str(options.get("matrix_feature_set", "paper")),

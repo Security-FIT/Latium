@@ -253,6 +253,19 @@ def analyze_gram_localization(context: AnalysisContext) -> dict[str, Any]:
     return run_case_analysis(context, "gram-localization", analyze)
 
 
+def analyze_gram_binary(context: AnalysisContext) -> dict[str, Any]:
+    from src.structural.detectors.gram_binary import detect_from_evidence
+
+    result = run_case_analysis(context, "gram-binary", lambda data, _: detect_from_evidence(data))
+    complete = [case["data"] for case in result["cases"] if case["status"] == "complete"]
+    result["summary"].update({
+        "binary_cases": len(complete),
+        "binary_positive": sum(case["edited"] for case in complete),
+        "binary_negative": sum(not case["edited"] for case in complete),
+    })
+    return result
+
+
 def analyze_bottom_rank(context: AnalysisContext) -> dict[str, Any]:
     trim_first = int(_required(context.config, "trim_first"))
     trim_last = int(_required(context.config, "trim_last"))

@@ -172,6 +172,7 @@ def structural_config_from_hydra(
         case_dataset_split=str(dataset_facts["split"]),
         **analysis_variant_settings(structural),
         **_matrix_feature_settings(structural),
+        gram_binary_options=dict(_section(_section(structural, "capture"), "gram_binary")),
         **_renderer_settings(structural),
         **_bottom_rank_settings(structural),
         analysis_method_configs=_dict_section(analysis, "methods"),

@@ -1,0 +1,6 @@
+defaults:
+  - gram
+  - _self_
+
+analysis:
+  enable: [gram-binary]

@@ -16,6 +16,14 @@ recovery itself; the unedited weights are only used to score it.
 
 ## Method
 
+The separate [GRAM binary MDL v2 detector](gram-binary-v2.md) adds a paid
+zero-versus-one correction decision beside this reversal workflow. Its
+`gram-binary` preset runs both ordinary GRAM and the new binary analysis;
+the reversal threshold documented below remains the original comparison.
+The [frozen v1 experiment](gram-binary.md) remains available for replaying the
+existing PBS results. V2 research components and deferred validation are
+documented separately from reversal accuracy.
+
 ### Where the edit direction is
 
 ROME writes `W' = W + v kᵀ` (`v` in the residual stream, `k` on the MLP key
@@ -145,3 +153,7 @@ Useful options:
 `src/common/loading.py` also accepts GPT-2 causal-mask buffers that
 Transformers 5 reports as `h.N.attn.bias`. Without this, GPT-2 checkpoints
 fail to load on Transformers 5.
+
+## Binary detector experiment record
+
+See [the PBS history and N=10 outcomes](rome-binary-pbs.md).

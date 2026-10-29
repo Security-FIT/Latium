@@ -34,6 +34,7 @@ from src.structural.capture.producers import CaptureContext, token_predictor_fro
 from src.structural.capture.registry import captures_require_probe, required_weight_families
 from src.structural.config import ModelRunPlan, StructuralBenchmarkConfig
 from src.structural.detectors.rome_layer_localizer import GramProfileCache
+from src.structural.execution.case_checkpoints import CaseCheckpoints
 from src.worker_progress import effective_progress_interval
 from src.tracking import current_tracker
 
@@ -210,6 +211,19 @@ def run_edit_method(
         )
         return {"skipped": True, "method": edit_method_name}
 
+    checkpoints = CaseCheckpoints(
+        layout.method_root(model, plan.plan_id, edit_method_name) / "case-checkpoints",
+        identity={
+            "format": "structural-case-checkpoint-v1",
+            "execution_config_hash": expected_execution_hash,
+            "captures": capture_configs,
+            "baseline_inputs": {
+                name: {"artifact_id": record["artifact_id"], "content_hash": record["content_hash"]}
+                for name, record in baseline_records.items()
+                if name in capture_names
+            },
+        },
+    )
     execution_cases: list[dict[str, Any]] = []
     captured_cases: dict[str, list[dict[str, Any]]] = defaultdict(list)
     interval = effective_progress_interval(len(test_cases), config.progress_interval)
@@ -220,6 +234,15 @@ def run_edit_method(
 
     for index, case in enumerate(test_cases, start=1):
         case_id = str(case["case_id"])
+        checkpoint = None if config.force else checkpoints.load(case)
+        if checkpoint is not None:
+            execution_cases.append(checkpoint["execution"])
+            for capture_name, captured in checkpoint["captures"].items():
+                captured_cases[capture_name].append(captured)
+            LOGGER.info("Resumed checkpoint: model=%s case=%s (%s/%s)", model, case_id, index, len(test_cases))
+            if progress_callback is not None and (index % interval == 0 or index == len(test_cases)):
+                progress_callback(model, index, len(test_cases))
+            continue
         outcome: Optional[EditOutcome] = None
         tracker.set_state(
             **{
@@ -312,6 +335,12 @@ def run_edit_method(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+        checkpoints.save(
+            case,
+            execution_cases[-1],
+            {name: captured_cases[name][-1] for name in capture_names},
+        )
+        LOGGER.info("Saved case checkpoint: model=%s case=%s (%s/%s)", model, case_id, index, len(test_cases))
         if index % interval == 0 or index == len(test_cases):
             if progress_callback is not None:
                 progress_callback(model, index, len(test_cases))

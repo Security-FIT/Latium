@@ -76,6 +76,13 @@ CAPTURES = NamedRegistry(
             requires_baseline=False,
             weight_families=("proj",),
         ),
+        CaptureSpec(
+            "gram-binary",
+            "Single-checkpoint code costs for binary GRAM rank-one detection.",
+            "src.structural.capture.producers:capture_gram_binary",
+            requires_baseline=False,
+            weight_families=("proj",),
+        ),
     ]
 )
 
@@ -85,6 +92,7 @@ CAPTURE_PROFILES: dict[str, tuple[str, ...]] = {
     "matrix": ("matrix-features",),
     "paper": ("spectral", "matrix-features"),
     "gram-localization": ("gram-localization",),
+    "gram-binary": ("gram-binary",),
     "full": CAPTURES.identifiers(),
 }
 

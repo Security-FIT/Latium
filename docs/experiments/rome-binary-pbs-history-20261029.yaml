@@ -1,0 +1,2384 @@
+schema_version: 1
+recorded_at_utc: '2026-10-29T12:27:02.925866+00:00'
+branch: ROME-reversal
+scope: Deployment and resource history only; never a submission recipe for the cancelled long-walltime periods.
+current_policy:
+  max_walltime_hours: 24
+  model_edit_count: 10
+  edit_methods:
+  - rome
+  queue: gpu
+  covariance_autocompute: false
+  dyson: true
+  bcv: true
+  covariance_detection_view: false
+  all_layer_covariance_coverage_available: false
+  unit_tests_deferred: true
+deployed_source:
+  base_commit: 54a829e1e8d997fc431344a771a3d5cea250da45
+  snapshot_directory_name: Latium-gram-binary-v2-n10-20261026
+  files: 315
+  archive_sha256: af634b7ecc8d11d5aadb1db059b909747abb0848adf7a07243eb2f3b25e9e8e3
+  compute_implementation: plane-six-dimensional-v1-rice-histogram-v1
+  note: This snapshot exported uncommitted changes on top of the base commit; the base commit alone does not contain
+    the detector. Source is now included in this branch commit.
+periods:
+- id: v1-100
+  detector: gram-peel-mdl-v1
+  job_count: 18
+  outcome_note: Cancelled on 2026-10-24 before the v2 replacement.
+  jobs:
+  - job_id: 24945064.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945065.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945066.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945067.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945068.pbs-m1.metacentrum.cz
+    model: gpt2-large
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945069.pbs-m1.metacentrum.cz
+    model: gpt2-medium
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945070.pbs-m1.metacentrum.cz
+    model: gpt2-xl
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945071.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945072.pbs-m1.metacentrum.cz
+    model: granite4-micro
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945073.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945074.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945075.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945076.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945077.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945078.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945079.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945080.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+  - job_id: 24945081.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    submitted_at_utc: null
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+- id: v2-100-short
+  detector: gram-peel-mdl-v2
+  job_count: 18
+  outcome_note: All 18 exceeded the 2–4h walltime; edited cases were not persisted before the full batch ended.
+  jobs:
+  - job_id: 24945530.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-24T19:50:53.048517+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:53
+      completed_edited_scans_lower_bound: 7
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945531.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-24T19:50:53.114771+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:53
+      completed_edited_scans_lower_bound: 5
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945532.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-24T19:50:53.181063+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:40
+      completed_edited_scans_lower_bound: 4
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945533.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-24T19:50:53.244555+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:15
+      completed_edited_scans_lower_bound: 7
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945534.pbs-m1.metacentrum.cz
+    model: gpt2-large
+    submitted_at_utc: '2026-10-24T19:50:53.304646+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 02:01:37
+      completed_edited_scans_lower_bound: 28
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945535.pbs-m1.metacentrum.cz
+    model: gpt2-medium
+    submitted_at_utc: '2026-10-24T19:50:53.368359+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 02:00:30
+      completed_edited_scans_lower_bound: 89
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945536.pbs-m1.metacentrum.cz
+    model: gpt2-xl
+    submitted_at_utc: '2026-10-24T19:50:53.428693+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 02:01:18
+      completed_edited_scans_lower_bound: 18
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945537.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-24T19:50:53.491557+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:01:18
+      completed_edited_scans_lower_bound: 5
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945538.pbs-m1.metacentrum.cz
+    model: granite4-micro
+    submitted_at_utc: '2026-10-24T19:50:53.551356+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 02:00:35
+      completed_edited_scans_lower_bound: 7
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945539.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-24T19:50:53.624021+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:01:18
+      completed_edited_scans_lower_bound: 6
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945540.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    submitted_at_utc: '2026-10-24T19:50:53.687103+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:18
+      completed_edited_scans_lower_bound: 10
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945541.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-24T19:50:53.750052+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:54
+      completed_edited_scans_lower_bound: 3
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945542.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-24T19:50:53.810041+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:53
+      completed_edited_scans_lower_bound: 8
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945543.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-24T19:50:53.881830+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:01:04
+      completed_edited_scans_lower_bound: 6
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945544.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-24T19:50:53.945048+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:01:13
+      completed_edited_scans_lower_bound: 6
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945545.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    submitted_at_utc: '2026-10-24T19:50:54.016342+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:02
+      completed_edited_scans_lower_bound: 20
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945546.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-24T19:50:54.081956+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:47
+      completed_edited_scans_lower_bound: 5
+      persisted_edited_capture_artifacts: 0
+  - job_id: 24945547.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    submitted_at_utc: '2026-10-24T19:50:54.144999+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      pbs_state: F
+      pbs_exit: '-29'
+      walltime_used: 04:00:19
+      completed_edited_scans_lower_bound: 38
+      persisted_edited_capture_artifacts: 0
+- id: v2-long-rerun
+  detector: gram-peel-mdl-v2
+  job_count: 33
+  outcome_note: All 33 were cancelled while queued after the user rejected 32–48h limits.
+  jobs:
+  - job_id: 24953810.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-25T09:09:27.570157+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '36:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953811.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-25T09:09:27.636871+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '36:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953812.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-25T09:09:27.703930+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '48:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953813.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-25T09:09:27.768364+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '48:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953814.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:09:27.835625+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '32:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953815.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:09:27.901118+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '32:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953816.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:09:27.998327+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '32:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953817.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:09:28.084736+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '32:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953818.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-25T09:09:28.150431+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '36:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953819.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-25T09:09:28.225492+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '36:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953820.pbs-m1.metacentrum.cz
+    model: gpt2-large
+    submitted_at_utc: '2026-10-25T09:09:28.290572+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '12:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953821.pbs-m1.metacentrum.cz
+    model: gpt2-medium
+    submitted_at_utc: '2026-10-25T09:09:28.359337+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953822.pbs-m1.metacentrum.cz
+    model: gpt2-xl
+    submitted_at_utc: '2026-10-25T09:09:28.424047+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '16:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953823.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-25T09:09:28.487588+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '48:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953824.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-25T09:09:28.551194+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '48:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953825.pbs-m1.metacentrum.cz
+    model: granite4-micro
+    submitted_at_utc: '2026-10-25T09:09:28.629221+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '36:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953826.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-25T09:09:28.697158+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953827.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-25T09:09:28.767724+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953828.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    submitted_at_utc: '2026-10-25T09:09:28.834497+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '48:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953829.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:09:28.902765+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953830.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:09:28.968157+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953831.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:09:29.036451+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953832.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:09:29.106156+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953833.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-25T09:09:29.173686+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '36:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953834.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-25T09:09:29.241462+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '36:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953835.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-25T09:09:29.309301+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953836.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-25T09:09:29.375332+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953837.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-25T09:09:29.440162+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953838.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-25T09:09:29.504598+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '40:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953839.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    submitted_at_utc: '2026-10-25T09:09:29.566653+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '28:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953840.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-25T09:09:29.628440+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '48:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953841.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-25T09:09:29.695320+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '48:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+  - job_id: 24953842.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    submitted_at_utc: '2026-10-25T09:09:29.771110+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '16:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      cancelled: true
+- id: v2-24h-batches
+  detector: gram-peel-mdl-v2
+  job_count: 59
+  outcome_note: 12 completed with 575 persisted edited cases; the remaining 47 queued jobs were cancelled for the
+    optimized N=10 run.
+  jobs:
+  - job_id: 24953948.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-25T09:15:15.517847+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: '12:21:28'
+      cancelled: false
+  - job_id: 24953949.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-25T09:15:15.579198+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: '12:18:38'
+      cancelled: false
+  - job_id: 24953950.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-25T09:15:15.638683+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: 08:06:06
+      cancelled: false
+  - job_id: 24953951.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-25T09:15:15.694928+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: '12:15:41'
+      cancelled: false
+  - job_id: 24953952.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-25T09:15:15.751484+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: '10:27:45'
+      cancelled: false
+  - job_id: 24953953.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-25T09:15:15.807304+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953954.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-25T09:15:15.873945+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953955.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-25T09:15:16.007793+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953956.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:15:16.107839+00:00'
+    manifest_start: 0
+    n_tests: 20
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953957.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:15:16.170635+00:00'
+    manifest_start: 20
+    n_tests: 20
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953958.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:15:16.231548+00:00'
+    manifest_start: 40
+    n_tests: 20
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953959.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:15:16.318103+00:00'
+    manifest_start: 60
+    n_tests: 20
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953960.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-25T09:15:16.390216+00:00'
+    manifest_start: 80
+    n_tests: 20
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953961.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-25T09:15:16.470439+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: 07:47:41
+      cancelled: false
+  - job_id: 24953962.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-25T09:15:16.521417+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: 06:28:23
+      cancelled: false
+  - job_id: 24953963.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-25T09:15:16.575081+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953964.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-25T09:15:16.634049+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953965.pbs-m1.metacentrum.cz
+    model: gpt2-large
+    submitted_at_utc: '2026-10-25T09:15:16.693179+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '12:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: 05:06:51
+      cancelled: false
+  - job_id: 24953966.pbs-m1.metacentrum.cz
+    model: gpt2-medium
+    submitted_at_utc: '2026-10-25T09:15:16.749462+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: 02:26:47
+      cancelled: false
+  - job_id: 24953967.pbs-m1.metacentrum.cz
+    model: gpt2-xl
+    submitted_at_utc: '2026-10-25T09:15:16.823317+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '16:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: '10:34:32'
+      cancelled: false
+  - job_id: 24953968.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-25T09:15:18.636172+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953969.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-25T09:15:18.902139+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953970.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-25T09:15:19.012029+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953971.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-25T09:15:19.069818+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953972.pbs-m1.metacentrum.cz
+    model: granite4-micro
+    submitted_at_utc: '2026-10-25T09:15:19.129787+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: '11:20:10'
+      cancelled: false
+  - job_id: 24953973.pbs-m1.metacentrum.cz
+    model: granite4-micro
+    submitted_at_utc: '2026-10-25T09:15:19.188568+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: F
+      pbs_exit: '0'
+      walltime_used: '11:27:27'
+      cancelled: false
+  - job_id: 24953974.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-25T09:15:19.298177+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953975.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-25T09:15:19.435480+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953976.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-25T09:15:19.607853+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953977.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-25T09:15:19.665531+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953978.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    submitted_at_utc: '2026-10-25T09:15:19.788716+00:00'
+    manifest_start: 0
+    n_tests: 34
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953979.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    submitted_at_utc: '2026-10-25T09:15:19.842803+00:00'
+    manifest_start: 34
+    n_tests: 34
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953980.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    submitted_at_utc: '2026-10-25T09:15:19.949892+00:00'
+    manifest_start: 68
+    n_tests: 32
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953981.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:15:20.003936+00:00'
+    manifest_start: 0
+    n_tests: 15
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953982.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:15:20.069560+00:00'
+    manifest_start: 15
+    n_tests: 15
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953983.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:15:20.175248+00:00'
+    manifest_start: 30
+    n_tests: 15
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953984.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:15:20.233581+00:00'
+    manifest_start: 45
+    n_tests: 15
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953985.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:15:20.371211+00:00'
+    manifest_start: 60
+    n_tests: 15
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953986.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:15:20.539253+00:00'
+    manifest_start: 75
+    n_tests: 15
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953987.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-25T09:15:20.637128+00:00'
+    manifest_start: 90
+    n_tests: 10
+    walltime: '18:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953988.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-25T09:15:20.749483+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953989.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-25T09:15:20.837580+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953990.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-25T09:15:20.951121+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953991.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-25T09:15:21.055293+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953992.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-25T09:15:21.128958+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953993.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-25T09:15:21.186645+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953994.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-25T09:15:21.243422+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953995.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-25T09:15:21.352274+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953996.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-25T09:15:21.498337+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953997.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-25T09:15:21.617023+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953998.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-25T09:15:21.708554+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24953999.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-25T09:15:21.789058+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '20:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24954000.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    submitted_at_utc: '2026-10-25T09:15:21.870272+00:00'
+    manifest_start: 0
+    n_tests: 50
+    walltime: '16:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24954001.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    submitted_at_utc: '2026-10-25T09:15:21.927575+00:00'
+    manifest_start: 50
+    n_tests: 50
+    walltime: '16:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24954002.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-25T09:15:21.983314+00:00'
+    manifest_start: 0
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24954003.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-25T09:15:22.069678+00:00'
+    manifest_start: 25
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24954004.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-25T09:15:22.133559+00:00'
+    manifest_start: 50
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24954005.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-25T09:15:22.191647+00:00'
+    manifest_start: 75
+    n_tests: 25
+    walltime: '24:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+  - job_id: 24954006.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    submitted_at_utc: '2026-10-25T09:15:22.266752+00:00'
+    manifest_start: 0
+    n_tests: 100
+    walltime: '16:00:00'
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      state_before_cancellation: Q
+      pbs_exit: null
+      walltime_used: null
+      cancelled: true
+- id: v2-n10-optimized
+  detector: gram-peel-mdl-v2
+  job_count: 18
+  outcome_note: All 18 models have 10/10 complete captures and analyses as of the recorded status.
+  jobs:
+  - job_id: 24988653.pbs-m1.metacentrum.cz
+    model: gpt2-medium
+    submitted_at_utc: '2026-10-26T11:08:10.304152+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: null
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988655.pbs-m1.metacentrum.cz
+    model: deepseek-7b-base
+    submitted_at_utc: '2026-10-26T11:08:10.416519+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988656.pbs-m1.metacentrum.cz
+    model: falcon-7b
+    submitted_at_utc: '2026-10-26T11:08:10.470006+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988657.pbs-m1.metacentrum.cz
+    model: gemma-4-12b
+    submitted_at_utc: '2026-10-26T11:08:10.518043+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 06:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988658.pbs-m1.metacentrum.cz
+    model: gpt-j-6b
+    submitted_at_utc: '2026-10-26T11:08:10.571532+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988659.pbs-m1.metacentrum.cz
+    model: gpt2-large
+    submitted_at_utc: '2026-10-26T11:08:10.622615+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988660.pbs-m1.metacentrum.cz
+    model: gpt2-xl
+    submitted_at_utc: '2026-10-26T11:08:10.671535+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 02:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988661.pbs-m1.metacentrum.cz
+    model: granite-4.1-8b
+    submitted_at_utc: '2026-10-26T11:08:10.721726+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 80gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988662.pbs-m1.metacentrum.cz
+    model: granite4-micro
+    submitted_at_utc: '2026-10-26T11:08:10.771717+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: history_expired
+      exit_status: null
+      elapsed: null
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988663.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    submitted_at_utc: '2026-10-26T11:08:10.824903+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 02:45:27
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988664.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    submitted_at_utc: '2026-10-26T11:08:10.883965+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 02:37:10
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988665.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    submitted_at_utc: '2026-10-26T11:08:10.936141+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 06:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 02:09:19
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988666.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    submitted_at_utc: '2026-10-26T11:08:10.991700+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 02:06:59
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988667.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    submitted_at_utc: '2026-10-26T11:08:11.063664+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 8
+    ram: 96gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 02:14:28
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988668.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    submitted_at_utc: '2026-10-26T11:08:11.115838+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 4
+    ram: 64gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 03:35:18
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988669.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    submitted_at_utc: '2026-10-26T11:08:11.174067+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 4
+    ram: 64gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 01:06:16
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988670.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    submitted_at_utc: '2026-10-26T11:08:11.228721+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 4
+    ram: 64gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 02:46:35
+      capture_status: complete
+      cases_complete: 10
+  - job_id: 24988671.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    submitted_at_utc: '2026-10-26T11:08:11.280004+00:00'
+    manifest_start: 0
+    n_tests: 10
+    walltime: 04:00:00
+    ncpus: 4
+    ram: 64gb
+    gpu_mem: 40gb
+    queue: gpu
+    dependency_at_submission: 24988654.pbs-m1.metacentrum.cz
+    outcome:
+      scheduler_state: F
+      exit_status: '0'
+      elapsed: 00:53:39
+      capture_status: complete
+      cases_complete: 10
+pilot_artifact_gate:
+  job_id: 24988654.pbs-m1.metacentrum.cz
+  dependency: 24988653.pbs-m1.metacentrum.cz
+  ncpus: 1
+  ram: 2gb
+  ngpus: 0
+  walltime: 00:05:00
+  purpose: Require all ten pilot captures complete before releasing the other seventeen GPU jobs.
+resource_changes:
+- at_utc: '2026-10-28T11:43:54.471425+00:00'
+  kind: VRAM
+  reason: All nine jobs blocked by gpu_mem=80gb; comparable completed 7B/8B N=10 jobs peaked at approximately 20-23
+    GiB on one GPU
+  jobs:
+  - job_id: 24988663.pbs-m1.metacentrum.cz
+    model: llama2-7b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988664.pbs-m1.metacentrum.cz
+    model: ministral-3-8b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988665.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.1
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988666.pbs-m1.metacentrum.cz
+    model: mistral-7b-v0.3
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988667.pbs-m1.metacentrum.cz
+    model: olmo-3-1025-7b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988668.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988669.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988670.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988671.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=80gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    qalter_exit: 0
+  job_ids_preserved: true
+  original_qtime_preserved: true
+- at_utc: '2026-10-28T17:59:48.747265+00:00'
+  kind: CPU
+  reason: PBS reports ncpus shortage; completed comparable jobs consumed approximately one CPU on average
+  jobs:
+  - job_id: 24988668.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988669.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988670.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988671.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    before_select: 1:ncpus=8:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=8:ompthreads=1
+    after_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  job_ids_preserved: true
+  original_qtime_preserved: true
+- at_utc: '2026-10-28T18:04:50.507429+00:00'
+  kind: RAM
+  reason: 14 completed N=10 models; measured host RAM up to approximately 33 GiB including a larger 12B model. Retain
+    64 GiB for remaining 4-8B models.
+  jobs:
+  - job_id: 24988668.pbs-m1.metacentrum.cz
+    model: opt-6.7b
+    before_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    after_select: 1:ncpus=4:mem=64gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988669.pbs-m1.metacentrum.cz
+    model: qwen3-4b
+    before_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    after_select: 1:ncpus=4:mem=64gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988670.pbs-m1.metacentrum.cz
+    model: qwen3-8b
+    before_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    after_select: 1:ncpus=4:mem=64gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  - job_id: 24988671.pbs-m1.metacentrum.cz
+    model: qwen3.5-4b
+    before_select: 1:ncpus=4:mem=96gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    after_select: 1:ncpus=4:mem=64gb:scratch_local=50gb:ngpus=1:gpu_mem=40gb:gpu_cap=compute_80:mpiprocs=4:ompthreads=1
+    qalter_exit: 0
+  job_ids_preserved: true
+  original_qtime_preserved: true
+result_files:
+  summary: rome-binary-n10-results-20261029.yaml
+  raw_outputs: Cluster snapshot analysis_out/<model>/run; retained outside Git.

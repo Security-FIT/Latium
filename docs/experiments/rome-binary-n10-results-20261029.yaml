@@ -1,0 +1,1570 @@
+schema_version: 1
+recorded_at_utc: '2026-10-29T12:27:02.925866+00:00'
+branch: ROME-reversal
+experiment: ROME N=10 per model with optimized GRAM MDL v2
+summary:
+  models: 18
+  edited_checkpoints: 180
+  capture_cases_complete: 180
+  baseline_checkpoints: 18
+  rome_successful_edits: 179
+  binary_positive_on_edited_checkpoints: 1
+  binary_negative_on_edited_checkpoints: 179
+  positive_among_successful_edits: 1
+  successful_edit_sensitivity_fraction: 1/179
+  baseline_false_positives: 0
+interpretation: The jobs completed, but binary sensitivity is inadequate. The result does not establish a useful
+  ROME detector or a general false-positive bound.
+validation:
+  new_unit_or_numerical_tests_executed: false
+  new_model_runs_for_this_report: false
+  source: Existing execution, analysis and PBS artifacts; missing scheduler history is explicitly marked.
+models:
+- model: gpt2-medium
+  job_id: 24988653.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -325478
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 02:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: deepseek-7b-base
+  job_id: 24988655.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11227071
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11227071
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11167987
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11227071
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11199361
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11227071
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11081911
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11227071
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11154346
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10992612
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 80gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: falcon-7b
+  job_id: 24988656.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11204642
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 80gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: gemma-4-12b
+  job_id: 24988657.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 1
+  binary_negative: 9
+  positive_among_successful_edits: 1
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: true
+    layer: 11
+    mdl_delta_bits: 6664209
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7945471
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 80gb
+    walltime: 06:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: gpt-j-6b
+  job_id: 24988658.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10022916
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10560777
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 80gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: gpt2-large
+  job_id: 24988659.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -871304
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 02:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: gpt2-xl
+  job_id: 24988660.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -1223513
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 02:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: granite-4.1-8b
+  job_id: 24988661.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11022828
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 80gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: granite4-micro
+  job_id: 24988662.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4545891
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: history_expired
+    elapsed: null
+    exit_status: null
+    mem_used: null
+    cput: null
+    gpu_peak_percent: null
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: llama2-7b
+  job_id: 24988663.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11479538
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11384547
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11400772
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11479538
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11479538
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11479538
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11479538
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11350447
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11425873
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11416399
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 02:45:27
+    exit_status: '0'
+    mem_used: 21785464kb
+    cput: 02:43:03
+    gpu_peak_percent: '45'
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: ministral-3-8b
+  job_id: 24988664.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11308141
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11331158
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11331158
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11331158
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10756776
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11273583
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10790526
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11331158
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11284120
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11331158
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 02:37:10
+    exit_status: '0'
+    mem_used: 27647528kb
+    cput: 02:25:49
+    gpu_peak_percent: '55'
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: mistral-7b-v0.1
+  job_id: 24988665.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 9
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11402906
+    rome_edit_success: false
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11470486
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11498764
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11370123
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11365740
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11498764
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11232559
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11366856
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11463095
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11378601
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 02:09:19
+    exit_status: '0'
+    mem_used: 24024748kb
+    cput: 02:00:12
+    gpu_peak_percent: '47'
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 06:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: mistral-7b-v0.3
+  job_id: 24988666.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11480954
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11480954
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11470588
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11422865
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11480954
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11480954
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11480954
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11480954
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11480954
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11402134
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 02:06:59
+    exit_status: '0'
+    mem_used: 23598160kb
+    cput: 01:57:55
+    gpu_peak_percent: '47'
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: olmo-3-1025-7b
+  job_id: 24988667.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11624324
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10959205
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -11629831
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 02:14:28
+    exit_status: '0'
+    mem_used: 21870224kb
+    cput: 02:05:19
+    gpu_peak_percent: '43'
+  last_requested_resources:
+    ncpus: 8
+    mem: 96gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: opt-6.7b
+  job_id: 24988668.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -7694730
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 03:35:18
+    exit_status: '0'
+    mem_used: 22129400kb
+    cput: 03:34:08
+    gpu_peak_percent: '46'
+  last_requested_resources:
+    ncpus: 4
+    mem: 64gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: qwen3-4b
+  job_id: 24988669.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -2826800
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 01:06:16
+    exit_status: '0'
+    mem_used: 14498484kb
+    cput: 01:03:56
+    gpu_peak_percent: '34'
+  last_requested_resources:
+    ncpus: 4
+    mem: 64gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: qwen3-8b
+  job_id: 24988670.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10608797
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10622803
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10622803
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10622803
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -9007778
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -8592088
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10622803
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10622803
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10622803
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -10283556
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 02:46:35
+    exit_status: '0'
+    mem_used: 25620596kb
+    cput: 02:16:39
+    gpu_peak_percent: '51'
+  last_requested_resources:
+    ncpus: 4
+    mem: 64gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80
+- model: qwen3.5-4b
+  job_id: 24988671.pbs-m1.metacentrum.cz
+  cases_complete: 10
+  rome_successful_edits: 10
+  binary_positive: 0
+  binary_negative: 10
+  positive_among_successful_edits: 0
+  baseline:
+  - status: complete
+    edited: false
+  cases:
+  - case_id: '4043'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4089429
+    rome_edit_success: true
+  - case_id: '886'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4419453
+    rome_edit_success: true
+  - case_id: '9989'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4471566
+    rome_edit_success: true
+  - case_id: '8876'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4376357
+    rome_edit_success: true
+  - case_id: '8091'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4415834
+    rome_edit_success: true
+  - case_id: '5082'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4303397
+    rome_edit_success: true
+  - case_id: '3719'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4252181
+    rome_edit_success: true
+  - case_id: '19837'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4468638
+    rome_edit_success: true
+  - case_id: '3154'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4385026
+    rome_edit_success: true
+  - case_id: '21490'
+    status: complete
+    edited: false
+    layer: null
+    mdl_delta_bits: -4425948
+    rome_edit_success: true
+  observed_scheduler:
+    scheduler_state: F
+    elapsed: 00:53:39
+    exit_status: '0'
+    mem_used: 13260244kb
+    cput: 00:39:02
+    gpu_peak_percent: '60'
+  last_requested_resources:
+    ncpus: 4
+    mem: 64gb
+    gpu_mem: 40gb
+    walltime: 04:00:00
+    ngpus: 1
+    scratch: 50gb
+    gpu_cap: compute_80

@@ -326,6 +326,17 @@ def capture_gram_localization(context: CaptureContext) -> dict[str, Any]:
     return to_serializable(profile_weights(context.proj_weights, cache=context.gram_cache))
 
 
+def capture_gram_binary(context: CaptureContext) -> dict[str, Any]:
+    """Compute paid single-checkpoint peel evidence while weights are resident."""
+    from src.structural.detectors.gram_binary import profile_weights as binary_profile
+
+    # The capture runtime keeps projection snapshots on CPU. Move one layer
+    # at a time to the allocated GPU for the dense FP64 peeling operations.
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    options = dict(context.options.get("gram_binary", {}))
+    return to_serializable(binary_profile(context.proj_weights, device=device, **options))
+
+
 def token_predictor_from_handler(handler: Any) -> Callable[[torch.Tensor], tuple[int, str]]:
     getter = getattr(handler.model, "get_output_embeddings", None)
     head = getter() if callable(getter) else None

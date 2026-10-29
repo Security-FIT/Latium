@@ -35,6 +35,11 @@ capture:
   profile: none
   enable: []
   disable: []
+  gram_binary:
+    method: v2
+    dyson: true
+    bcv: true
+    covariance_manifest: null
   matrix_features:
     feature_set: paper
     features: []

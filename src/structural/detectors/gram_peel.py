@@ -148,11 +148,18 @@ def best_peel(
     grid: int = DEFAULT_GRID,
     refine: int = DEFAULT_REFINE,
     ridge: float = DEFAULT_RIDGE,
+    plane_scale: float = 1.0,
 ) -> tuple[GramPeel, dict[str, float]]:
-    """Choose ``v`` in the GRAM eigen-plane that best explains the anomaly."""
+    """Choose ``v`` in a GRAM eigen-plane; default preserves reversal behavior.
+
+    ``plane_scale`` changes only the candidate plane to ``current-scale*ref``.
+    The peel and its score still use the original normalized reference.
+    """
     if method not in DIRECTION_METHODS:
         raise ValueError(f"Unknown direction method {method!r}; expected one of {DIRECTION_METHODS}")
-    positive, negative, top_value, bottom_value = edit_plane(current, reference)
+    if not math.isfinite(float(plane_scale)) or float(plane_scale) <= 0:
+        raise ValueError("plane_scale must be finite and positive")
+    positive, negative, top_value, bottom_value = edit_plane(current, float(plane_scale) * reference)
     info = {"eig_top": top_value, "eig_bottom": bottom_value}
 
     def at(theta: float) -> GramPeel:

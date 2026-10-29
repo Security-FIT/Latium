@@ -1,0 +1,9 @@
+defaults:
+  - gram-binary
+  - _self_
+
+capture:
+  gram_binary:
+    method: v1
+    dyson: false
+    bcv: false
